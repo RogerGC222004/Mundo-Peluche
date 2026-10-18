@@ -197,6 +197,11 @@ kbd{font-family:var(--body);font-weight:800;font-size:13px;background:#fff;borde
 .mp-box .btn{font-size:20px;padding:9px 18px;}
 .join-row{display:flex;gap:8px;flex-wrap:wrap;margin:0;}
 .mp-msg{margin:0;min-height:1.3em;font-weight:800;font-size:14px;}
+.priv-row{display:flex;align-items:center;gap:10px;font-weight:800;font-size:14px;}
+.priv-row small{display:block;font-weight:700;font-size:12px;opacity:.7;}
+.room-item .right{display:flex;align-items:center;gap:6px;}
+.room-item .join{background:var(--thread);color:var(--label);border-radius:999px;padding:4px 11px;font-size:13px;}
+.room-item .lock{background:#e7e1cc;border-radius:999px;padding:3px 9px;font-size:12px;}
 .room-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:170px;overflow-y:auto;align-self:stretch;}
 .room-item{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;background:#fffdf5;border:none;border-radius:10px;padding:9px 12px;
   font-family:var(--body);font-weight:800;font-size:14px;color:var(--thread);cursor:pointer;box-shadow:0 2px 0 #d9d2bb;}
@@ -360,6 +365,8 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <div class="mp-actions">
       <div class="mp-box">
         <h3>Nueva sala</h3>
+        <div class="priv-row"><button class="switch" id="mpPrivate" role="switch" aria-checked="false" aria-label="Sala privada"></button>
+          <span>Sala privada<small id="mpPrivNote">Pública: cualquiera la ve en Salas activas y entra con un toque</small></span></div>
         <button class="btn primary" id="mpCreate">Crear sala</button>
       </div>
       <div class="mp-box">
@@ -607,7 +614,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='35';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='36';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -2174,13 +2181,20 @@ function syncSwatches(){ ui('mpColors').querySelectorAll('.swatch').forEach(b=>b
 // Vestíbulo por PeerJS: todos los que abren el juego se conectan aquí y avisan en qué sala están (sin el código a la vista)
 let webLobby=null, lobbyRef=null;
 function getLobby(){ if(!webLobby){ webLobby = peerNet ? peerNet.join('LOBBY0').then(L=>{ lobbyRef=L; lobbyAnnounce(); return L; }).catch(()=>{ webLobby=null; return null; }) : Promise.resolve(null); } return webLobby; }
-function lobbyAnnounce(){ if(!lobbyRef){ getLobby(); return; } try{ lobbyRef.presence({rm:mp.code||null, n:cleanName(profile.name)||'Peluche'}); }catch(e){} }
+function lobbyAnnounce(){ if(!lobbyRef){ getLobby(); return; } try{ lobbyRef.presence({rm:mp.code?lobbyKey(mp.code,mp.pub):null, n:cleanName(profile.name)||'Peluche', pub:mp.code&&mp.pub?1:0}); }catch(e){} }
 setTimeout(getLobby,1200);
+function lobbyKey(code,pub){ if(pub) return code; let h=7; for(const ch of code) h=(Math.imul(h,31)+ch.charCodeAt(0))>>>0; return 'p'+h.toString(36).padStart(7,'0').slice(-7); }   // las privadas se anuncian con una clave disfrazada
+// ¿La sala con este código es pública? Se ve en el vestíbulo (si nadie está dentro, se toma como privada)
+function inferPub(code){ return Promise.resolve(getLobby()).then(L=>{ let ps=[]; try{ ps=L.peers(); }catch(e){}
+  for(const p of ps){ const pr=p.presence||{}; if(pr.rm===lobbyKey(code,true) && pr.pub===1) return true; } return false; }).catch(()=>false); }
+const isPrivateChoice=()=>ui('mpPrivate').getAttribute('aria-checked')==='true';
+ui('mpPrivate').onclick=()=>{ const on=!isPrivateChoice(); ui('mpPrivate').setAttribute('aria-checked',String(on));
+  ui('mpPrivNote').textContent = on ? 'Privada: no se puede entrar sin el código' : 'Pública: cualquiera la ve en Salas activas y entra con un toque'; };
 let roomsSub=null, roomsLast=0, roomsTimer=0;
 function roomsFromPeers(peers){
   const g=new Map();
-  for(const p of peers||[]){ if(p.kind==='agent') continue; const pr=p.presence||{}, rm=typeof pr.rm==='string'?pr.rm:''; if(!/^[A-Z0-9]{6}$/.test(rm)) continue;
-    let e=g.get(rm); if(!e){ e={n:0, names:[], mine:rm===mp.code}; g.set(rm,e); } e.n++; if(e.names.length<3) e.names.push(cleanName(pr.n)||'Peluche'); }
+  for(const p of peers||[]){ if(p.kind==='agent') continue; const pr=p.presence||{}, rm=typeof pr.rm==='string'?pr.rm:''; if(!/^[A-Za-z0-9]{6,8}$/.test(rm)) continue;
+    let e=g.get(rm); if(!e){ e={n:0, names:[], mine:mp.code && rm===lobbyKey(mp.code,mp.pub), pub:false, code:rm}; g.set(rm,e); } e.n++; if(pr.pub===1) e.pub=true; if(e.names.length<3) e.names.push(cleanName(pr.n)||'Peluche'); }
   return [...g.values()].sort((a,b)=>(b.mine-a.mine)||(b.n-a.n));
 }
 function renderRooms(list){
@@ -2189,7 +2203,14 @@ function renderRooms(list){
   list.forEach(e=>{ const li=document.createElement('li'), b=document.createElement('button'); b.type='button'; b.className='room-item'+(e.mine?' mine':'');
     const who=document.createElement('span'); who.textContent=(e.mine?'Tu sala · ':'Sala de ')+e.names.join(', ')+(e.n>e.names.length?'…':'');
     const cnt=document.createElement('span'); cnt.className='cnt'; cnt.textContent=e.n+(e.n===1?' jugador':' jugadores');
-    b.append(who,cnt); b.onclick=()=>{ if(e.mine){ mpMsg('Ya estás en esta sala. Tu código: '+mp.code); return; } mpMsg('Para entrar, pide el código a '+e.names[0]+' y escríbelo arriba.'); ui('mpCode').focus(); };
+    const right=document.createElement('span'); right.className='right'; right.appendChild(cnt);
+    const canJoin=e.pub && !e.mine && /^[A-Z0-9]{6}$/.test(e.code);
+    if(canJoin){ const j=document.createElement('span'); j.className='join'; j.textContent='Unirse'; right.appendChild(j); }
+    else if(!e.pub){ const l=document.createElement('span'); l.className='lock'; l.textContent='Privada'; right.appendChild(l); }
+    b.append(who,right);
+    b.onclick=()=>{ if(e.mine){ mpMsg('Ya estás en esta sala. Tu código: '+mp.code); return; }
+      if(canJoin){ joinRoom(e.code,true); return; }
+      mpMsg('Es una sala privada: pide el código a '+e.names[0]+' y escríbelo arriba.'); ui('mpCode').focus(); };
     li.appendChild(b); ul.appendChild(li); });
 }
 function refreshRooms(L){ const now=performance.now(); clearTimeout(roomsTimer);
@@ -2210,7 +2231,7 @@ function openMp(){
 }
 ui('mpBtn').onclick=openMp;
 ui('mpBack').onclick=()=>{ mpEl.hidden=true; };
-ui('mpCreate').onclick=()=>joinRoom(newCode());
+ui('mpCreate').onclick=()=>joinRoom(newCode(), !isPrivateChoice());
 ui('mpJoinForm').addEventListener('submit',e=>{
   e.preventDefault();
   const code=cleanCode(ui('mpCode').value);
@@ -2232,7 +2253,8 @@ function lobbyRoom(room, code){
     leave:async()=>{ try{ await room.presence({rm:null, p:null, vc:null, dv:null}); }catch(e){} }
   };
 }
-async function joinRoom(code){
+async function joinRoom(code, pub){
+  if(pub===undefined) pub=await inferPub(code);   // al escribir un código: pública si así la anunciaron
   const btns=[ui('mpCreate'),ui('mpJoin')];
   btns.forEach(b=>b.disabled=true); mpMsg('Conectando a la sala '+code+'…');
   try{
@@ -2240,13 +2262,13 @@ async function joinRoom(code){
     if(!room){ mpMsg(UNAVAILABLE, true); return; }
     await leaveRoom();
     const r=await room.join(code);   // todos en el vestíbulo; cada quien anuncia su código
-    mp.room=r; mp.code=code; mp.connected=r.connected();
+    mp.room=r; mp.code=code; mp.pub=!!pub; mp.connected=r.connected();
     mp.unsubs.push(r.onPeers(onPeers, ()=>roomEnded()));
     mp.unsubs.push(r.onConnection(c=>{ mp.connected=c; if(c) sendPresence(true); updateRoomUI(); }, ()=>{}));
     player.pos.set(...startSpot());
     sendPresence(true);
     mpEl.hidden=true; updateRoomUI(); startGame();
-    flashNote('Estás en la sala '+code+'. Comparte el código para que entren.'); lobbyAnnounce();
+    flashNote(mp.pub ? 'Sala pública '+code+': aparece en Salas activas para que cualquiera entre.' : 'Sala privada '+code+': comparte el código para que entren.'); lobbyAnnounce();
   }catch(e){
     const c=e&&e.code;
     mpMsg(c==='limit_reached' ? 'No se pudo abrir la sala ahora mismo. Inténtalo en un momento.'
@@ -2276,7 +2298,7 @@ function sendPresence(force){
     p: [r2(player.pos.x), r2(player.pos.y), r2(player.pos.z)],
     f: r2(Math.atan2(Math.sin(player.facing), Math.cos(player.facing))),
     m: playing ? r2(Math.min(1, player.vel.length()/4.2)) : 0,
-    gv: GAME_VERSION, a: playing && !player.grounded && !player.swim, w: mp.waveStamp, d: r2(player.diveAngle), s: player.swim, h: heldItem()||'',
+    pub: mp.pub?1:0, gv: GAME_VERSION, a: playing && !player.grounded && !player.swim, w: mp.waveStamp, d: r2(player.diveAngle), s: player.swim, h: heldItem()||'',
     vc: player.car && player.car.kind!=='exit' ? [player.car.i, player.car.seat] : null,
     dv: iDrive() ? (c=>[c.i, r2(c.x), r2(c.z), Math.round(c.h*1000)/1000, r2(c.v), r2(c.steer), c.braking?1:0])(cars[player.car.i]) : null,
     lt: cars.map(c=>[c.lights?1:0, c.lightT]),
@@ -2442,7 +2464,7 @@ function updateRoomUI(){
   // diagnóstico: conexión, cuántas pestañas ve la sala (contándote) y último error
   let total='?', all='?'; try{ total=mp.room.peers().filter(p=>p.kind!=='agent').length; all=mp.room.lobby.peers().filter(p=>p.kind!=='agent').length; }catch(e){}
   const d=ui('roomDiag'); d.hidden=false;
-  const txt=`Versión ${GAME_VERSION} · Conexión: ${mp.connected?'sí':'no'} · Con el juego abierto: ${all} · En tu sala: ${total} · Se ven: ${mp.remotes.size+1}${mp.lastErr?' · Error: '+mp.lastErr:''}`;
+  const txt=`${mp.pub?'Sala pública':'Sala privada'} · Versión ${GAME_VERSION} · Conexión: ${mp.connected?'sí':'no'} · Con el juego abierto: ${all} · En tu sala: ${total} · Se ven: ${mp.remotes.size+1}${mp.lastErr?' · Error: '+mp.lastErr:''}`;
   if(d.textContent!==txt) d.textContent=txt;
 }
 function wave(){
