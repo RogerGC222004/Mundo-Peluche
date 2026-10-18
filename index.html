@@ -596,7 +596,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='32';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='33';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -2841,7 +2841,15 @@ function buildCar(i){
 }
 const cars=CAR_TYPES.map((_,i)=>buildCar(i));
 // Estacionados en fila, mirando hacia la pista
-cars.forEach((c,k)=>{ c.x=PARK.x; c.z=PARK.z-17.9+k*8.95; c.h=Math.PI/2; c.prevH=c.h; });
+cars.forEach((c,k)=>{ c.x=PARK.x; c.z=PARK.z-17.9+k*8.95; c.h=Math.PI/2; c.prevH=c.h; c.home={x:c.x,z:c.z,h:c.h}; });
+// ¿Está metido en el mar o en el lago?
+function vehicleWet(x,z){ const h=terrainH(x,z); return h<SEA_Y-.25 || (inLakeWater(x,z) && h<WATER_Y-.1); }
+// Si un vehículo se queda en el agua más de un minuto sin que nadie lo use, regresa a su lugar
+const WET_RETURN=60;
+function wetReturn(v,dt,used,goHome){
+  if(!used && vehicleWet(v.x,v.z) && Math.abs(v.v)<1.5){ v.wetT=(v.wetT||0)+dt;
+    if(v.wetT>WET_RETURN){ v.wetT=0; goHome(); v.t=now1(); v.net=null; v.sim=false; if(Math.hypot(v.x-player.pos.x,v.z-player.pos.z)<120) flashNote('Un vehículo que estaba en el agua regresó a su lugar'); try{ sendPresence(true); }catch(e){} } }
+  else v.wetT=0; }
 
 const now1=()=>Math.round(Date.now()/100)/10;    // marca de tiempo en segundos (para saber qué dato es más nuevo)
 const carFwd=c=>[Math.sin(c.h),Math.cos(c.h)], carLeft=c=>[Math.cos(c.h),-Math.sin(c.h)];
@@ -2865,18 +2873,18 @@ const iDrive=()=>player.car && player.car.seat===0 && player.car.kind==='seated'
 // Física sencilla de coche: acelerar, frenar/reversa, girar según la velocidad
 function stepCar(c,dt,inp){
   const T=c.T, gr=carGround(c.x,c.z,c.trackI); c.trackI=gr.i;
-  const off=!gr.paved, maxV=off?T.maxV*.8:T.maxV;   // por el pasto se va un poco más lento, pero se puede ir a cualquier lado
+  const wet=vehicleWet(c.x,c.z), off=!gr.paved, maxV=wet?7:off?T.maxV*.8:T.maxV;   // por el pasto un poco más lento; bajo el agua, despacito
   const steerMax=.55*(1-Math.min(.55,Math.abs(c.v)/60));
   c.steer += (inp.steer*steerMax - c.steer)*Math.min(1,dt*6);
   if(inp.gas){ if(c.v<-.3) c.v+=18*dt; else c.v+=T.accel*dt*(1-Math.max(0,c.v)/maxV*.55); }
   if(inp.brake){ if(c.v>.3) c.v-=20*dt; else c.v-=6*dt; }
-  if(!inp.gas && !inp.brake){ c.v*=Math.exp(-dt*(off?.55:.3)); if(Math.abs(c.v)<.15) c.v=0; }
-  if(c.v>maxV) c.v-=(off?6:4)*dt;
+  if(!inp.gas && !inp.brake){ c.v*=Math.exp(-dt*(wet?1.6:off?.55:.3)); if(Math.abs(c.v)<.15) c.v=0; }
+  if(wet && !c.wasWet && Math.abs(c.v)>1) audio.splash(1); c.wasWet=wet;
+  if(c.v>maxV) c.v-=(wet?14:off?6:4)*dt;
   c.v=Math.max(-8,Math.min(T.maxV,c.v));
   c.h += c.v/4.3*Math.tan(c.steer)*dt;
   const nx=c.x+Math.sin(c.h)*c.v*dt, nz=c.z+Math.cos(c.h)*c.v*dt, nh=terrainH(nx,nz);
-  if(nh<SEA_Y+.15 || (inLakeWater(nx,nz) && nh<WATER_Y+.05)){ if(Math.abs(c.v)>3) audio.bump(); c.v=0; }   // no se puede entrar al agua
-  else { c.x=nx; c.z=nz; }
+  c.x=nx; c.z=nz;   // también se puede entrar al mar y al lago
   // choques con árboles, rocas y palmeras (el coche son tres círculos a lo largo)
   const [fx,fz]=carFwd(c);
   for(const k of [-2.2,0,2.2]){
@@ -3120,6 +3128,7 @@ function updateCars(dt){
       const k=1-Math.exp(-dt*6); c.x+=(c.net.x-c.x)*k; c.z+=(c.net.z-c.z)*k; c.h=lerpAng(c.h,c.net.h,k);
     }
     if(!(c.i===drive) && !c.remote) c.braking=false;
+    wetReturn(c,dt,c.i===drive || !!c.remote || carHasPeople(c) || (player.car&&player.car.i===c.i), ()=>{ c.x=c.home.x; c.z=c.home.z; c.h=c.home.h; c.v=0; c.doorMask=0; c.doorT=now1(); });
     updateCarVisual(c,dt);
     updateCarLights(c);
   }
@@ -3484,6 +3493,8 @@ function updateAircraft(dt){
     } else if(a.net && a.net.parked){
       const k=1-Math.exp(-dt*5); a.x+=(a.net.x-a.x)*k; a.y+=(a.net.y-a.y)*k; a.z+=(a.net.z-a.z)*k; a.h=lerpAng(a.h,a.net.h,k);
     }
+    { let used=a.i===mine || !!a.remote || (player.ac && player.ac.i===a.i); for(const r of mp.remotes.values()) if(r.ai && r.ai[0]===a.i) used=true;
+      wetReturn(a,dt,used,()=>{ const [x,z]=airportXZ(...AIR_PARK[a.i]); a.x=x; a.z=z; a.h=AIR_HEAD; a.y=airGroundY(x,z); a.v=0; a.vy=0; a.p=0; a.b=0; a.thr=0; a.rotor=0; a.onGround=true; a.stairs=0; a.door=0; a.sdT=now1(); }); }
     a.stairsK+=(a.stairs-a.stairsK)*Math.min(1,dt*2.2); a.doorK+=(a.door-a.doorK)*Math.min(1,dt*3);
     if(a.T.kind==='plane'){ a.stairsP.rotation.z=(1-a.stairsK)*2.17; a.doorP.rotation.y=a.doorK*1.85; }
     else { a.spin+=a.rotor*a.rotor*dt*28; a.rotorG.rotation.y=a.spin; a.tail.rotation.x=a.spin*1.6; }
