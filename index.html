@@ -614,7 +614,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='36';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='37';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -2268,7 +2268,7 @@ async function joinRoom(code, pub){
     player.pos.set(...startSpot());
     sendPresence(true);
     mpEl.hidden=true; updateRoomUI(); startGame();
-    flashNote(mp.pub ? 'Sala pública '+code+': aparece en Salas activas para que cualquiera entre.' : 'Sala privada '+code+': comparte el código para que entren.'); lobbyAnnounce();
+    flashNote(mp.pub ? 'Sala pública: aparece en Salas activas para que cualquiera entre. El código está en la pausa.' : 'Sala privada '+code+': comparte el código para que entren.'); lobbyAnnounce();
   }catch(e){
     const c=e&&e.code;
     mpMsg(c==='limit_reached' ? 'No se pudo abrir la sala ahora mismo. Inténtalo en un momento.'
@@ -2457,14 +2457,16 @@ function updateRoomUI(){
   ui('leaveRoomBtn').hidden=!inRoom;
   if(!inRoom){ ui('roomDiag').hidden=true; return; }
   const n=mp.remotes.size+1;
-  ui('roomLabel').textContent = innerWidth<520 ? `${mp.code} · ${n}` : `Sala ${mp.code} · ${n} ${n===1?'jugador':'jugadores'}`;
-  ui('roomChip').title=`Sala ${mp.code} · ${n} ${n===1?'jugador':'jugadores'}. Toca para copiar el código.`;
+  // en una sala pública no hace falta ver el código: queda en la pausa
+  const tag = mp.pub ? (innerWidth<520 ? 'Pública' : 'Sala pública') : (innerWidth<520 ? mp.code : 'Sala '+mp.code);
+  ui('roomLabel').textContent = innerWidth<520 ? `${tag} · ${n}` : `${tag} · ${n} ${n===1?'jugador':'jugadores'}`;
+  ui('roomChip').title = mp.pub ? `Sala pública · ${n} ${n===1?'jugador':'jugadores'}. El código está en la pausa.` : `Sala ${mp.code} · ${n} ${n===1?'jugador':'jugadores'}. Toca para copiar el código.`;
   ui('roomDot').classList.toggle('on', mp.connected);
   centerText(ui('leaveRoomBtn'), 'Salir de la sala '+mp.code);
   // diagnóstico: conexión, cuántas pestañas ve la sala (contándote) y último error
   let total='?', all='?'; try{ total=mp.room.peers().filter(p=>p.kind!=='agent').length; all=mp.room.lobby.peers().filter(p=>p.kind!=='agent').length; }catch(e){}
   const d=ui('roomDiag'); d.hidden=false;
-  const txt=`${mp.pub?'Sala pública':'Sala privada'} · Versión ${GAME_VERSION} · Conexión: ${mp.connected?'sí':'no'} · Con el juego abierto: ${all} · En tu sala: ${total} · Se ven: ${mp.remotes.size+1}${mp.lastErr?' · Error: '+mp.lastErr:''}`;
+  const txt=`${mp.pub?'Sala pública':'Sala privada'} · Código ${mp.code} · Versión ${GAME_VERSION} · Conexión: ${mp.connected?'sí':'no'} · Con el juego abierto: ${all} · En tu sala: ${total} · Se ven: ${mp.remotes.size+1}${mp.lastErr?' · Error: '+mp.lastErr:''}`;
   if(d.textContent!==txt) d.textContent=txt;
 }
 function wave(){
@@ -2472,6 +2474,7 @@ function wave(){
   mp.waveStamp=Date.now(); sendPresence(true);
 }
 ui('roomChip').onclick=()=>{
+  if(mp.pub){ flashNote('Sala pública: cualquiera entra desde Salas activas. El código está en la pausa.'); return; }
   const code=mp.code; if(!code) return;
   const done=()=>flashNote('Código '+code+' copiado');
   try{ navigator.clipboard.writeText(code).then(done,()=>flashNote('Código de la sala: '+code)); }catch(e){ flashNote('Código de la sala: '+code); }
