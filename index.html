@@ -319,6 +319,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <button class="btn" id="pauseOptionsBtn">Opciones</button>
     <button class="btn" id="leaveRoomBtn" hidden>Salir de la sala</button>
     <p class="room-diag" id="roomDiag" hidden></p>
+    <p class="room-diag" id="skyInfo"></p>
     <button class="btn" id="toMenuBtn">Menú principal</button>
   </div>
 </div>
@@ -376,6 +377,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       <div class="opt"><label>Límite de FPS<small>30 da un ritmo parejo en equipos lentos</small></label>
         <div class="seg" id="optFpsCap"><button data-v="free">Libre</button><button data-v="30">30</button></div></div>
       <div class="opt"><label for="optShadows">Sombras</label><button class="switch" id="optShadows" role="switch" aria-checked="true" aria-label="Sombras"></button></div>
+      <div class="opt"><label for="optWeather">Clima<small>Lluvia, nieve, tormentas y niebla de vez en cuando</small></label><button class="switch" id="optWeather" role="switch" aria-checked="true" aria-label="Clima"></button></div>
       <div class="opt"><label for="optDraw">Distancia de visión</label><div class="ctrl"><input type="range" id="optDraw" min="80" max="300" step="10"><output id="optDrawOut"></output></div></div>
     </div>
 
@@ -568,7 +570,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='23';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='24';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -585,7 +587,7 @@ const camera = new THREE.PerspectiveCamera(65, 1, 0.05, 500);
 camera.rotation.order = 'YXZ';
 
 // ---------- Luces ----------
-scene.add(new THREE.HemisphereLight(0xeef8ff, 0x7a9a4a, 0.75));
+const hemi = new THREE.HemisphereLight(0xeef8ff, 0x7a9a4a, 0.75); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff3dc, 0.85);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -1150,6 +1152,158 @@ for(let i=0;i<40;i++){
   clouds.push(g); scene.add(g);
 }
 
+// ---------- Cielo: día y noche, sol, luna, estrellas y clima ----------
+// Todo sale de la hora real, así que todos los jugadores ven la misma hora y el mismo clima sin mandarse nada.
+const DAY_LEN=1800;              // 15 min de día + 15 min de noche (segundos)
+const WEATHER_SLOT=300;          // el clima puede cambiar cada 5 minutos
+const WEATHERS={
+  clear:{name:'Despejado',     cov:0,   rain:0, snow:0, storm:0, fog:0,   wind:.1},
+  cloudy:{name:'Nublado',      cov:.6,  rain:0, snow:0, storm:0, fog:.1,  wind:.3},
+  rain:{name:'Lluvia',         cov:.85, rain:1, snow:0, storm:0, fog:.25, wind:.4},
+  storm:{name:'Tormenta eléctrica', cov:1, rain:1, snow:0, storm:1, fog:.3, wind:.8},
+  snow:{name:'Nieve',          cov:.75, rain:0, snow:1, storm:0, fog:.3,  wind:.3},
+  fog:{name:'Niebla',          cov:.4,  rain:0, snow:0, storm:0, fog:.85, wind:.05}};
+const WEATHER_BAG=[['clear',40],['cloudy',18],['rain',15],['storm',10],['snow',9],['fog',8]];
+const WEATHER_MSG={clear:'Se despejó el cielo', cloudy:'Se está nublando', rain:'Empieza a llover', storm:'Se acerca una tormenta eléctrica', snow:'Empieza a nevar', fog:'Llega la niebla'};
+function weatherOfSlot(k){
+  if(!settings.weather) return 'clear';
+  let h=Math.imul(k|0,2654435761)>>>0; h^=h>>>15; h=Math.imul(h,2246822519)>>>0; h=(h^(h>>>13))>>>0;
+  let x=(h%1000)/1000*100;
+  for(const [id,w] of WEATHER_BAG){ x-=w; if(x<0) return id; }
+  return 'clear';
+}
+const skyNow=new THREE.Color(SKY);
+const weatherNow={id:'clear', cov:0, rain:0, snow:0, storm:0, fog:0, wind:.1};
+const _c1=new THREE.Color(), _c2=new THREE.Color();
+const C={night:new THREE.Color(0x0b1430), day:new THREE.Color(SKY), dusk:new THREE.Color(0xf2a07a), grayDay:new THREE.Color(0xa7b0b6), grayStorm:new THREE.Color(0x6a737b), grayNight:new THREE.Color(0x10141c),
+  hemiSkyDay:new THREE.Color(0xeef8ff), hemiSkyNight:new THREE.Color(0x5867a0), hemiGndDay:new THREE.Color(0x7a9a4a), hemiGndNight:new THREE.Color(0x1d2a22),
+  sunNoon:new THREE.Color(0xfff3dc), sunLow:new THREE.Color(0xffa060), moon:new THREE.Color(0xa8bcff), cloudW:new THREE.Color(0xffffff), cloudD:new THREE.Color(0x59626c)};
+const sm=(a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
+function spriteTex(draw,size=128){ const c=document.createElement('canvas'); c.width=c.height=size; draw(c.getContext('2d'),size); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; }
+const skyRoot=new THREE.Group(); scene.add(skyRoot);
+const sunSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:spriteTex((g,s)=>{ const r=s/2, gr=g.createRadialGradient(r,r,0,r,r,r);
+  gr.addColorStop(0,'rgba(255,255,240,1)'); gr.addColorStop(.22,'rgba(255,248,215,1)'); gr.addColorStop(.3,'rgba(255,225,150,.55)'); gr.addColorStop(1,'rgba(255,200,120,0)'); g.fillStyle=gr; g.fillRect(0,0,s,s); }),
+  fog:false, depthWrite:false, transparent:true}));
+const moonSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:spriteTex((g,s)=>{ const r=s/2, gr=g.createRadialGradient(r,r,0,r,r,r);
+  gr.addColorStop(0,'rgba(200,215,255,.0)'); gr.addColorStop(.36,'rgba(200,215,255,.0)'); gr.addColorStop(.4,'rgba(190,205,255,.35)'); gr.addColorStop(1,'rgba(160,180,255,0)'); g.fillStyle=gr; g.fillRect(0,0,s,s);
+  g.fillStyle='#eef0f6'; g.beginPath(); g.arc(r,r,s*.2,0,7); g.fill();
+  g.fillStyle='rgba(150,155,175,.45)'; [[-.07,-.05,.05],[.06,.03,.035],[-.02,.08,.03],[.05,-.08,.025]].forEach(([x,y,q])=>{ g.beginPath(); g.arc(r+x*s,r+y*s,q*s,0,7); g.fill(); }); }),
+  fog:false, depthWrite:false, transparent:true}));
+skyRoot.add(sunSprite, moonSprite);
+const stars=(()=>{ const n=900, p=new Float32Array(n*3); let s=99;
+  const rnd=()=>{ s=(s*1664525+1013904223)>>>0; return s/4294967296; };
+  for(let i=0;i<n;i++){ const u=rnd()*2-1, a=rnd()*Math.PI*2, r=Math.sqrt(1-u*u); p[i*3]=Math.cos(a)*r; p[i*3+1]=Math.abs(u)*.95+.05; p[i*3+2]=Math.sin(a)*r; }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(p,3));
+  const m=new THREE.Points(g,new THREE.PointsMaterial({color:0xffffff, size:2, sizeAttenuation:false, transparent:true, opacity:0, fog:false, depthWrite:false}));
+  m.frustumCulled=false; skyRoot.add(m); return m; })();
+// Lluvia (rayitas) y nieve (copos) en una caja que sigue a la cámara
+const PRECIP_BOX=26, PRECIP_H=34, SNOW_BOX=16, SNOW_H=22;
+let rainFx=null, snowFx=null;
+function buildPrecip(){
+  const q=settings.quality, nR=q==='low'?600:q==='mid'?1200:2000, nS=q==='low'?800:q==='mid'?1400:2200;
+  const rp=new Float32Array(nR*6), rd=new Float32Array(nR*3);
+  for(let i=0;i<nR;i++){ rd[i*3]=(Math.random()*2-1)*PRECIP_BOX; rd[i*3+1]=Math.random()*PRECIP_H; rd[i*3+2]=(Math.random()*2-1)*PRECIP_BOX; }
+  const rg=new THREE.BufferGeometry(); rg.setAttribute('position',new THREE.BufferAttribute(rp,3));
+  const rl=new THREE.LineSegments(rg,new THREE.LineBasicMaterial({color:0xb9c8dc, transparent:true, opacity:.55, depthWrite:false}));
+  rl.frustumCulled=false; rl.visible=false; scene.add(rl);
+  const sp=new Float32Array(nS*3), sd=new Float32Array(nS*4);
+  for(let i=0;i<nS;i++){ sd[i*4]=(Math.random()*2-1)*SNOW_BOX; sd[i*4+1]=Math.random()*SNOW_H; sd[i*4+2]=(Math.random()*2-1)*SNOW_BOX; sd[i*4+3]=Math.random()*6.28; }
+  const sg=new THREE.BufferGeometry(); sg.setAttribute('position',new THREE.BufferAttribute(sp,3));
+  const flake=spriteTex((g,s)=>{ const r=s/2, gr=g.createRadialGradient(r,r,0,r,r,r); gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.5,'rgba(255,255,255,.8)'); gr.addColorStop(1,'rgba(255,255,255,0)'); g.fillStyle=gr; g.fillRect(0,0,s,s); },32);
+  const sl=new THREE.Points(sg,new THREE.PointsMaterial({map:flake, color:0xffffff, size:.45, transparent:true, opacity:1, depthWrite:false, fog:false}));
+  sl.frustumCulled=false; sl.visible=false; scene.add(sl);
+  rainFx={mesh:rl, pos:rp, d:rd, n:nR, q}; snowFx={mesh:sl, pos:sp, d:sd, n:nS};
+}
+function wrap(v,box){ return ((v+box)%(2*box)+2*box)%(2*box)-box; }
+// Rayos
+const bolt=(()=>{ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(16*3),3));
+  const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xf4f6ff, fog:false, transparent:true, opacity:1})); l.frustumCulled=false; l.visible=false; scene.add(l); return l; })();
+const sky={flash:0, nextBolt:6, boltT:0, lastWeather:'', shownWeather:'', thunderAt:0, thunderPow:0, hour:6, dayK:1};
+function strikeLightning(){
+  const a=Math.random()*Math.PI*2, d=70+Math.random()*170, x=camera.position.x+Math.cos(a)*d, z=camera.position.z+Math.sin(a)*d;
+  const arr=bolt.geometry.attributes.position.array; let px=x, pz=z;
+  for(let i=0;i<16;i++){ const y=75-i*(75/15); arr[i*3]=px; arr[i*3+1]=y; arr[i*3+2]=pz; px+=(Math.random()-.5)*7; pz+=(Math.random()-.5)*7; }
+  arr[15*3+1]=Math.max(terrainH(px,pz),SEA_Y);
+  bolt.geometry.attributes.position.needsUpdate=true; bolt.visible=true; sky.boltT=.22;
+  sky.flash=1; sky.flash2=.12+Math.random()*.1;     // doble destello
+  sky.thunderAt=performance.now()+d/340*1000; sky.thunderPow=Math.max(.35,1.2-d/220);
+}
+function blendWeather(out,a,b,k){ for(const key of ['cov','rain','snow','storm','fog','wind']) out[key]=a[key]+(b[key]-a[key])*k; }
+function updateSky(dt){
+  const now=Date.now()/1000;
+  // Hora: 0 = amanecer, .25 = mediodía, .5 = atardecer, .75 = medianoche
+  const p=(now%DAY_LEN)/DAY_LEN, th=p*Math.PI*2;
+  sky.hour=(6+p*24)%24;
+  _c1.set(0,0,0);
+  const sx=Math.cos(th), sy=Math.sin(th)*.9, sz=.36, sl=Math.hypot(sx,sy,sz), sunDir={x:sx/sl, y:sy/sl, z:sz/sl}, moonDir={x:-sunDir.x, y:-sunDir.y, z:-sunDir.z};
+  // Clima: cada bloque de 5 min tiene uno; los últimos 45 s se mezcla con el siguiente
+  const slot=Math.floor(now/WEATHER_SLOT), into=now-slot*WEATHER_SLOT, wa=weatherOfSlot(slot), wb=weatherOfSlot(slot+1);
+  const kb=sm(WEATHER_SLOT-45, WEATHER_SLOT, into);
+  blendWeather(weatherNow, WEATHERS[wa], WEATHERS[wb], kb); weatherNow.id=kb>.5?wb:wa;
+  const W=weatherNow, under=typeof underwaterView!=='undefined' && underwaterView;
+  if(W.id!==sky.shownWeather){ if(sky.shownWeather && state==='play' && settings.hints) flashNote(WEATHER_MSG[W.id]); sky.shownWeather=W.id; }
+  // ¿Cuánto es de día?
+  const day=sm(-.12,.18,sunDir.y), dusk=Math.exp(-Math.pow(sunDir.y/.14,2))*(1-W.cov*.8);
+  sky.dayK=day;
+  // Color del cielo
+  skyNow.copy(C.night).lerp(C.day,day).lerp(C.dusk,dusk*.55);
+  _c2.copy(C.grayNight).lerp(_c1.copy(C.grayDay).lerp(C.grayStorm,W.storm),day);
+  skyNow.lerp(_c2, Math.min(1,W.cov*.85+W.fog*.4));
+  // Destello del rayo
+  if(sky.flash>0){ sky.flash=Math.max(0,sky.flash-dt*6); if(sky.flash<.05 && sky.flash2>0){ sky.flash=.7; sky.flash2-=1; } }
+  const fl=sky.flash;
+  if(fl>0) skyNow.lerp(_c1.set(0xdfe6ff), fl*.6);
+  if(!under){ scene.background.copy(skyNow); scene.fog.color.copy(skyNow); const k=1-.68*W.fog-.15*(W.rain+W.snow); scene.fog.near=settings.draw*.32*k*k; scene.fog.far=settings.draw*k; }
+  // Luces
+  hemi.color.copy(C.hemiSkyNight).lerp(C.hemiSkyDay,day);
+  hemi.groundColor.copy(C.hemiGndNight).lerp(C.hemiGndDay,day);
+  hemi.intensity=(.22+.53*day)*(1-.2*W.cov) + fl*1.4;
+  const sunUp=sm(-.04,.2,sunDir.y), moonUp=sm(-.04,.2,moonDir.y);
+  const useSun=sunDir.y>-.02, dir=useSun?sunDir:moonDir;
+  sun.intensity=useSun ? .85*sunUp*(1-.7*W.cov) : .24*moonUp*(1-.6*W.cov);
+  if(useSun) sun.color.copy(C.sunLow).lerp(C.sunNoon, sm(.05,.35,sunDir.y)); else sun.color.copy(C.moon);
+  const fp=player.pos;
+  sun.position.set(fp.x+dir.x*60, fp.y+dir.y*60, fp.z+dir.z*60); sun.target.position.copy(fp);
+  // Sol, luna y estrellas (siempre lejos, alrededor de la cámara)
+  const R=camera.far*.82; skyRoot.position.copy(camera.position);
+  const clearSky=1-sm(.55,.95,W.cov+W.fog*.5);
+  sunSprite.position.set(sunDir.x*R, sunDir.y*R, sunDir.z*R); sunSprite.scale.setScalar(R*.16);
+  sunSprite.material.opacity=sm(-.08,.02,sunDir.y)*(.25+.75*clearSky); sunSprite.visible=sunSprite.material.opacity>.01 && !under;
+  sunSprite.material.color.copy(C.sunLow).lerp(_c1.set(0xffffff), sm(0,.3,sunDir.y));
+  moonSprite.position.set(moonDir.x*R, moonDir.y*R, moonDir.z*R); moonSprite.scale.setScalar(R*.16);
+  moonSprite.material.opacity=sm(-.08,.04,moonDir.y)*(1-day*.6)*(.2+.8*clearSky); moonSprite.visible=moonSprite.material.opacity>.01 && !under;
+  stars.scale.setScalar(R*.97); stars.rotation.y=th*.5; stars.rotation.z=.4;
+  stars.material.opacity=(1-sm(.0,.5,day))*clearSky*.9; stars.visible=stars.material.opacity>.01 && !under;
+  // Nubes: más grises con lluvia y tormenta, oscuras de noche
+  cloudMat.color.copy(C.cloudW).lerp(C.cloudD, Math.min(1,W.storm*.85+W.rain*.35+W.snow*.15));
+  cloudMat.emissive.copy(cloudMat.color); cloudMat.emissiveIntensity=.04+.22*day+fl*.8;
+  // Lluvia y nieve
+  if(!rainFx || rainFx.q!==settings.quality){ if(rainFx){ scene.remove(rainFx.mesh, snowFx.mesh); rainFx.mesh.geometry.dispose(); snowFx.mesh.geometry.dispose(); } buildPrecip(); }
+  const cx=camera.position.x, cy=camera.position.y, cz=camera.position.z, windX=W.wind*4, windZ=W.wind*1.5;
+  const nr=Math.round(rainFx.n*W.rain); rainFx.mesh.visible=nr>0 && !under;
+  if(rainFx.mesh.visible){ const d=rainFx.d, a=rainFx.pos, vy=22, len=.9;
+    for(let i=0;i<nr;i++){ d[i*3]+=windX*dt; d[i*3+1]-=vy*dt; d[i*3+2]+=windZ*dt; if(d[i*3+1]<0) d[i*3+1]+=PRECIP_H;
+      const x=cx+wrap(d[i*3]-cx,PRECIP_BOX), y=cy-12+d[i*3+1], z=cz+wrap(d[i*3+2]-cz,PRECIP_BOX);
+      a[i*6]=x; a[i*6+1]=y; a[i*6+2]=z; a[i*6+3]=x-windX/vy*len; a[i*6+4]=y+len; a[i*6+5]=z-windZ/vy*len; }
+    rainFx.mesh.geometry.setDrawRange(0,nr*2); rainFx.mesh.geometry.attributes.position.needsUpdate=true;
+    rainFx.mesh.material.color.copy(_c1.set(0x5d6b80).lerp(_c2.set(0xc4d2e6),day)); }
+  const ns=Math.round(snowFx.n*W.snow); snowFx.mesh.visible=ns>0 && !under;
+  if(snowFx.mesh.visible){ const d=snowFx.d, a=snowFx.pos, t=now%1000;
+    for(let i=0;i<ns;i++){ d[i*4+1]-=1.6*dt; if(d[i*4+1]<0) d[i*4+1]+=SNOW_H; d[i*4]+=windX*.4*dt; d[i*4+2]+=windZ*.4*dt;
+      a[i*3]=cx+wrap(d[i*4]-cx+Math.sin(t*.8+d[i*4+3])*.6,SNOW_BOX); a[i*3+1]=cy-8+d[i*4+1]; a[i*3+2]=cz+wrap(d[i*4+2]-cz+Math.cos(t*.7+d[i*4+3])*.6,SNOW_BOX); }
+    snowFx.mesh.geometry.setDrawRange(0,ns); snowFx.mesh.geometry.attributes.position.needsUpdate=true;
+    snowFx.mesh.material.color.copy(_c1.set(0x8a93a8).lerp(_c2.set(0xffffff),day)); }
+  // Rayos y truenos
+  if(W.storm>.6){ sky.nextBolt-=dt; if(sky.nextBolt<=0){ sky.nextBolt=5+Math.random()*12; strikeLightning(); } } else sky.nextBolt=3+Math.random()*5;
+  if(sky.boltT>0){ sky.boltT-=dt; bolt.material.opacity=Math.min(1,sky.boltT*8); if(sky.boltT<=0) bolt.visible=false; }
+  if(sky.thunderAt && performance.now()>=sky.thunderAt){ sky.thunderAt=0; audio.thunder(sky.thunderPow); }
+  audio.weather(under?0:W.rain, W.wind*(1-W.fog*.5)+W.storm*.3);
+  if(now-skyInfoT>.5 && !ui('pause').hidden){ skyInfoT=now; const tx=skyLabel(); const el=ui('skyInfo'); if(el.textContent!==tx) el.textContent=tx; }
+}
+let skyInfoT=0;
+function skyLabel(){ const h=Math.floor(sky.hour), m=Math.floor((sky.hour-h)*60/15)*15;
+  return `Hora en la isla: ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')} · ${WEATHERS[weatherNow.id].name}`; }
+
 // ---------- El peluche ----------
 const PLUSH_COLORS=[
   {name:'Verde', hex:'#a6d24f'}, {name:'Rosa', hex:'#f5a9c0'}, {name:'Azul', hex:'#8cc3ef'},
@@ -1508,6 +1662,22 @@ const audio=(()=>{
     leave(){ if(!ok())return; const t=ctx.currentTime; [79,72].forEach((m,i)=>tone('sine',mtof(m),mtof(m)*.998,t+i*.12,.45,.09)); },
     cam(){ if(!ok())return; const t=ctx.currentTime; tone('square',1400,900,t,.035,.03); noise(t,.03,3000,.06); },
     ui(){ if(!ok())return; const n=performance.now(); if(n-lastUi<40) return; lastUi=n; const t=ctx.currentTime; tone('sine',520,880,t,.07,.16); },
+    // Trueno: chasquido y retumbo largo
+    thunder(p){ if(!ok())return; const t=ctx.currentTime; p=Math.min(1.2,Math.max(.3,p));
+      if(p>.7) noise(t,.18,2600,.22*p,.7);
+      [[150,3.2,.55],[80,4,.6],[320,1.6,.25]].forEach(([f,dur,v],i)=>{
+        const s=ctx.createBufferSource(), fl=ctx.createBiquadFilter(), g=ctx.createGain(); s.buffer=noiseBuf; s.loop=true; s.playbackRate.value=.4+Math.random()*.2;
+        fl.type='lowpass'; fl.frequency.value=f; fl.Q.value=.9; const t0=t+i*.05;
+        g.gain.setValueAtTime(.0001,t0); g.gain.exponentialRampToValueAtTime(v*p,t0+.12+Math.random()*.2); g.gain.exponentialRampToValueAtTime(v*p*.4,t0+dur*.4); g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+        s.connect(fl); fl.connect(g); g.connect(sfxBus); s.start(t0,Math.random()*.5); s.stop(t0+dur+.05); }); },
+    // Ambiente de clima: lluvia (ruido agudo) y viento (ruido grave que sube y baja)
+    weather(rain, wind){ if(!ok()) return;
+      if(!this._wx){ const mk=(type,f,q)=>{ const s=ctx.createBufferSource(), fl=ctx.createBiquadFilter(), g=ctx.createGain(); s.buffer=noiseBuf; s.loop=true;
+          fl.type=type; fl.frequency.value=f; fl.Q.value=q; g.gain.value=0; s.connect(fl); fl.connect(g); g.connect(sfxBus); s.start(); return {g,fl}; };
+        this._wx={rain:mk('highpass',1400,.5), rain2:mk('lowpass',900,.6), wind:mk('bandpass',380,.7)}; }
+      const w=this._wx, t=ctx.currentTime; if(t-(this._wxT||0)<.25) return; this._wxT=t;
+      w.rain.g.gain.setTargetAtTime(.075*rain,t,.6); w.rain2.g.gain.setTargetAtTime(.05*rain,t,.6);
+      w.wind.g.gain.setTargetAtTime(.05*Math.max(0,wind-.15)*(.7+.3*Math.sin(t*.4)),t,.8); w.wind.fl.frequency.setTargetAtTime(300+120*Math.sin(t*.23),t,1); },
     suspend(){ if(ctx && ctx.state==='running') ctx.suspend().catch(()=>{}); },
     resume(){ if(ctx && ctx.state==='suspended') ctx.resume().catch(()=>{}); }
   };
@@ -1519,7 +1689,7 @@ addEventListener('keydown',e=>{ if(e.code==='KeyM' && !e.repeat && !(e.target in
 
 // ---------- Opciones ----------
 const DEFAULTS={fov:65, quality:'high', shadows:true, draw:190, sens:1, invert:false, startCam:'third', alwaysRun:false, bob:true, fps:false, hints:true,
-  master:80, music:60, sfx:80, muted:false, autoRes:true, fpsCap:'free'};
+  master:80, music:60, sfx:80, muted:false, autoRes:true, fpsCap:'free', weather:true};
 let settings={...DEFAULTS};
 let resScale=1;   // escala de resolución automática (1 = completa)
 try{ const s=JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'null'); if(s) settings={...DEFAULTS,...s}; }catch(e){}
@@ -1564,7 +1734,7 @@ function syncOptionsUI(){
   ui('optDraw').value=settings.draw; ui('optDrawOut').textContent=settings.draw+' m';
   ui('optSens').value=settings.sens; ui('optSensOut').textContent=settings.sens.toFixed(1)+'×';
   [['optMaster','master'],['optMusic','music'],['optSfx','sfx']].forEach(([id,k])=>{ ui(id).value=settings[k]; ui(id+'Out').textContent=settings[k]+'%'; });
-  [['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optHints','hints']]
+  [['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optHints','hints'],['optWeather','weather']]
     .forEach(([id,k])=>ui(id).setAttribute('aria-checked', String(settings[k])));
   [['optQuality','quality'],['optStartCam','startCam'],['optFpsCap','fpsCap']].forEach(([id,k])=>
     ui(id).querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.v===settings[k]))));
@@ -1572,7 +1742,7 @@ function syncOptionsUI(){
 function set(k,v){ settings[k]=v; saveSettings(); applySettings(); }
 
 ui('optFull').onclick=toggleFullscreen;
-[['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optHints','hints']]
+[['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optHints','hints'],['optWeather','weather']]
   .forEach(([id,k])=>ui(id).onclick=()=>set(k,!settings[k]));
 let sfxPreview=0;
 [['optMaster','master'],['optMusic','music'],['optSfx','sfx']].forEach(([id,k])=>ui(id).oninput=e=>{
@@ -2728,7 +2898,7 @@ let swimHintShown=false;
 let underwaterView=false;
 function refreshFog(){
   if(underwaterView){ scene.fog.color.set(0x2f7fae); scene.background.set(0x2f7fae); scene.fog.near=1; scene.fog.far=Math.min(60,settings.draw); }
-  else { scene.fog.color.set(SKY); scene.background.set(SKY); scene.fog.near=settings.draw*.32; scene.fog.far=settings.draw; }
+  else { scene.fog.color.copy(skyNow); scene.background.copy(skyNow); const k=1-.68*weatherNow.fog; scene.fog.near=settings.draw*.32*k*k; scene.fog.far=settings.draw*k; }
 }
 function setUnderwaterView(on){ if(on===underwaterView) return; underwaterView=on; refreshFog(); audio.underwater(on); }
 
@@ -2966,9 +3136,6 @@ function update(dt,t){
   if(performance.now()-actScan>100){ actScan=performance.now(); scanActions(); }
   updateCarHud();
 
-  // El sol sigue al jugador para que las sombras se vean nítidas
-  sun.position.set(player.pos.x+25, player.pos.y+45, player.pos.z+18);
-  sun.target.position.copy(player.pos);
 }
 
 let fpsFrames=0, fpsTime=0; const fpsEl=ui('fps');
@@ -2990,6 +3157,7 @@ function frame(){
   if(settings.fpsCap==='30'){ capSkip=!capSkip; if(capSkip) return; }   // dibujar uno sí y uno no: ritmo parejo de 30
   const raw=clock.getDelta(), dt=Math.min(raw,.05), t=clock.elapsedTime;
   if(state!=='pause') update(dt,t);
+  updateSky(dt);
   updateRemotes(dt,t);
   if(state==='play') sendPresence(false);
   if(mp.room && performance.now()-mp.heartbeat>4000){ mp.heartbeat=performance.now(); mp.lastPayload=''; sendPresence(true); updateRoomUI(); }   // latido
