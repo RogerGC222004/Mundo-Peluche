@@ -489,20 +489,19 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 // Salas por internet con PeerJS (WebRTC). Quien entra primero con un código se vuelve el anfitrión
 // (su ID es "mundopeluche-v1-CODIGO"); los demás se conectan a él y él reparte la presencia de todos.
 // Si el anfitrión se va, el siguiente en reconectar toma su lugar.
-const peerNet = (()=>{
-  const PREFIX='mundopeluche-v1-';
+function makePeerNet(PREFIX){
   if(typeof Peer!=='function') return null;
   const randId=()=>{ const a=new Uint32Array(3); crypto.getRandomValues(a); return PREFIX+'p-'+[...a].map(v=>v.toString(36)).join(''); };
   function merge(base, patch){ const o={...(base||{})}; for(const k in patch){ if(patch[k]===null) delete o[k]; else o[k]=patch[k]; } return o; }
   function join(code){
-    const hostId=PREFIX+code;
+    const hostId=PREFIX+String(code).replace(/[^A-Za-z0-9_-]/g,'');
     const peersH=new Set(), connH=new Set(), errH=new Set();
     let me=null, myId='', isHost=false, hostConn=null, clients=new Map(), pres=new Map(), myPres={};
     let connected=false, closed=false, notifyT=0, retryT=0, firstDone=null, firstFail=null;
     const ready=new Promise((res,rej)=>{ firstDone=res; firstFail=rej; });
     const setConn=c=>{ if(c===connected) return; connected=c; connH.forEach(h=>{ try{h(c);}catch(e){} }); };
-    const list=()=>{ const out=[]; if(myId) out.push({peer:myId, sameTab:true, presence:myPres});
-      for(const [id,p] of pres) if(id!==myId) out.push({peer:id, presence:p}); return out; };
+    const list=()=>{ const out=[]; if(myId) out.push({peer:myId, kind:'viewer', sameTab:true, presence:myPres});
+      for(const [id,p] of pres) if(id!==myId) out.push({peer:id, kind:'viewer', presence:p}); return out; };
     const notify=()=>{ if(notifyT) return; notifyT=setTimeout(()=>{ notifyT=0; const ps=list(); peersH.forEach(h=>{ try{h({peers:ps});}catch(e){} }); },0); };
     const sendAll=(msg, except)=>{ for(const [id,c] of clients) if(id!==except && c.open){ try{ c.send(msg); }catch(e){} } };
     function cleanup(){ clients.forEach(c=>{ try{c.close();}catch(e){} }); clients.clear(); hostConn=null;
@@ -564,7 +563,8 @@ const peerNet = (()=>{
     return ready.then(()=>{ clearTimeout(timeout); return room; }, e=>{ closed=true; cleanup(); throw e; });
   }
   return { join };
-})();
+}
+const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
