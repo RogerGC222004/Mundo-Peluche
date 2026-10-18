@@ -615,7 +615,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='40';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='41';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -658,8 +658,15 @@ function feltTexture(base, speck, size = 256, density = 5000, repeat = 1){
   t.anisotropy = 4;
   return t;
 }
+// Brillo suave en los bordes, como la pelusa del fieltro a contraluz (casi no cuesta: unas cuantas operaciones por pixel)
+const FELT_RIM={value:.22};
+function feltSheen(m){
+  m.onBeforeCompile=sh=>{ sh.uniforms.rimK=FELT_RIM;
+    sh.fragmentShader='uniform float rimK;\n'+sh.fragmentShader.replace('#include <tonemapping_fragment>',
+      '{ float fr=1.0-clamp(dot(normalize(normal),normalize(vViewPosition)),0.0,1.0); gl_FragColor.rgb+=fr*fr*fr*rimK*(diffuseColor.rgb*0.7+0.3); }\n#include <tonemapping_fragment>'); };
+  m.customProgramCacheKey=()=>'feltSheen'; return m; }
 const felt = (hex, speck='rgba(0,0,0,0.10)', rep=1) =>
-  new THREE.MeshStandardMaterial({color:0xffffff, map:feltTexture(hex, speck, 256, 5000, rep), roughness:1, metalness:0});
+  feltSheen(new THREE.MeshStandardMaterial({color:0xffffff, map:feltTexture(hex, speck, 256, 5000, rep), roughness:1, metalness:0}));
 
 // ---------- Mapa fijo de la isla ----------
 // La isla es siempre la misma para todos: el relieve está definido por las fórmulas de abajo
@@ -768,6 +775,16 @@ const waterLevelAt=(x,z)=>inLakeWater(x,z)?WATER_Y:SEA_Y;
     if(cc>1) { tmpC.lerp(SEAF, smooth(1,1.1,cc)); tmpC.lerp(DEEP, smooth(-6,-40,h)); }
     col[i*3]=tmpC.r; col[i*3+1]=tmpC.g; col[i*3+2]=tmpC.b;
   }
+  // variación del pasto: tonos que cambian poco a poco, valles en sombra y lomas más claras (se calcula una vez al cargar)
+  { const W=SEG+1, DRY=hexLin('#b4c25c'), LUSH=hexLin('#5ea444');
+    for(let j=0;j<W;j++) for(let i=0;i<W;i++){ const k=j*W+i, x=pos.getX(k), z=pos.getZ(k), h=pos.getY(k);
+      if(h<SEA_Y+.3 || coastC(x,z)>.86) continue;
+      let c=0; if(i>0&&i<W-1&&j>0&&j<W-1){ const sp=Math.max(.5,Math.abs(pos.getX(k+1)-x)); c=(h-(pos.getY(k-1)+pos.getY(k+1)+pos.getY(k-W)+pos.getY(k+W))/4)/sp; }
+      const n1=Math.sin(x*.07+1.7)*Math.cos(z*.06-.6)+.5*Math.sin(x*.13-z*.11+2.3), n2=Math.sin(x*.09+z*.07)*.5+Math.sin(z*.11-x*.05+1.1)*.5;
+      tmpC.setRGB(col[k*3],col[k*3+1],col[k*3+2]);
+      if(n1>0) tmpC.lerp(DRY, Math.min(.45,n1*.35)); else tmpC.lerp(LUSH, Math.min(.6,-n1*.45));
+      const lum=.84*THREE.MathUtils.clamp(1+c*3.2+n2*.07, .7, 1.15);   // un poco más profundo para que no se "queme" con el sol
+      col[k*3]=tmpC.r*lum; col[k*3+1]=tmpC.g*lum; col[k*3+2]=tmpC.b*lum; } }
   geo.setAttribute('color', new THREE.BufferAttribute(col,3));
   geo.computeVertexNormals();
   const m=new THREE.Mesh(geo, new THREE.MeshStandardMaterial({map:t, vertexColors:true, roughness:1}));
@@ -1409,6 +1426,16 @@ const C={night:new THREE.Color(0x0b1430), day:new THREE.Color(SKY), dusk:new THR
 const sm=(a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
 function spriteTex(draw,size=128){ const c=document.createElement('canvas'); c.width=c.height=size; draw(c.getContext('2d'),size); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; }
 const skyRoot=new THREE.Group(); scene.add(skyRoot);
+// Domo del cielo: abajo el color del horizonte (igual a la niebla), arriba más azul, y un resplandor alrededor del sol
+const skyDome=new THREE.Mesh(new THREE.SphereGeometry(1,32,16), new THREE.ShaderMaterial({
+  uniforms:{hor:{value:new THREE.Color(SKY)}, zen:{value:new THREE.Color(0x8fc4ea)}, sunD:{value:new THREE.Vector3(0,1,0)}, glowC:{value:new THREE.Color(0xfff0c8)}, glowK:{value:.4}},
+  vertexShader:'varying vec3 vD; void main(){ vD=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader:'uniform vec3 hor; uniform vec3 zen; uniform vec3 sunD; uniform vec3 glowC; uniform float glowK; varying vec3 vD;'+
+    'void main(){ vec3 d=normalize(vD); float t=clamp(d.y,0.0,1.0); vec3 c=mix(hor,zen,pow(t,.55)); float s=max(dot(d,sunD),0.0);'+
+    'c+=glowC*glowK*(pow(s,6.0)*.35+pow(s,40.0)*.5)*(1.0-t*.5); gl_FragColor=vec4(c,1.0); }',
+  side:THREE.BackSide, depthWrite:false, fog:false}));
+skyDome.frustumCulled=false; skyDome.renderOrder=-1; skyRoot.add(skyDome);
+const _zen=new THREE.Color();
 const sunSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:spriteTex((g,s)=>{ const r=s/2, gr=g.createRadialGradient(r,r,0,r,r,r);
   gr.addColorStop(0,'rgba(255,255,240,1)'); gr.addColorStop(.22,'rgba(255,248,215,1)'); gr.addColorStop(.3,'rgba(255,225,150,.55)'); gr.addColorStop(1,'rgba(255,200,120,0)'); g.fillStyle=gr; g.fillRect(0,0,s,s); }),
   fog:false, depthWrite:false, transparent:true}));
@@ -1494,6 +1521,14 @@ function updateSky(dt){
   sun.position.set(fp.x+dir.x*60, fp.y+dir.y*60, fp.z+dir.z*60); sun.target.position.copy(fp);
   // Sol, luna y estrellas (siempre lejos, alrededor de la cámara)
   const R=camera.far*.82; skyRoot.position.copy(camera.position);
+  { const U=skyDome.material.uniforms; skyDome.scale.setScalar(camera.far*.9); skyDome.visible=!under;
+    U.hor.value.copy(skyNow);
+    _zen.copy(skyNow).multiply(_c1.setRGB(.66,.83,1.0)).lerp(_c1.set(0x050a1c), 1-day).lerp(skyNow, Math.min(1,W.cov*.9+W.fog*.5));
+    if(fl>0) _zen.lerp(_c1.set(0xdfe6ff), fl*.6);
+    U.zen.value.copy(_zen); U.sunD.value.set(dir.x,dir.y,dir.z);
+    U.glowC.value.copy(useSun ? _c1.copy(C.sunLow).lerp(C.sunNoon, sm(.05,.35,sunDir.y)) : C.moon);
+    U.glowK.value=(useSun ? .55*sunUp+.5*dusk : .15*moonUp)*(1-sm(.4,.9,W.cov+W.fog*.5));
+    FELT_RIM.value=(.08+.16*day)*(1-.4*W.cov); }
   const clearSky=1-sm(.55,.95,W.cov+W.fog*.5);
   sunSprite.position.set(sunDir.x*R, sunDir.y*R, sunDir.z*R); sunSprite.scale.setScalar(R*.16);
   sunSprite.material.opacity=sm(-.08,.02,sunDir.y)*(.25+.75*clearSky); sunSprite.visible=sunSprite.material.opacity>.01 && !under;
