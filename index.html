@@ -71,7 +71,8 @@ kbd{font-family:var(--body);font-weight:800;font-size:13px;background:#fff;borde
   background:rgba(251,248,239,.45);outline:2px dashed rgba(44,58,26,.5);outline-offset:-8px;pointer-events:auto;}
 .knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:var(--felt);box-shadow:0 4px 0 var(--felt-dk);}
 .tbtns{position:fixed;right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(86px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:auto auto;gap:14px 16px;align-items:end;justify-items:center;pointer-events:none;}
-.tbtns .tbtn{pointer-events:auto;}
+.tbtns .tbtn{pointer-events:auto;touch-action:none;}
+.slot,.act,.chip{touch-action:manipulation;}
 .tbtn.small{width:72px;height:72px;font-size:15px;}
 .tbtn.dive{background:#ffd2dc;box-shadow:0 5px 0 #d98aa0;}
 .tbtn{width:90px;height:90px;border-radius:50%;border:none;font-family:var(--display);font-weight:800;font-size:15px;color:var(--thread);background:var(--label);box-shadow:0 5px 0 #c9c2ab;font-size:17px;}
@@ -598,7 +599,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='27';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='28';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -1789,15 +1790,23 @@ ui('controlsBtn').onclick=()=>{controlsEl.hidden=false;};
 ui('closeControls').onclick=()=>{controlsEl.hidden=true;};
 ui('resumeBtn').onclick=()=>{show('play'); lockPointer();};
 ui('toMenuBtn').onclick=()=>{ leaveRoom(); show('menu'); player.pos.set(START.x,START.top,START.z); player.vy=0; player.vel.set(0,0,0); player.dive=null; player.diveAngle=0; player.grounded=true; player.inWater=false; player.groundY=0; player.swim=false; player.car=null; updateTouchMode(); };
-ui('pauseChip').onclick=()=>{ if(document.pointerLockElement) document.exitPointerLock(); show('pause'); };
-camChip.onclick=()=>setCam(camMode==='third'?'first':'third');
-ui('tCam').onclick=()=>setCam(camMode==='third'?'first':'third');
-ui('tJump').addEventListener('pointerdown',e=>{e.preventDefault(); touchHold.up=true; jump();});
-ui('tDive').addEventListener('pointerdown',e=>{e.preventDefault(); touchHold.down=true; startDive();});
-['pointerup','pointercancel','pointerleave'].forEach(ev=>{
-  ui('tJump').addEventListener(ev,()=>{touchHold.up=false;});
-  ui('tDive').addEventListener(ev,()=>{touchHold.down=false;});
-});
+// Botones que responden al instante al tocarlos, aunque otro dedo esté en el joystick
+// (con varios dedos el navegador a veces no manda "click", así que se usa el toque directo)
+let swallowClick=0;   // tras un toque, el "click" que manda el navegador al soltar no debe caer en lo que se abrió encima
+addEventListener('click',e=>{ if(performance.now()<swallowClick){ e.stopPropagation(); e.preventDefault(); swallowClick=0; } },true);
+function tap(el, fn){
+  el.addEventListener('pointerdown',e=>{ if(e.pointerType==='mouse') return; e.preventDefault(); el._tapT=performance.now(); swallowClick=performance.now()+450; fn(e); });
+  el.addEventListener('click',e=>{ if(performance.now()-(el._tapT||-1e9)<800) return; fn(e); });
+}
+function hold(el, on, off){
+  el.addEventListener('pointerdown',e=>{ e.preventDefault(); try{ el.setPointerCapture(e.pointerId); }catch(_){} on(e); });
+  ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>el.addEventListener(ev,off));
+}
+tap(ui('pauseChip'),()=>{ if(document.pointerLockElement) document.exitPointerLock(); show('pause'); });
+tap(camChip,()=>setCam(camMode==='third'?'first':'third'));
+tap(ui('tCam'),()=>setCam(camMode==='third'?'first':'third'));
+hold(ui('tJump'),()=>{ touchHold.up=true; jump(); },()=>{ touchHold.up=false; });
+hold(ui('tDive'),()=>{ touchHold.down=true; startDive(); },()=>{ touchHold.down=false; });
 
 function jump(){ if(player.grounded && !player.dive && !player.swim && !player.car){ player.vy=7.2; player.grounded=false; audio.jump(); } }
 
@@ -2177,7 +2186,7 @@ ui('roomChip').onclick=()=>{
   try{ navigator.clipboard.writeText(code).then(done,()=>flashNote('Código de la sala: '+code)); }catch(e){ flashNote('Código de la sala: '+code); }
 };
 ui('leaveRoomBtn').onclick=()=>{ leaveRoom(); flashNote('Saliste de la sala.'); };
-ui('tWave').addEventListener('pointerdown',e=>{ e.preventDefault(); wave(); });
+tap(ui('tWave'),()=>wave());
 addEventListener('keydown',e=>{ if(state==='play' && e.code==='KeyG' && !e.repeat && !player.car) wave(); });
 
 // ---------- Objetos: barra, inventario y mapa ----------
@@ -2220,7 +2229,7 @@ function applyHeld(){
   try{ sendPresence(true); }catch(e){}
 }
 function closeMap(relock){ if(heldItem()!=='map') return false; holding=false; applyHeld(); renderHotbar(); if(relock) lockPointer(); return true; }
-hotbarEl.querySelectorAll('.slot[data-slot]').forEach(b=>b.addEventListener('click',()=>useSlot(+b.dataset.slot)));
+hotbarEl.querySelectorAll('.slot[data-slot]').forEach(b=>tap(b,()=>useSlot(+b.dataset.slot)));
 ui('mapClose').onclick=()=>closeMap(true);
 
 // Inventario
@@ -2237,7 +2246,7 @@ function renderInv(){
 }
 function openInv(){ if(state!=='play') return; invEl.hidden=false; touchEl.hidden=true; if(document.pointerLockElement) document.exitPointerLock(); renderInv(); ui('invClose').focus({preventScroll:true}); }
 function closeInv(relock){ if(invEl.hidden) return false; invEl.hidden=true; touchEl.hidden=!(state==='play' && isTouch); if(relock) lockPointer(); return true; }
-ui('invBtn').onclick=()=>{ invEl.hidden ? openInv() : closeInv(true); };
+tap(ui('invBtn'),()=>{ invEl.hidden ? openInv() : closeInv(true); });
 ui('invClose').onclick=()=>closeInv(true);
 addEventListener('keydown',e=>{
   if(state!=='play' || e.repeat || e.target instanceof HTMLInputElement) return;
@@ -2739,8 +2748,8 @@ function setActions(a,b){
   label(act1,a,'E'); label(act2,b,'R');
   actEl.hidden=!a && !b;
 }
-act1.onclick=()=>{ if(actA && !actA.disabled) actA.run(); };
-act2.onclick=()=>{ if(actB && !actB.disabled) actB.run(); };
+tap(act1,()=>{ if(actA && !actA.disabled) actA.run(); });
+tap(act2,()=>{ if(actB && !actB.disabled) actB.run(); });
 addEventListener('keydown',e=>{
   if(state!=='play' || e.repeat || e.target instanceof HTMLInputElement) return;
   if(e.code==='KeyE' && actA && !actA.disabled){ actA.run(); }
@@ -2932,11 +2941,10 @@ function updateTouchMode(){
 }
 [['tGas','gas'],['tBrake','brake']].forEach(([id,k])=>{
   const b=ui(id);
-  b.addEventListener('pointerdown',e=>{ e.preventDefault(); touchHold[k]=true; });
-  ['pointerup','pointercancel','pointerleave'].forEach(ev=>b.addEventListener(ev,()=>{ touchHold[k]=false; }));
+  hold(b,()=>{ touchHold[k]=true; },()=>{ touchHold[k]=false; });
 });
-ui('tCam2').onclick=()=>setCam(camMode==='third'?'first':'third');
-ui('tLights').onclick=toggleLights;
+tap(ui('tCam2'),()=>setCam(camMode==='third'?'first':'third'));
+tap(ui('tLights'),toggleLights);
 
 // Jugadores de la sala dentro de coches: misma animación, calculada aquí
 function remoteCarUpdate(r){
