@@ -568,7 +568,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='22';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='23';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -777,7 +777,15 @@ const pathSamples=[], pathLines=[];
   const W=2.4;
   PATHS.forEach(P=>{
     const curve=new THREE.CatmullRomCurve3(P.pts.map(([x,z])=>new THREE.Vector3(x,0,z)), !!P.closed);
-    const len=curve.getLength(), n=Math.ceil(len/1.0), pts=curve.getSpacedPoints(n);
+    const len=curve.getLength(), n=Math.ceil(len/1.0), all=curve.getSpacedPoints(n);
+    // los caminos que salen del botón de inicio (radio 4.6 en el centro) empiezan en su borde, no encima
+    const onBtn=p=>Math.hypot(p.x,p.z)<4.75;
+    let s0=0, s1=all.length; if(!P.closed){ while(s0<s1-2 && onBtn(all[s0])) s0++; while(s1-2>s0 && onBtn(all[s1-1])) s1--; }
+    const pts=all.slice(s0,s1);
+    const edgePt=(a,b)=>{ let lo=0,hi=1; for(let k=0;k<20;k++){ const m=(lo+hi)/2, x=a.x+(b.x-a.x)*m, z=a.z+(b.z-a.z)*m; if(Math.hypot(x,z)<4.75) lo=m; else hi=m; }
+      return new THREE.Vector3(a.x+(b.x-a.x)*hi, 0, a.z+(b.z-a.z)*hi); };   // punto justo en el borde del botón
+    if(s0>0) pts.unshift(edgePt(all[s0-1], all[s0]));
+    if(s1<all.length) pts.push(edgePt(all[s1], all[s1-1]));
     const verts=[], uvs=[], idx=[], line=[]; pathLines.push(line);
     pts.forEach((p,i)=>{
       const a=pts[Math.max(0,i-1)], b=pts[Math.min(pts.length-1,i+1)];
