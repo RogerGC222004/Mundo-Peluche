@@ -615,7 +615,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='41';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='42';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -796,6 +796,148 @@ const farFloor=new THREE.Mesh(new THREE.PlaneGeometry(6000,6000),
   new THREE.MeshStandardMaterial({color:'#5f7f97', roughness:1, polygonOffset:true, polygonOffsetFactor:4, polygonOffsetUnits:8}));
 farFloor.rotation.x=-Math.PI/2; farFloor.position.y=DEEP_Y-.05; scene.add(farFloor);
 
+// ---------- Agua: olas, color según la profundidad, brillos del sol, espuma en la orilla y ondas al tocarla ----------
+// Las olas dependen de la hora (Date.now), así que todos los jugadores ven las mismas.
+const WAVES=[[.8,.6,.35,1.1,.5,0],[-.5,.866,.55,1.5,.3,1.7],[.196,-.981,.9,2.1,.2,4.1]];   // dirección x,z · número de onda · velocidad · peso · fase
+const waterClock=()=>(Date.now()/1000)%3600;
+const WATER={seaA:.2, lakeA:.04, t:0};
+function waveH(x,z,A,t){ let h=0; for(const [dx,dz,k,w,a,ph] of WAVES) h+=a*Math.sin(k*(dx*x+dz*z)+w*t+ph); return h*A; }
+function waterSurfaceY(x,z){ return inLakeWater(x,z) ? WATER_Y+waveH(x,z,WATER.lakeA,WATER.t) : SEA_Y+waveH(x,z,WATER.seaA,WATER.t); }
+// Profundidad guardada en una textura (se calcula una vez): valor = (nivel - fondo + 2) / 12
+function depthTexture(N,cx,cz,E,level,fast){
+  const data=new Uint8Array(N*N);
+  for(let j=0;j<N;j++) for(let i=0;i<N;i++){
+    const x=cx-E+2*E*(i+.5)/N, z=cz-E+2*E*(j+.5)/N; let v;
+    const c=fast?coastC(x,z):1;
+    if(fast && c<.84) v=0; else if(fast && c>1.35) v=255;
+    else v=Math.round(THREE.MathUtils.clamp((level-terrainH(x,z)+2)/12,0,1)*255);
+    data[j*N+i]=v;
+  }
+  const t=new THREE.DataTexture(data,N,N,THREE.LuminanceFormat); t.magFilter=t.minFilter=THREE.LinearFilter; t.generateMipmaps=false; t.needsUpdate=true;
+  return {tex:t, rect:new THREE.Vector4(cx-E,cz-E,2*E,2*E)};
+}
+// Ondas al tocar el agua (anillos que se abren): x, z, momento y fuerza
+const RIP_N=10, ripples=Array.from({length:RIP_N},()=>new THREE.Vector4(0,0,-99,0)); let ripNext=0;
+function waterRipple(x,z,amp){
+  if(Math.hypot(x-camera.position.x,z-camera.position.z)>120) return;
+  const r=ripples[ripNext]; r.set(x,z,WATER.t,Math.min(.35,amp)); ripNext=(ripNext+1)%RIP_N;
+  if(amp>.14) splashBurst(x,waterSurfaceY(x,z),z,amp);
+}
+const WATER_GLSL=`
+uniform float uT; uniform float uA; uniform vec4 uRip[${RIP_N}];
+float waveSum(vec2 p, out vec2 g){
+  float h=0.0; g=vec2(0.0);
+  ${WAVES.map(([dx,dz,k,w,a,ph])=>`{ vec2 d=vec2(${dx.toFixed(3)},${dz.toFixed(3)}); float s=${k.toFixed(3)}*dot(d,p)+${w.toFixed(3)}*uT+${ph.toFixed(3)}; h+=${a.toFixed(3)}*sin(s); g+=${(a*k).toFixed(4)}*cos(s)*d; }`).join('\n  ')}
+  g*=uA; return h*uA;
+}
+float ripSum(vec2 p, inout vec2 g, out float foam){
+  float h=0.0; foam=0.0;
+  for(int i=0;i<${RIP_N};i++){
+    vec4 r=uRip[i]; float age=uT-r.z; if(age<0.0 || age>4.0) continue;
+    vec2 dv=p-r.xy; float d=length(dv)+1e-3; float R=age*2.3+.2; float x=d-R;
+    float env=r.w*exp(-age*.95)*exp(-x*x*.9)*(1.0-exp(-d*3.0));
+    float s=x*5.5; h+=env*sin(s); g+=env*5.5*cos(s)*dv/d; foam+=env*max(sin(s),0.0);
+  }
+  return h;
+}`;
+function makeWaterMat(o){
+  const U={uT:{value:0}, uA:{value:o.A}, uRip:{value:ripples}, uDepth:{value:o.depth.tex}, uRect:{value:o.depth.rect},
+    uShallow:{value:hexLin(o.shallow)}, uDeep:{value:hexLin(o.deep)}, uDeepD:{value:o.deepD}, uSky:{value:new THREE.Color()}, uAmb:{value:new THREE.Color(.6,.6,.6)},
+    uSunD:{value:new THREE.Vector3(0,1,0)}, uSunC:{value:new THREE.Color(1,1,1)}, uDetail:{value:o.detail}, uTile:{value:o.tile}, uFoamK:{value:o.foam}, uOpacity:{value:o.opacity}};
+  return new THREE.ShaderMaterial({
+    uniforms:Object.assign(THREE.UniformsUtils.clone(THREE.UniformsLib.fog), U),
+    vertexShader:`${WATER_GLSL}
+      varying vec3 vWp; varying float vH;
+      #include <fog_pars_vertex>
+      void main(){
+        vec4 wp=modelMatrix*vec4(position,1.0); vec2 g; float h=waveSum(wp.xz,g); float f; h+=ripSum(wp.xz,g,f);
+        wp.y+=h; vH=h; vWp=wp.xyz;
+        vec4 mvPosition=viewMatrix*wp; gl_Position=projectionMatrix*mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader:`${WATER_GLSL}
+      uniform sampler2D uDepth; uniform vec4 uRect; uniform vec3 uShallow; uniform vec3 uDeep; uniform float uDeepD; uniform vec3 uSky; uniform vec3 uAmb;
+      uniform vec3 uSunD; uniform vec3 uSunC; uniform sampler2D uDetail; uniform float uTile; uniform float uFoamK; uniform float uOpacity;
+      varying vec3 vWp; varying float vH;
+      #include <fog_pars_fragment>
+      void main(){
+        vec2 p=vWp.xz;
+        float depth=texture2D(uDepth,(p-uRect.xy)/uRect.zw).r*12.0-2.0+vH;
+        if(depth<-1.2) discard;   // bajo tierra (por ejemplo el mar debajo del lago)
+        vec2 g; waveSum(p,g); float rf; ripSum(p,g,rf);
+        // olitas finas que se mueven (detalle) y olas que llegan a la orilla
+        float sw=sin(depth*2.6-uT*1.7); float shore=(1.0-smoothstep(.2,3.5,depth));
+        g+=vec2(.05*sin(p.x*1.9+uT*1.3)+.04*sin(p.y*2.3-uT*1.1), .05*cos(p.y*1.7+uT*1.2)+.04*cos(p.x*2.1+uT*.9));
+        vec3 n=normalize(vec3(-g.x,1.0,-g.y)); if(!gl_FrontFacing) n=-n;
+        vec3 v=normalize(cameraPosition-vWp);
+        vec3 det=pow(texture2D(uDetail,p/uTile+vec2(uT*.006,uT*.003)).rgb,vec3(2.2));
+        vec3 base=mix(uShallow,uDeep,smoothstep(0.0,uDeepD,depth))*mix(vec3(1.0),det*1.3,.55)*(1.0+vH*.35);
+        float dif=max(dot(n,uSunD),0.0);
+        vec3 col=base*(uAmb+uSunC*dif*.55);
+        float fr=pow(1.0-max(dot(n,v),0.0),3.0);
+        col=mix(col,uSky,clamp(fr*.55,0.0,.5));
+        float sp=pow(max(dot(n,normalize(uSunD+v)),0.0),160.0);
+        col+=uSunC*sp*1.6;
+        float foam=(1.0-smoothstep(0.0,.28+.12*sin(uT*1.6+p.x*.07+p.y*.05),depth))*step(-.4,depth);
+        foam+=smoothstep(.82,1.0,sw)*shore*.75;
+        foam+=clamp(rf*6.0,0.0,1.0)*.7;
+        foam=clamp(foam*uFoamK*(.75+.5*det.r),0.0,1.0);
+        col=mix(col,vec3(.96,.98,1.0)*(uAmb+uSunC*.5),foam);
+        float a=mix(uOpacity*.62,uOpacity,smoothstep(0.0,2.5,depth));
+        gl_FragColor=vec4(col,max(a,foam*.95));
+        #include <fog_fragment>
+        #include <encodings_fragment>
+      }`,
+    transparent:true, depthWrite:false, side:THREE.DoubleSide, fog:true});
+}
+// malla en anillos: muchos puntos cerca del jugador (para ver las olas y las ondas) y pocos lejos
+function ringGeometry(R,rings,segs,pow){
+  const pos=[], idx=[]; pos.push(0,0,0);
+  for(let i=1;i<=rings;i++){ const r=R*Math.pow(i/rings,pow); for(let j=0;j<segs;j++){ const a=j/segs*Math.PI*2; pos.push(Math.cos(a)*r,0,Math.sin(a)*r); } }
+  for(let j=0;j<segs;j++) idx.push(0,1+(j+1)%segs,1+j);
+  for(let i=1;i<rings;i++) for(let j=0;j<segs;j++){ const a=1+(i-1)*segs+j, b=1+(i-1)*segs+(j+1)%segs, c=a+segs, d=b+segs; idx.push(a,b,c, b,d,c); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setIndex(idx); return g;
+}
+// Gotitas al salpicar
+const splash=(()=>{ const N=90, pos=new Float32Array(N*3), vel=new Float32Array(N*3), life=new Float32Array(N); let k=0;
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  const tex=spriteTexW(); const m=new THREE.Points(g,new THREE.PointsMaterial({map:tex, color:0xeaf6ff, size:.22, transparent:true, depthWrite:false}));
+  m.frustumCulled=false; scene.add(m); for(let i=0;i<N;i++) pos[i*3+1]=-999;
+  return {burst(x,y,z,amp){ const n=Math.round(8+amp*50); for(let q=0;q<n;q++){ const i=k; k=(k+1)%N; const a=Math.random()*6.283, s=.6+Math.random()*2.2*amp*4;
+      pos[i*3]=x+Math.cos(a)*.3; pos[i*3+1]=y+.05; pos[i*3+2]=z+Math.sin(a)*.3; vel[i*3]=Math.cos(a)*s*.45; vel[i*3+1]=1.8+Math.random()*3.2*Math.min(1,amp*4); vel[i*3+2]=Math.sin(a)*s*.45; life[i]=1.2; } },
+    update(dt){ let any=false; for(let i=0;i<N;i++){ if(life[i]<=0) continue; any=true; life[i]-=dt; vel[i*3+1]-=9.8*dt;
+      pos[i*3]+=vel[i*3]*dt; pos[i*3+1]+=vel[i*3+1]*dt; pos[i*3+2]+=vel[i*3+2]*dt;
+      if(life[i]<=0 || pos[i*3+1]<waterSurfaceY(pos[i*3],pos[i*3+2])-.1){ life[i]=0; pos[i*3+1]=-999; } }
+      if(any||this.was) g.attributes.position.needsUpdate=true; this.was=any; }}; })();
+function spriteTexW(){ const c=document.createElement('canvas'); c.width=c.height=32; const g=c.getContext('2d'), gr=g.createRadialGradient(16,16,0,16,16,16);
+  gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.6,'rgba(255,255,255,.8)'); gr.addColorStop(1,'rgba(255,255,255,0)'); g.fillStyle=gr; g.fillRect(0,0,32,32); return new THREE.CanvasTexture(c); }
+function splashBurst(x,y,z,amp){ splash.burst(x,y,z,amp); }
+// Quién toca el agua: al entrar salpica fuerte; al moverse deja ondas detrás
+function waterTouch(st,x,y,z,speed,dt){
+  const lake=inLakeWater(x,z), lvl=lake?WATER_Y:SEA_Y, ground=terrainH(x,z);
+  const surf=lvl+(lake?waveH(x,z,WATER.lakeA,WATER.t):waveH(x,z,WATER.seaA,WATER.t));
+  const inW = ground<lvl-.05 && y<surf+.05 && y>surf-2.4;
+  const vy=st.py===undefined?0:(y-st.py)/Math.max(dt,1e-3); st.py=y;
+  if(inW && !st.inW) waterRipple(x,z,.08+Math.min(.27,Math.max(0,-vy)*.03+speed*.012));
+  else if(inW && speed>.4){ st.t=(st.t||0)-dt; if(st.t<=0){ st.t=.32; waterRipple(x,z,.05+Math.min(.07,speed*.012)); } }
+  st.inW=inW;
+}
+const myWaterSt={};
+function updateWater(dt){
+  WATER.t=waterClock();
+  const W=weatherNow; WATER.seaA=.22+.3*W.wind+.15*W.storm; WATER.lakeA=.025+.05*W.wind;
+  const day=sky.dayK, amb=_c1.copy(hemi.color).multiplyScalar(hemi.intensity*.9).add(_c2.copy(hemi.groundColor).multiplyScalar(hemi.intensity*.25));
+  for(const m of waterMats){ const u=m.uniforms; u.uT.value=WATER.t; u.uA.value=m.userData.lake?WATER.lakeA:WATER.seaA;
+    u.uSky.value.copy(skyNow).convertSRGBToLinear(); u.uAmb.value.copy(amb);
+    u.uSunD.value.copy(sun.position).sub(sun.target.position).normalize(); u.uSunC.value.copy(sun.color).multiplyScalar(sun.intensity); }
+  // ondas del jugador, de los demás y de los coches
+  if(state==='play') waterTouch(myWaterSt, player.pos.x, player.pos.y, player.pos.z, Math.hypot(player.vel.x,player.vel.z), dt);
+  for(const r of mp.remotes.values()){ r.wst=r.wst||{}; waterTouch(r.wst, r.pos.x, r.pos.y, r.pos.z, r.moving*5, dt); }
+  for(const c of cars){ if(!vehicleWet(c.x,c.z) || Math.abs(c.v)<1){ c.wst=null; continue; } c.wst=c.wst||{t:0}; c.wst.t-=dt; if(c.wst.t<=0){ c.wst.t=.25; waterRipple(c.x,c.z,.08+Math.min(.12,Math.abs(c.v)*.01)); } }
+  splash.update(dt);
+}
+const waterMats=[];
+
 // Superficie del mar: también sigue al jugador; la tela queda fija en el mundo
 let seaTex;
 const SEA_TILE=12;
@@ -807,15 +949,16 @@ const seaSurface=(()=>{
   for(let r=0;r<4;r++){ g.beginPath(); for(let x=0;x<=size;x+=4){ const y=32+r*64+Math.sin(x/size*Math.PI*4)*8; x?g.lineTo(x,y):g.moveTo(x,y);} g.stroke(); }
   seaTex=new THREE.CanvasTexture(c); seaTex.wrapS=seaTex.wrapT=THREE.RepeatWrapping; seaTex.encoding=THREE.sRGBEncoding;
   const S=3000; seaTex.repeat.set(S/SEA_TILE,S/SEA_TILE);
-  const m=new THREE.Mesh(new THREE.PlaneGeometry(S,S), new THREE.MeshStandardMaterial({map:seaTex, roughness:.8, transparent:true, opacity:.82, side:THREE.DoubleSide, emissive:0x1d4f78, emissiveIntensity:.15, depthWrite:false}));
-  m.rotation.x=-Math.PI/2; m.position.y=SEA_Y; m.renderOrder=2; scene.add(m);
+  const mat=makeWaterMat({A:WATER.seaA, depth:depthTexture(768,0,0,1250,SEA_Y,true), shallow:'#78d3df', deep:'#2266a8', deepD:7, detail:seaTex, tile:SEA_TILE, foam:1, opacity:.86});
+  waterMats.push(mat);
+  const m=new THREE.Mesh(ringGeometry(1500,110,128,2.4), mat); m.frustumCulled=false;
+  m.position.y=SEA_Y; m.renderOrder=2; scene.add(m);
   return m;
 })();
 let seaDrift=0;
 function updateSea(dt,px,pz){
   seaDrift+=dt*.012;
   seaSurface.position.x=px; seaSurface.position.z=pz;
-  seaTex.offset.set(px/SEA_TILE+seaDrift, -pz/SEA_TILE+seaDrift*.5);
   farFloor.position.x=px; farFloor.position.z=pz;
 }
 
@@ -828,8 +971,9 @@ let waterTex;
   g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=3; g.setLineDash([10,9]);
   for(let r=0;r<4;r++){ g.beginPath(); for(let x=0;x<=size;x+=4){ const y=32+r*64+Math.sin(x/size*Math.PI*4)*8; x?g.lineTo(x,y):g.moveTo(x,y);} g.stroke(); }
   waterTex=new THREE.CanvasTexture(c); waterTex.wrapS=waterTex.wrapT=THREE.RepeatWrapping; waterTex.repeat.set(6,6); waterTex.encoding=THREE.sRGBEncoding;
-  const w=new THREE.Mesh(new THREE.CircleGeometry(LAKE.R*.92,72), new THREE.MeshStandardMaterial({map:waterTex, roughness:.85, transparent:true, opacity:.9, emissive:0x1f4a6b, emissiveIntensity:.12}));
-  w.rotation.x=-Math.PI/2; w.position.set(LAKE.x, WATER_Y, LAKE.z); w.receiveShadow=true; scene.add(w);
+  const lm=makeWaterMat({A:WATER.lakeA, depth:depthTexture(96,LAKE.x,LAKE.z,LAKE.R,WATER_Y,false), shallow:'#9fd8e8', deep:'#4f9ccf', deepD:1.4, detail:waterTex, tile:LAKE.R*2/6, foam:.4, opacity:.9});
+  lm.userData.lake=true; waterMats.push(lm);
+  const w=new THREE.Mesh(ringGeometry(LAKE.R*.92,40,96,1.3), lm); w.position.set(LAKE.x, WATER_Y, LAKE.z); w.renderOrder=2; scene.add(w);
   const padMat=felt('#5e9e3a','rgba(20,50,10,.15)'), budMat=felt('#ffc2d1','rgba(150,40,70,.12)');
   [[63,-38,1.2,.5],[48,-52,1,2.1],[60,-56,1.3,4],[44,-40,.9,1.2],[68,-48,1.1,3.3],[53,-33,1.4,5.5],[41,-47,.85,.3],[58,-44,1,2.8],[70,-40,.9,4.6]]
     .forEach(([x,z,r,rot],i)=>{
@@ -4093,7 +4237,7 @@ function update(dt,t){
       if(up && !down) vyT=run?4:2.8;
       else if(down && !up) vyT=run?-4.2:-3;
       else {
-        vyT=THREE.MathUtils.clamp((FLOAT_Y-player.pos.y)*1.1,-1.2,1.2);
+        vyT=THREE.MathUtils.clamp((FLOAT_Y+waveH(player.pos.x,player.pos.z,WATER.seaA,WATER.t)-player.pos.y)*1.6,-1.6,1.6);
         if(camMode==='first' && f!==0) vyT=Math.sin(pitch)*sp*Math.sign(f);   // en 1ª persona nadas hacia donde miras
       }
       player.vy += (vyT-player.vy)*(1-Math.exp(-dt*3.5));
@@ -4146,7 +4290,7 @@ function update(dt,t){
     const g=groundAt(player.pos.x, player.pos.z, player.pos.y);
     if(player.swim){
       player.pos.y += player.vy*dt;
-      if(player.pos.y>FLOAT_Y+.05){ player.pos.y=FLOAT_Y+.05; if(player.vy>0) player.vy=0; }
+      { const top=FLOAT_Y+.05+waveH(player.pos.x,player.pos.z,WATER.seaA,WATER.t); if(player.pos.y>top){ player.pos.y=top; if(player.vy>0) player.vy=0; } }
       if(player.pos.y<g+.15){ player.pos.y=g+.15; if(player.vy<0) player.vy=0; }
       // Salir caminando al llegar a la orilla
       if(terrainH(player.pos.x,player.pos.z) > SWIM_EXIT && player.pos.y-g < 1){
@@ -4250,7 +4394,7 @@ function update(dt,t){
 
   // Mar, lago, algas, peces y nubes
   updateSea(dt, player.pos.x, player.pos.z);
-  if(waterTex){ waterTex.offset.x+=dt*.012; waterTex.offset.y+=dt*.006; }
+  updateWater(dt);
   updateSeaweed(t); updateFish(t);
   clouds.forEach((c,i)=>{ c.position.x += dt*(.6+i%3*.2); if(c.position.x>1100) c.position.x=-1100; });
 
