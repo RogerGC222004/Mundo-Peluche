@@ -437,6 +437,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       <h3>Interfaz</h3>
       <div class="opt"><label for="optBob">Balanceo al caminar<small>Movimiento de la cámara en 1ª persona</small></label><button class="switch" id="optBob" role="switch" aria-checked="true" aria-label="Balanceo al caminar"></button></div>
       <div class="opt"><label for="optFps">Mostrar FPS</label><button class="switch" id="optFps" role="switch" aria-checked="false" aria-label="Mostrar FPS"></button></div>
+      <div class="opt"><label for="optAutoFull">Empezar en pantalla completa<small>Y en horizontal en el celular, al tocar la pantalla</small></label><button class="switch" id="optAutoFull" role="switch" aria-checked="true" aria-label="Empezar en pantalla completa"></button></div>
       <div class="opt"><label for="optHints">Mostrar ayudas en pantalla</label><button class="switch" id="optHints" role="switch" aria-checked="true" aria-label="Mostrar ayudas"></button></div>
     </div>
 
@@ -614,7 +615,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='39';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='40';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -1921,7 +1922,7 @@ addEventListener('keydown',e=>{ if(e.code==='KeyM' && !e.repeat && !(e.target in
 
 // ---------- Opciones ----------
 const DEFAULTS={fov:65, quality:'low', shadows:true, draw:190, sens:1, invert:false, startCam:'third', alwaysRun:false, bob:true, fps:false, hints:true,
-  master:80, music:60, sfx:80, muted:false, autoRes:true, fpsCap:'free', weather:true, layout:{}, qDef:1};
+  master:80, music:60, sfx:80, muted:false, autoRes:true, fpsCap:'free', weather:true, layout:{}, qDef:1, autoFull:true};
 let settings={...DEFAULTS};
 let resScale=1;   // escala de resolución automática (1 = completa)
 try{ const s=JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'null'); if(s){ settings={...DEFAULTS,...s}; if(!s.qDef){ settings.quality='low'; settings.qDef=1; } } }catch(e){}   // gráficos en bajo por defecto (una sola vez para quien ya jugaba)
@@ -1935,10 +1936,29 @@ function toggleFullscreen(){
     if(isFull()){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); }
     else{
       const el=document.documentElement, fn=el.requestFullscreen||el.webkitRequestFullscreen;
-      const p=fn&&fn.call(el); if(p&&p.catch) p.catch(()=>flashNote('Tu navegador no permitió la pantalla completa aquí.'));
+      const p=fn&&fn.call(el); if(p&&p.then) p.then(lockLandscape,()=>flashNote('Tu navegador no permitió la pantalla completa aquí.'));
     }
   }catch(e){ flashNote('Tu navegador no permitió la pantalla completa aquí.'); }
 }
+// Al tocar la pantalla por primera vez (o al dar Jugar) se pone en pantalla completa y, en el celular, en horizontal.
+// Los navegadores solo lo permiten después de un toque; si no se puede (por ejemplo en iPhone) se avisa que gire el teléfono.
+let userLeftFull=false, turnHintShown=false;
+function lockLandscape(){
+  if(!isTouch) return;
+  try{ const o=screen.orientation; if(o && o.lock) o.lock('landscape').catch(turnHint); else turnHint(); }catch(e){ turnHint(); }
+}
+function turnHint(){ if(turnHintShown || !isTouch || !matchMedia('(orientation:portrait)').matches) return; turnHintShown=true; setTimeout(()=>flashNote('Gira tu teléfono para jugar en horizontal'),400); }
+function autoFullscreen(){
+  if(!settings.autoFull || userLeftFull || isFull()) return;
+  try{ const el=document.documentElement, fn=el.requestFullscreen||el.webkitRequestFullscreen;
+    const p=fn ? (el.requestFullscreen ? fn.call(el,{navigationUI:'hide'}) : fn.call(el)) : null;
+    if(p && p.then) p.then(lockLandscape, turnHint); else if(!fn) turnHint(); else setTimeout(()=>{ if(isFull()) lockLandscape(); else turnHint(); },300);
+  }catch(e){ turnHint(); }
+}
+['pointerup','keydown'].forEach(ev=>addEventListener(ev,e=>{ if(e.type==='keydown' && (e.code==='KeyF' || e.target instanceof HTMLInputElement)) return;
+  if(e.target && e.target.closest && e.target.closest('#optFull,#optAutoFull')) return; autoFullscreen(); },true));
+let wasFull=false;
+['fullscreenchange','webkitfullscreenchange'].forEach(ev=>document.addEventListener(ev,()=>{ const f=isFull(); if(wasFull && !f) userLeftFull=true; wasFull=f; }));
 let toastTimer=0;
 function flashNote(msg){ const t=ui('toast'); t.textContent=msg; t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>{t.hidden=true;},3000); }
 ['fullscreenchange','webkitfullscreenchange'].forEach(ev=>document.addEventListener(ev,()=>{ ui('optFull').setAttribute('aria-checked', String(isFull())); setTimeout(resize,50); }));
@@ -1967,7 +1987,7 @@ function syncOptionsUI(){
   ui('optDraw').value=settings.draw; ui('optDrawOut').textContent=settings.draw+' m';
   ui('optSens').value=settings.sens; ui('optSensOut').textContent=settings.sens.toFixed(1)+'×';
   [['optMaster','master'],['optMusic','music'],['optSfx','sfx']].forEach(([id,k])=>{ ui(id).value=settings[k]; ui(id+'Out').textContent=settings[k]+'%'; });
-  [['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optHints','hints'],['optWeather','weather']]
+  [['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optHints','hints'],['optWeather','weather'],['optAutoFull','autoFull']]
     .forEach(([id,k])=>ui(id).setAttribute('aria-checked', String(settings[k])));
   [['optQuality','quality'],['optStartCam','startCam'],['optFpsCap','fpsCap']].forEach(([id,k])=>
     ui(id).querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.v===settings[k]))));
@@ -1975,7 +1995,7 @@ function syncOptionsUI(){
 function set(k,v){ settings[k]=v; saveSettings(); applySettings(); }
 
 ui('optFull').onclick=toggleFullscreen;
-[['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optHints','hints'],['optWeather','weather']]
+[['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optHints','hints'],['optWeather','weather'],['optAutoFull','autoFull']]
   .forEach(([id,k])=>ui(id).onclick=()=>set(k,!settings[k]));
 let sfxPreview=0;
 [['optMaster','master'],['optMusic','music'],['optSfx','sfx']].forEach(([id,k])=>ui(id).oninput=e=>{
