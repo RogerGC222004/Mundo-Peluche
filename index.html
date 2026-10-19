@@ -663,7 +663,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='48';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='49';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -1279,6 +1279,14 @@ function startSpot(spread=1.8){ const a=Math.random()*Math.PI*2, d=Math.random()
 // Muralla redonda de pastel con 4 puertas, 4 torres, un segundo piso (el paseo sobre la muralla)
 // al que se sube por 2 escaleras, y una plaza de glaseado de chocolate llena de dulces.
 const CAKE={R:19*CS, wallR:8*CS, wallT:.9*CS, H:3.6*CS, gateHalf:.2, gateTop:2.75*CS, towerR:10.3*CS, S:CS};
+// Escaleras anchas (dos tramos curvos pegados a la muralla) y segundo piso con un hueco encima de cada escalera
+const CAKE_ST=(()=>{ const r0=CAKE.wallR-CAKE.wallT, W=1.9*CS, SR=r0-W/2-.05, NSTEP=Math.round(CAKE.H/.4), STEP=CAKE.H/NSTEP, DA=.72/SR;
+  const rin=SR-W/2, rRail=rin+.3, span=NSTEP*DA;
+  return {r0, W, SR, NSTEP, STEP, DA, rin, rRail, span, a0s:[.34, Math.PI+.34], holes:[.34, Math.PI+.34].map(a=>[a-.06, a+(NSTEP-.5)*DA])}; })();
+const angIn=(a,lo,hi)=>{ let d=a-lo; d=((d%(2*Math.PI))+2*Math.PI)%(2*Math.PI); return d<=hi-lo; };
+function cakeHole(x,z){ const d=Math.hypot(x,z); if(d<CAKE_ST.rin-.05 || d>CAKE_ST.r0+.1) return false; const a=Math.atan2(z,x); return CAKE_ST.holes.some(([lo,hi])=>angIn(a,lo,hi)); }
+// segundo piso: se camina encima (salvo en los huecos de las escaleras)
+function cakeFloorGround(x,z,y){ if(y<CAKE.H-.6) return null; const d=Math.hypot(x,z); if(d>CAKE_ST.r0+.05 || cakeHole(x,z)) return null; return CAKE.H; }
 // ¿Este punto está dentro de la muralla o de una torre? (para que la cámara no atraviese el pastel)
 function cakeSolid(x,y,z){
   const d=Math.hypot(x,z); if(d>CAKE.towerR+2.2*CS) return false;
@@ -1286,6 +1294,7 @@ function cakeSolid(x,y,z){
     const a=Math.atan2(z,x); let am=((a%(Math.PI/2))+Math.PI/2)%(Math.PI/2); am=Math.min(am,Math.PI/2-am);
     if(am>CAKE.gateHalf-.03 || y>CAKE.gateTop-.15) return true; }
   for(let k=0;k<4;k++){ const ta=Math.PI/4+k*Math.PI/2, tx=Math.cos(ta)*CAKE.towerR, tz=Math.sin(ta)*CAKE.towerR; if(Math.hypot(x-tx,z-tz)<1.9*CS && y<9.4*CS) return true; }
+  if(d<CAKE_ST.r0 && y>CAKE.H-.4 && y<CAKE.H+.08 && !cakeHole(x,z)) return true;   // el segundo piso
   return false; }
 function clampCamToCake(target,want){
   if(Math.hypot(want.x,want.z)>CAKE.towerR+3 && Math.hypot(target.x,target.z)>CAKE.towerR+3) return;
@@ -1357,13 +1366,12 @@ const onCakeSurface=(x,z,y)=>{ const d=Math.hypot(x,z); return d<CAKE.R && !(d<S
     for(let j=0;j<7;j++){ const b=j/7*Math.PI*2; add(deco,sphereG,j%2?gumMats[(k+j)%6]:cherryMat,x+Math.cos(b)*1.55*CS,TH-(.9+((j*3)%4)*.9)*CS,z+Math.sin(b)*1.55*CS,.18*CS,.18*CS,.18*CS); }   // dulces pegados
     obstacles.push({x,z,r:1.6*CS,top:99,walk:false}); }
   // Escaleras: dos tramos curvos por dentro de la muralla hasta el segundo piso
-  const STEP=.4, NSTEP=Math.round(CAKE.H/STEP), SR=CAKE.wallR-1.25*CS, DA=.72/SR;   // escalones de la misma altura (se suben igual), más anchos
-  [.34, Math.PI+.34].forEach(a0=>{
+  const {STEP, NSTEP, SR, DA, W:SW}=CAKE_ST;   // escalones de la misma altura que siempre, el doble de anchos
+  CAKE_ST.a0s.forEach(a0=>{
     for(let k=0;k<NSTEP;k++){ const a=a0+k*DA, top=(k+1)*STEP, x=Math.cos(a)*SR, z=Math.sin(a)*SR;
-      add(castle,boxG,spongeMat,x,(top-.09)/2,z,.95*CS,top-.09,.8,-a);
-      add(castle,boxG,k%2?pinkMat:creamMat,x,top-.045,z,.98*CS,.09,.83,-a);
-      obstacles.push({x,z,r:.62*CS,top,walk:true,cake:true}); }
-    const a=a0+NSTEP*DA; obstacles.push({x:Math.cos(a)*(SR+.35*CS), z:Math.sin(a)*(SR+.35*CS), r:.8*CS, top:CAKE.H, walk:true, cake:true});   // descanso arriba
+      add(castle,boxG,spongeMat,x,(top-.09)/2,z,SW,top-.09,.95,-a);
+      add(castle,boxG,k%2?pinkMat:creamMat,x,top-.045,z,SW+.04,.09,.98,-a);
+      [-.375,-.125,.125,.375].forEach(f=>{ const rr=SR+f*SW; obstacles.push({x:Math.cos(a)*rr,z:Math.sin(a)*rr,r:.72,top,walk:true,cake:true}); }); }
   });
   // Plaza de glaseado de chocolate (sigue el terreno) con chispas de colores
   const frostTex=canvasTex(512,512,(g,w,h)=>{
@@ -1404,6 +1412,74 @@ const onCakeSurface=(x,z,y)=>{ const d=Math.hypot(x,z); return d<CAKE.R && !(d<S
     add(castle,cylG2,stickMat,x,y+1.3*CS,z,.07*CS,2.6*CS,.07*CS);
     const d=new THREE.Mesh(new THREE.CylinderGeometry(.85*CS,.85*CS,.16*CS,28),[new THREE.MeshStandardMaterial({color:0xfff6f0,roughness:.3}),popMat,popMat]); d.rotation.set(Math.PI/2,0,0); d.rotation.y=-a+Math.PI/2; d.rotation.order='YXZ'; d.position.set(x,y+3.2*CS,z); d.castShadow=true; castle.add(d);
     obstacles.push({x,z,r:.18*CS,top:99,walk:false}); });
+  // ---- Segundo piso: losa de pastel a la altura de la muralla, con un hueco sobre cada escalera ----
+  { const H=CAKE.H, T=.32, r0=CAKE_ST.r0+.02, rin=CAKE_ST.rin;
+    const floorTop=new THREE.MeshStandardMaterial({map:frostTex, roughness:.55});
+    const pos=[], uv=[], posB=[];
+    const cell=(ra,rb,a,b)=>{ const P=(r,t,y)=>[Math.cos(t)*r,y,Math.sin(t)*r];
+      const q=[P(ra,a,H),P(ra,b,H),P(rb,b,H),P(rb,a,H)], U=q.map(v=>[v[0]/5,v[2]/5]);
+      [[0,1,2],[0,2,3]].forEach(t=>t.forEach(i=>{ pos.push(...q[i]); uv.push(...U[i]); }));
+      const qb=q.map(v=>[v[0],H-T,v[2]]); [[0,2,1],[0,3,2]].forEach(t=>t.forEach(i=>posB.push(...qb[i]))); };
+    const arcs=(a,b,r)=>{ const n=Math.max(2,Math.ceil((b-a)*r/.8)); for(let j=0;j<n;j++) yield0(a+(b-a)*j/n, a+(b-a)*(j+1)/n); };
+    let yield0=null;
+    // centro: disco completo hasta la orilla de adentro de los huecos
+    for(let i=0;i<10;i++){ const ra=rin*i/10, rb=rin*(i+1)/10; yield0=(a,b)=>cell(ra,rb,a,b); arcs(0,Math.PI*2,rb); }
+    // anillo de afuera: solo entre los huecos (bordes exactos)
+    const [[l1,h1],[l2,h2]]=CAKE_ST.holes;
+    for(let i=0;i<4;i++){ const ra=rin+(r0-rin)*i/4, rb=rin+(r0-rin)*(i+1)/4; yield0=(a,b)=>cell(ra,rb,a,b); arcs(h1,l2,rb); arcs(h2,l1+Math.PI*2,rb); }
+    const gt=new THREE.BufferGeometry(); gt.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); gt.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); gt.computeVertexNormals();
+    const top=new THREE.Mesh(gt,floorTop); top.receiveShadow=true; top.castShadow=true; castle.add(top);
+    const gb=new THREE.BufferGeometry(); gb.setAttribute('position',new THREE.Float32BufferAttribute(posB,3)); gb.computeVertexNormals();
+    const bot=new THREE.Mesh(gb,spongeMat); bot.receiveShadow=true; castle.add(bot);
+    // orillas del hueco: el borde de pastel que se ve desde abajo
+    CAKE_ST.holes.forEach(([lo,hi])=>{ castle.add(shell(lo,hi,rin-.25,rin,H-T,H,.95));
+      [lo].forEach(a=>{ const m=shell(a-.004,a+.004,rin,r0,H-T,H,.95); castle.add(m); }); });
+  }
+  // ---- Barandales: bastones de caramelo gigantes unidos por serpientes de gomita muy largas ----
+  { const H=CAKE.H, caneTex=canvasTex(64,256,(g,w,h)=>{ g.fillStyle='#fffaf3'; g.fillRect(0,0,w,h); g.fillStyle='#e0303a';
+      for(let y=-h;y<h*2;y+=48){ g.beginPath(); g.moveTo(0,y); g.lineTo(w,y-32); g.lineTo(w,y-12); g.lineTo(0,y+20); g.fill(); } },1,1);
+    const caneMat=new THREE.MeshStandardMaterial({map:caneTex, roughness:.3});
+    const snakeTex=canvasTex(256,32,(g,w,h)=>{ const cs=['#ff5d6c','#ffe14d','#7ed957','#4fc3f7','#c77dff']; for(let i=0;i<10;i++){ g.fillStyle=cs[i%5]; g.fillRect(i*w/10,0,w/10,h); }
+      g.fillStyle='rgba(255,255,255,.25)'; g.fillRect(0,h*.2,w,h*.15); },1,1);
+    const snakeMat=new THREE.MeshStandardMaterial({map:snakeTex, roughness:.35, emissive:0x331a22, emissiveIntensity:.25});
+    const headMat=new THREE.MeshStandardMaterial({color:0xff5d6c, roughness:.35});
+    const canes=[];
+    const cane=(x,z,y0,y1,face)=>{ const L=y1-y0, R=.17;
+      const st=new THREE.Mesh(new THREE.CylinderGeometry(R,R,L,10),caneMat); st.material.map.repeat.set(1,Math.max(1,L/1.3)); st.position.set(x,y0+L/2,z); castle.add(st);
+      const hook=new THREE.Mesh(new THREE.TorusGeometry(.42,R,8,16,Math.PI),caneMat); hook.position.set(x+Math.cos(face)*.42,y1,z+Math.sin(face)*.42); hook.rotation.set(0,-face,0); castle.add(hook);
+      canes.push([x,z]); obstacles.push({x,z,r:.24,top:y1+.5,walk:false,bot:y0>1?y0-.2:undefined}); };
+    // serpiente de gomita que pasa por varios puntos (con su cabecita) y se enrolla en cada bastón
+    const snake=(pts,coils)=>{ const curve=new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p)));
+      const len=curve.getLength(), tg=new THREE.TubeGeometry(curve, Math.max(8,Math.ceil(len*3)), .1, 7, false);
+      const m=new THREE.Mesh(tg,snakeMat.clone()); m.material.map=snakeTex.clone(); m.material.map.repeat.set(len/1.6,1); m.material.map.needsUpdate=true; castle.add(m);
+      const hd=new THREE.Mesh(sphereG,headMat); const e=pts[pts.length-1]; hd.position.set(...e); hd.scale.set(.16,.13,.2); castle.add(hd);
+      (coils||[]).forEach(([x,y,z])=>{ const t=new THREE.Mesh(new THREE.TorusGeometry(.24,.08,6,14),snakeMat); t.position.set(x,y,z); t.rotation.x=Math.PI/2; castle.add(t); }); };
+    const railBlock=(x,z,bot,top)=>obstacles.push({x,z,r:.3,top,bot,walk:false});
+    CAKE_ST.a0s.forEach((a0,si)=>{
+      const {rRail, NSTEP, STEP, DA, r0}=CAKE_ST, P=(r,a,y)=>[Math.cos(a)*r,y,Math.sin(a)*r];
+      const aEnd=a0+(NSTEP-.5)*DA, face=a=>a+Math.PI;      // el gancho mira hacia el centro
+      // bastones a lo largo de la orilla de adentro de la escalera (del piso de abajo hasta arriba del segundo piso)
+      const nC=7, cAng=[]; for(let i=0;i<nC;i++) cAng.push(a0-.03+(aEnd-a0+.03)*i/(nC-1));
+      cAng.forEach(a=>{ const [x,,z]=P(rRail,a,0); cane(x,z,terrainH(x,z)-.1,H+1.35,face(a)); });
+      // dos bastones más cerrando el hueco del lado de abajo de la escalera
+      const aLow=a0-.06; [(rRail+r0)/2, r0-.35].forEach(r=>{ const [x,,z]=P(r,aLow-.015,0); cane(x,z,H-.05,H+1.35,face(aLow)); });   // estos dos van parados sobre el segundo piso
+      // pasamanos de la escalera: sube con los escalones
+      const stairY=a=>Math.min(H,((a-a0)/DA+1)*STEP);
+      const hand=[]; for(let i=0;i<=24;i++){ const a=a0-.03+(aEnd-a0+.03)*i/24; hand.push(P(rRail,a,stairY(a)+1.0)); }
+      snake(hand, cAng.map(a=>P(rRail,a,stairY(a)+1.0)));
+      // barandal del segundo piso alrededor del hueco
+      const top1=[]; for(let i=0;i<=24;i++){ const a=a0-.03+(aEnd-a0+.03)*i/24; top1.push(P(rRail,a,H+1.05+.05*Math.sin(i*.9))); }
+      snake(top1, cAng.map(a=>P(rRail,a,H+1.05)));
+      const top2=[]; for(let i=0;i<=24;i++){ const a=a0-.03+(aEnd-a0+.03)*i/24; top2.push(P(rRail,a,H+.5)); }
+      snake(top2);
+      const low=[P(rRail,aLow,H+1.05),P((rRail+r0)/2,aLow,H+1.0),P(r0-.35,aLow,H+1.05)], low2=low.map(([x,y,z])=>[x,y-.5,z]);
+      snake(low); snake(low2);
+      // que no se pueda caer: bloqueo a lo largo de la escalera y del hueco
+      for(let k=0;k<NSTEP;k++){ const a=a0+k*DA, top=(k+1)*STEP, [x,,z]=P(rRail-.05,a,0); railBlock(x,z,top+.25,top+1.5); }
+      for(let i=0;i<=40;i++){ const a=a0-.03+(aEnd-a0+.03)*i/40, [x,,z]=P(rRail-.05,a,0); railBlock(x,z,H+.25,H+1.5); }
+      for(let i=0;i<=8;i++){ const r=rRail+(r0-rRail)*i/8, [x,,z]=P(r,aLow,0); railBlock(x,z,H+.25,H+1.5); }
+    });
+  }
   mergeStatic(deco); deco.traverse(o=>{ if(o.isMesh){ o.castShadow=false; o.receiveShadow=true; } }); scene.add(deco);
   scene.add(castle);
 })();
@@ -1598,6 +1674,7 @@ function groundAt(x,z,y){
   if(tn.d<TRACK_W/2+1.3 || inPark(x,z)) g+=TRACK_Y;
   if(typeof aircraftGround==='function'){ const ag=aircraftGround(x,z,y); if(ag!==null && ag>g) g=ag; }
   if(typeof playgroundGround==='function'){ const pg=playgroundGround(x,z,y); if(pg!==null && pg>g) g=pg; }
+  { const cf=cakeFloorGround(x,z,y); if(cf!==null && cf>g) g=cf; }
   for(const o of obstacles){
     if(!o.walk) continue;
     const dx=x-o.x, dz=z-o.z;
