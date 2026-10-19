@@ -694,7 +694,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='54';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='55';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -820,6 +820,7 @@ const MAP={"trees":[[33.5,229.9,1.1,2,1.4],[83.8,-216.4,1.35,1,1.4],[121.5,-47.3
 // La plaza del castillo de pastel (radio 19 en el centro) queda libre de árboles, rocas y flores
 const CS=2.08;   // tamaño del castillo de pastel (todo escalado igual); la plaza llega hasta el camino del lago
 const PG={x:-185, z:-125, R:23};   // parque de juegos
+const BENCHES=[];   // bancas donde uno se puede sentar (parque y feria)
 ['trees','rocks','flowers','palms'].forEach(k=>{ MAP[k]=MAP[k].filter(([x,z])=>Math.hypot(x,z)>19*CS+2.5 && airportFlat(x,z)<.02 && Math.hypot(x-PG.x,z-PG.z)>PG.R+2.5 && Math.hypot(x-FAIR.x,z-FAIR.z)>FAIR.R+4); });
 // en la península nueva ya no hay mar: fuera algas, corales, estrellas, rocas y peces que quedaron bajo tierra
 ['seaweed','corals','stars','seaRocks','fish'].forEach(k=>{ MAP[k]=MAP[k].filter(([x,z])=>coastC(x,z)>1.04); });
@@ -1129,6 +1130,17 @@ const pathSamples=[], pathLines=[];
 // ---------- Decoración (todo desde MAP) ----------
 // obstacles: {x,z,r,top,walk}. Con "walk" se puede subir encima (rocas, botón gigante, cofre).
 const obstacles = [];
+// Rejilla para buscar solo los obstáculos cercanos (antes se revisaban todos, miles, varias veces por cuadro)
+const DYN_OBS=[];   // los que se mueven (caballitos del carrusel): siempre se revisan
+const obsGrid={cell:6, map:null, n:-1};
+function obsNear(x,z){
+  if(obsGrid.n!==obstacles.length){ const m=new Map(), C=obsGrid.cell; obsGrid.map=m; obsGrid.n=obstacles.length;
+    for(const o of obstacles){ const rr=o.r+2.5; for(let i=Math.floor((o.x-rr)/C);i<=Math.floor((o.x+rr)/C);i++) for(let j=Math.floor((o.z-rr)/C);j<=Math.floor((o.z+rr)/C);j++){ const k=i*100003+j; let l=m.get(k); if(!l){ l=[]; m.set(k,l); } l.push(o); } } }
+  const l=obsGrid.map.get(Math.floor(x/obsGrid.cell)*100003+Math.floor(z/obsGrid.cell));
+  return DYN_OBS.length ? (l?l.concat(DYN_OBS):DYN_OBS) : (l||EMPTY_OBS);
+}
+const EMPTY_OBS=[];
+const PLAYER_H=2.0;   // alto del peluche (para pasar por debajo de puertas, alas, etc.)
 const trunkMat = felt('#9a6b45','rgba(60,30,10,.2)');
 const leafMats = [felt('#6fae3e'), felt('#7cbf4a'), felt('#f0a9bb','rgba(150,40,70,.12)'), felt('#ffcf6b','rgba(150,90,0,.12)')];
 const rockMat = felt('#c9c4d6','rgba(60,50,80,.15)');
@@ -1381,11 +1393,12 @@ const onCakeSurface=(x,z,y)=>{ const d=Math.hypot(x,z); return d<CAKE.R && !(d<S
   const gumMats=['#ff5d6c','#ffb02e','#7ed957','#4fc3f7','#c77dff','#ffe14d'].map(c=>new THREE.MeshStandardMaterial({color:c, roughness:.3, emissive:c, emissiveIntensity:.18}));
   const boxG=new THREE.BoxGeometry(1,1,1), cylG2=new THREE.CylinderGeometry(1,1,1,14);
   const add=(parent,geo,mat,x,y,z,sx,sy,sz,ry=0,rx=0)=>{ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.rotation.set(rx,ry,0); parent.add(m); return m; };
-  const cherry=(parent,x,y,z,s=1)=>{ add(parent,sphereG,cherryMat,x,y+.2*s,z,.22*s,.21*s,.22*s); const st=add(parent,cylG2,stemMat,x+.05*s,y+.48*s,z,.025*s,.32*s,.025*s); st.rotation.z=-.35; };
-  const bonbon=(parent,x,y,z,s=1,mat=chocoMat)=>{ add(parent,sphereG,mat,x,y+.24*s,z,.26*s,.24*s,.26*s); add(parent,sphereG,whiteMat,x,y+.45*s,z,.1*s,.04*s,.1*s); };
+  const solidSweet=(x,z,y,r,top)=>obstacles.push({x,z,r,top:y+top,walk:true,cake:true});
+  const cherry=(parent,x,y,z,s=1)=>{ if(parent===deco) solidSweet(x,z,y,.22*s+.05,.42*s); add(parent,sphereG,cherryMat,x,y+.2*s,z,.22*s,.21*s,.22*s); const st=add(parent,cylG2,stemMat,x+.05*s,y+.48*s,z,.025*s,.32*s,.025*s); st.rotation.z=-.35; };
+  const bonbon=(parent,x,y,z,s=1,mat=chocoMat)=>{ if(parent===deco) solidSweet(x,z,y,.26*s+.05,.49*s); add(parent,sphereG,mat,x,y+.24*s,z,.26*s,.24*s,.26*s); add(parent,sphereG,whiteMat,x,y+.45*s,z,.1*s,.04*s,.1*s); };
   const deco=new THREE.Group();
   for(let i=0;i<40;i++){ const a=(i+.5)/40*Math.PI*2, x=Math.cos(a)*(CAKE.wallR+.62*CS), z=Math.sin(a)*(CAKE.wallR+.62*CS);
-    add(deco,boxG,i%2?creamMat:pinkMat,x,CAKE.H+.25*CS,z,.55*CS,.5*CS,.55*CS,-a);
+    add(deco,boxG,i%2?creamMat:pinkMat,x,CAKE.H+.25*CS,z,.55*CS,.5*CS,.55*CS,-a); obstacles.push({x,z,r:.62*CS,top:CAKE.H+.5*CS,walk:true,cake:true});   // almena
     if(i%4===0) cherry(deco,x,CAKE.H+.5*CS,z,CS); else if(i%4===2) bonbon(deco,x,CAKE.H+.5*CS,z,.8*CS, i%8===2?chocoMat:pinkMat); }
   for(let i=0;i<64;i++){ const a=i/64*Math.PI*2; add(deco,sphereG,creamMat,Math.cos(a)*(r0+.08*CS),CAKE.H+.02,Math.sin(a)*(r0+.08*CS),.16*CS,.12*CS,.16*CS); }   // copitos de crema en el borde de adentro
   // Torres: pastel alto con techo de crema batida y una cereza
@@ -1423,7 +1436,7 @@ const onCakeSurface=(x,z,y)=>{ const d=Math.hypot(x,z); return d<CAKE.R && !(d<S
     const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:frostTex, roughness:.55, polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-2}));
     m.receiveShadow=true; scene.add(m); }
   // Borde de la plaza: copos de crema
-  for(let i=0;i<110;i++){ const a=i/110*Math.PI*2, x=Math.cos(a)*CAKE.R, z=Math.sin(a)*CAKE.R; add(deco,sphereG,i%3?creamMat:pinkMat,x,terrainH(x,z)+.08,z,.42*CS,.26*CS,.42*CS); }
+  for(let i=0;i<110;i++){ const a=i/110*Math.PI*2, x=Math.cos(a)*CAKE.R, z=Math.sin(a)*CAKE.R; add(deco,sphereG,i%3?creamMat:pinkMat,x,terrainH(x,z)+.02,z,.42*CS,.13*CS,.42*CS); obstacles.push({x,z,r:.4*CS,top:terrainH(x,z)+.02+.13*CS,walk:true,cake:true}); }   // copitos bajitos: se pasan por encima
   // Dulces repartidos por la plaza (sin tapar las puertas)
   const freeSpot=(rmin,rmax)=>{ for(let t=0;t<40;t++){ const a=rnd(0,Math.PI*2), r=rnd(rmin,rmax); let am=((a%(Math.PI/2))+Math.PI/2)%(Math.PI/2); am=Math.min(am,Math.PI/2-am);
       if(am<.16 && r>r1) continue; const x=Math.cos(a)*r, z=Math.sin(a)*r; if(Math.abs(Math.abs(x)-CAKE.towerR*Math.SQRT1_2)<2.4*CS && Math.abs(Math.abs(z)-CAKE.towerR*Math.SQRT1_2)<2.4*CS) continue; return [x,z,a]; } return null; };
@@ -1432,7 +1445,8 @@ const onCakeSurface=(x,z,y)=>{ const d=Math.hypot(x,z); return d<CAKE.R && !(d<S
   for(let i=0;i<26;i++){ const p=freeSpot(1.5,CAKE.R-.8); if(!p) continue; const [x,z]=p; if(Math.hypot(x,z)>r0-.6 && Math.hypot(x,z)<r1+.8) continue; cherry(deco,x,gy(x,z),z,rnd(1,1.5)*CS); }
   for(let i=0;i<26;i++){ const p=freeSpot(r1+1,CAKE.R-.8); if(!p) continue; const [x,z]=p; bonbon(deco,x,gy(x,z),z,rnd(.9,1.4)*CS,[chocoMat,milkChocoMat,pinkMat,whiteMat][i%4]); }
   for(let i=0;i<12;i++){ const p=freeSpot(r1+1.5,CAKE.R-1.5); if(!p) continue; const [x,z,a]=p, y=gy(x,z);   // barras de chocolate
-    add(deco,boxG,milkChocoMat,x,y+.09*CS,z,1.1*CS,.18*CS,.55*CS,a+rnd(-.6,.6)); for(let k=-1;k<=1;k++) add(deco,boxG,chocoMat,x+Math.cos(-a)*k*.36*CS,y+.2*CS,z+Math.sin(-a)*k*.36*CS,.3*CS,.05*CS,.45*CS,a); }
+    const rr=a+rnd(-.6,.6); add(deco,boxG,milkChocoMat,x,y+.09*CS,z,1.1*CS,.18*CS,.55*CS,rr);
+    [-.36,0,.36].forEach(f=>obstacles.push({x:x+Math.cos(rr)*f*CS, z:z-Math.sin(rr)*f*CS, r:.32*CS, top:y+.23*CS, walk:true, cake:true})); for(let k=-1;k<=1;k++) add(deco,boxG,chocoMat,x+Math.cos(-a)*k*.36*CS,y+.2*CS,z+Math.sin(-a)*k*.36*CS,.3*CS,.05*CS,.45*CS,a); }
   // Charcos de chocolate derretido
   const puddleMat=new THREE.MeshStandardMaterial({color:0x4a2614, roughness:.18, polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-6});
   for(let i=0;i<12;i++){ const p=i<3?freeSpot(START.r+.8,r0-1.4):freeSpot(r1+1.2,CAKE.R-2); if(!p) continue; const [x,z]=p, rr=rnd(.7,1.5)*CS;
@@ -1492,9 +1506,9 @@ const onCakeSurface=(x,z,y)=>{ const d=Math.hypot(x,z); return d<CAKE.R && !(d<S
       const aEnd=a0+(NSTEP-.5)*DA, face=a=>a+Math.PI;      // el gancho mira hacia el centro
       // bastones a lo largo de la orilla de adentro de la escalera (del piso de abajo hasta arriba del segundo piso)
       const nC=7, cAng=[]; for(let i=0;i<nC;i++) cAng.push(a0-.03+(aEnd-a0+.03)*i/(nC-1));
-      cAng.forEach(a=>{ const [x,,z]=P(rRail,a,0); cane(x,z,terrainH(x,z)-.1,H+1.35,face(a)); });
+      cAng.forEach(a=>{ const [x,,z]=P(rRail,a,0); cane(x,z,terrainH(x,z)-.1,H+2.45,face(a)); });
       // dos bastones más cerrando el hueco del lado de abajo de la escalera
-      const aLow=a0-.06; [(rRail+r0)/2, r0-.35].forEach(r=>{ const [x,,z]=P(r,aLow-.015,0); cane(x,z,H-.05,H+1.35,face(aLow)); });   // estos dos van parados sobre el segundo piso
+      const aLow=a0-.06; [(rRail+r0)/2, r0-.35].forEach(r=>{ const [x,,z]=P(r,aLow-.015,0); cane(x,z,H-.05,H+2.45,face(aLow)); });   // estos dos van parados sobre el segundo piso
       // pasamanos de la escalera: sube con los escalones
       const stairY=a=>Math.min(H,((a-a0)/DA+1)*STEP);
       const hand=[]; for(let i=0;i<=24;i++){ const a=a0-.03+(aEnd-a0+.03)*i/24; hand.push(P(rRail,a,stairY(a)+1.0)); }
@@ -1707,7 +1721,7 @@ function groundAt(x,z,y){
   if(typeof aircraftGround==='function'){ const ag=aircraftGround(x,z,y); if(ag!==null && ag>g) g=ag; }
   if(typeof playgroundGround==='function'){ const pg=playgroundGround(x,z,y); if(pg!==null && pg>g) g=pg; }
   { const cf=cakeFloorGround(x,z,y); if(cf!==null && cf>g) g=cf; }
-  for(const o of obstacles){
+  for(const o of obsNear(x,z)){
     if(!o.walk) continue;
     const dx=x-o.x, dz=z-o.z;
     if(dx*dx+dz*dz < (o.r*.8)*(o.r*.8) && y>=o.top-.45 && o.top>g) g=o.top;
@@ -2789,7 +2803,7 @@ function onPeers({peers}){
       if(e[1]>c.lightT){ c.lights=e[0]===1; c.lightT=e[1]; }
     });
     // aviones y helicópteros: quién pilota, dónde quedaron, escaleras y puertas, y quién va a bordo
-    { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<3 ? pl : null;
+    { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<(PG_KINDS[pl[0]]==='bench'?BENCHES.length:3) ? pl : null;
       if(pr.pu) pgCheckPush(r,pr.pu); }
     const ai=pr.ai;
     r.ai = Array.isArray(ai) && ai.length===10 && ai.every(Number.isFinite) && aircraft[ai[0]] && Math.abs(ai[2])<20 && Math.abs(ai[4])<20 ? ai : null;
@@ -2848,6 +2862,7 @@ function updateRemotes(dt,t){
     { const a=r.dive, H=2.42-1.5*Math.sin(a)/Math.sin(DIVE_FLAT), F=.85*Math.sin(a);
       r.label.position.set(0, H*Math.cos(a)+F*Math.sin(a), -H*Math.sin(a)+F*Math.cos(a)); }
     if(r.bw && r.held==='bow') remoteBowPose(r);
+    if(r.mg) remoteMgPose(r,t,dt);
     const fwd=Math.sin(r.dive)*.85;
     { const bx=r.pos.x+Math.sin(r.obj.rotation.y)*fwd, bz=r.pos.z+Math.cos(r.obj.rotation.y)*fwd, by=terrainH(bx,bz);
       r.blob.position.set(bx, Math.max(by, Math.min(r.pos.y, by+3))+.06, bz); r.blob.visible = !r.swim && r.pos.y > waterLevelAt(r.pos.x,r.pos.z)-.05; }
@@ -3219,10 +3234,12 @@ function teleportTo(p){
   if(player.ac){ player.ac=null; forceFirst(false); updateTouchMode(); }
   if(player.pg){ player.pg=null; updateTouchMode(); }
   if(player.mg) stopMini();
+  if(hook.mode) bowRelease(true);
+  try{ splashBurst(player.pos.x,player.pos.y+1.2,player.pos.z,.32); }catch(e){}   // destello al irse
   const [x,y,z]= p.id==='inicio' ? startSpot() : [p.x, groundAt(p.x,p.z,99)+.05, p.z];
   player.pos.set(x,y,z); player.vel.set(0,0,0); player.vy=0; player.grounded=true;
   player.swim=false; player.dive=null; player.diveAngle=0; player.inWater=false;
-  audio.teleport(); flashNote('Viajaste a '+p.name); drawMap(true);
+  audio.teleport(); flashNote('Viajaste a '+p.name); drawMap(true); player.squash=1; try{ splashBurst(x,y+1.2,z,.32); }catch(e){}   // y al llegar
   try{ sendPresence(true); }catch(e){}
 }
 
@@ -3442,7 +3459,7 @@ function stepCar(c,dt,inp){
   const [fx,fz]=carFwd(c);
   for(const k of [-2.2,0,2.2]){
     const cx=c.x+fx*k, cz=c.z+fz*k;
-    for(const o of obstacles){
+    for(const o of obsNear(cx,cz)){
       if(o.top<c.y+.6 || (o.bot!==undefined && c.y+c.T.roof<o.bot)) continue;
       const dx=cx-o.x, dz=cz-o.z; if(Math.abs(dx)>o.r+2 || Math.abs(dz)>o.r+2) continue;
       const d=Math.hypot(dx,dz), min=o.r+1.75;
@@ -3830,7 +3847,8 @@ const AIR_PARK=[[60,-52],[112,-52],[150,-58],[177,-58]];   // estacionamientos (
   mergeStatic(st); st.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); g.add(st);
   scene.add(g);
   // colisiones: terminal (varios círculos) y torre
-  for(let u=34;u<=116;u+=8){ const [x,z]=airportXZ(u,-118); obstacles.push({x,z,r:8.4,top:8.8,walk:false}); }
+  for(let u=34;u<=116;u+=4){ const [x,z]=airportXZ(u,-118); obstacles.push({x,z,r:8.2,top:8.8,walk:false}); }   // más juntos: sin huecos en las esquinas
+  [[29,-112],[29,-124],[121,-112],[121,-124]].forEach(([u,v])=>{ const [x,z]=airportXZ(u,v); obstacles.push({x,z,r:3.6,top:8.8,walk:false}); });   // esquinas de la terminal
   { const [x,z]=airportXZ(152,-118); obstacles.push({x,z,r:3.1,top:99,walk:false}); }
 })();
 
@@ -3966,7 +3984,7 @@ function aircraftGround(x,z,y){
 function collideAircraft(pos){
   for(const a of aircraft){ if(Math.abs(pos.x-a.x)>16 || Math.abs(pos.z-a.z)>16) continue;
     const [lx,lz]=airWorldToLocalFlat(a,pos.x,pos.z), c=Math.cos(a.h), s=Math.sin(a.h);
-    const boxes=a.T.kind==='plane' ? [[0,PL.R+.35,(PL.len[0]+PL.len[1])/2,(PL.len[1]-PL.len[0])/2, a.y+PL.FY+PL.R],[5,1.15,.4,1.9,a.y+2],[-5,1.15,.4,1.9,a.y+2]] : [[0,1.85,0,2.7,a.y+3.2]];
+    const boxes=a.T.kind==='plane' ? [[0,PL.R+.35,(PL.len[0]+PL.len[1])/2,(PL.len[1]-PL.len[0])/2, a.y+PL.FY+PL.R],[5,1.15,.4,1.9,a.y+2],[-5,1.15,.4,1.9,a.y+2],[0,12.3,-.6,2.0,a.y+PL.FY-.95]] : [[0,1.85,0,2.7,a.y+3.2],[0,.5,-4.6,2.7,a.y+2.6]];   // cuerpo, motores, alas completas · cabina y cola
     for(let [cx,hx,cz,hz,top] of boxes){
       if(pos.y>top-.3) continue;
       let hx2=hx; if(a.T.kind==='plane' && cx===0 && Math.abs(lz-PL.doorZ)<.62 && lx>0 && pos.y>a.y+PL.F-.5) hx2=PL.R+.12;   // en el descanso: hasta la pared
@@ -4274,7 +4292,9 @@ const pgParts={swing:[], rider:[], see:null};
     const ch=add(q,box,yellow,0,(H+.45)/2,-.45+2.2,1,.08,len, ang,0,0);
     [-.52,.52].forEach(x=>add(q,box,yellow,x,(H+.45)/2+.15,-.45+2.2,.06,.3,len, ang,0,0));
     add(q,box,yellow,0,.42,4.6,1,.08,1.3);
-    [[0,-1.1,.9],[0,2.2,.6]].forEach(([lx,lz,r])=>{ const [wx,,wz]=eqToWorld(e,lx,0,lz); obstacles.push({x:wx,z:wz,r,top:99,walk:false}); }); }
+    [[0,-1.1,.9]].forEach(([lx,lz,r])=>{ const [wx,,wz]=eqToWorld(e,lx,0,lz); obstacles.push({x:wx,z:wz,r,top:99,walk:false}); });
+    for(let k=0;k<=8;k++){ const t=k/8, lz=-.45+4.4*t, top=eqBase(e)+(H+.04)+(.49-(H+.04))*t; const [wx,,wz]=eqToWorld(e,0,0,lz); obstacles.push({x:wx,z:wz,r:.55,top,walk:true}); }   // la rampa: sólida, y se puede subir caminando
+    { const [wx,,wz]=eqToWorld(e,0,0,4.6); obstacles.push({x:wx,z:wz,r:.6,top:eqBase(e)+.46,walk:true}); } }
   // pasamanos
   { const e=PG_EQ.bars, q=at(e,st), H=e.h, L=e.len;
     [-L/2-.3, L/2+.3].forEach(z=>{ [-.5,.5].forEach(x=>bar(q,green,[x,0,z],[x,H,z],.07)); for(let k=1;k<=4;k++) bar(q,dark,[-.5,H*k/5,z],[.5,H*k/5,z],.035); });
@@ -4306,10 +4326,12 @@ const pgParts={swing:[], rider:[], see:null};
     [[0,-2],[0,2],[-2,0],[2,0]].forEach(([dx,dz])=>add(st,box,wood,ax+dx,by+.15,az+dz,dx?.25:4.2,.3,dz?.25:4.2));
     add(st,sphereG,felt('#e3cf93','rgba(150,110,50,.25)'),ax,by+.05,az,1.4,.45,1.2);
     add(st,cyl,red,ax+.9,by+.2,az+.6,.2,.3,.2); add(st,cyl,blue,ax-1,by+.15,az-.5,.18,.25,.18);
+    [[0,-2],[0,2],[-2,0],[2,0]].forEach(([dx,dz])=>{ for(let k=-2;k<=2;k++){ const x=ax+dx+(dz?k*.9:0), z=az+dz+(dx?k*.9:0); obstacles.push({x,z,r:.32,top:by+.3,walk:true}); } });
+    obstacles.push({x:ax,z:az,r:1.3,top:by+.45,walk:true});
     for(let k=0;k<4;k++){ const a=k*Math.PI/2+Math.PI/4, x=PG.x+Math.cos(a)*(PG.R-3.2), z=PG.z+Math.sin(a)*(PG.R-3.2), y=sandH(x,z);
       const b=new THREE.Group(); b.position.set(x,y,z); b.rotation.y=-a+Math.PI/2; st.add(b);
       add(b,box,wood,0,.45,0,2.2,.1,.5); add(b,box,wood,0,.8,-.25,2.2,.5,.08); [-.9,.9].forEach(o=>add(b,box,dark,o,.22,0,.1,.45,.4));
-      obstacles.push({x,z,r:.7,top:y+.5,walk:true}); }
+      const by2=-a+Math.PI/2; [-.75,0,.75].forEach(f=>obstacles.push({x:x+Math.cos(by2)*f, z:z-Math.sin(by2)*f, r:.42, top:y+.5, walk:true})); BENCHES.push({x,z,y:y+.5,yaw:by2}); }
     const cols=[red,yellow,green,blue];
     for(let k=0;k<64;k++){ const a=k/64*Math.PI*2, ga=((a+Math.PI/8)%(Math.PI/2)); if(ga<.16) continue;   // 4 entradas
       const x=PG.x+Math.cos(a)*PG.R, z=PG.z+Math.sin(a)*PG.R, y=terrainH(x,z);
@@ -4328,7 +4350,7 @@ const pgParts={swing:[], rider:[], see:null};
 let myPush={i:-1,t:0}; player.pushUntil=0;
 function pgOccupied(k,i){ if(player.pg && player.pg.k===k && player.pg.i===i) return 'me';
   for(const r of mp.remotes.values()) if(r.pl && r.pl[0]===PG_KINDS.indexOf(k) && r.pl[1]===i) return r; return null; }
-const PG_KINDS=['swing','slide','bars','ride','see'];
+const PG_KINDS=['swing','slide','bars','ride','see','bench'];
 function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars') return;
   holding=false; applyHeld(); renderHotbar();
   player.pg={k,i,t0:performance.now()/1000, from:[player.pos.x,player.pos.y,player.pos.z]};
@@ -4341,13 +4363,15 @@ function stopPlay(){ const P=player.pg; if(!P) return; const pose=player.pgPose;
   if(P.k==='swing'){ const e=PG_EQ.swings; out=eqToWorld(e,e.seats[P.i],0,.9); pgState.swing[P.i].w*=.5; }
   else if(P.k==='ride'){ const e=PG_EQ.riders[P.i]; out=eqToWorld(e,.9,0,0); }
   else if(P.k==='see'){ const e=PG_EQ.seesaw; out=eqToWorld(e,.9,0,(P.i?1:-1)*e.half); }
+  else if(P.k==='bench'){ const b=BENCHES[P.i]; out=[b.x+Math.sin(b.yaw)*.95,0,b.z+Math.cos(b.yaw)*.95]; }
   else out=pose?pose.pos:[player.pos.x,player.pos.y,player.pos.z];
-  player.pos.set(out[0], sandH(out[0],out[2]), out[2]); if(pose) player.facing=pose.yaw;
+  player.pos.set(out[0], groundAt(out[0],out[2],(P.k==='bench'?BENCHES[P.i].y:0)+.3), out[2]); if(pose) player.facing=pose.yaw;
   player.pg=null; player.grounded=true; player.vy=0; audio.getup(); updateTouchMode(); try{ sendPresence(true); }catch(e){} }
 const pgIn=()=>{ let f=0; if(keys.KeyW||keys.ArrowUp) f+=1; if(keys.KeyS||keys.ArrowDown) f-=1; f-=stick.y; return Math.min(1,Math.abs(f)+Math.hypot(stick.x,0)*.5); };
 // Pose de un peluche en cada juego (la misma para mí y para los demás). Devuelve pos en el mundo, giro y postura.
 const rotX=(y,z,a)=>[y*Math.cos(a)-z*Math.sin(a), y*Math.sin(a)+z*Math.cos(a)];
 function playPose(k,i,v,dt){
+  if(k==='bench'){ const b=BENCHES[i]; if(!b) return null; const c=Math.cos(b.yaw), s=Math.sin(b.yaw); return {pos:[b.x-s*.12, b.y-.415, b.z-c*.12], yaw:b.yaw, sit:1}; }
   if(k==='swing'){ const e=PG_EQ.swings, [ry,rz]=rotX(-e.L-.415,-.06,-v);
     return {pos:eqToWorld(e,e.seats[i],e.pivot+ry,rz), yaw:e.yaw, tilt:-v, sit:1, holdUp:1}; }
   if(k==='ride'){ const e=PG_EQ.riders[i], [ry,rz]=rotX(.67-.415,-.18,v); return {pos:eqToWorld(e,0,.62+ry,rz), yaw:e.yaw, tilt:v, sit:1, grip:1}; }
@@ -4422,8 +4446,9 @@ function placePlay(obj,pose){ obj.position.set(pose.pos[0],pose.pos[1],pose.pos[
 // acciones del parque
 function pgActions(){
   if(player.pg){ const k=player.pg.k; if(k==='slide'||k==='bars') return [null,null];
-    return [{label: k==='swing'?'Bajarse del columpio': k==='ride'?'Bajarse':'Bajarse del sube y baja', run:stopPlay}, null]; }
+    return [{label: k==='swing'?'Bajarse del columpio': k==='ride'?'Bajarse': k==='bench'?'Levantarse':'Bajarse del sube y baja', run:stopPlay}, null]; }
   if(player.car || player.ac || player.swim || player.dive) return [null,null];
+  for(let i=0;i<BENCHES.length;i++){ const b=BENCHES[i]; if(Math.hypot(player.pos.x-b.x,player.pos.z-b.z)<1.5 && Math.abs(player.pos.y-(b.y-.5))<1 && !pgOccupied('bench',i)) return [{label:'Sentarse', run:()=>startPlay('bench',i)}, null]; }
   const px=player.pos.x, pz=player.pos.z; if(Math.hypot(px-PG.x,pz-PG.z)>PG.R+2) return [null,null];
   // columpios: sentarse o empujar (si hay alguien y estoy detrás)
   { const e=PG_EQ.swings, [lx,lz]=eqToLocal(e,px,pz);
@@ -4586,7 +4611,7 @@ function hitAt(p,ignoreSelf){
   for(const a of aircraft){ if(Math.abs(p.x-a.x)>16 || Math.abs(p.z-a.z)>16) continue; const [lx,lz]=airWorldToLocalFlat(a,p.x,p.z);
     const boxes=a.T.kind==='plane' ? [[0,PL.R+.2,(PL.len[0]+PL.len[1])/2,(PL.len[1]-PL.len[0])/2, a.y+PL.FY+PL.R],[5,4.5,.4,1.6,a.y+PL.FY+.3],[-5,4.5,.4,1.6,a.y+PL.FY+.3]] : [[0,1.5,0,2.4,a.y+3.4]];
     for(const [cx,hx,cz,hz,top] of boxes) if(Math.abs(lx-cx)<hx && Math.abs(lz-cz)<hz && p.y<top && p.y>a.y-.2) return {kind:'air', ref:a}; }
-  for(const o of obstacles){ const dx=p.x-o.x, dz=p.z-o.z; if(dx*dx+dz*dz<o.r*o.r && p.y<o.top && p.y>(o.bot??-99) && p.y>g-.5) return {kind:'solid'}; }
+  for(const o of obsNear(p.x,p.z)){ const dx=p.x-o.x, dz=p.z-o.z; if(dx*dx+dz*dz<o.r*o.r && p.y<o.top && p.y>(o.bot??-99) && p.y>g-.5) return {kind:'solid'}; }
   if(p.y<=g) return {kind:'ground'};
   const lvl=waterLevelAt(p.x,p.z); if(p.y<lvl && terrainH(p.x,p.z)<lvl) return {kind:'water'};
   return null;
@@ -4771,7 +4796,7 @@ const critters=[];
     critters.push({kind, def, g, body, home, R, s, sp:def.speed*(.8+rnd()*.4), ph:[rnd(0,6.28),rnd(0,6.28),rnd(0,6.28),rnd(0,6.28)], w:rnd(.12,.22), pw:rnd(.25,.5), yaw:rnd(0,6.28),
       pos:new THREE.Vector3(), vel:new THREE.Vector3(), acc:new THREE.Vector3(), shy:new THREE.Vector2(), eyes:[0,1].map(()=>({p:new THREE.Vector2(0,-.9), v:new THREE.Vector2()})), first:true, ground:opts.ground }); };
   // lugares buenos en la isla: pasto seco, lejos del mar, lago, castillo, parque, aeropuerto y pista
-  const okSpot=(x,z)=>{ const h=terrainH(x,z); if(h<SEA_Y+1.4 || coastC(x,z)>.8) return false; if(Math.hypot(x-LAKE.x,z-LAKE.z)<LAKE.R+7) return false;
+  const okSpot=(x,z)=>{ for(const o of obsNear(x,z)) if(Math.hypot(x-o.x,z-o.z)<o.r+9) return false; const h=terrainH(x,z); if(h<SEA_Y+1.4 || coastC(x,z)>.8) return false; if(Math.hypot(x-LAKE.x,z-LAKE.z)<LAKE.R+7) return false;
     if(Math.hypot(x,z)<CAKE.R+8) return false; if(Math.hypot(x-PG.x,z-PG.z)<PG.R+6) return false; if(Math.hypot(x-FAIR.x,z-FAIR.z)<FAIR.R+8) return false; if(airportFlat(x,z)>.01) return false;
     if(trackNearest(x,z).d<TRACK_W) return false; return true; };
   const kinds=['conejo','conejo','osito','cerdito','gatito','ovejita','conejo','gatito','osito','ovejita'], NA=MIN_Q?18:34;
@@ -4945,7 +4970,7 @@ function textTex(lines,w=512,h=192,bg='#fff3d6',fg='#7a2b2b',edge='#e5534b'){ co
 // toldo de puesto: 4 postes, techo de rayas y letrero con el nombre
 function tent(par,w,d,h,ca,cb,title,sub){
   const pole=FM('#fbf3e4'), roofT=stripeTex(ca,cb,10);
-  [[-w/2,-d/2],[w/2,-d/2],[-w/2,d/2],[w/2,d/2]].forEach(([x,z])=>fAdd(par,fCyl,pole,x,h/2,z,.07,h,.07));
+  par.updateMatrixWorld(true); [[-w/2,-d/2],[w/2,-d/2],[-w/2,d/2],[w/2,d/2]].forEach(([x,z])=>{ fAdd(par,fCyl,pole,x,h/2,z,.07,h,.07); const p=par.localToWorld(new THREE.Vector3(x,0,z)); obstacles.push({x:p.x,z:p.z,r:.12,top:FY+h,walk:false}); });
   const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*.78,1.3,4,1,true), new THREE.MeshStandardMaterial({map:roofT, side:THREE.DoubleSide, roughness:.9}));
   roof.rotation.y=Math.PI/4; roof.scale.set(w/Math.max(w,d),1,d/Math.max(w,d)); roof.position.y=h+.62; par.add(roof);
   for(let i=0;i<Math.round(w/.45);i++){ const x=-w/2+.22+i*.45; fAdd(par,new THREE.ConeGeometry(.22,.32,3),FM(i%2?ca:cb),x,h-.12,-d/2-.02,1,1,.2,Math.PI); }   // banderines del borde
@@ -5091,10 +5116,14 @@ let fairBulbs=null;
     if(name.startsWith('Al')) for(let i=0;i<5;i++){ fAdd(g,fCyl,FM('#fbf3e4'),-.8+i*.4,1.35,-.6,.02,.6,.02); fAdd(g,sphereG,FM(['#ff9ec0','#c8b6ff','#9fe0ff'][i%3]),-.8+i*.4,1.75,-.6,.2,.22,.2); }
     else { fAdd(g,fBox,FM('#e5534b'),0,1.5,-.6,.8,.8,.5); fAdd(g,sphereG,FM('#fff6d8'),0,1.95,-.6,.42,.18,.3); }
     blockAt(e,0,-.6,1.3,2); });
+  // bancas para sentarse
+  [.45,1.25,1.9,2.7,4.3,5.15].forEach((a,i)=>{ const r=FAIR.R-6.5, lx=Math.cos(a)*r, lz=Math.sin(a)*r; const e=boothFrame(lx,lz,-lx,-lz), b=booth(e);
+    fAdd(b,fBox,FM('#e5534b'),0,.45,0,2.2,.1,.55); fAdd(b,fBox,FM('#e5534b'),0,.8,-.27,2.2,.5,.08); [-.9,.9].forEach(o=>fAdd(b,fBox,FM('#3a3d46'),o,.22,0,.1,.45,.45));
+    [-.75,0,.75].forEach(f=>{ const p=bW(e,f,0,-.08); obstacles.push({x:p.x,z:p.z,r:.5,top:FY+.5,walk:true}); }); BENCHES.push({x:e.x,z:e.z,y:FY+.5,yaw:e.yaw}); });
   // globos
   for(let i=0;i<10;i++){ const a=i*.63+.3, r=FAIR.R-6-(i%3)*3, [x,z]=fairW(Math.cos(a)*r,Math.sin(a)*r);
     const c=['#ff5d6c','#ffe14d','#7ed957','#4fc3f7','#c77dff'][i%5]; const b=new THREE.Mesh(sphereG,FM(c,'shiny')); b.scale.set(.45,.55,.45); b.position.set(x,FY+3.6+(i%2)*.5,z); root.add(b);
-    fBar(root,FM('#ffffff'),[x,FY+.9,z],[x,FY+3.1+(i%2)*.5,z],.012); fAdd(root,fCyl,FM('#8a6a3e'),x,FY+.45,z,.1,.9,.1); }
+    fBar(root,FM('#ffffff'),[x,FY+.9,z],[x,FY+3.1+(i%2)*.5,z],.012); fAdd(root,fCyl,FM('#8a6a3e'),x,FY+.45,z,.1,.9,.1); obstacles.push({x,z,r:.14,top:FY+3,walk:false}); }
 })();
 
 // ======================================================================================
@@ -5444,6 +5473,7 @@ let fairBulbs=null;
   // patas
   [-1,1].forEach(sz=>[-1,1].forEach(sx=>fBar(g,FM('#4f86c6','shiny'),[sx*5.5,0,sz*1.8],[0,HUB,sz*.7],.22)));
   fAdd(g,fBox,FM('#b88a5a'),0,.2,-2.6,4,.4,2.2);   // andén para subir
+  for(let x=-1.6;x<=1.6;x+=.8) for(const z of [-3.3,-2.6,-1.9]) { const p=bW(e,x,0,z); obstacles.push({x:p.x,z:p.z,r:.75,top:FY+.4,walk:true}); }
   [-1,1].forEach(sz=>[-1,1].forEach(sx=>blockAt(e,sx*5.3,sz*1.75,.4,6)));
   // canastillas (siempre derechas)
   const gcol=['#ff5d6c','#ffe14d','#7ed957','#4fc3f7','#c77dff','#ff9d5c'], gond=[];
@@ -5489,6 +5519,8 @@ let fairBulbs=null;
     horses.push({h,a}); }
   for(let i=0;i<24;i++){ const a=i/24*Math.PI*2; fAdd(spin,sphereG,new THREE.MeshStandardMaterial({color:['#ff5d6c','#ffe14d','#7ed957','#4fc3f7'][i%4], emissive:0xffffff, emissiveIntensity:.2}),Math.cos(a)*4.9,4.45,Math.sin(a)*4.9,.12,.12,.12); }
   blockAt(e,0,0,.6,6);
+  { const p0=bW(e,0,0,0); obstacles.push({x:p0.x,z:p0.z,r:3.3,top:FY+.4,walk:true}); for(let k=0;k<16;k++){ const a=k/16*Math.PI*2, p=bW(e,Math.cos(a)*3.75,0,Math.sin(a)*3.75); obstacles.push({x:p.x,z:p.z,r:1.3,top:FY+.4,walk:true}); } }
+  const horseObs=[0,1,2,3,4,5,6,7].map(()=>{ const o={x:0,z:0,r:.42,top:FY+2.0,walk:false}; DYN_OBS.push(o); return o; });
   const sg=new THREE.Mesh(new THREE.PlaneGeometry(2.4,.8), new THREE.MeshStandardMaterial({map:textTex(['Carrusel','¡Paseo gratis!'],512,170,'#fff3d6','#c2185b','#ff9ec0'), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
   sg.position.set(0,1.6,-5.4); sg.rotation.y=Math.PI; g.add(sg); fairGlow.push(sg.material); [-1.1,1.1].forEach(x=>fAdd(g,fCyl,FM('#fbf3e4'),x,.8,-5.4,.05,1.6,.05));
   padMesh(g,0,-4.9,.6);
@@ -5499,7 +5531,7 @@ let fairBulbs=null;
     hud(M){ return {score:'¡Arre, caballito!', time:fmtT(40-M.t)}; },
     update(M,dt){ const t=Date.now()/1000; hp(M.data.k,t,_v); const w=bW(e,_v.x,_v.y-.12,_v.z); player.pos.copy(w); player.groundY=w.y;
       const a=-(ang()+horses[M.data.k].a); player.facing=e.yaw+Math.atan2(-Math.sin(a),Math.cos(a))+Math.PI; if(M.t>40) endMini(M,null); },
-    idle(dt){ const t=Date.now()/1000; spin.rotation.y=ang(); horses.forEach((o,i)=>{ o.h.position.set(Math.cos(o.a)*R,1.35+Math.sin(t*2.2+i)*.25,Math.sin(o.a)*R); o.h.rotation.y=-o.a; }); },
+    idle(dt,mine){ const t=Date.now()/1000; spin.rotation.y=ang(); horses.forEach((o,i)=>{ o.h.position.set(Math.cos(o.a)*R,1.35+Math.sin(t*2.2+i)*.25,Math.sin(o.a)*R); o.h.rotation.y=-o.a; hp(i,t,_v); const w=bW(e,_v.x,0,_v.z); horseObs[i].x=w.x; horseObs[i].z=w.z; horseObs[i].r=mine?0:.42; }); },
     pose(M,o,t,dt){ poseLimbs(o,t,dt,0,false,0,false,null,0,0,false,1,false); o.position.y=player.pos.y-.1; },
   };
   MINIS.push(def);
@@ -5510,6 +5542,27 @@ function mgPresence(){ const M=player.mg; if(!M) return {mg:null, hk:null}; cons
 renderCoins();
 function parseMg(r,pr){ r.mg = Array.isArray(pr.mg) && Number.isInteger(pr.mg[0]) && pr.mg[0]>=0 && pr.mg[0]<MINIS.length ? pr.mg : null;
   r.hk = Array.isArray(pr.hk) && pr.hk.every(v=>typeof v==='number' && Number.isFinite(v)) && (pr.hk[0]===0||pr.hk[0]===1) ? pr.hk : null; }
+
+// ---------- Empujoncitos: animalitos y otros peluches no se atraviesan ----------
+function softPushes(){
+  const P=player.pos;
+  for(const c of critters){ if(!c.vis || c.kind==='pato') continue; const dx=P.x-c.pos.x, dz=P.z-c.pos.z; if(Math.abs(dx)>2||Math.abs(dz)>2) continue;
+    const r=(c.snake?.25:.38*(c.s||1))+.38, d=Math.hypot(dx,dz); if(d<r && d>1e-4 && Math.abs(P.y-c.pos.y)<1.2){ P.x=c.pos.x+dx/d*r; P.z=c.pos.z+dz/d*r; } }
+  for(const r of mp.remotes.values()){ if(r.car||r.ai||r.pl||r.mg) continue; const dx=P.x-r.pos.x, dz=P.z-r.pos.z, d=Math.hypot(dx,dz), m=.78;
+    if(d<m && d>1e-4 && Math.abs(P.y-r.pos.y)<1.6){ const k=(m-d)*.5; P.x+=dx/d*k; P.z+=dz/d*k; } }
+}
+// ---------- La cámara no se mete dentro de árboles, puestos, rocas grandes, etc. ----------
+function clampCamToObstacles(target,want){
+  const N=16; for(let i=1;i<=N;i++){ const t=i/N, x=target.x+(want.x-target.x)*t, y=target.y+(want.y-target.y)*t, z=target.z+(want.z-target.z)*t;
+    for(const o of obsNear(x,z)){ if(o.r<.3 || y>o.top-.05 || (o.bot!==undefined && y<o.bot) || y<(o.walk?-99:-99)) continue; const dx=x-o.x, dz=z-o.z, rr=o.r*.92;
+      if(dx*dx+dz*dz<rr*rr){ const k=Math.max(0,(i-1.5)/N); want.set(target.x+(want.x-target.x)*k, target.y+(want.y-target.y)*k, target.z+(want.z-target.z)*k); return; } } } }
+// ---------- Otros jugadores en la feria: se ven sentados en los paseos y con los brazos en el juego ----------
+function remoteMgPose(r,t,dt){ const d=MINIS[r.mg[0]]; if(!d) return;
+  if(d.id==='rueda'){ poseLimbs(r.obj,t,dt,0,false,0,false,null,0,0,false,1,false); r.obj.position.y=r.pos.y-.4; r.obj.rotation.x=0; r.obj.rotation.z=0; }
+  else if(d.id==='carrusel'){ poseLimbs(r.obj,t,dt,0,false,0,false,null,0,0,false,1,false); r.obj.position.y=r.pos.y-.1; r.obj.rotation.x=0; r.obj.rotation.z=0; }
+  else if(d.id==='baile'){ const now=performance.now()/1000; armsOf(r.obj).forEach(a=>{ const sd=a.userData.side, b=Math.sin(now*6.2+(sd>0?0:Math.PI)); a.rotation.z=sd*(1.2+.6*b); a.rotation.x=-.3; a.userData.joint.rotation.x=-.8; }); r.obj.position.y=r.pos.y+.16+Math.abs(Math.sin(now*3.1))*.06; }
+  else { armsOf(r.obj).forEach(a=>{ const sd=a.userData.side; a.rotation.z=sd*.5; a.rotation.x=-1.15; a.userData.joint.rotation.x=-.7; }); }
+}
 
 // ---------- Bucle ----------
 function resize(){
@@ -5609,12 +5662,14 @@ function update(dt,t){
     player.pos.x += player.vel.x*dt; player.pos.z += player.vel.z*dt;
 
     // Colisiones con árboles, rocas, palmeras, el botón y el cofre
-    for(const o of obstacles){
+    for(let pass=0;pass<2;pass++) for(const o of obsNear(player.pos.x,player.pos.z)){
       const ox=player.pos.x-o.x, oz=player.pos.z-o.z;
       if(Math.abs(ox)>o.r+.5 || Math.abs(oz)>o.r+.5) continue;
       const d=Math.hypot(ox,oz), min=o.r+.42;
-      if(d<min && d>0.0001 && player.pos.y<o.top-.45 && !(o.bot!==undefined && player.pos.y+1.7<o.bot)){ player.pos.x=o.x+ox/d*min; player.pos.z=o.z+oz/d*min; }
+      if(d<min && d>0.0001 && player.pos.y<o.top-.45 && !(o.bot!==undefined && player.pos.y+PLAYER_H<o.bot) && !(o.bot!==undefined && player.pos.y>=o.top-.45)){ player.pos.x=o.x+ox/d*min; player.pos.z=o.z+oz/d*min; }
     }
+    // animalitos y otros jugadores: se empujan suavecito (no se atraviesan)
+    softPushes();
 
     collideAircraft(player.pos);   // aviones y helicópteros también
     // los coches son sólidos
@@ -5805,7 +5860,7 @@ function update(dt,t){
     const off=_camO.set(Math.sin(yaw)*Math.cos(p), Math.sin(p), Math.cos(yaw)*Math.cos(p)).multiplyScalar(camDist*(1-.35*camAim));
     const want=_camW.copy(target).add(off);
     const floorY=Math.max(terrainH(want.x,want.z), inLake(want.x,want.z,4)?WATER_Y:-999)+.45; if(want.y<floorY) want.y=floorY;
-    clampCamToCake(target,want);
+    clampCamToCake(target,want); clampCamToObstacles(target,want);
     camera.position.lerp(want, 1-Math.exp(-dt*14));
     if(cakeSolid(camera.position.x,camera.position.y,camera.position.z)) camera.position.copy(want);   // nunca quedarse dentro del pastel
     camera.lookAt(target);
