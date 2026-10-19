@@ -412,7 +412,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
         <div class="seg" id="optFpsCap"><button data-v="free">Libre</button><button data-v="30">30</button></div></div>
       <div class="opt"><label for="optShadows">Sombras</label><button class="switch" id="optShadows" role="switch" aria-checked="true" aria-label="Sombras"></button></div>
       <div class="opt"><label for="optWeather">Clima<small>Lluvia, nieve, tormentas y niebla de vez en cuando</small></label><button class="switch" id="optWeather" role="switch" aria-checked="true" aria-label="Clima"></button></div>
-      <div class="opt"><label for="optDraw">Distancia de visión</label><div class="ctrl"><input type="range" id="optDraw" min="80" max="300" step="10"><output id="optDrawOut"></output></div></div>
+      <div class="opt"><label for="optDraw">Distancia de visión</label><div class="ctrl"><input type="range" id="optDraw" min="30" max="300" step="10"><output id="optDrawOut"></output></div></div>
     </div>
 
     <div class="opt-group">
@@ -663,7 +663,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='45';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='46';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -837,8 +837,24 @@ const waterLevelAt=(x,z)=>inLakeWater(x,z)?WATER_Y:SEA_Y;
       col[k*3]=tmpC.r*lum; col[k*3+1]=tmpC.g*lum; col[k*3+2]=tmpC.b*lum; } }
   geo.setAttribute('color', new THREE.BufferAttribute(col,3));
   geo.computeVertexNormals();
-  const m=new THREE.Mesh(geo, new THREE.MeshStandardMaterial({map:t, vertexColors:true, roughness:1}));
-  m.receiveShadow=true; scene.add(m);
+  // El terreno se parte en cuadros que comparten los mismos puntos: así solo se dibujan los que están frente a la cámara
+  // (lo de atrás, los lados y lo que queda más lejos que la distancia de visión se salta solo).
+  const mat=new THREE.MeshStandardMaterial({map:t, vertexColors:true, roughness:1});
+  const T=8, W1=SEG+1, step=Math.ceil(SEG/T);
+  for(let ty=0;ty<SEG;ty+=step) for(let tx=0;tx<SEG;tx+=step){
+    const idx=[];
+    for(let iy=ty;iy<Math.min(SEG,ty+step);iy++) for(let ix=tx;ix<Math.min(SEG,tx+step);ix++){
+      const a=ix+W1*iy, b=ix+W1*(iy+1), c=ix+1+W1*(iy+1), d=ix+1+W1*iy; idx.push(a,b,d, b,c,d); }
+    const g=new THREE.BufferGeometry();
+    for(const k of ['position','normal','uv','color']) g.setAttribute(k, geo.attributes[k]);
+    g.setIndex(idx);
+    // esfera que envuelve solo este cuadro (para saber si se ve)
+    let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,z0=1e9,z1=-1e9;
+    for(let iy=ty;iy<=Math.min(SEG,ty+step);iy++) for(let ix=tx;ix<=Math.min(SEG,tx+step);ix++){ const k=ix+W1*iy, x=+pos.getX(k), y=+pos.getY(k), z=+pos.getZ(k);
+      if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; if(z<z0)z0=z; if(z>z1)z1=z; }
+    g.boundingSphere=new THREE.Sphere(new THREE.Vector3((x0+x1)/2,(y0+y1)/2,(z0+z1)/2), Math.hypot(x1-x0,y1-y0,z1-z0)/2+.5);
+    const m=new THREE.Mesh(g, mat); m.receiveShadow=true; m.matrixAutoUpdate=false; scene.add(m);
+  }
 })();
 
 // Fondo del océano abierto: sigue al jugador para que el mar no tenga fin
@@ -1103,6 +1119,7 @@ function instanced(geo, mat, items, set, opts={}){
     let r=0; list.forEach(e=>{ r=Math.max(r, e.p.distanceTo(c)+gr*e.s); });
     g.boundingSphere=new THREE.Sphere(c, r+.5);
     const m=new THREE.InstancedMesh(g,mat,list.length); list.forEach((e,i)=>m.setMatrixAt(i,e.m));
+    m.frustumCulled=true;   // la esfera de arriba envuelve todo el grupo: si no se ve, no se dibuja (three.js lo apaga por defecto en grupos)
     m.castShadow=opts.shadow!==false; m.receiveShadow=true; scene.add(m); meshes.set(key,m);
   });
   return { meshes:[...meshes.values()], setColorAt(i,col){ const [k,j]=where[i]; meshes.get(k).setColorAt(j,col); } };
@@ -1459,7 +1476,7 @@ const seaweedChunks=(()=>{
     const g=geo.clone(); let cx=0,cz=0; list.forEach(e=>{cx+=e.w[0];cz+=e.w[1];}); cx/=list.length; cz/=list.length;
     let r=0, cy=0; list.forEach(e=>{ r=Math.max(r,Math.hypot(e.w[0]-cx,e.w[1]-cz)); cy+=e.y; }); cy/=list.length;
     g.boundingSphere=new THREE.Sphere(new THREE.Vector3(cx,cy,cz), r+6);
-    const m=new THREE.InstancedMesh(g,mat,list.length*2); m.castShadow=false; m.receiveShadow=true; scene.add(m);
+    const m=new THREE.InstancedMesh(g,mat,list.length*2); m.frustumCulled=true; m.castShadow=false; m.receiveShadow=true; scene.add(m);
     out.push({m,list,cx,cz});
   });
   return out;
@@ -2210,7 +2227,7 @@ function applySettings(){
   if(minQ && settings.draw>100){ settings.draw=100; }
   if(settings.quality!==Q0 && applySettings.ready) flashNote('Algunos detalles de la calidad nueva se aplican al volver a abrir el juego');
   refreshFog();
-  camera.far=settings.draw+60; camera.updateProjectionMatrix();
+  camera.far=settings.draw*1.05+15; camera.updateProjectionMatrix();   // más allá todo queda cubierto por la niebla: no se dibuja
   ui('fps').hidden=!settings.fps;
   audio.apply();
   ui('hint').style.visibility = settings.hints ? '' : 'hidden';
