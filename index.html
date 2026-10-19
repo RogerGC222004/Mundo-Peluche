@@ -80,10 +80,11 @@ body.not-play .mg-hud, body.not-play .mg-ctl, body.not-play .mg-result{display:n
 .mg-ctl{position:fixed;right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(86px + env(safe-area-inset-bottom,0px));display:flex;gap:14px;pointer-events:none;}
 .mg-ctl .mg-b{pointer-events:auto;touch-action:none;}
 .mg-ctl .mg-b.on{transform:translateY(3px);filter:brightness(.92);}
-.mg-ctl.arrows{left:50%;right:auto;transform:translateX(-50%);gap:12px;}
+.mg-ctl.arrows{left:calc(22px + env(safe-area-inset-left,0px));right:calc(22px + env(safe-area-inset-right,0px));bottom:calc(30px + env(safe-area-inset-bottom,0px));gap:12px;}
+.mg-ctl.arrows .mg-b:nth-child(2){margin-right:auto;}   /* ← ↓ a la izquierda, ↑ → a la derecha: la pantalla queda libre */
 .mg-ctl.arrows .mg-b{width:84px;height:84px;font-size:38px;}
 .mg-ctl.grid3{display:grid;grid-template-columns:repeat(3,auto);gap:10px;}
-.mg-ctl.grid3 .mg-b{width:70px;height:70px;font-size:26px;}
+.mg-ctl.grid3 .mg-b{width:58px;height:58px;font-size:22px;opacity:.88;}
 .mg-result{position:fixed;inset:0;display:grid;place-items:center;background:rgba(40,30,20,.25);z-index:30;}
 .mg-result .card{background:var(--label);border-radius:20px;padding:22px 26px;min-width:260px;max-width:calc(100% - 40px);text-align:center;color:var(--thread);font-weight:700;box-shadow:0 10px 30px var(--shadow);outline:2px dashed #b9b29a;outline-offset:-8px;}
 .mg-result h2{font-family:var(--display);margin:0 0 8px;font-size:26px;}
@@ -694,7 +695,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='56';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='57';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -2062,6 +2063,7 @@ function poseLimbs(obj,t,dt,sw,air,dk,waving,swimT,walkPh=0,mv=0,holdMap=false,s
   // Brazos: codos un poco doblados al estar de pie, más al correr, hacia arriba al saltar, rectos al tirarse
   arms.forEach(a=>{
     const sd=a.userData.side, j=a.userData.joint;
+    if(a.rotation.y || j.rotation.y){ ease(a.rotation,'y',0); ease(j.rotation,'y',0); if(Math.abs(a.rotation.y)<.002) a.rotation.y=0; if(Math.abs(j.rotation.y)<.002) j.rotation.y=0; }
     if(sit>.5){
       if(drive){ ease(a.rotation,'z',sd*.3); ease(a.rotation,'x',-1.05); ease(j.rotation,'x',-.55); ease(j.rotation,'z',-sd*.35); }   // manos al volante
       else { ease(a.rotation,'z',sd*.42); ease(a.rotation,'x',-.35); ease(j.rotation,'x',-.75); ease(j.rotation,'z',0); }          // manos en las piernas
@@ -2422,7 +2424,9 @@ function hold(el, on, off){
   ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>el.addEventListener(ev,off));
 }
 tap(ui('pauseChip'),()=>{ if(document.pointerLockElement) document.exitPointerLock(); show('pause'); });
-tap(camChip,()=>setCam(camMode==='third'?'first':'third'));
+tap(camChip,()=>{ const M=player.mg;
+  if(M && M.g.fp){ M.view=mgView(M)==='first'?'third':'first'; try{ audio.cam(); }catch(e){} centerText(camChip, M.view==='first'?'1ª persona':'3ª persona'); return; }
+  setCam(camMode==='third'?'first':'third'); });
 hold(ui('tJump'),()=>{ touchHold.up=true; jump(); },()=>{ touchHold.up=false; });
 hold(ui('tDive'),()=>{ touchHold.down=true; startDive(); },()=>{ touchHold.down=false; });
 
@@ -2445,7 +2449,8 @@ document.addEventListener('pointerlockchange',()=>{
 
 // Mirar con ratón: bloqueo de puntero o arrastre
 let dragging=false;
-canvas.addEventListener('mousedown',e=>{ if(state!=='play')return; if(document.pointerLockElement && e.button===0 && bowHeld() && hook.mode===0){ bowShoot(); return; } dragging=true; if(!document.pointerLockElement && !overlaysOpen()) lockPointer(); });
+canvas.addEventListener('pointerdown',e=>{ const M=player.mg; if(state!=='play' || !M || M.over || !M.g.tap || (e.pointerType==='mouse' && document.pointerLockElement)) return; M.g.tap(M,e.clientX,e.clientY); });
+canvas.addEventListener('mousedown',e=>{ if(state!=='play')return; if(player.mg && player.mg.g.tap && !document.pointerLockElement) return; if(document.pointerLockElement && e.button===0 && bowHeld() && hook.mode===0){ bowShoot(); return; } dragging=true; if(!document.pointerLockElement && !overlaysOpen()) lockPointer(); });
 addEventListener('mouseup',()=>dragging=false);
 addEventListener('mousemove',e=>{
   if(state!=='play') return;
@@ -4533,7 +4538,7 @@ function bowRig(obj){
   const rope=makeRope();
   return obj.userData.bowRig={bow, reel, nockArrow, arrow, rope, stretch:1};
 }
-function hideBowRig(rig){ if(!rig) return; rig.bow.visible=rig.reel.visible=rig.nockArrow.visible=rig.arrow.visible=false; drawRope(rig.rope,null); const arm=rig.reel.parent; if(arm) arm.userData.joint.scale.y=1; }
+function hideBowRig(rig,keepArm){ if(!rig) return; rig.bow.visible=rig.reel.visible=rig.nockArrow.visible=rig.arrow.visible=false; drawRope(rig.rope,null); const arm=rig.reel.parent; if(arm && !keepArm) arm.userData.joint.scale.y=1; }
 // Brazo de dos partes que alcanza un punto (en coordenadas del peluche). stretch: el antebrazo se estira si no llega.
 const bw_S=new THREE.Vector3(), bw_D=new THREE.Vector3(), bw_U=new THREE.Vector3(), bw_E=new THREE.Vector3(), bw_F=new THREE.Vector3(), bw_hint=new THREE.Vector3(), bw_qi=new THREE.Quaternion(), bw_down=new THREE.Vector3(0,-1,0);
 function reachArm(arm,target,hint,stretch){
@@ -4718,7 +4723,7 @@ function poseBowOn(obj,rig,o,arrowPos,ropeTaut){
 }
 function myBowPose(dt){
   const rig=bowRig(plush);
-  if(!bowHeld()){ hideBowRig(rig); return; }
+  if(!bowHeld()){ hideBowRig(rig,!!player.mg); return; }   // en un minijuego el brazo puede estar estirado alcanzando algo
   const p=aimPitch();
   poseBowOn(plush,rig,{pitch:p, draw:hook.mode===0?1:0, mode:hook.mode, target:hook.mode>=1?hook.pos:null, extend:hook.extend, pull:hook.pull, reachK:hook.reachK, vel:hook.mode===1?hook.vel:null}, hook.pos, hook.mode>=3);
   myBowAim=p;
@@ -5007,6 +5012,7 @@ function startMini(def){
   player.mg=M; player.vel.set(0,0,0); player.vy=0; player.dive=null; player.diveAngle=0; player.grounded=true;
   if(def.e && !def.freeSpot){ const p=bW(def.e,def.spot?def.spot[0]:0,0,def.spot?def.spot[1]:0); player.pos.set(p.x,FY,p.z); player.facing=def.e.yaw+(def.face||0); }
   def.start && def.start(M);
+  if(def.fp) centerText(camChip,'1ª persona');
   mgEl('mgTitle').textContent=def.name; mgEl('mgHud').hidden=!!def.noHud; mgShowCtl(def); mgEl('mgResult').hidden=true; renderMgHud();
   setActions(null,null); updateTouchMode();
   try{ sendPresence(true); }catch(e){}
@@ -5021,7 +5027,7 @@ function endMini(M, res){   // res: {title, lines:[], coins}
   else stopMini();
 }
 function stopMini(){ const M=player.mg; if(!M) return; try{ M.g.end && M.g.end(M); }catch(e){}
-  player.mg=null; mgEl('mgHud').hidden=true; mgEl('mgCtl').hidden=true; mgEl('mgResult').hidden=true;
+  player.mg=null; fpBody(plush,false); resetArmsIK(plush); plush.rotation.x=0; centerText(camChip, camMode==='third' ? '3ª persona' : '1ª persona'); mgEl('mgHud').hidden=true; mgEl('mgCtl').hidden=true; mgEl('mgResult').hidden=true;
   if(M.g.e && M.g.exitTo){ const p=bW(M.g.e,M.g.exitTo[0],0,M.g.exitTo[1]); player.pos.set(p.x,FY,p.z); }
   audio.bgQuiet=false; updateTouchMode(); try{ sendPresence(true); }catch(e){} }
 function renderMgHud(){ const M=player.mg; if(!M) return; const h=M.g.hud?M.g.hud(M):{};
@@ -5063,7 +5069,21 @@ function updateMinis(dt){
   else if(M.g.after) M.g.after(M,dt);
   renderMgHud();
 }
-function mgCamera(dt){ const M=player.mg; if(!M || !M.g.cam) return false; const r=M.g.cam(M); if(!r) return false;
+// Vista de los minijuegos: en la mayoría, 1ª persona (se ve desde los ojos del peluche, con sus manos);
+// el botón de cámara cambia entre 1ª y 3ª persona mientras juegas.
+const mgView=M=>M.g.fp ? (M.view||'first') : 'third';
+function fpBody(o,on,arms){ const u=o.userData; if(u.fpOn===on && u.fpArms===!!arms) return; u.fpOn=on; u.fpArms=!!arms;
+  u.body.visible=!on; u.eyes.forEach(e=>e.visible=!on); u.legs.forEach(l=>l.visible=!on); u.arms.forEach(a=>a.visible=!on||!!arms); }
+const _mgEye=new THREE.Vector3(), _mgL=new THREE.Vector3();
+// punto del mundo → coordenadas del peluche (para que las manos alcancen cosas)
+function toPlush(o,w,out){ o.updateMatrixWorld(true); return o.worldToLocal((out||new THREE.Vector3()).copy(w)); }
+function mgCamera(dt){ const M=player.mg; if(!M) return false;
+  if(M.g.fp && mgView(M)==='first'){ fpBody(plush,true,M.g.fpArms); plush.visible=true; plush.updateMatrixWorld(true);
+    const eye=plush.localToWorld(_mgEye.set(0,1.78,.14)), look=M.g.fp(M);
+    if(camera.position.distanceTo(eye)>2.5) camera.position.copy(eye); else camera.position.lerp(eye,1-Math.exp(-dt*25));
+    camera.lookAt(look); return true; }
+  fpBody(plush,false);
+  if(!M.g.cam) return false; const r=M.g.cam(M); if(!r) return false;
   const [pos,look]=r; if(camera.position.distanceTo(pos)>6) camera.position.copy(pos); else camera.position.lerp(pos,1-Math.exp(-dt*8)); camera.lookAt(look); plush.visible=true; return true; }
 function mgPose(t,dt){ const M=player.mg; if(M && M.g.pose) M.g.pose(M,plush,t,dt); }
 document.getElementById('mgExit').addEventListener('click',()=>{ const M=player.mg; if(!M) return; if(M.over) stopMini(); else endMini(M, M.g.quit?M.g.quit(M):null); });
@@ -5127,6 +5147,16 @@ let fairBulbs=null;
 })();
 
 // ======================================================================================
+// ---------- Manos que alcanzan cosas (minijuegos) ----------
+// ======================================================================================
+function resetArmsIK(o){ o.userData.arms.forEach(a=>{ a.rotation.y=0; a.userData.joint.rotation.y=0; a.userData.joint.scale.y=1; }); }
+const _ikW=new THREE.Vector3(), _ikH=new THREE.Vector3();
+// la mano de ese lado (−1 derecha, 1 izquierda) va a un punto del puesto (coordenadas locales del puesto)
+function handTo(o,e,side,lx,ly,lz,hx,hy,hz,stretch){ const arm=ARM(o,side); if(!arm) return; bW(e,lx,ly,lz,_ikW); toPlush(o,_ikW,_ikW); reachArm(arm,_ikW,_ikH.set(hx,hy,hz),!!stretch); }
+// …o a un punto en coordenadas del propio peluche
+function handLocal(o,side,x,y,z,hx,hy,hz,stretch){ const arm=ARM(o,side); if(!arm) return; reachArm(arm,_ikW.set(x,y,z),_ikH.set(hx,hy,hz),!!stretch); }
+
+// ======================================================================================
 // ---------- 1) Canasta ----------
 // ======================================================================================
 {
@@ -5157,24 +5187,43 @@ let fairBulbs=null;
   const balls=[0,1,2].map(i=>{ const m=new THREE.Mesh(new THREE.SphereGeometry(BR,16,12),ballMat); m.castShadow=true; g.add(m); return {m, p:new THREE.Vector3(), v:new THREE.Vector3(), st:'tray', slot:i, scored:false}; });
   const traySpot=(i,out)=>out.set(-.36+i*.36,.56+BR,1.0);
   balls.forEach(b=>{ traySpot(b.slot,b.p); b.m.position.copy(b.p); });
+  // La pelota en las manos: frente al pecho, a la vista en 1ª persona.
+  // Al lanzar, las manos empujan hacia el aro, bajan por otra pelota y la vuelven a subir.
+  const HOLD=new THREE.Vector3(0,1.52,.45), _hb=new THREE.Vector3();
+  function handBall(age,out){
+    if(age<.12){ const k=age/.12; return out.set(0,1.52+.38*k,.45+.15*k); }
+    if(age<.3) return out.set(0,1.9,.6);
+    if(age<.45){ const k=(age-.3)/.15; return out.set(0,1.9-.8*k,.6-.25*k); }
+    if(age<.62){ const k=(age-.45)/.17, s=k*k*(3-2*k); return out.set(0,1.1+.42*s,.35+.1*s); }
+    return out.copy(HOLD);
+  }
   let throwT=-9;
+  function canastaArms(o,age,t){ handBall(age,_hb); const br=Math.sin(t*2.2)*.012;
+    [-1,1].forEach(sd=>handTo(o,e,sd,_hb.x+sd*.14,_hb.y+br,_hb.z,sd*.8,-1,-.2,false)); }
   const def={id:'canasta', name:'Canasta', e, pads:[[0,0]], spot:[0,-.1], exitTo:[0,-1.6],
     ctl:[{k:'shoot', label:'Lanzar'}], keys:{Space:'shoot', KeyE:'shoot', Enter:'shoot'},
-    start(M){ M.data={time:40, baskets:0, shots:0}; M.score=0; balls.forEach((b,i)=>{ b.st='tray'; b.slot=i; traySpot(i,b.p); b.v.set(0,0,0); }); },
+    fp(M){ return bW(e,0,2.0,4.6,_mgL); }, fpArms:true,
+    start(M){ M.data={time:40, baskets:0, shots:0}; M.score=0; throwT=-9; balls.forEach((b,i)=>{ b.st='tray'; b.slot=i; traySpot(i,b.p); b.v.set(0,0,0); }); },
+    end(){ balls.forEach(b=>{ if(b.st==='hand'){ b.st='roll'; b.v.set(0,0,0); } }); },
     hud(M){ const p=.5+.5*Math.sin(M.t*2.7); return {score:'Canastas: '+M.data.baskets, time:fmtT(M.data.time), meter:p, sweet:Math.abs(p-.62)<.07}; },
     input(M,k,down){ if(k!=='shoot'||!down||M.data.time<=0) return;
-      const b=balls.find(b=>b.st==='tray'); if(!b) return;
+      const b=balls.find(b=>b.st==='hand'); if(!b || now0()-throwT<.62) return;
       const p=.5+.5*Math.sin(M.t*2.7), err=p-.62;
-      const S=new THREE.Vector3(0,1.6,.45), T=.95, d=HOOP.clone().sub(S); d.z+=.1;   // un poquito más allá del centro: entra limpio sin pegar en el aro de enfrente
+      const S=HOLD, T=.95, d=HOOP.clone().sub(S); d.z+=.1;   // un poquito más allá del centro: entra limpio sin pegar en el aro de enfrente
       const e2=err*.5+.02; b.v.set(d.x/T + (Math.random()-.5)*Math.min(.6,Math.max(0,Math.abs(err)-.06)*2.2), (d.y+.5*9.8*T*T)/T, d.z/T).multiplyScalar(1+e2*.2);
-      b.p.copy(S); b.st='fly'; b.scored=false; M.data.shots++; throwT=performance.now()/1000; audio.jump(); },
+      b.p.copy(S); b.st='fly'; b.scored=false; M.data.shots++; M.act=(M.act|0)+1; throwT=now0(); audio.jump(); },
     update(M,dt){ M.data.time=40-M.t;
       if(M.data.time<=0 && !balls.some(b=>b.st==='fly')){ const n=M.data.baskets, c=n+(n>=10?3:0)+(n>=15?3:0);
+        balls.forEach(b=>{ if(b.st==='hand'){ b.st='roll'; b.v.set(0,0,0); } });
         endMini(M,{title:n>=10?'¡Eres un crack!':'¡Bien jugado!', lines:['Canastas: <b>'+n+'</b> de '+M.data.shots+' tiros'], coins:c}); } },
     idle(dt,mine){
+      const M=mine&&player.mg, playing=M && !M.over && M.data.time>0, age=now0()-throwT;
+      if(playing && age>=.45 && !balls.some(b=>b.st==='hand')){ const b=balls.find(b=>b.st==='tray'); if(b) b.st='hand'; }
+      if(!playing) balls.forEach(b=>{ if(b.st==='hand'){ b.st='roll'; b.v.set(0,0,0); } });
       const sub=4, h=dt/sub;
       for(const b of balls){
         if(b.st==='tray'){ traySpot(b.slot,b.p); }
+        else if(b.st==='hand'){ handBall(age,b.p); b.p.y-=.02; }
         else for(let s=0;s<sub;s++){
           if(b.st==='fly'){ b.v.y-=9.8*h; const py=b.p.y; b.p.addScaledVector(b.v,h);
             // aro
@@ -5189,11 +5238,11 @@ let fairBulbs=null;
           } else if(b.st==='roll'){ b.v.z-=1.6*h; b.v.z*=Math.exp(-h*.6); b.v.x*=Math.exp(-h*3); b.p.z+=b.v.z*h; b.p.x+=b.v.x*h; b.p.y=rampY(b.p.z)+BR;
             if(b.p.z<1.12){ const used=balls.filter(o=>o!==b&&o.st==='tray').map(o=>o.slot); b.slot=[0,1,2].find(i=>!used.includes(i))??0; b.st='tray'; } }
         }
-        b.m.position.copy(b.p); if(b.st!=='tray') b.m.rotation.x+=b.v.z*dt*4;
+        b.m.position.copy(b.p); if(b.st!=='tray' && b.st!=='hand') b.m.rotation.x+=b.v.z*dt*4;
       } },
     cam(M){ return [bW(e,.75,3.0,-2.1), bW(e,0,2.0,4.8)]; },
-    pose(M,o,t,dt){ const k=Math.max(0,1-(performance.now()/1000-throwT)/.45); if(k>0) pgPoseLimbs(o,{armsUp:Math.min(1,k*1.6)},t,dt,0);
-      else armsOf(o).forEach(a=>{ const sd=a.userData.side; a.rotation.z=sd*.6; a.rotation.x=-1.1; a.userData.joint.rotation.x=-.9; }); },
+    pose(M,o,t,dt){ if(M.over || M.data.time<=0) return; canastaArms(o,now0()-throwT,t); },
+    rpose(r,t){ canastaArms(r.obj, r.mgActT?now0()-r.mgActT:9, t); },
   };
   function swish(){ try{ const R=audio.raw(); if(!R) return; const t=R.ctx.currentTime; R.noise(t,.25,3000,.12); R.tone('sine',880,1320,t+.05,.18,.08); }catch(e){} }
   MINIS.push(def);
@@ -5211,9 +5260,10 @@ let fairBulbs=null;
   { const m=new THREE.Mesh(new THREE.PlaneGeometry(3.8,15),netMat); m.position.set(0,3.4,6.8); m.rotation.x=Math.PI/2; g.add(m); const b=new THREE.Mesh(new THREE.PlaneGeometry(3.8,3.4),netMat); b.position.set(0,1.7,14.3); g.add(b); }
   for(let z=-.7;z<=14.4;z+=3){ [-1.9,1.9].forEach(x=>fAdd(g,fCyl,FM('#4f86c6'),x,1.7,z,.06,3.4,.06)); fAdd(g,fCyl,FM('#4f86c6'),0,3.4,z,.05,3.8,.05,0,0,Math.PI/2); }
   const turf=fAdd(g,fBox,FM('#5ea444'),0,.05,6.8,3.7,.04,15);
-  // home plate
+  // home plate y caja del bateador
   const plate=new THREE.Shape(); plate.moveTo(-.22,0); plate.lineTo(.22,0); plate.lineTo(.22,.22); plate.lineTo(0,.42); plate.lineTo(-.22,.22); plate.closePath();
   const pm=new THREE.Mesh(new THREE.ShapeGeometry(plate),FM('#ffffff')); pm.rotation.x=-Math.PI/2; pm.position.set(0,.08,.2); g.add(pm);
+  [[-1.1,.2],[1.1,.2]].forEach(([x,z])=>{ [[-.4,0,.8],[.4,0,.8]].forEach(([dx])=>fAdd(g,fBox,FM('#ffffff'),x+dx,.075,z,.03,.01,1.2)); [-.6,.6].forEach(dz=>fAdd(g,fBox,FM('#ffffff'),x,.075,z+dz,.83,.01,.03)); });
   // máquina lanzadora de peluche con foco
   fAdd(g,fBox,FM('#e5534b'),0,.6,MZ,.9,1.2,.9); fAdd(g,fCyl,FM('#3a3d46'),0,1.35,MZ-.2,.32,.12,.32,Math.PI/2);
   const lamp=fAdd(g,sphereG,new THREE.MeshStandardMaterial({color:0x553322, emissive:0xff3020, emissiveIntensity:0}),0,1.4,MZ-.47,.11,.11,.06);
@@ -5221,42 +5271,78 @@ let fairBulbs=null;
   sg.position.set(0,3.95,-.75); sg.rotation.y=Math.PI; g.add(sg); fairGlow.push(sg.material);
   padMesh(g,-.6,-1.2);
   [-1.9,1.9].forEach(x=>{ for(let z=0;z<=14;z+=1) blockAt(e,x,z,.3,3.4); }); for(let x=-1.6;x<=1.6;x+=.8) blockAt(e,x,14.4,.4,3.4); blockAt(e,0,MZ,.7,1.4);
-  // bate
-  const bat=new THREE.Group(); g.add(bat); const batM=FM('#b87a40','shiny');
-  const bm=new THREE.Mesh(new THREE.CylinderGeometry(.045,.022,.9,10),batM); bm.rotation.z=-Math.PI/2; bm.position.x=.45; bat.add(bm); fAdd(bat,sphereG,batM,.9,0,0,.045,.045,.045);
-  bat.visible=false;
+  // Bate de madera de juguete: va en las manos del peluche (eje +z, el mango en el origen)
+  const batGeo=(()=>{ const pts=[[0,-.08],[.048,-.08],[.05,-.055],[.027,-.04],[.028,.36],[.05,.68],[.064,.88],[.06,.97],[.036,1.0],[0,1.005]].map(([r,y])=>new THREE.Vector2(r,y));
+    const gg=new THREE.LatheGeometry(pts,14); gg.rotateX(Math.PI/2); return gg; })();
+  const batMat=FM('#c98a4b','shiny'), gripMat=FM('#e5534b');
+  function makeBat(){ const b=new THREE.Group(); const m=new THREE.Mesh(batGeo,batMat); m.castShadow=true; b.add(m); fAdd(b,fCyl,gripMat,0,0,.12,.032,.27,.032,Math.PI/2); b.visible=false; return b; }
+  const myBat=makeBat();
   const ballG=new THREE.SphereGeometry(.075,12,10), ball=new THREE.Mesh(ballG,FM('#fbf8ef')); ball.visible=false; g.add(ball);
-  const pivot=new THREE.Vector3(-.35,1.05,.15);
-  const def={id:'bateo', name:'Bateo', e, pads:[[-.6,-1.2]], spot:[-.62,.2], face:Math.PI/2, exitTo:[-.6,-2.2],
+  // ---- El swing ----
+  // El peluche mira hacia el home (de lado a la máquina). En sus coordenadas: +z = hacia el home, −x = hacia la máquina.
+  // Tres posiciones clave: en guardia (bate arriba detrás del hombro), contacto (bate plano sobre el home) y remate (bate sobre el otro hombro).
+  const SW=.3, CONTACT=.485, HOLDF=.25, BACK=.4;
+  const KEYS=[{g:[.2,1.5,.32], phi:2.3, el:1.0, tw:.25},{g:[0,1.1,.42], phi:0, el:-.12, tw:-.1},{g:[-.22,1.4,.3], phi:-2.5, el:.6, tw:-.6}];
+  const e3=k=>{ k=Math.min(1,Math.max(0,k)); return k*k*(3-2*k); };
+  const dirOf=(phi,el,out)=>out.set(Math.sin(phi)*Math.cos(el), Math.sin(el), Math.cos(phi)*Math.cos(el));
+  const _G=new THREE.Vector3(), _D=new THREE.Vector3(), _D2=new THREE.Vector3(), _H=new THREE.Vector3(), _zA=new THREE.Vector3(0,0,1);
+  function lerpKey(P,Q,k){ _G.set(P.g[0]+(Q.g[0]-P.g[0])*k, P.g[1]+(Q.g[1]-P.g[1])*k, P.g[2]+(Q.g[2]-P.g[2])*k); dirOf(P.phi+(Q.phi-P.phi)*k, P.el+(Q.el-P.el)*k, _D); return P.tw+(Q.tw-P.tw)*k; }
+  // → manos en _G, dirección del bate en _D; devuelve {tw: giro del cuerpo, st: paso con el pie de adelante}
+  function swingAt(age,t){
+    const [A,B,C]=KEYS;
+    if(!(age>=0) || age>=SW+HOLDF+BACK){ const w=Math.sin(t*3)*.07; _G.set(A.g[0],A.g[1]+Math.sin(t*3)*.012,A.g[2]); dirOf(A.phi+w,A.el+w*.4,_D); return {tw:A.tw, st:0}; }   // en guardia, meneando el bate
+    if(age<SW){ const u=e3(age/SW); const tw=u<CONTACT ? lerpKey(A,B,u/CONTACT) : lerpKey(B,C,(u-CONTACT)/(1-CONTACT)); return {tw, st:Math.min(1,age/(SW*.4))}; }
+    if(age<SW+HOLDF){ const tw=lerpKey(B,C,1); return {tw, st:1}; }
+    const k=e3((age-SW-HOLDF)/BACK); lerpKey(B,C,1); _D2.copy(_D); dirOf(A.phi,A.el,_D); _D.lerp(_D2,1-k).normalize();   // el bate regresa por arriba de la cabeza
+    _G.set(C.g[0]+(A.g[0]-C.g[0])*k, C.g[1]+(A.g[1]-C.g[1])*k+Math.sin(k*Math.PI)*.12, C.g[2]+(A.g[2]-C.g[2])*k);
+    return {tw:C.tw+(A.tw-C.tw)*k, st:1-k};
+  }
+  function batterPose(o,bat,age,t,facing){
+    const s=swingAt(age,t);
+    o.rotation.y=facing+s.tw; o.rotation.x=0; o.rotation.z=0; o.position.y-=.05;
+    if(bat.parent!==o) o.add(bat); bat.visible=true; bat.position.copy(_G); bat.quaternion.setFromUnitVectors(_zA,_D);
+    // las dos manos en el mango: la de abajo (del lado de la máquina) y la de arriba
+    _H.copy(_G).addScaledVector(_D,.05); handLocal(o,-1,_H.x,_H.y,_H.z,-.5,-1,.1,true);
+    _H.copy(_G).addScaledVector(_D,.17); handLocal(o,1,_H.x,_H.y,_H.z,.6,-1,-.3,true);
+    // piernas abiertas y rodillas dobladas; el pie de adelante da un pasito al batear
+    legsOf(o).forEach(l=>{ const sd=l.userData.side; l.rotation.set(-.1,0,sd*.17+(sd<0?-s.st*.13:0)); l.userData.joint.rotation.x=.3-(sd<0?s.st*.15:0); });
+  }
+  function swoosh(){ try{ const R=audio.raw(); R&&R.noise(R.ctx.currentTime,.18,1200,.08); }catch(e){} }
+  const _bp=new THREE.Vector3();
+  const def={id:'bateo', name:'Bateo', e, pads:[[-.6,-1.2]], spot:[-1.1,.2], face:Math.PI/2, exitTo:[-.6,-2.2],
     ctl:[{k:'swing', label:'Batear'}], keys:{Space:'swing', KeyE:'swing', Enter:'swing'},
-    start(M){ M.data={pitch:0, total:12, next:1.8, ball:null, swingT:-9, hits:0, msg:'', msgT:0}; M.score=0; bat.visible=true; },
-    end(){ bat.visible=false; ball.visible=false; },
+    start(M){ M.data={pitch:0, total:12, next:2.2, ball:null, swingT:-9, hits:0, msg:'', msgT:0}; M.score=0; },
+    end(){ myBat.visible=false; ball.visible=false; },
     hud(M){ return {score:'Puntos: '+M.score, time:'Lanzamiento '+Math.min(M.data.total,M.data.pitch)+'/'+M.data.total+(M.data.msgT>0?' · '+M.data.msg:'')}; },
-    input(M,k,down){ if(k==='swing'&&down&&performance.now()/1000-M.data.swingT>.45){ M.data.swingT=performance.now()/1000; try{ const R=audio.raw(); R&&R.noise(R.ctx.currentTime,.18,1200,.08); }catch(e){} } },
-    update(M,dt){ const D=M.data; D.msgT-=dt;
+    input(M,k,down){ if(k!=='swing'||!down) return; const D=M.data, now=now0(); if(now-D.swingT<SW+HOLDF+BACK-.05) return;
+      D.swingT=now; M.act=(M.act|0)+1; swoosh();
+      // ¿el bate pasa por el home justo cuando llega la pelota?
+      const b=D.ball, tc=now+CONTACT*SW;
+      if(b && !b.hit && !b.hitAt){ const err=tc-b.tArr; if(Math.abs(err)<.11){ b.hitAt=tc; b.err=err; } else if(Math.abs(err)<.4){ D.msg=err<0?'¡Muy pronto!':'¡Muy tarde!'; D.msgT=1.1; } } },
+    update(M,dt){ const D=M.data, now=now0(); D.msgT-=dt;
       if(!D.ball){ D.next-=dt; lamp.material.emissiveIntensity=D.next<.7 && D.pitch<D.total ? (Math.sin(D.next*30)>0?1.5:.2):0;
         if(D.next<=0){ if(D.pitch>=D.total){ const c=M.score+(D.hits>=8?4:0); endMini(M,{title:D.hits>=8?'¡Gran bateador!':'¡Buen juego!', lines:['Golpes: <b>'+D.hits+'</b> de '+D.total,'Puntos: <b>'+M.score+'</b>'], coins:c}); return; }
-          const sp=[13,16,19,23,27][Math.floor(Math.random()*(D.pitch<4?3:5))]; D.pitch++;
-          const S=new THREE.Vector3(0,1.35,MZ-.5), T=new THREE.Vector3((Math.random()-.5)*.25,.85+Math.random()*.35,.2), tt=S.distanceTo(T)/sp;
-          D.ball={p:S.clone(), v:new THREE.Vector3((T.x-S.x)/tt,(T.y-S.y+.5*9.8*tt*tt)/tt,(T.z-S.z)/tt), hit:false, t:0, sp}; ball.visible=true; audio.land(.5); } }
-      else { const b=D.ball; b.t+=dt; b.v.y-=9.8*dt; b.p.addScaledVector(b.v,dt);
-        if(!b.hit){ const st=performance.now()/1000-D.swingT, ph=st/.3;
-          if(ph>.3 && ph<.75 && b.p.z<.85 && b.p.z>-.4 && Math.abs(b.p.y-1.0)<.6){
-            const q=Math.max(0,1-Math.abs(b.p.z-.25)/.6), pts=q>.75?3:q>.4?2:1; b.hit=true; D.hits++; M.score+=pts;
-            const yaw=(Math.random()-.5)*(1-q)*1.4, sp=14+26*q, el=.18+.42*q; b.v.set(Math.sin(yaw)*Math.cos(el)*sp, Math.sin(el)*sp, Math.cos(yaw)*Math.cos(el)*sp);
+          const sp=[13,15,17,20,23][Math.floor(Math.random()*(D.pitch<4?3:5))]; D.pitch++;
+          const S=new THREE.Vector3(0,1.35,MZ-.5), T=new THREE.Vector3((Math.random()-.5)*.25,.9+Math.random()*.3,.2), tt=S.distanceTo(T)/sp;
+          const v0=new THREE.Vector3((T.x-S.x)/tt,(T.y-S.y+.5*9.8*tt*tt)/tt,(T.z-S.z)/tt);
+          D.ball={S, v0, t0:now, tArr:now+tt, p:S.clone(), v:new THREE.Vector3(), hit:false, hitAt:0, t:0}; ball.visible=true; audio.land(.5); } }
+      else { const b=D.ball;
+        if(!b.hit){ const tt=Math.min(now,b.hitAt||now)-b.t0; b.p.copy(b.S).addScaledVector(b.v0,tt); b.p.y-=4.9*tt*tt;   // vuelo exacto, no depende de los cuadros por segundo
+          if(b.hitAt && now>=b.hitAt){
+            const q=Math.max(0,1-Math.abs(b.err)/.11), pts=q>.7?3:q>.35?2:1; b.hit=true; b.t=0; D.hits++; M.score+=pts; b.p.z=.2;
+            const yaw=(b.err/.11)*.55+(Math.random()-.5)*.25*(1-q), sp=14+26*q, el=.18+.42*q; b.v.set(Math.sin(yaw)*Math.cos(el)*sp, Math.sin(el)*sp, Math.cos(yaw)*Math.cos(el)*sp);
             D.msg=pts===3?'¡Jonrón!':pts===2?'¡Buen golpe!':'Rozó'; D.msgT=1.4;
             try{ const R=audio.raw(); const t0=R.ctx.currentTime; R.tone('triangle',900,300,t0,.12,.25); R.noise(t0,.08,4000,.2); }catch(e){} } }
-        if(b.hit){ if(Math.abs(b.p.x)>1.8){ b.p.x=Math.sign(b.p.x)*1.8; b.v.x*=-.3; } if(b.p.y>3.3){ b.p.y=3.3; b.v.y*=-.3; } if(b.p.z>14.2){ b.p.z=14.2; b.v.z*=-.25; } if(b.p.y<.12){ b.p.y=.12; b.v.y*=-.4; b.v.multiplyScalar(.7); } }
-        if((!b.hit && b.p.z<-1.4) ){ D.msg='Strike'; D.msgT=1; }
-        if((!b.hit && b.p.z<-1.4) || (b.hit && b.t>2.6)){ D.ball=null; ball.visible=false; D.next=1.4+Math.random()*1.2; }
-        else ball.position.copy(b.p); }
-      // bate: de atrás del hombro a adelante
-      const st=performance.now()/1000-D.swingT, ph=Math.min(1,Math.max(0,st/.3)), a=st<.3? -2.3+3.9*ph*ph*(3-2*ph) : st<.8? 1.6 : 1.6-Math.min(1,(st-.8)/.4)*3.9;
-      bat.position.copy(pivot); bat.rotation.set(0,0,0); bat.rotateY(Math.PI/2-a); bat.rotateZ(st<.3||st>1.2? .5 : .1); },
-    cam(M){ return [bW(e,.9,1.9,-2.7), bW(e,-.1,1.2,7)]; },
-    pose(M,o,t,dt){ const st=performance.now()/1000-M.data.swingT, ph=Math.min(1,Math.max(0,st/.3));
-      armsOf(o).forEach(a=>{ const sd=a.userData.side; a.rotation.z=sd*.45; a.rotation.x=-1.25+(st<.5?ph*.4:0); a.userData.joint.rotation.x=-.6; });
-      o.rotation.y=player.facing+(st<.35? -.5+ph*1.1 : st<1? .6 : .6-Math.min(1,(st-1)/.4)*1.1); },
+        else { b.t+=dt; b.v.y-=9.8*dt; b.p.addScaledVector(b.v,dt);
+          if(Math.abs(b.p.x)>1.8){ b.p.x=Math.sign(b.p.x)*1.8; b.v.x*=-.3; } if(b.p.y>3.3){ b.p.y=3.3; b.v.y*=-.3; } if(b.p.z>14.2){ b.p.z=14.2; b.v.z*=-.25; } if(b.p.y<.12){ b.p.y=.12; b.v.y*=-.4; b.v.multiplyScalar(.7); } }
+        const gone=!b.hit && !b.hitAt && b.p.z<-1.4;
+        if(gone && D.msgT<=0){ D.msg='Strike'; D.msgT=1; }
+        if(gone || (b.hit && b.t>2.6)){ D.ball=null; ball.visible=false; D.next=1.4+Math.random()*1.2; }
+        else ball.position.copy(b.p); } },
+    // cámara detrás del home, un poco arriba: se ve al bateador de lado, el bate y la pelota que llega
+    cam(M){ return [bW(e,.35,2.05,-2.6), bW(e,-.35,1.15,5)]; },
+    pose(M,o,t,dt){ batterPose(o,myBat,now0()-M.data.swingT,t,player.facing); },
+    rpose(r,t){ const u=r.obj.userData; if(!u.mgBat) u.mgBat=makeBat(); batterPose(r.obj,u.mgBat,r.mgActT?now0()-r.mgActT:-1,t,r.facing); },
   };
   MINIS.push(def);
 }
@@ -5285,7 +5371,6 @@ let fairBulbs=null;
   // pantalla en espera
   const ARR=(q,x,y,dir,col,s=1,alpha=1)=>{ q.save(); q.globalAlpha=alpha; q.translate(x,y); q.rotate(dir); q.scale(s,s); q.fillStyle=col; q.strokeStyle='#ffffff'; q.lineWidth=3; q.beginPath(); q.moveTo(0,-22); q.lineTo(20,2); q.lineTo(8,2); q.lineTo(8,22); q.lineTo(-8,22); q.lineTo(-8,2); q.lineTo(-20,2); q.closePath(); q.fill(); q.stroke(); q.restore(); };
   const SCRN={laneX:[136,214,292,370]};   // en pantalla: ← ↓ ↑ →
-  const ORDER=[0,1,2,3];
   function idleScreen(){ const q=SC.getContext('2d'); q.fillStyle='#1d1530'; q.fillRect(0,0,512,288); q.fillStyle='#ffe14d'; q.font='800 46px Sniglet, Nunito, sans-serif'; q.textAlign='center'; q.fillText('¡BAILA!',256,120);
     q.font='700 22px Nunito, sans-serif'; q.fillStyle='#fff'; q.fillText('Párate en la placa y pisa las flechas',256,170); LANES.forEach((L,i)=>ARR(q,SCRN.laneX[i],230,L.dir,L.col,.8)); sTex.needsUpdate=true; }
   idleScreen(); if(document.fonts) document.fonts.ready.then(()=>{ if(!(player.mg&&player.mg.g===def)) idleScreen(); });
@@ -5301,13 +5386,34 @@ let fairBulbs=null;
         if(b>=4 && b%2===0){ const m=mel[(b/2+Math.floor(b/16))%8]; R.tone('square',440*Math.pow(2,(m-69)/12),440*Math.pow(2,(m-69)/12),t,BEAT*.8,.035); } }
     }catch(e){} }
   const songT=M=>{ try{ const R=audio.raw(); if(R && M.data.a0!==undefined) return R.ctx.currentTime-M.data.a0; }catch(e){} return M.t; };
+  // Pasos de baile: cada flecha mueve un pie hacia esa flecha y los brazos señalan para ese lado; entre pasos, rebote al ritmo
+  function dancePose(o,lane,age,now){
+    const legs=legsOf(o), s=Math.max(0,1-age/.28), beat=now*Math.PI*2/BEAT;
+    legs.forEach(l=>{ l.rotation.set(0,0,0); l.userData.joint.rotation.x=.12+Math.max(0,Math.sin(beat))*.12; });
+    const right=legs.find(l=>l.userData.side<0)||legs[0], left=legs.find(l=>l.userData.side>0)||legs[1];
+    if(s>0){ if(lane===2){ right.rotation.x=-.7*s; right.userData.joint.rotation.x=.6*s; } if(lane===1){ left.rotation.x=.6*s; left.userData.joint.rotation.x=.5*s; }
+      if(lane===0){ left.rotation.z=.5*s; } if(lane===3){ right.rotation.z=-.5*s; } }
+    armsOf(o).forEach(a=>{ const sd=a.userData.side, j=a.userData.joint, b=Math.sin(beat+(sd>0?0:Math.PI));
+      let z=sd*(1.2+.6*b), x=-.3, ej=-.8;   // al ritmo
+      if(s>0){ let tz=z, tx=x, te=ej;
+        if(lane===2){ tz=sd*2.7; tx=0; te=-.1; }                                   // ↑ los dos brazos arriba
+        else if(lane===1){ tz=sd*.35; tx=-1.1; te=-1.2; }                          // ↓ aplauso al frente
+        else if((lane===0)===(sd>0)){ tz=sd*1.6; tx=0; te=-.05; }                  // ← → el brazo de ese lado señala
+        else { tz=sd*.5; tx=-1.3; te=-1.4; }                                       //     y el otro cruza el pecho
+        z+=(tz-z)*s; x+=(tx-x)*s; ej+=(te-ej)*s; }
+      a.rotation.z=z; a.rotation.x=x; j.rotation.x=ej; });
+    o.position.y+=.16+Math.abs(Math.sin(now*Math.PI/BEAT))*.07;
+    o.rotation.z=Math.sin(beat*.5)*.07+(s>0&&lane===0?.1*s:0)-(s>0&&lane===3?.1*s:0);
+  }
+  let lastLane=2;
   const def={id:'baile', name:'Baile', e, pads:[[0,-1.6]], spot:[0,0], exitTo:[0,-2.4],
     ctl:[{k:0,label:'←',cls:'arrow'},{k:1,label:'↓',cls:'arrow'},{k:2,label:'↑',cls:'arrow'},{k:3,label:'→',cls:'arrow'}], ctlClass:'arrows',
     keys:{ArrowLeft:0,KeyA:0,ArrowDown:1,KeyS:1,ArrowUp:2,KeyW:2,ArrowRight:3,KeyD:3},
+    fp(M){ return bW(e,0,2.2,4.2,_mgL); }, fpArms:false,
     start(M){ M.data={notes:makeChart(), perfect:0, good:0, miss:0, combo:0, best:0, fb:'', fbT:0}; M.score=0; music(M); },
     end(){ audio.bgQuiet=false; idleScreen(); },
     hud(M){ return {score:'Puntos: '+M.score, time:fmtT(SONG+LEAD-songT(M))}; },
-    input(M,k,down){ if(!down) return; const T=songT(M); stepT[k]=performance.now()/1000; padMats[k].emissiveIntensity=.8;
+    input(M,k,down){ if(!down) return; const T=songT(M); stepT[k]=performance.now()/1000; padMats[k].emissiveIntensity=.8; lastLane=k; M.act=(M.act|0)+1; M.actX=k;
       let best=null, bd=.2; for(const n of M.data.notes){ if(n.lane!==k||n.done) continue; const d=Math.abs(n.t-T); if(d<bd){ bd=d; best=n; } }
       if(best){ best.done=true; const D=M.data; if(bd<.08){ D.perfect++; M.score+=3; D.fb='¡Perfecto!'; } else { D.good++; M.score+=1; D.fb='Bien'; } D.combo++; D.best=Math.max(D.best,D.combo); D.fbT=.6; } },
     update(M,dt){ const T=songT(M), D=M.data;
@@ -5324,15 +5430,8 @@ let fairBulbs=null;
       if(T>SONG+LEAD+.4){ const c=Math.round(M.score/9);
         endMini(M,{title:D.miss<6?'¡Qué pasos!':'¡Bien bailado!', lines:['Perfectos: <b>'+D.perfect+'</b> · Bien: <b>'+D.good+'</b> · Fallos: <b>'+D.miss+'</b>','Mejor combo: <b>'+D.best+'</b>'], coins:c}); } },
     cam(M){ return [bW(e,0,2.3,-3.0), bW(e,0,1.6,3.6)]; },
-    pose(M,o,t,dt){ const now=performance.now()/1000, legs=legsOf(o);
-      // cada pie pisa su flecha: arriba = adelante, abajo = atrás, izquierda/derecha = de lado
-      legs.forEach(l=>{ l.rotation.set(0,0,0); l.userData.joint.rotation.x=.1; });
-      const k=[0,1,2,3].reduce((a,b)=>stepT[b]>stepT[a]?b:a,0), age=now-stepT[k], s=Math.max(0,1-age/.25);
-      if(s>0){ const right=legs[0], left=legs[1]||legs[0];
-        if(k===2){ right.rotation.x=-.7*s; right.userData.joint.rotation.x=.6*s; } if(k===1){ left.rotation.x=.6*s; left.userData.joint.rotation.x=.5*s; }
-        if(k===0){ left.rotation.z=-.5*s; } if(k===3){ right.rotation.z=.5*s; } }
-      armsOf(o).forEach(a=>{ const sd=a.userData.side, b=Math.sin(now*Math.PI*2/BEAT+(sd>0?0:Math.PI)); a.rotation.z=sd*(1.2+.6*b); a.rotation.x=-.3; a.userData.joint.rotation.x=-.8; });
-      o.position.y=player.pos.y+.16+Math.abs(Math.sin(now*Math.PI/BEAT))*.06; },
+    pose(M,o,t,dt){ const now=performance.now()/1000; dancePose(o,lastLane,now-stepT[lastLane],now); },
+    rpose(r,t){ const now=performance.now()/1000, lane=r.mg[2]|0; dancePose(r.obj, lane>=0&&lane<4?lane:2, r.mgActT?now-r.mgActT:9, now); r.obj.position.y=r.pos.y+.16+Math.abs(Math.sin(now*Math.PI/BEAT))*.07; },
   };
   MINIS.push(def);
 }
@@ -5343,35 +5442,74 @@ let fairBulbs=null;
 {
   const e=boothFrame(12,11,.7,.7), g=booth(e);
   tent(g,2.8,2.4,2.7,'#6fbf5a','#fff3d6','Topos','Golpea 30 s');
-  fAdd(g,fBox,FM('#b88a5a'),0,.45,1.25,2.0,.9,1.5);
-  const holes=[]; for(let r=0;r<3;r++) for(let c=0;c<3;c++){ const x=(1-c)*.5, z=.85+r*.4; fAdd(g,fCyl,FM('#3a2a22'),x,.905,z,.15,.01,.15); holes.push([x,z]); }
+  // mesa compacta: así el mazo alcanza todos los hoyos desde donde estás parado
+  const HX=.38, HZ=[.8,1.13,1.46], TOP=.9;
+  fAdd(g,fBox,FM('#b88a5a'),0,TOP/2,1.13,1.4,TOP,1.2);
+  fAdd(g,fBox,FM('#6fbf5a'),0,TOP+.01,1.13,1.46,.03,1.26);
+  fAdd(g,fBox,FM('#b88a5a'),0,TOP+.02,1.13,1.3,.03,1.1);
+  const holes=[]; for(let r=0;r<3;r++) for(let c=0;c<3;c++){ const x=(1-c)*HX, z=HZ[r]; fAdd(g,fCyl,FM('#3a2a22'),x,TOP+.04,z,.13,.01,.13); holes.push([x,z]); }
   const moleMat=FM('#8a6a50'), noseMat=FM('#ff8fab'), moles=holes.map(([x,z])=>{ const m=new THREE.Group(); m.position.set(x,.5,z); g.add(m);
-    fAdd(m,sphereG,moleMat,0,.15,0,.13,.18,.13); fAdd(m,sphereG,noseMat,0,.22,.12,.035,.03,.03); [-1,1].forEach(s=>fAdd(m,sphereG,FM('#111111','shiny'),s*.05,.27,.1,.022,.025,.015)); return {m, up:0, want:0, until:0, bonk:0}; });
-  const mallet=new THREE.Group(); fAdd(mallet,fCyl,FM('#b87a40'),0,.22,0,.025,.45,.025); fAdd(mallet,fCyl,FM('#e5534b','shiny'),0,.45,0,.09,.22,.09,0,0,Math.PI/2); mallet.visible=false; g.add(mallet);
+    fAdd(m,sphereG,moleMat,0,.15,0,.12,.17,.12); fAdd(m,sphereG,FM('#c9a586'),0,.13,.09,.07,.08,.04); fAdd(m,sphereG,noseMat,0,.21,.115,.034,.028,.03);
+    [-1,1].forEach(s=>{ fAdd(m,sphereG,FM('#111111','shiny'),s*.05,.26,.1,.022,.025,.015); fAdd(m,sphereG,moleMat,s*.08,.3,0,.04,.05,.025); }); return {m, up:0, want:0, until:0, bonk:0}; });
+  // mazo de feria: mango largo con el agarre en el origen y la cabeza arriba
+  const ML=.62, mallet=new THREE.Group();
+  fAdd(mallet,fCyl,FM('#b87a40'),0,ML/2,0,.026,ML,.026); fAdd(mallet,fCyl,FM('#fbf3e4'),0,.07,0,.034,.14,.034);
+  fAdd(mallet,fCyl,FM('#e5534b','shiny'),0,ML,0,.08,.22,.08,0,0,Math.PI/2); [-1,1].forEach(s=>fAdd(mallet,fCyl,FM('#fbf3e4'),s*.115,ML,0,.084,.02,.084,0,0,Math.PI/2));
+  mallet.visible=false; g.add(mallet);
   padMesh(g,0,-1.0);
-  blockAt(e,0,1.25,1.1,1);
+  blockAt(e,0,1.1,.85,1);
+  const SPOT_Z=.12;
   let hitAt=-9, hitIdx=4;
-  const def={id:'topos', name:'Topos', e, pads:[[0,-1.0]], spot:[0,0], exitTo:[0,-1.9],
+  const headP=new THREE.Vector3(0,1.45,.6), _mt=new THREE.Vector3(), _mg=new THREE.Vector3(), _mu=new THREE.Vector3(0,1,0), _md=new THREE.Vector3(), _tp=new THREE.Vector3();
+  let mx=0, mLean=0;
+  // mueve el mazo (hacia el hoyo y de vuelta arriba) y devuelve el agarre; who: quién lo sostiene (posición x del peluche en el puesto)
+  function malletStep(dt,idx,age,px){
+    const [hx,hz]=holes[idx], o=moles[idx], strike=age<.2;
+    if(strike) _mt.set(hx,TOP+.12+(o.up>.4?o.up*.2:0),hz); else _mt.set(hx*.5-.32,TOP+.28,.6);   // en espera: abajo a la derecha, sin tapar los hoyos
+    headP.lerp(_mt,1-Math.exp(-dt*(strike?45:9)));
+    // el mango apunta de la cabeza hacia el hombro
+    _md.set(px-.32,1.2,SPOT_Z+.05).sub(headP).normalize(); _mg.copy(headP).addScaledVector(_md,ML);
+    mallet.position.copy(_mg); mallet.quaternion.setFromUnitVectors(_mu,_md.negate());
+    return _mg;
+  }
+  // el peluche se recorre un poco hacia el hoyo y se inclina sobre la mesa
+  function toposBody(o,dt,idx,age){ const [hx,hz]=holes[idx];
+    mx+=(hx*.5-mx)*Math.min(1,dt*10); mLean+=(((hz-.7)*.22+(age<.2?.06:0))-mLean)*Math.min(1,dt*12);
+    return mLean; }
+  function toposArms(o,lean){ o.rotation.x=lean;
+    handTo(o,e,-1,_mg.x,_mg.y,_mg.z,-.6,-1,-.2,true);                          // mano derecha en el mazo
+    handLocal(o,1,.3,1.0,.42,.7,-1,-.2,false); }                               // la otra mano apoyada en la mesa
+  function toposWho(){ for(const r of mp.remotes.values()) if(r.mg && MINIS[r.mg[0]]===def) return r; return null; }
+  const def={id:'topos', name:'Topos', e, pads:[[0,-1.0]], spot:[0,SPOT_Z], exitTo:[0,-1.9],
     ctlClass:'grid3', ctl:[6,7,8,3,4,5,0,1,2].map(i=>({k:i, label:'●', cls:'mole'})),
     keys:{Numpad7:6,Numpad8:7,Numpad9:8,Numpad4:3,Numpad5:4,Numpad6:5,Numpad1:0,Numpad2:1,Numpad3:2, Digit7:6,Digit8:7,Digit9:8,Digit4:3,Digit5:4,Digit6:5,Digit1:0,Digit2:1,Digit3:2,
       KeyQ:6,KeyW:7,KeyE:8,KeyA:3,KeyS:4,KeyD:5,KeyZ:0,KeyX:1,KeyC:2},
-    start(M){ M.data={time:30, next:.6, hits:0, misses:0, stun:0}; M.score=0; moles.forEach(o=>{o.want=0;}); mallet.visible=true; },
+    fp(M){ return bW(e,mx*.5,TOP,1.12,_mgL); }, fpArms:true,
+    start(M){ M.data={time:30, next:.6, hits:0, misses:0, stun:0}; M.score=0; moles.forEach(o=>{o.want=0;}); mallet.visible=true; mx=0; mLean=0; headP.set(0,TOP+.55,.85); hitAt=-9; hitIdx=4; },
     end(){ mallet.visible=false; moles.forEach(o=>o.want=0); },
     hud(M){ return {score:'Golpes: '+M.data.hits, time:fmtT(M.data.time)}; },
-    input(M,k,down){ if(!down || M.data.time<=0) return; hitAt=performance.now()/1000; hitIdx=k; const o=moles[k];
+    // tocar la mesa en la pantalla también golpea (el hoyo más cercano al dedo)
+    tap(M,cx,cy){ const r=canvas.getBoundingClientRect(); let best=-1, bd=1e9;
+      holes.forEach(([x,z],i)=>{ const w=bW(e,x,TOP+.1,z,_tp).project(camera); if(w.z>1) return; const sx=r.left+(w.x+1)/2*r.width, sy=r.top+(1-w.y)/2*r.height, d=Math.hypot(sx-cx,sy-cy); if(d<bd){ bd=d; best=i; } });
+      if(best>=0 && bd<r.height*.13){ mgInput(best,true); return true; } return false; },
+    input(M,k,down){ if(!down || M.data.time<=0) return; hitAt=performance.now()/1000; hitIdx=k; M.act=(M.act|0)+1; M.actX=k; const o=moles[k];
       if(now0()<M.data.stun) return;
       if(o.want && o.up>.5 && !o.bonk){ o.bonk=.3; o.want=0; M.data.hits++; M.score++; try{ const R=audio.raw(); const t=R.ctx.currentTime; R.tone('square',520,180,t,.12,.12); R.noise(t,.06,2000,.15); }catch(e){} }
       else { M.data.stun=now0()+.45; try{ const R=audio.raw(); R.noise(R.ctx.currentTime,.06,800,.12); }catch(e){} } },   // golpe al aire: el mazo rebota un momento
     update(M,dt){ const D=M.data; D.time=30-M.t; const now=performance.now()/1000;
-      D.next-=dt; if(D.next<=0 && D.time>0){ const free=moles.map((o,i)=>i).filter(i=>!moles[i].want); if(free.length){ const i=free[Math.floor(Math.random()*free.length)], o=moles[i]; o.want=1; o.until=now+Math.max(.55,1.1-(30-D.time)*.018); }
+      D.next-=dt; if(D.next<=0 && D.time>0){ const free=moles.map((o,i)=>i).filter(i=>!moles[i].want); if(free.length){ const i=free[Math.floor(Math.random()*free.length)], o=moles[i]; o.want=1; o.until=now+Math.max(.6,1.15-(30-D.time)*.018); }
         D.next=Math.max(.35,.8-(30-D.time)*.014)*(.6+Math.random()*.7); }
       moles.forEach(o=>{ if(o.want && now>o.until){ o.want=0; } });
+      bW(e,mx,0,SPOT_Z,_tp); player.pos.set(_tp.x,FY,_tp.z);   // el peluche se recorre hacia el hoyo
       if(D.time<=0 && moles.every(o=>o.up<.05)){ const c=Math.round(D.hits*.6); endMini(M,{title:D.hits>=25?'¡Manos rápidas!':'¡Bien hecho!', lines:['Topos golpeados: <b>'+D.hits+'</b>'], coins:c}); } },
-    idle(dt){ moles.forEach(o=>{ o.bonk=Math.max(0,o.bonk-dt); const want=o.want?1:0; o.up+=(want-o.up)*Math.min(1,dt*(want?14:9)); o.m.position.y=.46+o.up*.32-(o.bonk>0?.08:0); o.m.scale.y=o.bonk>0?.7:1; });
-      const st=performance.now()/1000-hitAt, [hx,hz]=holes[hitIdx]; mallet.position.set(hx,1.05,hz-.25); mallet.rotation.set(st<.18? -1.2+st/.18*1.2 : 0 ,0,0); mallet.rotation.x=st<.09? -.2-st/.09*1.0 : st<.25? -1.2+(st-.09)/.16*1.0 : -.2; },
-    cam(M){ return [bW(e,.95,2.7,-.9), bW(e,0,.85,1.3)]; },
-    pose(M,o){ const st=performance.now()/1000-hitAt; const a=ARM(o,-1)||armsOf(o)[0]; a.rotation.x=st<.2?-2.2+st*5:-1.6; a.rotation.z=-.3; a.userData.joint.rotation.x=-.4;
-      const b=ARM(o,1); if(b){ b.rotation.x=-.6; b.rotation.z=.6; } },
+    idle(dt,mine){ moles.forEach(o=>{ o.bonk=Math.max(0,o.bonk-dt); const want=o.want?1:0; o.up+=(want-o.up)*Math.min(1,dt*(want?14:9)); o.m.position.y=.46+o.up*.36-(o.bonk>0?.08:0); o.m.scale.y=o.bonk>0?.7:1; });
+      let idx=hitIdx, at=hitAt;
+      if(!mine){ const r=toposWho(); mallet.visible=!!r; if(!r) return; idx=Math.min(8,Math.max(0,r.mg[2]|0)); at=r.mgActT||-9; }
+      const age=performance.now()/1000-at; toposBody(null,dt,idx,age); malletStep(dt,idx,age,mx); },
+    cam(M){ return [bW(e,1.6,3.2,-.4), bW(e,-.1,.9,1.15)]; },   // de lado y arriba: el peluche no tapa la mesa
+    pose(M,o,t,dt){ toposArms(o,mLean); },
+    rpose(r,t){ toposArms(r.obj,mLean); },
+    _moles:moles,
   };
   MINIS.push(def);
 }
@@ -5385,7 +5523,7 @@ let fairBulbs=null;
   fAdd(g,fBox,FM('#4f86c6'),0,H/2-.02,0,1.45,H-.04,2.6);
   fAdd(g,fBox,FM('#e8f3ff','shiny'),0,H,0,1.3,.02,2.42);
   [[-W-.04,0,.08,2.5],[W+.04,0,.08,2.5]].forEach(([x,z,sx,sz])=>fAdd(g,fBox,FM('#e5534b'),x,H+.05,z,sx,.1,sz));
-  [-1,1].forEach(s=>{ [[-1,1]].forEach(()=>{}); fAdd(g,fBox,FM('#e5534b'),-(W+GOAL)/2-.0,H+.05,s*(L+.04),W-GOAL+.02,.1,.08); fAdd(g,fBox,FM('#e5534b'),(W+GOAL)/2,H+.05,s*(L+.04),W-GOAL+.02,.1,.08);
+  [-1,1].forEach(s=>{ fAdd(g,fBox,FM('#e5534b'),-(W+GOAL)/2,H+.05,s*(L+.04),W-GOAL+.02,.1,.08); fAdd(g,fBox,FM('#e5534b'),(W+GOAL)/2,H+.05,s*(L+.04),W-GOAL+.02,.1,.08);
     fAdd(g,fBox,FM('#222222'),0,H-.02,s*(L+.06),GOAL*2,.06,.1); });
   fAdd(g,fCyl,FM('#ff5d6c'),0,H+.012,0,.18,.004,.18); fAdd(g,fBox,FM('#ff5d6c'),0,H+.012,0,1.26,.004,.02);
   const sg=new THREE.Mesh(new THREE.PlaneGeometry(2.2,.75), new THREE.MeshStandardMaterial({map:textTex(['Hockey','2 jugadores · gana 5']), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
@@ -5397,13 +5535,20 @@ let fairBulbs=null;
   blockAt(e,0,-.7,.75,1); blockAt(e,0,0,.75,1); blockAt(e,0,.7,.75,1);
   const st={puck:{x:0,z:0,vx:0,vz:0}, pad:[{x:0,z:-L*.7,vx:0,vz:0},{x:0,z:L*.7,vx:0,vz:0}], s:[0,0], phase:0, t0:0, last:0};
   const sideSign=s=>s?1:-1;
-  function opponent(side){ for(const r of mp.remotes.values()) if(r.hk && r.hk[0]===1-side) return r; return null; }
-  function sideBusy(side){ for(const r of mp.remotes.values()) if(r.hk && r.hk[0]===side) return r; return null; }
+  function opponent(side){ for(const r of mp.remotes.values()) if(r.mg && MINIS[r.mg[0]]===def && r.hk && r.hk[0]===1-side) return r; return null; }
+  function sideBusy(side){ for(const r of mp.remotes.values()) if(r.mg && MINIS[r.mg[0]]===def && r.hk && r.hk[0]===side) return r; return null; }
   function resetPuck(toward){ st.puck={x:0,z:toward*.25,vx:0,vz:0}; }
+  // el peluche se para frente a su mango, se inclina sobre la mesa y lo agarra con la mano derecha
+  const STAND=1.72, _hp=new THREE.Vector3();
+  function hockeyPose(o,side){ const P=st.pad[side], from=L-Math.abs(P.z);
+    o.rotation.x=THREE.MathUtils.clamp((from-.2)*.42,0,.36);
+    handTo(o,e,-1,P.x,H+.12,P.z,-.5,-1,-.3,true);
+    handLocal(o,1,.32,.98,.5,.7,-1,-.2,false); }   // la otra mano apoyada en el borde
   const def={id:'hockey', name:'Hockey', e, multi:true, stick:true, pads:[[0,-1.85,.8],[0,1.85,.8]], exitTo:[0,-2.6],
     verb:'Jugar hockey', noAgain:true,
     busy(pd){ const side=pd[1]>0?1:0, r=sideBusy(side); return r?(r.name||'Alguien')+' está en ese lado':null; },
-    prepare(pd){ def._side=pd[1]>0?1:0; def.spot=[0,sideSign(def._side)*1.75]; def.face=def._side?Math.PI:0; def.exitTo=[0,sideSign(def._side)*2.6]; },
+    prepare(pd){ def._side=pd[1]>0?1:0; def.spot=[0,sideSign(def._side)*STAND]; def.face=def._side?Math.PI:0; def.exitTo=[0,sideSign(def._side)*2.6]; },
+    fp(M){ const s=sideSign(M.data.side); return bW(e,st.pad[M.data.side].x*.25,H,s*.12,_mgL); }, fpArms:true,
     start(M){ M.data={side:def._side, phase:0}; M.score=0; st.s=[0,0]; st.phase=0; resetPuck(0); st.pad[0]={x:0,z:-L*.7,vx:0,vz:0}; st.pad[1]={x:0,z:L*.7,vx:0,vz:0}; },
     quit(M){ return null; },
     hud(M){ const D=M.data, me=D.side, op=opponent(me);
@@ -5414,7 +5559,10 @@ let fairBulbs=null;
       // mi mango: joystick / teclas, relativo a mi lado de la mesa
       let ix=0, iz=0; if(mgKeys.KeyA||mgKeys.ArrowLeft) ix-=1; if(mgKeys.KeyD||mgKeys.ArrowRight) ix+=1; if(mgKeys.KeyW||mgKeys.ArrowUp) iz+=1; if(mgKeys.KeyS||mgKeys.ArrowDown) iz-=1; ix+=stick.x; iz-=stick.y;
       const sg=sideSign(me), P=st.pad[me], sp=2.6;
-      const vx=(me? ix : -ix)*sp, vz=-sg*iz*sp;   // la pantalla de cada quien está del lado opuesto de la mesa P.vx=vx; P.vz=vz; P.x=THREE.MathUtils.clamp(P.x+vx*dt,-W+PR,W-PR); P.z=THREE.MathUtils.clamp(P.z+vz*dt, me?.08:-L+PR, me?L-PR:-.08);
+      const vx=(me? ix : -ix)*sp, vz=-sg*iz*sp;   // la pantalla de cada quien está del lado opuesto de la mesa
+      P.vx=vx; P.vz=vz; P.x=THREE.MathUtils.clamp(P.x+vx*dt,-W+PR,W-PR); P.z=THREE.MathUtils.clamp(P.z+vz*dt, me?.08:-L+PR, me?L-PR:-.08);
+      // el peluche se recorre de lado siguiendo su mango
+      bW(e,P.x*.7,0,sg*STAND,_hp); player.pos.set(_hp.x,FY,_hp.z);
       // mango del rival (de su presencia)
       if(op && op.hk){ const O=st.pad[1-me]; const tx=op.hk[1], tz=op.hk[2]; if(Number.isFinite(tx)&&Number.isFinite(tz)){ O.vx=(tx-O.x)/Math.max(dt,1e-3)*.3; O.vz=(tz-O.z)/Math.max(dt,1e-3)*.3; O.x+=(tx-O.x)*Math.min(1,dt*14); O.z+=(tz-O.z)*Math.min(1,dt*14); } }
       if(auth){
@@ -5440,14 +5588,15 @@ let fairBulbs=null;
         endMini(M,{title:win?'¡Ganaste!':mine===his?'¡Empate!':'¡Buen partido!', lines:['Marcador: <b>'+mine+' – '+his+'</b>'], coins:win?12:mine===his?6:4}); } },
     idle(dt,mine){ const me=mine&&player.mg?player.mg.data.side:-1;
       if(me<0){ // nadie aquí: muestra lo que hacen los demás si están jugando
-        for(const r of mp.remotes.values()) if(r.hk){ const s=r.hk[0]; if(s===0||s===1){ st.pad[s].x+=(r.hk[1]-st.pad[s].x)*Math.min(1,dt*10); st.pad[s].z+=(r.hk[2]-st.pad[s].z)*Math.min(1,dt*10);
+        for(const r of mp.remotes.values()) if(r.hk && r.mg && MINIS[r.mg[0]]===def){ const s=r.hk[0]; if(s===0||s===1){ st.pad[s].x+=(r.hk[1]-st.pad[s].x)*Math.min(1,dt*10); st.pad[s].z+=(r.hk[2]-st.pad[s].z)*Math.min(1,dt*10);
           if(s===0 && r.hk.length>=11){ st.puck.x+=(r.hk[3]-st.puck.x)*Math.min(1,dt*10); st.puck.z+=(r.hk[4]-st.puck.z)*Math.min(1,dt*10); } } } }
       paddles.forEach((p,i)=>p.position.set(st.pad[i].x,H,st.pad[i].z)); puckM.position.set(st.puck.x,H+.013,st.puck.z); },
     presence(M){ const me=M.data.side, P=st.pad[me], r=v=>Math.round(v*1000)/1000;
       if(me===0) return [0,r(P.x),r(P.z),r(st.puck.x),r(st.puck.z),r(st.puck.vx),r(st.puck.vz),st.s[0],st.s[1],st.phase,Math.round(st.t0*10)/10,Math.round(performance.now()/50)%100000];
       return [1,r(P.x),r(P.z)]; },
-    cam(M){ const s=sideSign(M.data.side); return [bW(e,0,3.0,s*2.4), bW(e,0,.8,-s*.3)]; },
-    pose(M,o){ const a=ARM(o,-1)||armsOf(o)[0]; a.rotation.x=-1.3; a.rotation.z=-.2; a.userData.joint.rotation.x=-.3; },
+    cam(M){ const s=sideSign(M.data.side); return [bW(e,0,3.7,s*2.9), bW(e,0,.8,-s*.25)]; },   // alto, para ver por encima del peluche
+    pose(M,o){ hockeyPose(o,M.data.side); },
+    rpose(r,t){ if(r.hk) hockeyPose(r.obj,r.hk[0]); },
   };
   function puckSound(v){ try{ const R=audio.raw(); R&&R.tone('triangle',700,500,R.ctx.currentTime,.05,.08*v); }catch(e){} }
   function goalSound(good){ try{ const R=audio.raw(); const t=R.ctx.currentTime; (good?[660,880,1100]:[440,330]).forEach((f,i)=>R.tone('square',f,f,t+i*.1,.12,.05)); }catch(e){} }
@@ -5538,9 +5687,11 @@ let fairBulbs=null;
 }
 
 // presencia: en qué minijuego estoy (y datos del hockey)
-function mgPresence(){ const M=player.mg; if(!M) return {mg:null, hk:null}; const i=MINIS.indexOf(M.g); return {mg:[i], hk:M.g.presence?M.g.presence(M):null}; }
+function mgPresence(){ const M=player.mg; if(!M) return {mg:null, hk:null}; const i=MINIS.indexOf(M.g); return {mg:[i, M.act|0, M.actX|0], hk:M.g.presence?M.g.presence(M):null}; }
 renderCoins();
-function parseMg(r,pr){ r.mg = Array.isArray(pr.mg) && Number.isInteger(pr.mg[0]) && pr.mg[0]>=0 && pr.mg[0]<MINIS.length ? pr.mg : null;
+function parseMg(r,pr){ const was=r.mg; r.mg = Array.isArray(pr.mg) && Number.isInteger(pr.mg[0]) && pr.mg[0]>=0 && pr.mg[0]<MINIS.length && pr.mg.every(Number.isFinite) ? pr.mg : null;
+  if(r.mg && was && was[0]===r.mg[0] && r.mg[1]!==was[1]) r.mgActT=performance.now()/1000;   // hizo algo (batear, lanzar, golpear…)
+  if(was && (!r.mg || r.mg[0]!==was[0])){ resetArmsIK(r.obj); const b=r.obj.userData.mgBat; if(b) b.visible=false; r.obj.rotation.x=0; }
   r.hk = Array.isArray(pr.hk) && pr.hk.every(v=>typeof v==='number' && Number.isFinite(v)) && (pr.hk[0]===0||pr.hk[0]===1) ? pr.hk : null; }
 
 // ---------- Empujoncitos: animalitos y otros peluches no se atraviesan ----------
@@ -5558,6 +5709,7 @@ function clampCamToObstacles(target,want){
       if(dx*dx+dz*dz<rr*rr){ const k=Math.max(0,(i-1.5)/N); want.set(target.x+(want.x-target.x)*k, target.y+(want.y-target.y)*k, target.z+(want.z-target.z)*k); return; } } } }
 // ---------- Otros jugadores en la feria: se ven sentados en los paseos y con los brazos en el juego ----------
 function remoteMgPose(r,t,dt){ const d=MINIS[r.mg[0]]; if(!d) return;
+  if(d.rpose){ d.rpose(r,t,dt); return; }
   if(d.id==='rueda'){ poseLimbs(r.obj,t,dt,0,false,0,false,null,0,0,false,1,false); r.obj.position.y=r.pos.y-.4; r.obj.rotation.x=0; r.obj.rotation.z=0; }
   else if(d.id==='carrusel'){ poseLimbs(r.obj,t,dt,0,false,0,false,null,0,0,false,1,false); r.obj.position.y=r.pos.y-.1; r.obj.rotation.x=0; r.obj.rotation.z=0; }
   else if(d.id==='baile'){ const now=performance.now()/1000; armsOf(r.obj).forEach(a=>{ const sd=a.userData.side, b=Math.sin(now*6.2+(sd>0?0:Math.PI)); a.rotation.z=sd*(1.2+.6*b); a.rotation.x=-.3; a.userData.joint.rotation.x=-.8; }); r.obj.position.y=r.pos.y+.16+Math.abs(Math.sin(now*3.1))*.06; }
@@ -5786,7 +5938,7 @@ function update(dt,t){
   else if(state==='play' && performance.now()/1000<player.pushUntil) pgPoseLimbs(plush,{push:1},t,dt,player.walk);
   if(state==='play' && !player.car && !player.ac && !player.pg) pulledByOthers(dt);
   myBowPose(dt);
-  crossEl.hidden = !(state==='play' && (camMode==='first' || bowHeld()));
+  crossEl.hidden = !(state==='play' && !player.mg && (camMode==='first' || bowHeld()));
   const fwd=Math.sin(player.diveAngle)*.85;
   blob.position.set(player.pos.x+Math.sin(player.facing)*fwd, player.groundY+.06, player.pos.z+Math.cos(player.facing)*fwd);
   blob.visible = !player.inWater && !player.swim && !player.car && !player.ac && !pgPose;
