@@ -107,6 +107,18 @@ body.not-play .mg-hud, body.not-play .mg-ctl, body.not-play .mg-result{display:n
 .mg-hud b{font-family:var(--display);font-size:14px;}
 @media (max-width:1000px){ .mg-hud b{display:none;} }   /* en pantallas angostas basta con puntos y tiempo */
 .hud-tog{padding:7px 0;width:38px;}
+.ar-hud.hot{background:#ffe2c8;outline-color:#e5534b;animation:hotpulse .6s infinite alternate;}
+@keyframes hotpulse{to{background:#ffc49a;}}
+.ar-big{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);font-family:var(--display);font-weight:800;font-size:clamp(40px,10vw,96px);color:#fff;-webkit-text-stroke:3px var(--thread);paint-order:stroke fill;text-shadow:0 6px 0 rgba(0,0,0,.18);pointer-events:none;white-space:nowrap;z-index:6;}
+.ar-big.pop{animation:arpop .5s ease-out;}
+@keyframes arpop{from{transform:translate(-50%,-50%) scale(1.6);opacity:0;}to{transform:translate(-50%,-50%) scale(1);opacity:1;}}
+.ar-res{position:fixed;left:50%;top:22%;transform:translateX(-50%);z-index:6;}
+.ar-res .card{text-align:center;min-width:240px;color:var(--thread);font-weight:800;}
+.ar-res h3{font-family:var(--display);font-size:30px;margin:0 0 4px;}
+.ar-res p{margin:4px 0;}
+.ar-coins{font-size:24px;display:flex;align-items:center;justify-content:center;gap:6px;}
+.ar-coins .cn{width:22px;height:22px;}
+body.not-play .ar-big, body.not-play .ar-res{display:none!important;}
 .hud-tog svg{transition:transform .2s;}
 body.hud-min .hud-tog svg{transform:rotate(180deg);}
 body.hud-min #hud .chip:not(.hud-tog):not(.mg-exit), body.hud-min #hud .hint{display:none!important;}
@@ -384,6 +396,8 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
   </div>
 </div>
 
+<div class="ar-big" id="arBig" hidden></div>
+<div class="ar-res" id="arRes" hidden><div class="card"><h3 id="arResTitle"></h3><p id="arResText"></p><p class="ar-coins"><i class="cn"></i> <b id="arResCoins"></b></p></div></div>
 <div class="overlay shop" id="shop" hidden>
   <div class="shop-stage" id="shopStage" aria-hidden="true"></div>
   <div class="stage-ctl"><span class="stage-hint">Arrastra para girar · pellizca o usa la rueda para acercar</span>
@@ -542,6 +556,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <button class="chip room-chip" id="roomChip" hidden title="Copiar el código de la sala"><span class="dot" id="roomDot"></span><span id="roomLabel">Sala</span></button>
   </div>
   <div class="mg-hud" id="mgHud" hidden><b id="mgTitle"></b><span id="mgScore"></span><span id="mgTime"></span><div class="mg-meter" id="mgMeter" hidden><i></i><em></em></div><button class="chip mg-exit" id="mgExit" title="Salir (X)" aria-label="Salir">✕</button></div>
+  <div class="mg-hud ar-hud" id="arHud" hidden><b id="arTitle"></b><span id="arTxt"></span><button class="chip mg-exit" id="arExit" title="Salir del juego" aria-label="Salir del juego">✕</button></div>
   <div style="display:flex;gap:8px;align-items:center">
     <span class="hint" id="hint">V cambia la cámara · Clic para mirar con el ratón</span>
     <button class="chip" id="camChip">3ª persona</button>
@@ -753,7 +768,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='63';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='64';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -1780,6 +1795,7 @@ function groundAt(x,z,y){
   if(typeof aircraftGround==='function'){ const ag=aircraftGround(x,z,y); if(ag!==null && ag>g) g=ag; }
   if(typeof playgroundGround==='function'){ const pg=playgroundGround(x,z,y); if(pg!==null && pg>g) g=pg; }
   { const cf=cakeFloorGround(x,z,y); if(cf!==null && cf>g) g=cf; }
+  { const ar=arenaGround(x,z,y); if(ar!==null && ar>g) g=ar; }
   for(const o of obsNear(x,z)){
     if(!o.walk) continue;
     const dx=x-o.x, dz=z-o.z;
@@ -2781,7 +2797,7 @@ function sendPresence(force){
     ap: iPilot() ? (a=>[a.i, r2(a.x), r2(a.y), r2(a.z), Math.round(a.h*1000)/1000, Math.round(a.p*1000)/1000, Math.round(a.b*1000)/1000, r2(a.v), r2(a.vy), r2(a.rotor), a.onGround?1:0, r2(a.thr)])(aircraft[player.ac.i]) : null,
     as: aircraft.map(a=>[Math.round(a.x*10)/10, r2(a.y), Math.round(a.z*10)/10, Math.round(a.h*100)/100, a.t]),
     sd: aircraft.map(a=>[a.stairs, a.door, a.sdT]),
-    id: myUid, bw: bowPresence(), ...mgPresence(), ou: outfitList(wardrobe.eq),
+    id: myUid, bw: bowPresence(), ...mgPresence(), ou: outfitList(wardrobe.eq), ...arenaPresence(),
     pl: player.pg ? [PG_KINDS.indexOf(player.pg.k), player.pg.i, r2(player.pg.v||0)] : null,
     pu: myPush.i>=0 ? [myPush.i, myPush.t] : null,
     ai: player.ac && player.acPose ? (A=>[A.i, A.mode==='seated'||A.mode==='sitting'?A.seat:-1, r2(player.acPose.l[0]), r2(player.acPose.l[1]), r2(player.acPose.l[2]), r2(player.acPose.f||0), r2(player.acPose.sit||0), r2(player.acPose.walk?(player.acPose.mv||1):0), r2(player.acPose.armsUp||0), player.acPose.air?1:0])(player.ac) : null
@@ -2844,7 +2860,7 @@ function onPeers({peers}){
     r.facing=clampN(pr.f,-4,4,0); r.moving=clampN(pr.m,0,1,0); r.air=pr.a===true; r.swim=pr.s===true;
     const nd=clampN(pr.d,0,DIVE_FLAT,0);
     if(nd>.5 && r.diveTarget<=.5 && !r.swim) audio.flop(.5);
-    r.diveTarget=nd; r.held = pr.h==='map' ? 'map' : pr.h==='bow' ? 'bow' : null; parseBow(r,pr); parseMg(r,pr);
+    r.diveTarget=nd; r.held = pr.h==='map' ? 'map' : pr.h==='bow' ? 'bow' : null; parseBow(r,pr); parseMg(r,pr); parseArena(r,pr);
     const w=clampN(pr.w,0,Infinity,0);
     if(r.w!==undefined && w!==r.w){ r.waveUntil=clock.elapsedTime+1.6; audio.wave(); }
     r.w=w;
@@ -2931,6 +2947,7 @@ function updateRemotes(dt,t){
       r.label.position.set(0, H*Math.cos(a)+F*Math.sin(a), -H*Math.sin(a)+F*Math.cos(a)); }
     if(r.bw && r.held==='bow') remoteBowPose(r);
     if(r.mg) remoteMgPose(r,t,dt);
+    remoteArenaPose(r,t,dt);
     const fwd=Math.sin(r.dive)*.85;
     { const bx=r.pos.x+Math.sin(r.obj.rotation.y)*fwd, bz=r.pos.z+Math.cos(r.obj.rotation.y)*fwd, by=terrainH(bx,bz);
       r.blob.position.set(bx, Math.max(by, Math.min(r.pos.y, by+3))+.06, bz); r.blob.visible = !r.swim && r.pos.y > waterLevelAt(r.pos.x,r.pos.z)-.05; }
@@ -3102,7 +3119,14 @@ const mapBase=document.createElement('canvas'); mapBase.width=mapBase.height=MAP
   g.strokeStyle='rgba(120,90,50,.7)'; g.lineWidth=3; g.setLineDash([10,7]); g.strokeRect(8,8,MAP_PX-16,MAP_PX-16); g.setLineDash([]); }
 
 // Lugares a los que se puede viajar desde el mapa
-const TELEPORTS=[{id:'inicio', name:'Inicio', x:START.x, z:START.z}, {id:'pista', name:'Pista', x:MAP.park.x-6, z:MAP.park.z+30}, {id:'aero', name:'Aeropuerto', ...(([x,z])=>({x,z}))(airportXZ(85,-80))}, {id:'parque', name:'Parque', x:PG.x+1, z:PG.z+2}, {id:'feria', name:'Feria', x:FAIR.x+Math.sin(FAIR.yaw)*-(FAIR.R-5), z:FAIR.z+Math.cos(FAIR.yaw)*-(FAIR.R-5)}];
+// ---------- Dónde van los minijuegos grandes: en la orilla de la isla ----------
+// (u: hacia el mar, v: a lo largo de la playa; c: distancia del centro de la isla a donde empieza el agua)
+const AR_SPOTS=(()=>{ const coastAt=a=>{ for(let r=300;r<1300;r+=1){ if(terrainH(Math.cos(a)*r,Math.sin(a)*r)<SEA_Y) return r; } return 600; };
+  const mk=(id,name,a,centerOff,plateOff)=>{ const c=coastAt(a), u=[Math.cos(a),Math.sin(a)], v=[-Math.sin(a),Math.cos(a)];
+    const at=d=>[u[0]*(c+d), u[1]*(c+d)];
+    return {id, name, a, c, u, v, center:at(centerOff), plate:at(plateOff), watch:at(plateOff-6)}; };
+  return [mk('plat','Plataformas flotantes',1.37,38,-7), mk('papa','Papa caliente',4.71,-44,-20), mk('bola','Rebote sobre pelotas',3.93,21,-7)]; })();
+const TELEPORTS=[{id:'inicio', name:'Inicio', x:START.x, z:START.z}, {id:'pista', name:'Pista', x:MAP.park.x-6, z:MAP.park.z+30}, {id:'aero', name:'Aeropuerto', ...(([x,z])=>({x,z}))(airportXZ(85,-80))}, {id:'parque', name:'Parque', x:PG.x+1, z:PG.z+2}, {id:'feria', name:'Feria', x:FAIR.x+Math.sin(FAIR.yaw)*-(FAIR.R-5), z:FAIR.z+Math.cos(FAIR.yaw)*-(FAIR.R-5)}, ...AR_SPOTS.map(A=>({id:'ar_'+A.id, name:A.name, x:A.watch[0], z:A.watch[1], noPortal:true}))];
 
 // ---------- Portales del segundo piso del castillo: arcos de mini bombones que llevan a los lugares del mapa ----------
 const portals=[], signGlow=[], signLights=[];
@@ -3115,7 +3139,7 @@ const signMats=(()=>{ const c=document.createElement('canvas'); c.width=256; c.h
   return {bar:new THREE.MeshStandardMaterial({map:bt, roughness:.4}), choco:new THREE.MeshStandardMaterial({color:0x4a2614, roughness:.4}), cane:new THREE.MeshStandardMaterial({map:ct, roughness:.3}),
     icing:new THREE.MeshStandardMaterial({color:0xffb6d5, roughness:.35}), cherry:new THREE.MeshStandardMaterial({color:0xc8102e, roughness:.25})}; })();
 (function castlePortals(){
-  const dests=[...TELEPORTS.filter(t=>t.id!=='inicio'), ...TELEPORTS.filter(t=>t.id==='inicio')]; if(!dests.length) return;   // Inicio: baja a la planta baja
+  const dests=[...TELEPORTS.filter(t=>t.id!=='inicio' && !t.noPortal), ...TELEPORTS.filter(t=>t.id==='inicio')]; if(!dests.length) return;   // Inicio: baja a la planta baja
   const H=CAKE.H, [[,h1],[l2,h2]]=[CAKE_ST.holes[0],CAKE_ST.holes[1]];
   const sideA=(h1+l2)/2, sideB=(h2+CAKE_ST.holes[0][0]+Math.PI*2)/2;   // las dos orillas libres del segundo piso (entre los huecos de las escaleras)
   const half=Math.ceil(dests.length/2), R0=CAKE_ST.r0-1.6, GAP=5.2/R0;   // separación entre portales (en ángulo)
@@ -3637,6 +3661,7 @@ function freeSeatForDoor(ci,d){ for(const s of [[0],[1],[2,3],[4,3]][d]) if(!sea
 function scanActions(){
   if(state!=='play'){ setActions(null,null); return; }
   { const [x,y]=airActions(); if(x||y||player.ac){ setActions(x,y); return; } }
+  { const aa=arenaActions(); if(aa){ setActions(aa[0],aa[1]); return; } }
   { const ma=mgActions(); if(ma){ setActions(ma[0],ma[1]); return; } }
   { const [x,y]=pgActions(); if(x||y||player.pg){ setActions(x,y); return; } }
   { const ba=bowActions(); if(ba){ setActions(ba[0],ba[1]); return; } }
@@ -6347,6 +6372,339 @@ function handLocal(o,side,x,y,z,hx,hy,hz,stretch){ const arm=ARM(o,side); if(!ar
   MINIS.push(def);
 }
 
+// ======================================================================================
+// ---------- Minijuegos grandes en la orilla (solo con jugadores reales de tu sala) ----------
+// ======================================================================================
+// Cómo se juegan juntos: cada quien publica en su presencia si está en la fila o jugando ("az").
+// El jugador de la fila con el id más chico es el "líder": él decide cuándo empieza, cuenta el tiempo y
+// anota quién va quedando fuera ("ag"). Si el líder se va, el siguiente toma su lugar con lo que ya sabía.
+// Fases: 0 fila → 1 a sus lugares (3 s) → 2 cuenta regresiva (5 s) → 3 a jugar → 4 resultados (6 s).
+const AR_LOBBY=10000, AR_PLACE=3000, AR_COUNT=5000, AR_END=6500;
+const ARN=AR_SPOTS.length;
+const AR={me:{a:-1, st:0, gid:'', seq:0, req:null, lastPass:0, awarded:''}, G:Array.from({length:ARN},()=>({ph:0, ms:-1, gid:'', pl:[], el:[], h:null, hms:0, hs:-1, prev:null, pause:0, rk:[], tie:0, sd:1})), lead:Array(ARN).fill(false), recvAt:Array(ARN).fill(0)};
+const arW=(A,du,dv,y,out)=>(out||new THREE.Vector3()).set(A.center[0]+A.u[0]*du+A.v[0]*dv, y, A.center[1]+A.u[1]*du+A.v[1]*dv);
+const arL=(A,x,z)=>{ const dx=x-A.center[0], dz=z-A.center[1]; return [dx*A.u[0]+dz*A.u[1], dx*A.v[0]+dz*A.v[1]]; };
+const arYaw=(A,dx,dz)=>Math.atan2(dx,dz);
+const uidOf=r=>r.uid||'';
+function arPresent(uid){ if(uid===myUid) return true; for(const r of mp.remotes.values()) if(uidOf(r)===uid) return r; return null; }
+function arRemote(uid){ for(const r of mp.remotes.values()) if(uidOf(r)===uid) return r; return null; }
+function arStatus(a,uid){ if(uid===myUid) return AR.me.a===a ? AR.me.st : 0; const r=arRemote(uid); return r && r.az && r.az[0]===a ? r.az[1] : 0; }
+function arPos(uid){ if(uid===myUid) return player.pos; const r=arRemote(uid); return r ? r.pos : null; }
+
+// ---------------- 1) Plataformas flotantes: 5 pisos de 50×50 baldosas sobre el mar ----------------
+const PLAT={N:50, F:5, T:1.1, y0:SEA_Y+7, dy:7, removed:new Uint8Array(5*50*50), mine:[], warn:new Map(), gid:'', seen:new Map(), meshes:[], cur:-1, curT:0};
+const platTop=f=>PLAT.y0+f*PLAT.dy+.2;
+const platIdx=(f,i,j)=>f*PLAT.N*PLAT.N+j*PLAT.N+i;
+const PLAT_COL=['#ff7aa2','#ffc23d','#6fd15a','#4fb0ff','#a77bff'];
+(function buildPlat(){ const A=AR_SPOTS[0], N=PLAT.N, T=PLAT.T, o=new THREE.Object3D(), c=new THREE.Color(), geo=new THREE.BoxGeometry(T*.94,.4,T*.94), yaw=Math.atan2(A.v[0],A.v[1]);
+  for(let f=0;f<PLAT.F;f++){ const gf=geo.clone(); gf.boundingSphere=new THREE.Sphere(arW(A,0,0,platTop(f)),N*T*.75);   // así solo se dibuja cuando está a la vista
+    const m=new THREE.InstancedMesh(gf,new THREE.MeshStandardMaterial({roughness:.75}),N*N); m.receiveShadow=true; m.castShadow=f===PLAT.F-1;
+    for(let j=0;j<N;j++) for(let i=0;i<N;i++){ arW(A,(j-(N-1)/2)*T,(i-(N-1)/2)*T,platTop(f)-.2,o.position); o.rotation.set(0,yaw,0); o.scale.set(1,1,1); o.updateMatrix(); m.setMatrixAt(j*N+i,o.matrix);
+      c.set(PLAT_COL[f]); if((i+j)%2) c.multiplyScalar(.9); m.setColorAt(j*N+i,c); }
+    m.instanceMatrix.needsUpdate=true; m.instanceColor.needsUpdate=true; scene.add(m); PLAT.meshes.push(m); }
+  // cuatro bastones de caramelo en las esquinas y letrero en la playa
+  const caneM=new THREE.MeshStandardMaterial({map:(()=>{ const cc=document.createElement('canvas'); cc.width=32; cc.height=128; const q=cc.getContext('2d'); q.fillStyle='#fffaf3'; q.fillRect(0,0,32,128); q.fillStyle='#e0303a'; for(let y=-32;y<160;y+=32){ q.beginPath(); q.moveTo(0,y); q.lineTo(32,y-16); q.lineTo(32,y-4); q.lineTo(0,y+12); q.fill(); } const t=new THREE.CanvasTexture(cc); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1,12); return t; })(), roughness:.35});
+  const H=platTop(PLAT.F-1)+3-SEA_Y, half=(N/2)*T+.4;
+  [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([a,b])=>{ const p=arW(A,a*half,b*half,SEA_Y+H/2); const m=new THREE.Mesh(new THREE.CylinderGeometry(.45,.45,H,12),caneM); m.position.copy(p); scene.add(m);
+    const ball=new THREE.Mesh(sphereG,new THREE.MeshStandardMaterial({color:PLAT_COL[(a+1+b+1)%5], roughness:.3})); ball.scale.setScalar(.9); ball.position.set(p.x,SEA_Y+H+.6,p.z); scene.add(ball); });
+})();
+function platSetTile(k,alive){ const f=Math.floor(k/(PLAT.N*PLAT.N)), r=k%(PLAT.N*PLAT.N), m=PLAT.meshes[f], mt=new THREE.Matrix4();
+  m.getMatrixAt(r,mt); const p=new THREE.Vector3(), q=new THREE.Quaternion(), s=new THREE.Vector3(); mt.decompose(p,q,s); s.setScalar(alive?1:0); mt.compose(p,q,s); m.setMatrixAt(r,mt); m.instanceMatrix.needsUpdate=true; }
+function platReset(gid){ if(PLAT.gid===gid) return; PLAT.gid=gid; PLAT.mine=[]; PLAT.seen.clear(); PLAT.cur=-1; PLAT.curT=0;
+  for(let k=0;k<PLAT.removed.length;k++) if(PLAT.removed[k]){ PLAT.removed[k]=0; platSetTile(k,true); } PLAT.warn.forEach((t,k)=>platTint(k,0)); PLAT.warn.clear(); }
+function platRemove(k){ if(PLAT.removed[k]) return; PLAT.removed[k]=1; platSetTile(k,false); try{ const A=AR_SPOTS[0], w=platTileWorld(k); splashBurst(w.x,w.y,w.z,.15); }catch(e){} }
+const _pc=new THREE.Color();
+function platTint(k,t){ const f=Math.floor(k/(PLAT.N*PLAT.N)), r=k%(PLAT.N*PLAT.N), i=r%PLAT.N, j=Math.floor(r/PLAT.N);
+  _pc.set(PLAT_COL[f]); if((i+j)%2) _pc.multiplyScalar(.9); _pc.lerp(new THREE.Color('#ff3b3b'),Math.min(1,t)); PLAT.meshes[f].setColorAt(r,_pc); PLAT.meshes[f].instanceColor.needsUpdate=true; }
+function platTileWorld(k){ const f=Math.floor(k/(PLAT.N*PLAT.N)), r=k%(PLAT.N*PLAT.N), i=r%PLAT.N, j=Math.floor(r/PLAT.N), N=PLAT.N, T=PLAT.T; return arW(AR_SPOTS[0],(j-(N-1)/2)*T,(i-(N-1)/2)*T,platTop(f)); }
+// baldosa bajo los pies (o -1)
+function platTileAt(x,z,y){ const A=AR_SPOTS[0], [lu,lv]=arL(A,x,z), N=PLAT.N, T=PLAT.T, j=Math.floor(lu/T+N/2), i=Math.floor(lv/T+N/2);
+  if(i<0||j<0||i>=N||j>=N) return -1;
+  for(let f=PLAT.F-1;f>=0;f--){ const top=platTop(f); if(top<=y+.35 && y-top<.6){ const k=platIdx(f,i,j); return PLAT.removed[k]?-1:k; } } return -1; }
+function platGround(x,z,y){ const A=AR_SPOTS[0], [lu,lv]=arL(A,x,z), N=PLAT.N, T=PLAT.T, j=Math.floor(lu/T+N/2), i=Math.floor(lv/T+N/2);
+  if(i<0||j<0||i>=N||j>=N) return null;
+  for(let f=PLAT.F-1;f>=0;f--){ const top=platTop(f); if(top<=y+.35 && !PLAT.removed[platIdx(f,i,j)]) return top; } return null; }
+
+// ---------------- 2) Papa caliente: un claro de bosque con orilla irregular ----------------
+const PAPA={R:a=>15+3*Math.sin(3*a)+2*Math.cos(5*a+1), mesh:null, held:null};
+(function buildPapa(){ const A=AR_SPOTS[1], cx=A.center[0], cz=A.center[1];
+  // piso de pasto oscuro que sigue el terreno
+  const segA=48, segR=6, pos=[], idx=[], uv=[];
+  for(let r=0;r<=segR;r++) for(let s=0;s<segA;s++){ const a=s/segA*Math.PI*2, rr=PAPA.R(a)*r/segR+(r===segR?1.5:0), x=cx+Math.cos(a)*rr, z=cz+Math.sin(a)*rr; pos.push(x,terrainH(x,z)+.06,z); uv.push(.5+Math.cos(a)*r/segR*.5,.5+Math.sin(a)*r/segR*.5); }
+  for(let r=0;r<segR;r++) for(let s=0;s<segA;s++){ const a=r*segA+s, b=r*segA+(s+1)%segA, c=a+segA, d=b+segA; idx.push(a,b,c,b,d,c); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); g.setIndex(idx); g.computeVertexNormals();
+  const floor=new THREE.Mesh(g, felt('#4f7f3a','rgba(0,40,0,.25)',3)); floor.receiveShadow=true; scene.add(floor);
+  // árboles de peluche alrededor (con una entrada hacia la playa)
+  const grp=new THREE.Group(), trunkM=felt('#7a5232'), leafM=[felt('#3f8f3a'),felt('#57a845'),felt('#2f7a3e')], gapA=Math.atan2(A.u[1],A.u[0]);
+  for(let k=0;k<40;k++){ const a=k/40*Math.PI*2; let d=a-gapA; d=Math.atan2(Math.sin(d),Math.cos(d)); if(Math.abs(d)<.16) continue;
+    const rr=PAPA.R(a)+1.8+(k%3)*.8, x=cx+Math.cos(a)*rr, z=cz+Math.sin(a)*rr, h=terrainH(x,z), s=.8+((k*7)%5)*.12;
+    const tr=new THREE.Mesh(fCyl,trunkM); tr.scale.set(.32*s,2.6*s,.32*s); tr.position.set(x,h+1.3*s,z); grp.add(tr);
+    [[0,2.9,0,1.5],[.5,2.4,.3,1.1],[-.4,2.5,-.3,1.0]].forEach(([dx,dy,dz,r],q)=>{ const l=new THREE.Mesh(sphereG,leafM[(k+q)%3]); l.scale.setScalar(r*s); l.position.set(x+dx*s,h+dy*s,z+dz*s); grp.add(l); });
+    obstacles.push({x,z,r:.45*s,top:h+3*s,walk:false}); }
+  // hongos y troncos de adorno dentro del claro
+  for(let k=0;k<7;k++){ const a=k*2.1+.4, rr=PAPA.R(a)*.75, x=cx+Math.cos(a)*rr, z=cz+Math.sin(a)*rr, h=terrainH(x,z);
+    const st=new THREE.Mesh(fCyl,felt('#fbf3e4')); st.scale.set(.12,.35,.12); st.position.set(x,h+.17,z); grp.add(st);
+    const cap=new THREE.Mesh(sphereG,felt(k%2?'#e5534b':'#f6a43c')); cap.scale.set(.32,.18,.32); cap.position.set(x,h+.38,z); grp.add(cap); }
+  grp.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); mergeStatic(grp); scene.add(grp);
+  // la papa: café, con ojitos y mechita encendida
+  const p=new THREE.Group(); const body=new THREE.Mesh(sphereG,new THREE.MeshStandardMaterial({color:'#b98a4e', roughness:.8, emissive:'#ff2a00', emissiveIntensity:0})); body.scale.set(.26,.2,.2); p.add(body);
+  for(let k=0;k<6;k++){ const sp=new THREE.Mesh(sphereG,new THREE.MeshStandardMaterial({color:'#7a5232'})); sp.scale.setScalar(.025); const a=k*1.7; sp.position.set(Math.cos(a)*.22,Math.sin(a*1.3)*.12,Math.sin(a)*.16); p.add(sp); }
+  [-1,1].forEach(s=>{ const e=new THREE.Mesh(sphereG,new THREE.MeshStandardMaterial({color:'#ffffff'})); e.scale.setScalar(.05); e.position.set(s*.07,.05,.18); p.add(e); const q=new THREE.Mesh(sphereG,eyeMat); q.scale.setScalar(.025); q.position.set(s*.07,.05,.22); p.add(q); });
+  const fuse=new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,.14,6),new THREE.MeshStandardMaterial({color:'#333'})); fuse.position.set(0,.24,0); p.add(fuse);
+  const spark=new THREE.Mesh(sphereG,new THREE.MeshBasicMaterial({color:'#ffd23f'})); spark.scale.setScalar(.04); spark.position.set(0,.32,0); p.add(spark);
+  p.userData={body, spark}; p.visible=false; scene.add(p); PAPA.mesh=p;
+})();
+function papaInside(x,z,m=0){ const A=AR_SPOTS[1], dx=x-A.center[0], dz=z-A.center[1], a=Math.atan2(dz,dx); return Math.hypot(dx,dz) < PAPA.R(a)-m; }
+function papaClamp(p){ const A=AR_SPOTS[1], dx=p.x-A.center[0], dz=p.z-A.center[1], a=Math.atan2(dz,dx), d=Math.hypot(dx,dz), R=PAPA.R(a)-.6; if(d>R){ p.x=A.center[0]+dx/d*R; p.z=A.center[1]+dz/d*R; } }
+
+// ---------------- 3) Rebote sobre pelotas: plataforma redonda sobre el mar ----------------
+const BOLA={R:13, top:SEA_Y+4.5, br:.9, v:new THREE.Vector2(), dashT:0, vy:0, fall:false, q:new THREE.Quaternion(), mine:null};
+const ballTexs=[];
+function beachBallMat(i){ if(ballTexs[i]) return ballTexs[i]; const c=document.createElement('canvas'); c.width=256; c.height=128; const g=c.getContext('2d');
+  const cols=[['#ff5d6c','#ffe14d','#4fc3f7','#7ed957','#ffffff','#c77dff'],['#ff9a3c','#ffffff','#4f86c6','#ff5d6c','#ffffff','#7ed957']][i%2];
+  cols.forEach((col,k)=>{ g.fillStyle=col; g.fillRect(k*256/6,0,256/6+1,128); }); g.fillStyle='#ffffff'; g.beginPath(); g.ellipse(128,6,256,12,0,0,7); g.fill(); g.beginPath(); g.ellipse(128,122,256,12,0,0,7); g.fill();
+  const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return ballTexs[i]=new THREE.MeshStandardMaterial({map:t, roughness:.35}); }
+const ballGeo=new THREE.SphereGeometry(1,24,16);
+function makeBall(i){ const m=new THREE.Mesh(ballGeo,beachBallMat(i)); m.scale.setScalar(BOLA.br); m.castShadow=true; m.visible=false; scene.add(m); return m; }
+(function buildBola(){ const A=AR_SPOTS[2], c=arW(A,0,0,BOLA.top);
+  const tc=document.createElement('canvas'); tc.width=tc.height=512; const g=tc.getContext('2d'); const cols=['#ffd1dc','#fff3a6','#c8f2b0','#b8e6fb'];
+  for(let r=8;r>0;r--){ g.fillStyle=cols[r%4]; g.beginPath(); g.arc(256,256,r*32,0,7); g.fill(); } g.strokeStyle='rgba(255,255,255,.8)'; g.lineWidth=6; g.setLineDash([16,12]); g.beginPath(); g.arc(256,256,250,0,7); g.stroke();
+  const t=new THREE.CanvasTexture(tc); t.encoding=THREE.sRGBEncoding;
+  const top=new THREE.Mesh(new THREE.CylinderGeometry(BOLA.R,BOLA.R,.8,48), [new THREE.MeshStandardMaterial({color:'#e5534b', roughness:.5}), new THREE.MeshStandardMaterial({map:t, roughness:.7}), new THREE.MeshStandardMaterial({color:'#e5534b'})]);
+  top.position.set(c.x,BOLA.top-.4,c.z); top.receiveShadow=true; top.castShadow=true; scene.add(top);
+  const legM=new THREE.MeshStandardMaterial({color:'#fbf3e4', roughness:.4});
+  for(let k=0;k<6;k++){ const a=k/6*Math.PI*2, p=arW(A,Math.cos(a)*BOLA.R*.7,Math.sin(a)*BOLA.R*.7,0); const l=new THREE.Mesh(new THREE.CylinderGeometry(.5,.6,BOLA.top-SEA_Y+3,10),legM); l.position.set(p.x,(BOLA.top+SEA_Y-3)/2-.5,p.z); scene.add(l); }
+  // pelotas de adorno en la orilla
+  for(let k=0;k<3;k++){ const b=makeBall(k); b.visible=true; const p=arW(A,-27+k*.6,5+k*2.4,0); b.position.set(p.x,terrainH(p.x,p.z)+BOLA.br,p.z); obstacles.push({x:p.x,z:p.z,r:BOLA.br,top:terrainH(p.x,p.z)+2*BOLA.br,walk:true}); }
+})();
+BOLA.mine=makeBall(0);
+
+// ---------------- placas para unirse (en la playa) y letreros ----------------
+(function buildPlates(){ AR_SPOTS.forEach((A,i)=>{ const [x,z]=A.plate, h=terrainH(x,z);
+  const m=padMesh(scene,x,z,.9); m.position.y=h+.04;
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(3.4,1.15), new THREE.MeshStandardMaterial({map:textTex([A.name, i===1?'Pásala antes de que explote':'¡El último gana!'],512,174,'#fff3d6','#7a2b2b','#ffd34d'), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
+  const yaw=Math.atan2(A.u[0],A.u[1]); const sp=[x+A.u[0]*1.6, z+A.u[1]*1.6]; sg.position.set(sp[0],h+2.6,sp[1]); sg.rotation.y=yaw+Math.PI; scene.add(sg); fairGlow.push(sg.material); const sb=sg.clone(); sb.rotation.y=yaw; sb.position.addScaledVector(new THREE.Vector3(A.u[0],0,A.u[1]),.02); scene.add(sb);
+  [-1,1].forEach(s=>{ const p=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,2.6,8),new THREE.MeshStandardMaterial({color:'#fbf3e4'})); p.position.set(sp[0]+A.v[0]*s*1.6,h+1.3,sp[1]+A.v[1]*s*1.6); scene.add(p); obstacles.push({x:p.position.x,z:p.position.z,r:.12,top:h+2.6,walk:false}); }); }); })();
+
+// ======================================================================================
+// ---------- Estado compartido ----------
+// ======================================================================================
+function arenaPresence(){ const me=AR.me, la=AR.lead.indexOf(true);
+  const agOf=a=>{ const G=AR.G[a]; return {a, ph:G.ph, ms:Math.round(G.ms/100)*100, gid:G.gid, pl:G.pl, el:G.el, h:G.h, hms:Math.round(G.hms/100)*100, pause:G.pause>0?1:0, rk:G.rk, tie:G.tie, sd:G.sd, prev:G.prev}; };
+  if(me.a<0) return {az:null, ag: la>=0 && AR.G[la].ph>0 ? agOf(la) : null, rt:null};   // aunque ya salí, sigo avisando cómo acabó la partida que llevaba
+  const az=[me.a, me.st]; if(me.a===2 && me.st===2) az.push(r2(BOLA.v.x), r2(BOLA.v.y), BOLA.dashT>0?1:0); if(me.a===1 && me.req) az.push(me.req[0], me.req[1]);
+  const ag=AR.lead[me.a] ? agOf(me.a) : la>=0 && AR.G[la].ph>0 ? agOf(la) : null;
+  return {az, ag, rt: me.a===0 && PLAT.mine.length ? [PLAT.gid, ...PLAT.mine.slice(-1500)] : null}; }
+const clean12=s=>typeof s==='string'?s.slice(0,24):'';
+function parseArena(r,pr){
+  const az=pr.az; r.az = Array.isArray(az) && Number.isInteger(az[0]) && az[0]>=0 && az[0]<ARN && Number.isInteger(az[1]) ? az.slice(0,6) : null;
+  const ag=pr.ag; if(ag && typeof ag==='object' && Number.isInteger(ag.a) && ag.a>=0 && ag.a<ARN){
+    r.ag={a:ag.a, ph:ag.ph|0, ms:+ag.ms||0, gid:clean12(ag.gid), pl:(Array.isArray(ag.pl)?ag.pl:[]).slice(0,16).map(clean12), el:(Array.isArray(ag.el)?ag.el:[]).slice(0,16).map(clean12),
+      h:ag.h?clean12(ag.h):null, hms:+ag.hms||0, pause:ag.pause?1:0, rk:(Array.isArray(ag.rk)?ag.rk:[]).slice(0,16).map(clean12), tie:ag.tie|0, sd:ag.sd|0, prev:ag.prev?clean12(ag.prev):null, at:performance.now()}; } else r.ag=null;
+  // baldosas que quitó ese jugador en esta partida
+  if(Array.isArray(pr.rt) && pr.rt[0]===PLAT.gid && PLAT.gid){ const seen=PLAT.seen.get(r)||1; for(let i=seen;i<pr.rt.length;i++){ const k=pr.rt[i]; if(Number.isInteger(k) && k>=0 && k<PLAT.removed.length) platRemove(k); } PLAT.seen.set(r,pr.rt.length); }
+}
+// quién manda en cada minijuego: el id más chico entre los de la fila o los que juegan
+function arLeader(a){ const G=AR.G[a]; let best=null;
+  const consider=uid=>{ if(uid && (best===null || uid<best)) best=uid; };
+  if(AR.me.a===a && AR.me.st>0) consider(myUid);
+  for(const r of mp.remotes.values()) if(r.az && r.az[0]===a && r.az[1]>0) consider(uidOf(r));
+  if(G.ph>0) G.pl.forEach(u=>{ if(arPresent(u) && arStatus(a,u)>0) consider(u); });
+  return best; }
+
+// ---------------- el líder lleva el juego ----------------
+function arLead(a,dt){ const G=AR.G[a], ms=dt*1000;
+  if(G.ph===0){ const q=[]; if(AR.me.a===a && AR.me.st===1) q.push(myUid); for(const r of mp.remotes.values()) if(r.az && r.az[0]===a && r.az[1]===1 && uidOf(r)) q.push(uidOf(r));
+    if(q.length>=2){ if(G.ms<0) G.ms=AR_LOBBY; G.ms-=ms; if(G.ms<=0){ q.sort(); G.ph=1; G.ms=AR_PLACE; G.gid=Math.random().toString(36).slice(2,9); G.pl=q.slice(0,12); G.el=[]; G.rk=[]; G.tie=0; G.h=null; G.hms=0; G.pause=2500; G.seen={}; G.sd=(Math.random()*1e6)|0; } }
+    else G.ms=-1; return; }
+  G.ms-=ms;
+  if(G.ph===1 && G.ms<=0){ G.ph=2; G.ms=AR_COUNT; }
+  else if(G.ph===2 && G.ms<=0){ G.ph=3; G.ms=[200000,240000,150000][a]; G.pt=0; }
+  else if(G.ph===3){
+    G.pt=(G.pt||0)+ms; for(const u of G.pl){ const st=arStatus(a,u); if(!G.el.includes(u) && (!arPresent(u) || st===3 || st===0 || (st!==2 && G.pt>4000))) G.el.push(u); }
+    const alive=G.pl.filter(u=>!G.el.includes(u));
+    if(a===1 && alive.length>1){   // papa caliente
+      if(!G.h || !alive.includes(G.h)){ G.pause-=ms; if(G.pause<=0){ G.h=alive[(Math.random()*alive.length)|0]; G.hms=20000; G.prev=null; } }
+      else { G.hms-=ms;
+        // pase pedido por quien la tiene
+        const req = G.h===myUid ? AR.me.req : (r=>r&&r.az&&r.az[0]===1&&r.az.length>=4?[r.az[2],r.az[3]]:null)(arRemote(G.h));
+        G.seen=G.seen||{}; if(req && req[1]>(G.seen[G.h]||0) && alive.includes(req[0]) && req[0]!==G.h){ G.seen[G.h]=req[1]; G.prev=G.h; G.h=req[0]; G.hms=Math.min(20000,G.hms+1000); }   // al pasarla se recarga un poquito (así no se puede quedar pasándola para siempre)
+        if(G.hms<=0){ G.el.push(G.h); G.h=null; G.pause=3000; } } }
+    if(alive.length<=1 || G.ms<=0){ const al=G.pl.filter(u=>!G.el.includes(u)); G.rk=[...al, ...G.el.slice().reverse()]; G.tie=Math.max(1,al.length); G.ph=4; G.ms=AR_END; G.h=null; } }
+  else if(G.ph===4 && G.ms<=0){ G.ph=0; G.ms=-1; G.pl=[]; G.el=[]; G.h=null; }
+}
+// ---------------- los demás copian lo que dice el líder ----------------
+function arFollow(a,leaderUid){ const r=arRemote(leaderUid); if(!r || !r.ag || r.ag.a!==a) return; const G=AR.G[a], s=r.ag;
+  if(AR.recvAt[a]!==s.at){ AR.recvAt[a]=s.at; Object.assign(G,{ph:s.ph, ms:s.ms, gid:s.gid, pl:s.pl, el:s.el, h:s.h, hms:s.hms, pause:s.pause?1:0, rk:s.rk, tie:s.tie, sd:s.sd, prev:s.prev}); } }
+
+// ======================================================================================
+// ---------- Mi parte: unirme, jugar, quedar fuera, premios ----------
+// ======================================================================================
+const arHudEl=()=>ui('arHud');
+function arWarp(x,y,z,face){
+  if(player.car){ try{ exitCar(); }catch(e){} player.car=null; }
+  if(player.ac){ player.ac=null; try{ forceFirst(false); }catch(e){} }
+  if(player.pg){ player.pg=null; } if(player.mg) stopMini(); if(hook.mode) bowRelease(true);
+  player.pos.set(x,y,z); player.vel.set(0,0,0); player.vy=0; player.grounded=true; player.swim=false; player.dive=null; player.diveAngle=0; player.inWater=false;
+  if(face!==undefined){ player.facing=face; yaw=face+Math.PI; } player.squash=1; updateTouchMode(); try{ splashBurst(x,y+1.2,z,.3); }catch(e){} }
+function arToBeach(a){ const A=AR_SPOTS[a], [x,z]=A.watch; arWarp(x+(Math.random()-.5)*3, terrainH(x,z)+.05, z+(Math.random()-.5)*3, Math.atan2(A.u[0],A.u[1])); }
+function arJoin(a){ if(!mp.room){ flashNote('Primero entra a una sala con otros jugadores (Multijugador)'); return; } AR.me={...AR.me, a, st:1, req:null}; sendPresence(true); renderArHud(); audio.cam&&audio.cam(); }
+function arLeave(){ const me=AR.me, a=me.a; if(a<0) return; const was=me.st; me.a=-1; me.st=0; me.req=null; ballOff(); if(was>=2) arToBeach(a); sendPresence(true); renderArHud(); }
+// lugar de salida de cada jugador (según su número en la lista)
+function arStartSpot(a,n,N){ const A=AR_SPOTS[a], ang=n/N*Math.PI*2+.3;
+  if(a===0){ const T=PLAT.T, r=Math.min(18,4+N*1.2); const du=Math.cos(ang)*r, dv=Math.sin(ang)*r; const j=Math.round(du/T+PLAT.N/2-.5), i=Math.round(dv/T+PLAT.N/2-.5); const w=arW(A,(j-(PLAT.N-1)/2)*T,(i-(PLAT.N-1)/2)*T,platTop(PLAT.F-1)); return [w,ang]; }
+  if(a===1){ const r=8, w=arW(A,Math.cos(ang)*r,Math.sin(ang)*r,0); w.y=terrainH(w.x,w.z)+.05; return [w,ang]; }
+  const r=7, w=arW(A,Math.cos(ang)*r,Math.sin(ang)*r,BOLA.top); return [w,ang]; }
+function arEnter(a,G){ const me=AR.me, n=G.pl.indexOf(myUid), [w,ang]=arStartSpot(a,n,G.pl.length), A=AR_SPOTS[a];
+  me.gid=G.gid; me.st=2; me.req=null; me.lastPass=0;
+  const c=arW(A,0,0,w.y), face=Math.atan2(c.x-w.x,c.z-w.z);
+  if(a===0){ platReset(G.gid); }
+  arWarp(w.x,w.y,w.z,face);
+  if(a===2){ BOLA.v.set(0,0); BOLA.vy=0; BOLA.fall=false; BOLA.mine.visible=true; }
+  try{ audio.teleport(); }catch(e){} }
+function arOut(a,why){ const me=AR.me; if(me.st!==2) return; me.st=3; ballOff();
+  try{ const R=audio.raw(); const t=R.ctx.currentTime; R.tone('square',440,110,t,.35,.12); R.noise(t,.3,900,.2); }catch(e){}
+  bigText(why||'¡Quedaste fuera!',1600); setTimeout(()=>{ if(AR.me.a===a && AR.me.st===3) arToBeach(a); },900); sendPresence(true); }
+function ballOff(){ BOLA.mine.visible=false; BOLA.fall=false; }
+const arBall=()=>AR.me.a===2 && AR.me.st===2 && AR.G[2].ph>=1 && AR.G[2].ph<=3;
+const arFrozen=()=>AR.me.st===2 && AR.me.a>=0 && (AR.G[AR.me.a].ph===1 || AR.G[AR.me.a].ph===2);
+// texto grande en el centro
+let bigT=0;
+function bigText(s,ms=900){ const el=ui('arBig'); el.textContent=s; el.hidden=false; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); clearTimeout(bigT); bigT=setTimeout(()=>el.hidden=true,ms); }
+function arResult(a,G){ const me=AR.me; if(me.awarded===G.gid) return; me.awarded=G.gid;
+  const i=G.rk.indexOf(myUid), place=i<0?G.pl.length:(i<G.tie?0:i), N=G.pl.length;
+  const coins=place===0?14+N*3:[0,10,7][place]||4;
+  const names=['¡1er lugar!','2º lugar','3er lugar']; const title=place===0?(G.tie>1?'¡Ganaron juntos!':'¡Ganaste!'):(names[place]||(place+1)+'º lugar');
+  ui('arResTitle').textContent=title; ui('arResText').textContent=AR_SPOTS[a].name+' · '+N+' jugadores'; ui('arResCoins').textContent='+'+coins; ui('arRes').hidden=false;
+  setTimeout(()=>{ ui('arRes').hidden=true; },5500); setTimeout(()=>addCoins(coins),400);
+  try{ const R=audio.raw(); const t=R.ctx.currentTime; (place===0?[523,659,784,1046]:[523,440]).forEach((f,k)=>R.tone('triangle',f,f,t+k*.12,.16,.08)); }catch(e){} }
+
+// cada cuadro
+let arPrevPh=Array(ARN).fill(-1), arSendT=0;
+function arenaUpdate(dt){
+  if(!arenaReady) return;
+  for(let a=0;a<ARN;a++){ const L=arLeader(a); const amLead=L===myUid && mp.room; AR.lead[a]=!!amLead;
+    if(amLead) arLead(a,dt); else if(L) { arFollow(a,L); AR.G[a].ms-=dt*1000; } else { const G=AR.G[a]; if(G.ph!==0){ G.ph=0; G.ms=-1; G.pl=[]; G.el=[]; G.h=null; } } }
+  const me=AR.me;
+  if(me.a>=0){ const a=me.a, G=AR.G[a];
+    if(!mp.room){ arLeave(); return; }
+    if(me.st===1 && G.ph>=1 && G.ph<=3 && G.pl.includes(myUid) && !G.el.includes(myUid) && me.gid!==G.gid) arEnter(a,G);
+    if(me.st>=2 && (G.gid!==me.gid || G.ph===0)){ const was=me.st; me.st=0; me.a=-1; ballOff(); if(was===2) arToBeach(a); renderArHud(); sendPresence(true); return; }
+    if(me.st===2 && G.ph===3 && G.el.includes(myUid)) arOut(a, a===1?'¡BUM! Se te quemó la papa':'¡Quedaste fuera!');
+    if(me.st>=2 && G.ph===4) arResult(a,G);
+    // cuenta regresiva y salida
+    if(me.st===2 && arPrevPh[a]!==G.ph){ if(G.ph===1) bigText('¡A sus lugares!',2600); if(G.ph===3) bigText('¡YA!',900); }
+    if(me.st===2 && G.ph===2){ const s=Math.ceil(G.ms/1000); if(s!==arenaUpdate.lastS && s>0 && s<=5){ arenaUpdate.lastS=s; bigText(String(s),850); try{ const R=audio.raw(); R.tone('square',660,660,R.ctx.currentTime,.12,.06); }catch(e){} } }
+    arPrevPh[a]=G.ph;
+    if(me.st===2 && G.ph===3){
+      if(a===0) platPlay(dt);
+      if(a===1) papaPlay(dt,G);
+    }
+    if(arBall()) ballPlay(dt,G);
+  }
+  // las baldosas quitadas se ven igual para todos (también para quien mira desde la playa)
+  { const G=AR.G[0]; if(G.ph>=1 && G.gid) platReset(G.gid); else if(G.ph===0 && PLAT.gid && !(AR.me.a===0 && AR.me.st>=2)) platReset(''); }
+  // baldosas que alguien pisa: se van poniendo rojas
+  platWarn(dt);
+  papaShow(dt);
+  renderArHud();
+  // si hay juego activo mandamos presencia más seguido para que el tiempo y los pases vayan parejos
+  arSendT-=dt; if(arSendT<=0 && (me.a>=0 || AR.lead.some(x=>x))){ arSendT=.2; sendPresence(false); }
+}
+// ---------------- jugar: plataformas ----------------
+function platPlay(dt){ const k=player.grounded ? platTileAt(player.pos.x,player.pos.z,player.pos.y) : -1;
+  if(k>=0){ if(k===PLAT.cur) PLAT.curT+=dt; else { PLAT.cur=k; PLAT.curT=0; } if(PLAT.curT>1.0){ PLAT.mine.push(k); platRemove(k); PLAT.cur=-1; PLAT.curT=0; try{ const R=audio.raw(); R.noise(R.ctx.currentTime,.12,700,.12); }catch(e){} sendPresence(true); } }
+  else { PLAT.cur=-1; PLAT.curT=0; }
+  if(player.pos.y<PLAT.y0-4 || player.swim) arOut(0,'¡Al agua!'); }
+function platWarn(dt){ if(AR.G[0].ph!==3){ if(PLAT.warn.size){ PLAT.warn.forEach((t,k)=>platTint(k,0)); PLAT.warn.clear(); } return; }
+  const occ=new Set(); const check=(p)=>{ const k=platTileAt(p.x,p.z,p.y); if(k>=0) occ.add(k); };
+  if(AR.me.a===0 && AR.me.st===2) check(player.pos); for(const r of mp.remotes.values()) if(r.az && r.az[0]===0 && r.az[1]===2) check(r.pos);
+  occ.forEach(k=>{ if(!PLAT.warn.has(k)) PLAT.warn.set(k,0); });
+  PLAT.warn.forEach((t,k)=>{ t+= occ.has(k)?dt:-dt*2; if(t<=0 || PLAT.removed[k]){ PLAT.warn.delete(k); if(!PLAT.removed[k]) platTint(k,0); return; } PLAT.warn.set(k,t); platTint(k,t); }); }
+// ---------------- jugar: papa caliente ----------------
+function papaPlay(dt,G){ papaClamp(player.pos); if(G.h!==myUid) AR.me.req=null;   // solo pide pases quien tiene la papa
+  if(G.h===myUid && AR.me.had!==true){ AR.me.had=true; AR.me.gotAt=performance.now()/1000; bigText('¡Tienes la papa!',1100); } else if(G.h!==myUid) AR.me.had=false;
+  if(G.h===myUid && performance.now()/1000-AR.me.lastPass>1.0){
+    for(const u of G.pl){ if(u===myUid || G.el.includes(u) || u===G.prev && performance.now()/1000-AR.me.gotAt<3) continue;   /* no se la puedes regresar luego luego */ const p=arPos(u); if(!p) continue;
+      if(Math.hypot(p.x-player.pos.x,p.z-player.pos.z)<1.25 && Math.abs(p.y-player.pos.y)<1.5){ AR.me.seq++; AR.me.req=[u,AR.me.seq]; AR.me.lastPass=performance.now()/1000; sendPresence(true);
+        try{ const R=audio.raw(); R.tone('triangle',500,900,R.ctx.currentTime,.12,.12); }catch(e){} break; } } } }
+const _pv=new THREE.Vector3();
+function papaShow(dt){ const G=AR.G[1], p=PAPA.mesh; if(G.ph!==3 || !G.h){ p.visible=false; return; }
+  let o=null; if(G.h===myUid){ if(AR.me.a===1 && AR.me.st===2) o=plush; } else { const r=arRemote(G.h); if(r) o=r.obj; }
+  if(!o){ p.visible=false; return; }
+  p.visible=true; o.updateMatrixWorld(); o.localToWorld(_pv.set(0,2.55,.1)); p.position.copy(_pv); p.rotation.y+=dt*2;
+  const left=Math.max(0,G.hms)/20000, fast=8+ (1-left)*22, t=performance.now()/1000;
+  p.userData.body.material.emissiveIntensity=(1-left)*(.5+.5*Math.sin(t*fast)); p.userData.spark.scale.setScalar(.03+.02*Math.abs(Math.sin(t*25))); }
+// ---------------- jugar: pelotas ----------------
+function ballPlay(dt,G){ const A=AR_SPOTS[2], c=arW(A,0,0,0), P=player.pos, V=BOLA.v;
+  if(G.ph===3 && !BOLA.fall){
+    let f=0,s=0; if(keys.KeyW||keys.ArrowUp) f+=1; if(keys.KeyS||keys.ArrowDown) f-=1; if(keys.KeyD||keys.ArrowRight) s+=1; if(keys.KeyA||keys.ArrowLeft) s-=1; f-=stick.y; s+=stick.x;
+    const fx=-Math.sin(yaw), fz=-Math.cos(yaw), rx=Math.cos(yaw), rz=-Math.sin(yaw); let ix=fx*f+rx*s, iz=fz*f+rz*s; const il=Math.hypot(ix,iz); if(il>1){ ix/=il; iz/=il; }
+    V.x+=ix*11*dt; V.y+=iz*11*dt;
+    BOLA.dashT=Math.max(0,BOLA.dashT-dt); if(BOLA.cool>0) BOLA.cool-=dt;
+    if((keys.Space||touchHold.up) && !(BOLA.cool>0)){ const d=il>.1?[ix/Math.min(1,il||1),iz/Math.min(1,il||1)]:[Math.sin(player.facing),Math.cos(player.facing)], dl=Math.hypot(d[0],d[1])||1; V.x+=d[0]/dl*7; V.y+=d[1]/dl*7; BOLA.cool=1.6; BOLA.dashT=.35; try{ const R=audio.raw(); R.noise(R.ctx.currentTime,.2,1500,.15); }catch(e){} }
+  }
+  V.multiplyScalar(Math.exp(-dt*(BOLA.fall?.2:.7))); const sp=V.length(); if(sp>11) V.multiplyScalar(11/sp);
+  P.x+=V.x*dt; P.z+=V.y*dt;
+  // choques con las pelotas de los demás
+  if(!BOLA.fall) for(const r of mp.remotes.values()){ if(!r.az || r.az[0]!==2 || r.az[1]!==2) continue; const dx=P.x-r.pos.x, dz=P.z-r.pos.z, d=Math.hypot(dx,dz), md=BOLA.br*2;
+    if(d<md && d>1e-3){ const nx=dx/d, nz=dz/d; P.x+=nx*(md-d)*.5; P.z+=nz*(md-d)*.5; const rv=Number.isFinite(r.az[2])?[r.az[2],r.az[3]]:[0,0];
+      const vrel=(V.x-rv[0])*nx+(V.y-rv[1])*nz; if(vrel<0){ const k=(1.9)*.5*-vrel+(r.az[4]?3.5:0)+.6; V.x+=nx*k; V.y+=nz*k; try{ const R=audio.raw(); R.tone('sine',220,120,R.ctx.currentTime,.12,.18); }catch(e){} player.squash=.6; } } }
+  const dist=Math.hypot(P.x-c.x,P.z-c.z);
+  if(!BOLA.fall && dist>BOLA.R){ BOLA.fall=true; BOLA.vy=0; }
+  if(BOLA.fall){ BOLA.vy-=20*dt; P.y+=BOLA.vy*dt; if(P.y<BOLA.top-4){ try{ splashBurst(P.x,SEA_Y,P.z,1); audio.splash(1.2); }catch(e){} arOut(2,'¡Al agua!'); } }
+  else P.y=BOLA.top;
+  player.grounded=!BOLA.fall; player.groundY=P.y; player.vel.set(V.x,0,V.y);
+  if(sp>.4){ const want=Math.atan2(V.x,V.y); let d=want-player.facing; d=Math.atan2(Math.sin(d),Math.cos(d)); player.facing+=d*(1-Math.exp(-dt*6)); }
+  // la pelota rueda
+  const m=BOLA.mine; m.visible=true; m.position.set(P.x,P.y+BOLA.br,P.z); if(sp>.01){ const ax=new THREE.Vector3(V.y,0,-V.x).normalize(); BOLA.q.premultiply(new THREE.Quaternion().setFromAxisAngle(ax,sp*dt/BOLA.br)); } m.quaternion.copy(BOLA.q); }
+// poses: arriba de la pelota con los brazos abiertos; con la papa, arriba de la cabeza
+function ballRiderPose(o,t,dt,v){ poseLimbs(o,t,dt,0,false,0,false,null,0,0,false,1,false); o.position.y+=BOLA.br*2-.32;
+  o.userData.arms.forEach(a=>{ const sd=a.userData.side; a.rotation.z=sd*(1.5+Math.sin(t*5+sd)*.2); a.rotation.x=-.2; a.userData.joint.rotation.x=-.2; });
+  o.rotation.x=Math.min(.25,(v||0)*.03); }
+function arenaPose(t,dt){ const me=AR.me; if(me.a<0 || me.st!==2) return;
+  if(arBall()) ballRiderPose(plush,t,dt,BOLA.v.length());
+  if(me.a===1 && AR.G[1].h===myUid && AR.G[1].ph===3) pgPoseLimbs(plush,{armsUp:1},t,dt,player.walk); }
+const remoteBalls=new Map();
+function remoteArenaPose(r,t,dt){ const az=r.az; let b=remoteBalls.get(r);
+  if(az && az[0]===2 && az[1]===2 && AR.G[2].ph>=1){ if(!b){ b=makeBall(1); remoteBalls.set(r,b); } b.visible=true; b.position.set(r.pos.x,r.pos.y+BOLA.br,r.pos.z); const v=Math.hypot(az[2]||0,az[3]||0); b.rotation.x+=v*dt/BOLA.br; ballRiderPose(r.obj,t,dt,v); }
+  else if(b) b.visible=false;
+  if(az && az[0]===1 && AR.G[1].h===uidOf(r) && AR.G[1].ph===3) pgPoseLimbs(r.obj,{armsUp:1},t,dt,r.walk||0); }
+function arenaGround(x,z,y){ if(!arenaReady) return null; const A=AR_SPOTS[0]; if(Math.abs(x-A.center[0])<40 && Math.abs(z-A.center[1])<40) return platGround(x,z,y); return null; }
+// cámara: al acomodarse, una vuelta por arriba de la arena
+function arenaCamera(dt){ const me=AR.me; if(me.a<0 || me.st!==2 || AR.G[me.a].ph!==1) return false;
+  const A=AR_SPOTS[me.a], k=1-Math.max(0,AR.G[me.a].ms)/AR_PLACE, ang=k*1.8+Math.atan2(A.u[0],A.u[1]), rad=me.a===0?48:28, hgt=(me.a===0?platTop(4):terrainH(A.center[0],A.center[1]))+(me.a===0?22:16);
+  const c=arW(A,0,0,0), want=_pv.set(c.x+Math.sin(ang)*rad*(1-k*.6), hgt*(1-k*.35)+ (me.a===0?0:4*k), c.z+Math.cos(ang)*rad*(1-k*.6));
+  camera.position.lerp(want,1-Math.exp(-dt*4)); camera.lookAt(player.pos.x*k+c.x*(1-k), (me.a===0?platTop(4):player.pos.y)+1, player.pos.z*k+c.z*(1-k)); plush.visible=true; return true; }
+// botón junto a cada placa
+function arenaActions(){ if(player.car||player.ac||player.pg||player.mg) return null; const me=AR.me;
+  for(let a=0;a<ARN;a++){ const [x,z]=AR_SPOTS[a].plate; if(Math.hypot(player.pos.x-x,player.pos.z-z)>1.6) continue;
+    if(!mp.room) return [{label:'Entra a una sala para jugar', disabled:true, run:()=>{}}, null];
+    if(me.a===a && me.st===1) return [{label:'Salir de la fila', run:arLeave}, null];
+    if(me.a===a && me.st>=2) return null;
+    if(AR.G[a].ph>=1 && AR.G[a].ph<=3) return [{label:'Hay una partida en curso', disabled:true, run:()=>{}}, null];
+    return [{label:'Unirse: '+AR_SPOTS[a].name, run:()=>{ if(me.a>=0 && me.a!==a) arLeave(); arJoin(a); }}, null]; }
+  return null; }
+// HUD
+function fmtMs(ms){ const s=Math.max(0,Math.ceil(ms/1000)); return s>=60?Math.floor(s/60)+':'+String(s%60).padStart(2,'0'):s+' s'; }
+let arHudKey='';
+function renderArHud(){ const me=AR.me, el=arHudEl(); if(!el) return;
+  if(me.a<0){ if(!el.hidden){ el.hidden=true; arHudKey=''; } return; }
+  const G=AR.G[me.a], A=AR_SPOTS[me.a]; let txt='';
+  const queued=1+[...mp.remotes.values()].filter(r=>r.az&&r.az[0]===me.a&&r.az[1]===1).length;
+  if(me.st===1){ txt = G.ph>=1&&G.ph<=3 ? 'Partida en curso… entras en la siguiente' : queued<2 ? 'Esperando a otro jugador…' : 'Fila: '+queued+' · empieza en '+fmtMs(G.ms); }
+  else if(G.ph===1||G.ph===2) txt='¡Prepárate!';
+  else if(G.ph===3){ const alive=G.pl.filter(u=>!G.el.includes(u)).length; txt='Quedan '+alive+' · '+fmtMs(G.ms);
+    if(me.a===1){ if(G.h===myUid) txt='¡Tienes la papa! Pásala: '+fmtMs(G.hms); else if(G.h){ const r=arRemote(G.h); txt='La tiene '+(r&&r.name||'alguien')+' · '+fmtMs(G.hms); } else txt='Nueva papa en un momento…'; }
+    if(me.st===3) txt='Fuera · '+txt; }
+  else if(G.ph===4) txt='Resultados';
+  const key=A.name+'|'+txt; if(key===arHudKey) return; arHudKey=key; el.hidden=false; ui('arTitle').textContent=A.name; ui('arTxt').textContent=txt;
+  el.classList.toggle('hot', me.a===1 && G.h===myUid && G.ph===3); }
+ui('arExit').onclick=()=>arLeave();
+ui('arRes').onclick=()=>{ ui('arRes').hidden=true; };
+// botón para embestir con la pelota (en pantallas táctiles es el de Saltar)
+var arenaReady=true;
+
 // presencia: en qué minijuego estoy (y datos del hockey)
 function mgPresence(){ const M=player.mg; if(!M) return {mg:null, hk:null}; const i=MINIS.indexOf(M.g); return {mg:[i, M.act|0, M.actX|0], hk:M.g.presence?M.g.presence(M):null}; }
 renderCoins();
@@ -6360,7 +6718,7 @@ function softPushes(){
   const P=player.pos;
   for(const c of critters){ if(!c.vis || c.kind==='pato') continue; const dx=P.x-c.pos.x, dz=P.z-c.pos.z; if(Math.abs(dx)>2||Math.abs(dz)>2) continue;
     const r=(c.snake?.25:.38*(c.s||1))+.38, d=Math.hypot(dx,dz); if(d<r && d>1e-4 && Math.abs(P.y-c.pos.y)<1.2){ P.x=c.pos.x+dx/d*r; P.z=c.pos.z+dz/d*r; } }
-  for(const r of mp.remotes.values()){ if(r.car||r.ai||r.pl||r.mg) continue; const dx=P.x-r.pos.x, dz=P.z-r.pos.z, d=Math.hypot(dx,dz), m=.78;
+  for(const r of mp.remotes.values()){ if(r.car||r.ai||r.pl||r.mg||(r.az&&r.az[0]===2&&r.az[1]===2)||arBall()) continue; const dx=P.x-r.pos.x, dz=P.z-r.pos.z, d=Math.hypot(dx,dz), m=.78;
     if(d<m && d>1e-4 && Math.abs(P.y-r.pos.y)<1.6){ const k=(m-d)*.5; P.x+=dx/d*k; P.z+=dz/d*k; } }
 }
 // ---------- La cámara no se mete dentro de árboles, puestos, rocas grandes, etc. ----------
@@ -6420,8 +6778,9 @@ function update(dt,t){
   updatePortals(dt);
   updateCritters(dt);
   updateMinis(dt);
+  arenaUpdate(dt);
   const dv=player.dive;
-  if(state==='play' && !player.car && !player.ac && !player.pg && !bowMoving && !player.mg){
+  if(state==='play' && !player.car && !player.ac && !player.pg && !bowMoving && !player.mg && !arBall() && !arFrozen()){
     let f=0,s=0;
     if(keys.KeyW||keys.ArrowUp) f+=1;
     if(keys.KeyS||keys.ArrowDown) f-=1;
@@ -6596,6 +6955,7 @@ function update(dt,t){
   if(acPose){ const w=placeInAircraft(plush, aircraft[player.ac.i], acPose); player.pos.copy(w); player.groundY=w.y; }
   if(pgPose){ placePlay(plush,pgPose); player.pos.set(...pgPose.pos); player.groundY=pgPose.pos[1]; player.facing=pgPose.yaw; }
   if(player.mg && state==='play') mgPose(t,dt);
+  if(state==='play') arenaPose(t,dt);
   else if(state==='play' && performance.now()/1000<player.pushUntil) pgPoseLimbs(plush,{push:1},t,dt,player.walk);
   if(state==='play' && !player.car && !player.ac && !player.pg) pulledByOthers(dt);
   myBowPose(dt);
@@ -6617,6 +6977,7 @@ function update(dt,t){
     { camera.position.set(Math.sin(a)*4.2 - 1.2, 1.6, Math.cos(a)*1.5+4.2);
     camera.lookAt(-1.1, 1.15, 0); }
     plush.visible=true;
+  } else if(state==='play' && arenaCamera(dt)){
   } else if(player.mg && mgCamera(dt)){
   } else if(player.ac && acPose){
     const a=aircraft[player.ac.i], A=player.ac, seated=A.mode==='seated';
