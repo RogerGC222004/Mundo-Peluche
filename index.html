@@ -112,6 +112,15 @@ body.not-play .mg-hud, body.not-play .mg-ctl, body.not-play .mg-result{display:n
 .ar-big{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);font-family:var(--display);font-weight:800;font-size:clamp(40px,10vw,96px);color:#fff;-webkit-text-stroke:3px var(--thread);paint-order:stroke fill;text-shadow:0 6px 0 rgba(0,0,0,.18);pointer-events:none;white-space:nowrap;z-index:6;}
 .ar-big.pop{animation:arpop .5s ease-out;}
 @keyframes arpop{from{transform:translate(-50%,-50%) scale(1.6);opacity:0;}to{transform:translate(-50%,-50%) scale(1);opacity:1;}}
+.sp-fade{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:7;}
+.map-flags{padding:4px 6px 2px;font-size:12px;font-weight:800;color:#5a4426;}
+.map-flags b{display:block;margin-bottom:4px;}
+#mapFlagList{display:flex;gap:6px;flex-wrap:wrap;}
+.flag-chip{display:inline-flex;align-items:center;background:#fbf3df;border-radius:10px;box-shadow:0 2px 0 #d9cba8;}
+.flag-chip button{border:none;background:none;font:inherit;color:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:5px 8px;}
+.flag-chip i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+.flag-chip .flag-x{padding:5px 8px 5px 2px;opacity:.6;}
+.flag-empty{opacity:.75;font-weight:700;}
 .ar-res{position:fixed;left:50%;top:22%;transform:translateX(-50%);z-index:6;}
 .ar-res .card{text-align:center;min-width:240px;color:var(--thread);font-weight:800;}
 .ar-res h3{font-family:var(--display);font-size:30px;margin:0 0 4px;}
@@ -397,6 +406,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 </div>
 
 <div class="ar-big" id="arBig" hidden></div>
+<div class="sp-fade" id="spFade" hidden></div>
 <div class="ar-res" id="arRes" hidden><div class="card"><h3 id="arResTitle"></h3><p id="arResText"></p><p class="ar-coins"><i class="cn"></i> <b id="arResCoins"></b></p></div></div>
 <div class="overlay shop" id="shop" hidden>
   <div class="shop-stage" id="shopStage" aria-hidden="true"></div>
@@ -556,6 +566,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <button class="chip room-chip" id="roomChip" hidden title="Copiar el código de la sala"><span class="dot" id="roomDot"></span><span id="roomLabel">Sala</span></button>
   </div>
   <div class="mg-hud" id="mgHud" hidden><b id="mgTitle"></b><span id="mgScore"></span><span id="mgTime"></span><div class="mg-meter" id="mgMeter" hidden><i></i><em></em></div><button class="chip mg-exit" id="mgExit" title="Salir (X)" aria-label="Salir">✕</button></div>
+  <div class="mg-hud sp-hud" id="spHud" hidden><b>🚀</b><span id="spTxt"></span><button class="chip mg-exit" id="spExit" title="Volver a la isla" aria-label="Volver a la isla">✕</button></div>
   <div class="mg-hud ar-hud" id="arHud" hidden><b id="arTitle"></b><span id="arTxt"></span><button class="chip mg-exit" id="arExit" title="Salir del juego" aria-label="Salir del juego">✕</button></div>
   <div style="display:flex;gap:8px;align-items:center">
     <span class="hint" id="hint">V cambia la cámara · Clic para mirar con el ratón</span>
@@ -603,6 +614,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       <span><i style="background:#f5a9c0"></i>Otros jugadores</span>
       <span><i style="background:#ffd36b;outline:2px solid #8a6a3e"></i>Toca un lugar para viajar</span>
     </div>
+    <div class="map-flags"><b>Mis banderas</b><div id="mapFlagList"></div></div>
   </div>
 </div>
 
@@ -768,7 +780,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='64';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='65';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -1857,8 +1869,8 @@ const sunSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:spriteTex((g,s)=>
   fog:false, depthWrite:false, transparent:true}));
 const moonSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:spriteTex((g,s)=>{ const r=s/2, gr=g.createRadialGradient(r,r,0,r,r,r);
   gr.addColorStop(0,'rgba(200,215,255,.0)'); gr.addColorStop(.36,'rgba(200,215,255,.0)'); gr.addColorStop(.4,'rgba(190,205,255,.35)'); gr.addColorStop(1,'rgba(160,180,255,0)'); g.fillStyle=gr; g.fillRect(0,0,s,s);
-  g.fillStyle='#eef0f6'; g.beginPath(); g.arc(r,r,s*.2,0,7); g.fill();
-  g.fillStyle='rgba(150,155,175,.45)'; [[-.07,-.05,.05],[.06,.03,.035],[-.02,.08,.03],[.05,-.08,.025]].forEach(([x,y,q])=>{ g.beginPath(); g.arc(r+x*s,r+y*s,q*s,0,7); g.fill(); }); }),
+  g.fillStyle='#ffd95a'; g.beginPath(); g.arc(r,r,s*.2,0,7); g.fill();   // la luna es de queso
+  g.fillStyle='rgba(215,150,30,.6)'; [[-.07,-.05,.05],[.06,.03,.035],[-.02,.08,.03],[.05,-.08,.025]].forEach(([x,y,q])=>{ g.beginPath(); g.arc(r+x*s,r+y*s,q*s,0,7); g.fill(); }); }),
   fog:false, depthWrite:false, transparent:true}));
 skyRoot.add(sunSprite, moonSprite);
 const stars=(()=>{ const n=900, p=new Float32Array(n*3); let s=99;
@@ -2484,7 +2496,7 @@ ui('playBtn').onclick=startGame;
 ui('controlsBtn').onclick=()=>{controlsEl.hidden=false;};
 ui('closeControls').onclick=()=>{controlsEl.hidden=true;};
 ui('resumeBtn').onclick=()=>{show('play'); lockPointer();};
-ui('toMenuBtn').onclick=()=>{ leaveRoom(); show('menu'); player.pg=null; player.pos.set(START.x,START.top,START.z); player.vy=0; player.vel.set(0,0,0); player.dive=null; player.diveAngle=0; player.grounded=true; player.inWater=false; player.groundY=0; player.swim=false; player.car=null; if(player.ac){ player.ac=null; forceFirst(false); } updateTouchMode(); };
+ui('toMenuBtn').onclick=()=>{ if(SP.on) exitSpace(true); player.rk=null; leaveRoom(); show('menu'); player.pg=null; player.pos.set(START.x,START.top,START.z); player.vy=0; player.vel.set(0,0,0); player.dive=null; player.diveAngle=0; player.grounded=true; player.inWater=false; player.groundY=0; player.swim=false; player.car=null; if(player.ac){ player.ac=null; forceFirst(false); } updateTouchMode(); };
 // Botones que responden al instante al tocarlos, aunque otro dedo esté en el joystick
 // (con varios dedos el navegador a veces no manda "click", así que se usa el toque directo)
 let swallowClick=0;   // tras un toque, el "click" que manda el navegador al soltar no debe caer en lo que se abrió encima
@@ -2797,7 +2809,7 @@ function sendPresence(force){
     ap: iPilot() ? (a=>[a.i, r2(a.x), r2(a.y), r2(a.z), Math.round(a.h*1000)/1000, Math.round(a.p*1000)/1000, Math.round(a.b*1000)/1000, r2(a.v), r2(a.vy), r2(a.rotor), a.onGround?1:0, r2(a.thr)])(aircraft[player.ac.i]) : null,
     as: aircraft.map(a=>[Math.round(a.x*10)/10, r2(a.y), Math.round(a.z*10)/10, Math.round(a.h*100)/100, a.t]),
     sd: aircraft.map(a=>[a.stairs, a.door, a.sdT]),
-    id: myUid, bw: bowPresence(), ...mgPresence(), ou: outfitList(wardrobe.eq), ...arenaPresence(),
+    id: myUid, bw: bowPresence(), ...mgPresence(), ou: outfitList(wardrobe.eq), ...arenaPresence(), ...spacePresence(),
     pl: player.pg ? [PG_KINDS.indexOf(player.pg.k), player.pg.i, r2(player.pg.v||0)] : null,
     pu: myPush.i>=0 ? [myPush.i, myPush.t] : null,
     ai: player.ac && player.acPose ? (A=>[A.i, A.mode==='seated'||A.mode==='sitting'?A.seat:-1, r2(player.acPose.l[0]), r2(player.acPose.l[1]), r2(player.acPose.l[2]), r2(player.acPose.f||0), r2(player.acPose.sit||0), r2(player.acPose.walk?(player.acPose.mv||1):0), r2(player.acPose.armsUp||0), player.acPose.air?1:0])(player.ac) : null
@@ -2860,7 +2872,7 @@ function onPeers({peers}){
     r.facing=clampN(pr.f,-4,4,0); r.moving=clampN(pr.m,0,1,0); r.air=pr.a===true; r.swim=pr.s===true;
     const nd=clampN(pr.d,0,DIVE_FLAT,0);
     if(nd>.5 && r.diveTarget<=.5 && !r.swim) audio.flop(.5);
-    r.diveTarget=nd; r.held = pr.h==='map' ? 'map' : pr.h==='bow' ? 'bow' : null; parseBow(r,pr); parseMg(r,pr); parseArena(r,pr);
+    r.diveTarget=nd; r.held = pr.h==='map' ? 'map' : pr.h==='bow' ? 'bow' : null; parseBow(r,pr); parseMg(r,pr); parseArena(r,pr); parseSpace(r,pr);
     const w=clampN(pr.w,0,Infinity,0);
     if(r.w!==undefined && w!==r.w){ r.waveUntil=clock.elapsedTime+1.6; audio.wave(); }
     r.w=w;
@@ -3661,7 +3673,10 @@ function freeSeatForDoor(ci,d){ for(const s of [[0],[1],[2,3],[4,3]][d]) if(!sea
 function scanActions(){
   if(state!=='play'){ setActions(null,null); return; }
   { const [x,y]=airActions(); if(x||y||player.ac){ setActions(x,y); return; } }
+  if(SP.on){ const sa=spaceActions(); setActions(sa?sa[0]:null, sa?sa[1]:null); return; }
+  { const ra=rocketActions(); if(ra){ setActions(ra[0],ra[1]); return; } }
   { const aa=arenaActions(); if(aa){ setActions(aa[0],aa[1]); return; } }
+  if(heldItem()==='flag' && !player.car && !player.ac && !player.pg && !player.mg){ setActions({label:'Plantar bandera', run:plantFlag}, null); return; }
   { const ma=mgActions(); if(ma){ setActions(ma[0],ma[1]); return; } }
   { const [x,y]=pgActions(); if(x||y||player.pg){ setActions(x,y); return; } }
   { const ba=bowActions(); if(ba){ setActions(ba[0],ba[1]); return; } }
@@ -6705,6 +6720,451 @@ ui('arRes').onclick=()=>{ ui('arRes').hidden=true; };
 // botón para embestir con la pelota (en pantallas táctiles es el de Saltar)
 var arenaReady=true;
 
+// ======================================================================================
+// ---------- Etapa 3: el cohete, el espacio infinito, mordidas, criaturas y banderas ----------
+// ======================================================================================
+// El espacio es una escena aparte (fondo de estrellas). Los planetas salen de una cuadrícula infinita:
+// cada celda decide con su propia semilla si tiene planeta, de qué forma, de qué está hecho y cómo se llama,
+// así que todos los jugadores ven exactamente los mismos planetas en los mismos lugares.
+// La superficie de cada planeta es "radial": para cada dirección hay una altura (forma + mordidas),
+// así se puede caminar alrededor de cualquiera, sea esfera, cubo redondo, huevo o con picos.
+const SPACE_CELL=2400;
+const spaceScene=new THREE.Scene(); spaceScene.background=new THREE.Color('#05061a');
+const spSun=new THREE.DirectionalLight(0xfff4e0,1.15); spSun.position.set(.5,.8,.3); spaceScene.add(spSun);
+const spHemi=new THREE.HemisphereLight(0xbfd4ff,0x40305a,.55); spaceScene.add(spHemi);
+const spStars=(()=>{ const n=4000, p=new Float32Array(n*3), c=new Float32Array(n*3); let s=7; const r=()=>{ s=(Math.imul(s,1664525)+1013904223)>>>0; return s/4294967296; };
+  for(let i=0;i<n;i++){ const u=r()*2-1, a=r()*Math.PI*2, q=Math.sqrt(1-u*u); p[i*3]=Math.cos(a)*q; p[i*3+1]=u; p[i*3+2]=Math.sin(a)*q; const t=r(); c[i*3]=.8+t*.2; c[i*3+1]=.8+r()*.2; c[i*3+2]=1; }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(p,3)); g.setAttribute('color',new THREE.BufferAttribute(c,3));
+  const m=new THREE.Points(g,new THREE.PointsMaterial({size:2.2, sizeAttenuation:false, vertexColors:true, depthWrite:false, fog:false})); m.scale.setScalar(30000); m.frustumCulled=false; spaceScene.add(m); return m; })();
+const spSunSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:sunSprite.material.map, depthWrite:false, transparent:true, fog:false})); spSunSprite.scale.setScalar(5000); spaceScene.add(spSunSprite);
+// un remolino de nebulosa de colores muy lejos, para que el espacio no se vea vacío
+{ const c=document.createElement('canvas'); c.width=c.height=256; const g=c.getContext('2d'); [['rgba(255,90,200,.35)',90,110,90],['rgba(90,140,255,.35)',160,130,100],['rgba(150,90,255,.3)',120,170,80]].forEach(([col,x,y,r])=>{ const gr=g.createRadialGradient(x,y,4,x,y,r); gr.addColorStop(0,col); gr.addColorStop(1,'rgba(0,0,0,0)'); g.fillStyle=gr; g.fillRect(0,0,256,256); });
+  const t=new THREE.CanvasTexture(c); [[1,.3,-.4],[-.6,-.2,.8]].forEach(([x,y,z],i)=>{ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t, depthWrite:false, transparent:true, opacity:.8, fog:false})); s.position.set(x,y,z).normalize().multiplyScalar(26000); s.scale.setScalar(16000+i*5000); spaceScene.add(s); }); }
+
+// ---------------- el cohete (el mismo modelo en la isla, en vuelo y estacionado en planetas) ----------------
+const rkMats={white:new THREE.MeshStandardMaterial({color:'#f5f1e6', roughness:.35}), red:new THREE.MeshStandardMaterial({color:'#e5534b', roughness:.3}), gray:new THREE.MeshStandardMaterial({color:'#8b919c', roughness:.4, metalness:.5}),
+  glass:new THREE.MeshStandardMaterial({color:'#7fd0ff', roughness:.05, metalness:.2, emissive:'#1d4a66', emissiveIntensity:.4}), gold:new THREE.MeshStandardMaterial({color:'#f6c445', roughness:.3, metalness:.6}),
+  flame:new THREE.MeshBasicMaterial({color:'#ffb43c', transparent:true, opacity:.85, blending:THREE.AdditiveBlending, depthWrite:false}), flame2:new THREE.MeshBasicMaterial({color:'#fff3b0', transparent:true, opacity:.9, blending:THREE.AdditiveBlending, depthWrite:false})};
+const RK_DOOR_Y=11, RK_LADDER_Z=4.3;
+function makeRocket(){ const g=new THREE.Group(), M=rkMats;
+  const lathe=(pts,mat,seg=28)=>{ const m=new THREE.Mesh(new THREE.LatheGeometry(pts.map(([r,y])=>new THREE.Vector2(r,y)),seg),mat); m.castShadow=true; g.add(m); return m; };
+  lathe([[0,1.2],[2.1,1.2],[2.35,2.4],[2.4,5],[2.4,15],[2.25,17]],M.white); lathe([[2.25,17],[1.7,19],[1,20.8],[.35,21.9],[0,22.1]],M.red);
+  [3.2,15.4].forEach(y=>{ const t=new THREE.Mesh(new THREE.TorusGeometry(2.42,.16,8,32),M.red); t.rotation.x=Math.PI/2; t.position.y=y; g.add(t); });
+  // ventanas redondas
+  [[0,16.2],[Math.PI*.5,8],[Math.PI*1.5,8]].forEach(([a,y])=>{ const p=new THREE.Vector3(Math.sin(a)*2.42,y,Math.cos(a)*2.42); const r=new THREE.Mesh(new THREE.TorusGeometry(.62,.12,8,20),M.gold); r.position.copy(p); r.lookAt(p.x*2,y,p.z*2); g.add(r);
+    const gl=new THREE.Mesh(new THREE.CircleGeometry(.6,20),M.glass); gl.position.copy(p).multiplyScalar(1.004); gl.lookAt(p.x*2,y,p.z*2); g.add(gl); });
+  // aletas
+  for(let k=0;k<4;k++){ const a=k*Math.PI/2+Math.PI/4, f=new THREE.Mesh(new THREE.BoxGeometry(.28,5,3.2),M.red); f.position.set(Math.sin(a)*3.2,2.5,Math.cos(a)*3.2); f.rotation.y=a; f.castShadow=true; g.add(f); }
+  const bell=new THREE.Mesh(new THREE.CylinderGeometry(1.0,1.6,1.4,20,1,true),M.gray); bell.position.y=.6; g.add(bell);
+  // puerta (gira sobre la bisagra)
+  const door=new THREE.Group(); door.position.set(-.75,RK_DOOR_Y+1.15,2.4); g.add(door);
+  const dp=new THREE.Mesh(new THREE.BoxGeometry(1.5,2.3,.16),M.white); dp.position.set(.75,0,.04); door.add(dp); const dk=new THREE.Mesh(sphereG,M.gold); dk.scale.setScalar(.09); dk.position.set(1.3,0,.16); door.add(dk);
+  const frame=new THREE.Mesh(new THREE.TorusGeometry(1.0,.08,6,24),M.red); frame.scale.set(.85,1.25,1); frame.position.set(0,RK_DOOR_Y+1.15,2.42); g.add(frame);
+  // escalera y plataforma
+  const lad=new THREE.Group(); g.add(lad);
+  [-.55,.55].forEach(x=>{ const r=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,RK_DOOR_Y+1.2,8),M.gray); r.position.set(x,(RK_DOOR_Y+1.2)/2,RK_LADDER_Z); lad.add(r); });
+  for(let y=.4;y<RK_DOOR_Y;y+=.5){ const s=new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,1.1,6),M.gray); s.rotation.z=Math.PI/2; s.position.set(0,y,RK_LADDER_Z); lad.add(s); }
+  const plat=new THREE.Mesh(new THREE.BoxGeometry(1.8,.12,2.1),M.gray); plat.position.set(0,RK_DOOR_Y,3.35); lad.add(plat);
+  [2,7].forEach(y=>{ const st=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,1.9,6),M.gray); st.rotation.x=Math.PI/2; st.position.set(0,y,3.35); lad.add(st); });
+  // fuego del motor
+  const flames=new THREE.Group(); flames.position.y=-.1; g.add(flames);
+  const f1=new THREE.Mesh(new THREE.ConeGeometry(1.4,6,16,1,true),M.flame); f1.rotation.x=Math.PI; f1.position.y=-3; flames.add(f1);
+  const f2=new THREE.Mesh(new THREE.ConeGeometry(.8,3.6,14,1,true),M.flame2); f2.rotation.x=Math.PI; f2.position.y=-1.8; flames.add(f2);
+  flames.visible=false;
+  return {g, door, flames, lad}; }
+
+// en la isla: cohete en su plataforma junto a la playa
+const RK=(()=>{ const a=.72; let rc=600; for(let r=200;r<1200;r++){ if(terrainH(Math.cos(a)*r,Math.sin(a)*r)<SEA_Y){ rc=r; break; } }
+  const r=rc-50, x=Math.cos(a)*r, z=Math.sin(a)*r, h=terrainH(x,z)+.25; return {x,z,h,yaw:Math.atan2(-Math.cos(a),-Math.sin(a))}; })();
+const islandRocket=makeRocket();
+islandRocket.g.position.set(RK.x,RK.h,RK.z); islandRocket.g.rotation.y=RK.yaw; scene.add(islandRocket.g);
+{ const pad=new THREE.Mesh(new THREE.CylinderGeometry(6,6.4,.5,40),new THREE.MeshStandardMaterial({map:(()=>{ const c=document.createElement('canvas'); c.width=c.height=256; const g=c.getContext('2d'); g.fillStyle='#b8bcc6'; g.fillRect(0,0,256,256);
+    g.strokeStyle='#f6c445'; g.lineWidth=14; g.beginPath(); g.arc(128,128,90,0,7); g.stroke(); g.fillStyle='#33343b'; g.font='900 64px Nunito, sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('H',128,132); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; })(), roughness:.8}));
+  pad.position.set(RK.x,RK.h-.2,RK.z); pad.receiveShadow=true; scene.add(pad);
+  obstacles.push({x:RK.x,z:RK.z,r:6,top:RK.h+.05,walk:true});
+  obstacles.push({x:RK.x,z:RK.z,r:2.5,top:RK.h+22,walk:false});
+  for(let k=0;k<4;k++){ const a=k*Math.PI/2+Math.PI/4+RK.yaw; obstacles.push({x:RK.x+Math.sin(a)*3.4,z:RK.z+Math.cos(a)*3.4,r:.6,top:RK.h+5,walk:false}); }
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(3.6,1.2), new THREE.MeshStandardMaterial({map:textTex(['Cohete','¡Al espacio!'],512,170,'#fff3d6','#2a3f73','#4fb0ff'), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
+  const sp=rkLocal(0,0,8.5); sg.position.set(sp.x,RK.h+2.4,sp.z); sg.rotation.y=RK.yaw; scene.add(sg); fairGlow.push(sg.material); }
+function rkLocal(lx,ly,lz,out){ const c=Math.cos(RK.yaw), s=Math.sin(RK.yaw); return (out||new THREE.Vector3()).set(RK.x+lx*c+lz*s, RK.h+ly, RK.z-lx*s+lz*c); }
+
+// ---------------- planetas ----------------
+const PTYPES={
+  pastel:{n:'pastel', ed:1, col:'#ffb3cf', ins:'#f7d9a0'}, galleta:{n:'galleta', ed:1, col:'#d6a15f', ins:'#e8bf86'}, sandia:{n:'sandía', ed:1, col:'#3f9b45', ins:'#ff4f5e'},
+  queso:{n:'queso', ed:1, col:'#ffd04d', ins:'#ffe27a'}, helado:{n:'helado', ed:1, col:'#bff0dc', ins:'#fff4e0'}, chocolate:{n:'chocolate', ed:1, col:'#6b3a20', ins:'#4a2412'},
+  bosque:{n:'bosque', col:'#5fae4f'}, desierto:{n:'desierto', col:'#e8c98a'}, hielo:{n:'hielo', col:'#d9f1ff'}, lava:{n:'lava', col:'#3a1c18'},
+  oceano:{n:'océano', col:'#3f8fd8'}, cristal:{n:'cristal', col:'#a77bff'}, hongos:{n:'hongos', col:'#4fb5a8'}, nubes:{n:'nubes', col:'#f6f2ff'}, isla:{n:'isla', col:'#3f8fd8'}};
+const PT_LIST=['pastel','galleta','sandia','queso','helado','chocolate','bosque','desierto','hielo','lava','oceano','cristal','hongos','nubes'];
+const SHAPES=['esfera','grumoso','cubo','achatado','huevo','picos','esfera'];
+const SHAPE_N={esfera:'redondo', grumoso:'grumoso', cubo:'cuadrado', achatado:'aplastado', huevo:'de huevo', picos:'con picos'};
+const SYL=['ma','po','lu','zi','ke','ro','ta','ni','bu','fa','ga','mo','li','qui','sa','do','pe','ru','to','vi','yu','xo','chi','ña','me','bo'];
+const hash3=(i,j,k)=>(Math.imul(i|0,73856093)^Math.imul(j|0,19349663)^Math.imul(k|0,83492791)^0x5bd1e995)>>>0;
+const rngOf=seed=>{ let s=seed||1; return ()=>{ s=(Math.imul(s,1664525)+1013904223)>>>0; return s/4294967296; }; };
+const planets=new Map();
+function mkPlanet(o){ const P={bites:[], mesh:null, hi:false, deco:null, critters:null, flags:null, low:null, ...o}; P.t=PTYPES[P.type]; P.edible=!!P.t.ed;
+  const R=rngOf(P.seed); P.ax=new THREE.Vector3(R()-.5,R()-.5,R()-.5).normalize(); P.ph=[R()*6,R()*6,R()*6]; P.dirs=[0,1,2].map(()=>new THREE.Vector3(R()-.5,R()-.5,R()-.5).normalize());
+  P.spikes=Array.from({length:8},()=>new THREE.Vector3(R()-.5,R()-.5,R()-.5).normalize()); P.ring=P.ring??(R()<.25); P.critPal=['#ff9ec0','#9fe0ff','#ffe58a','#b8f0c0','#d6c2ff','#ffc4a0'].sort(()=>R()-.5); return P; }
+const HOME=mkPlanet({key:'home', c:new THREE.Vector3(0,0,0), R:420, type:'isla', shape:'esfera', name:'Isla Peluche', seed:11, home:true, ring:false});
+const MOON=mkPlanet({key:'luna', c:new THREE.Vector3(1500,320,-1150), R:75, type:'queso', shape:'esfera', name:'Luna de queso', seed:22, ring:false});
+planets.set('home',HOME); planets.set('luna',MOON);
+function planetAt(i,j,k){ const key=i+','+j+','+k; if(planets.has(key)) return planets.get(key);
+  const R=rngOf(hash3(i,j,k)), c=new THREE.Vector3((i+.5+(R()-.5)*.5)*SPACE_CELL,(j+.5+(R()-.5)*.5)*SPACE_CELL,(k+.5+(R()-.5)*.5)*SPACE_CELL);
+  if(c.length()<3000 || R()<.42){ planets.set(key,null); return null; }
+  const type=PT_LIST[(R()*PT_LIST.length)|0], shape=SHAPES[(R()*SHAPES.length)|0], rad=38+R()*72;
+  let name=''; const ns=2+((R()*2)|0); for(let s=0;s<ns;s++) name+=SYL[(R()*SYL.length)|0]; name=name[0].toUpperCase()+name.slice(1); if(R()<.2) name+=' '+['II','III','Mayor','Menor','Azul'][(R()*5)|0];
+  const P=mkPlanet({key, c, R:rad, type, shape, name, seed:hash3(i,j,k)+1}); planets.set(key,P); return P; }
+// alrededor de un punto: los planetas de las celdas cercanas (más la isla y la luna)
+function nearbyPlanets(p,rc=2){ const out=[HOME,MOON], ci=Math.floor(p.x/SPACE_CELL), cj=Math.floor(p.y/SPACE_CELL), ck=Math.floor(p.z/SPACE_CELL);
+  for(let i=-rc;i<=rc;i++) for(let j=-rc;j<=rc;j++) for(let k=-rc;k<=rc;k++){ const P=planetAt(ci+i,cj+j,ck+k); if(P) out.push(P); } return out; }
+function planetByKey(key){ if(planets.has(key)) return planets.get(key); const [i,j,k]=key.split(',').map(Number); return Number.isFinite(i)?planetAt(i,j,k):null; }
+// forma (multiplicador del radio) para una dirección
+function shapeK(P,d){ switch(P.shape){
+  case 'grumoso': return 1+.06*(Math.sin(d.dot(P.dirs[0])*5+P.ph[0])+Math.sin(d.dot(P.dirs[1])*7+P.ph[1])+Math.sin(d.dot(P.dirs[2])*4+P.ph[2]))/3*2;
+  case 'cubo': { const p=5, s=Math.pow(Math.pow(Math.abs(d.x),p)+Math.pow(Math.abs(d.y),p)+Math.pow(Math.abs(d.z),p),1/p); return .82/s; }
+  case 'achatado': { const c=d.dot(P.ax); return 1/Math.sqrt(1+c*c*(1/(.7*.7)-1)); }
+  case 'huevo': return 1+.2*d.dot(P.ax);
+  case 'picos': { let k=1; for(const s of P.spikes){ const q=Math.max(0,d.dot(s)); k+=.32*Math.pow(q,40); } return k; }
+  default: return 1; } }
+// mordidas: cráter con orilla de dientes
+const _bt=new THREE.Vector3(), _bu=new THREE.Vector3(), _bv=new THREE.Vector3();
+function biteAt(P,d){ let depth=0, inside=0;
+  for(const b of P.bites){ const c=d.dot(b.d); if(c<.9) continue; const ang=Math.acos(Math.min(1,c)), A=b.s/P.R*1.12; if(ang>A) continue;
+    // ángulo alrededor de la mordida, para el borde con forma de dientes
+    _bu.copy(b.d).cross(Math.abs(b.d.y)<.9?_bt.set(0,1,0):_bt.set(1,0,0)).normalize(); _bv.copy(b.d).cross(_bu);
+    const phi=Math.atan2(d.dot(_bv),d.dot(_bu)), Ae=b.s/P.R*(1+.1*Math.cos(phi*9));
+    if(ang<Ae){ const q=ang/Ae; depth=Math.max(depth,b.s*.55*(1-q*q)); inside=Math.max(inside,Math.min(1,(1-q)*4)); } }
+  return [depth,inside]; }
+function surfR(P,d){ let r=P.R*shapeK(P,d); if(P.bites.length) r-=biteAt(P,d)[0]; return r; }
+// telas de cada tipo de planeta (mapa equirectangular)
+const ptTex={};
+function planetTex(P){ const key=P.type+(P.home?'h':''); if(ptTex[key]) return ptTex[key]; const W=512,H=256, c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d'), R=rngOf(P.type.length*31+5), base=P.t.col;
+  g.fillStyle=base; g.fillRect(0,0,W,H);
+  const blobs=(n,col,rmin,rmax,a=1)=>{ g.globalAlpha=a; g.fillStyle=col; for(let i=0;i<n;i++){ const x=R()*W, y=R()*H, r=rmin+R()*(rmax-rmin); g.beginPath(); g.ellipse(x,y,r*1.6,r,0,0,7); g.fill(); if(x<r*2){ g.beginPath(); g.ellipse(x+W,y,r*1.6,r,0,0,7); g.fill(); } } g.globalAlpha=1; };
+  switch(P.type){
+    case 'pastel': blobs(160,'#ffffff',2,4); ['#ff5d6c','#ffe14d','#7ed957','#4fc3f7','#c77dff'].forEach(col=>{ g.fillStyle=col; for(let i=0;i<70;i++){ g.save(); g.translate(R()*W,R()*H); g.rotate(R()*6); g.fillRect(-4,-1.2,8,2.4); g.restore(); } }); break;
+    case 'galleta': blobs(40,'#c4894a',6,16,.5); blobs(70,'#4a2412',3,6); break;
+    case 'sandia': for(let x=0;x<W;x+=32){ g.fillStyle='#2b6f31'; g.fillRect(x,0,14,H); } break;
+    case 'queso': blobs(70,'#e0a92a',4,14); blobs(40,'#ffe27a',3,9,.6); break;
+    case 'helado': ['#ffd0e4','#fff4e0','#bff0dc','#c9c2ff'].forEach((col,i)=>{ g.fillStyle=col; g.beginPath(); for(let x=0;x<=W;x+=8) g.lineTo(x,i*64+28+Math.sin(x/30+i)*10); g.lineTo(W,i*64+64+40); g.lineTo(0,i*64+64+40); g.fill(); }); break;
+    case 'chocolate': blobs(50,'#8a5232',8,20,.5); g.strokeStyle='rgba(255,255,255,.25)'; g.lineWidth=3; for(let i=0;i<30;i++){ g.beginPath(); const x=R()*W, y=R()*H; g.moveTo(x,y); g.quadraticCurveTo(x+20,y-10,x+40,y); g.stroke(); } break;
+    case 'bosque': blobs(90,'#3f8f3a',8,22,.8); blobs(40,'#7ccf5a',5,12,.6); break;
+    case 'desierto': g.strokeStyle='#d4ad6a'; g.lineWidth=5; for(let y=0;y<H;y+=14){ g.beginPath(); for(let x=0;x<=W;x+=10) g.lineTo(x,y+Math.sin(x/25+y)*5); g.stroke(); } break;
+    case 'hielo': g.strokeStyle='#ffffff'; g.lineWidth=2; for(let i=0;i<40;i++){ g.beginPath(); let x=R()*W, y=R()*H; g.moveTo(x,y); for(let k=0;k<4;k++){ x+=R()*40-20; y+=R()*30-15; g.lineTo(x,y); } g.stroke(); } blobs(30,'#a8dcff',6,16,.5); break;
+    case 'lava': g.strokeStyle='#ff6a1a'; g.lineWidth=4; for(let i=0;i<60;i++){ g.beginPath(); let x=R()*W, y=R()*H; g.moveTo(x,y); for(let k=0;k<5;k++){ x+=R()*40-20; y+=R()*30-15; g.lineTo(x,y); } g.stroke(); } break;
+    case 'oceano': case 'isla': blobs(80,'#5fb0f0',6,18,.6); blobs(P.home?1:14, '#6fbf5a', P.home?40:6, P.home?46:16); if(P.home){ g.fillStyle='#e8d6a0'; g.beginPath(); g.ellipse(W*.5,H*.5,62,40,0,0,7); g.globalAlpha=.6; g.fill(); g.globalAlpha=1; g.fillStyle='#6fbf5a'; g.beginPath(); g.ellipse(W*.5,H*.5,52,32,0,0,7); g.fill(); } break;
+    case 'cristal': for(let i=0;i<60;i++){ g.fillStyle=['#c9a8ff','#8f6ae0','#e6d6ff'][i%3]; g.beginPath(); const x=R()*W, y=R()*H, s=6+R()*14; g.moveTo(x,y-s); g.lineTo(x+s*.6,y); g.lineTo(x,y+s); g.lineTo(x-s*.6,y); g.fill(); } break;
+    case 'hongos': blobs(60,'#7d4fb5',5,12,.6); blobs(80,'#ffffff',2,4,.8); break;
+    case 'nubes': blobs(90,'#ffffff',8,20,.8); blobs(40,'#ffd6ec',6,14,.5); break; }
+  const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.wrapS=THREE.RepeatWrapping; t.anisotropy=4; return ptTex[key]=t; }
+const ptMats={};
+function planetMat(P){ const key=P.type+(P.home?'h':''); if(ptMats[key]) return ptMats[key];
+  const m=new THREE.MeshStandardMaterial({map:planetTex(P), roughness:P.type==='hielo'||P.type==='chocolate'?.45:.9, emissive:P.type==='lava'?'#ff4a10':'#000000', emissiveIntensity:P.type==='lava'?.35:0});
+  const ins=new THREE.Color(P.t.ins||P.t.col);
+  m.onBeforeCompile=sh=>{ sh.uniforms.insideC={value:ins};
+    sh.vertexShader='attribute float aBite;\nvarying float vBite;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvBite=aBite;');
+    sh.fragmentShader='uniform vec3 insideC;\nvarying float vBite;\n'+sh.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\ndiffuseColor.rgb=mix(diffuseColor.rgb,insideC,vBite);'); };
+  m.customProgramCacheKey=()=>'planetBite'; return ptMats[key]=m; }
+// malla del planeta: esfera deformada por la forma y las mordidas
+function planetGeo(P,w,h){ const g=new THREE.SphereGeometry(1,w,h), pos=g.attributes.position, d=new THREE.Vector3(), bite=new Float32Array(pos.count);
+  for(let i=0;i<pos.count;i++){ d.fromBufferAttribute(pos,i).normalize(); const [dep,ins]=P.bites.length?biteAt(P,d):[0,0]; const r=P.R*shapeK(P,d)-dep; pos.setXYZ(i,d.x*r,d.y*r,d.z*r); bite[i]=ins; }
+  g.setAttribute('aBite',new THREE.BufferAttribute(bite,1)); g.computeVertexNormals(); g.computeBoundingSphere(); return g; }
+function planetMesh(P){ if(P.mesh) return P.mesh; const m=new THREE.Mesh(planetGeo(P,40,28),planetMat(P)); m.position.copy(P.c); m.castShadow=false; m.receiveShadow=true; spaceScene.add(m); P.mesh=m;
+  if(P.ring){ const r=new THREE.Mesh(new THREE.RingGeometry(P.R*1.5,P.R*2.2,64),new THREE.MeshStandardMaterial({color:PT_LIST.includes(P.type)?P.critPal[0]:'#ffd6ec', transparent:true, opacity:.55, side:THREE.DoubleSide, roughness:.6})); r.position.copy(P.c); r.lookAt(P.c.clone().add(P.ax)); spaceScene.add(r); P.ringMesh=r; }
+  return m; }
+const HI_SEG={min:[96,64], low:[128,90], mid:[176,120], high:[200,140]};
+function planetHi(P,on){ if(!P.mesh || P.home) return; if(on===P.hi) return; P.hi=on; const old=P.mesh.geometry;
+  const [w,h]=on?(HI_SEG[settings.quality]||HI_SEG.low):[40,28]; P.mesh.geometry=planetGeo(P,w,h); old.dispose();
+  if(on){ buildDeco(P); spawnCritters(P); showFlags(P,true); } else { if(P.deco){ spaceScene.remove(P.deco); P.deco=null; } (P.critters||[]).forEach(c=>spaceScene.remove(c.o)); P.critters=null; showFlags(P,false); } }
+// actualiza la malla cerca de una mordida nueva
+function planetRebite(P,b){ if(!P.mesh) return; const g=P.mesh.geometry, pos=g.attributes.position, bt=g.attributes.aBite, d=new THREE.Vector3(), lim=Math.cos(Math.min(Math.PI,b.s/P.R*1.4));
+  for(let i=0;i<pos.count;i++){ d.fromBufferAttribute(pos,i).normalize(); if(d.dot(b.d)<lim) continue; const [dep,ins]=biteAt(P,d); const r=P.R*shapeK(P,d)-dep; pos.setXYZ(i,d.x*r,d.y*r,d.z*r); bt.setX(i,ins); }
+  pos.needsUpdate=true; bt.needsUpdate=true; g.computeVertexNormals(); }
+// adornos sobre la superficie según el tipo de planeta
+const _q1=new THREE.Quaternion(), _y1=new THREE.Vector3(0,1,0);
+function placeOn(P,o,d,lift=0){ const r=surfR(P,d); o.position.copy(P.c).addScaledVector(d,r+lift); o.quaternion.setFromUnitVectors(_y1,d); }
+function buildDeco(P){ const g=new THREE.Group(), R=rngOf(P.seed*7+3), n=Math.round(P.R*.6);
+  const M=(c,o={})=>new THREE.MeshStandardMaterial({color:c, roughness:.6, ...o});
+  const rdir=()=>new THREE.Vector3(R()-.5,R()-.5,R()-.5).normalize();
+  for(let i=0;i<n;i++){ const d=rdir(), o=new THREE.Group(), s=.8+R()*1.2;
+    switch(P.type){
+      case 'pastel': if(i%2){ const c=new THREE.Mesh(fCyl,M(['#ff9ec0','#9fe0ff','#ffe58a'][i%3])); c.scale.set(.2*s,1.6*s,.2*s); c.position.y=.8*s; o.add(c); const f=new THREE.Mesh(sphereG,new THREE.MeshBasicMaterial({color:'#ffcf4d'})); f.scale.set(.15*s,.28*s,.15*s); f.position.y=1.8*s; o.add(f); } else { const c=new THREE.Mesh(sphereG,M('#d9243a',{roughness:.2})); c.scale.setScalar(.6*s); c.position.y=.5*s; o.add(c); } break;
+      case 'galleta': case 'chocolate': { const c=new THREE.Mesh(sphereG,M(P.type==='galleta'?'#4a2412':'#c8935a',{roughness:.35})); c.scale.set(.7*s,.45*s,.7*s); o.add(c); break; }
+      case 'sandia': { const c=new THREE.Mesh(sphereG,M('#1d1d22')); c.scale.set(.25*s,.4*s,.2*s); c.position.y=.1; o.add(c); break; }
+      case 'queso': continue;
+      case 'helado': { const k=new THREE.Mesh(new THREE.ConeGeometry(.5*s,1.5*s,10),M('#e2a95a')); k.rotation.x=Math.PI; k.position.y=.75*s; o.add(k); const b=new THREE.Mesh(sphereG,M(['#ffd0e4','#fff4e0','#bff0dc'][i%3])); b.scale.setScalar(.6*s); b.position.y=1.7*s; o.add(b); break; }
+      case 'bosque': { const t=new THREE.Mesh(fCyl,M('#7a5232')); t.scale.set(.3*s,2*s,.3*s); t.position.y=s; o.add(t); const l=new THREE.Mesh(sphereG,M(['#3f8f3a','#57a845'][i%2])); l.scale.setScalar(1.3*s); l.position.y=2.6*s; o.add(l); break; }
+      case 'desierto': { const t=new THREE.Mesh(capsuleGeo(.35*s,1.8*s),M('#5fa05a')); t.position.y=1.1*s; o.add(t); [-1,1].forEach(q=>{ const a=new THREE.Mesh(capsuleGeo(.22*s,.7*s),M('#5fa05a')); a.position.set(q*.5*s,1.3*s,0); a.rotation.z=-q*.9; o.add(a); }); break; }
+      case 'hielo': case 'cristal': { const c=new THREE.Mesh(new THREE.ConeGeometry(.4*s,2.2*s,5),M(P.type==='hielo'?'#e6f7ff':'#c9a8ff',{roughness:.1, metalness:.1, transparent:true, opacity:.85})); c.position.y=1.1*s; c.rotation.z=(R()-.5)*.6; o.add(c); break; }
+      case 'lava': { const c=new THREE.Mesh(sphereG,M('#2a1612',{emissive:'#ff4a10', emissiveIntensity:.25})); c.scale.set(.9*s,.6*s,.8*s); o.add(c); break; }
+      case 'oceano': { const c=new THREE.Mesh(sphereG,M(['#ff7f6e','#ffd166','#c77dff'][i%3])); c.scale.set(.4*s,.9*s,.4*s); c.position.y=.4*s; o.add(c); break; }
+      case 'hongos': { const st=new THREE.Mesh(fCyl,M('#fbf3e4')); st.scale.set(.2*s,.8*s,.2*s); st.position.y=.4*s; o.add(st); const cp=new THREE.Mesh(sphereG,M(['#e5534b','#c77dff','#4fc3f7'][i%3])); cp.scale.set(.7*s,.35*s,.7*s); cp.position.y=.85*s; o.add(cp); break; }
+      case 'nubes': { [[0,0,.9],[.6,.1,.6],[-.6,.1,.6]].forEach(([x,y,r])=>{ const b=new THREE.Mesh(sphereG,M('#ffffff')); b.scale.setScalar(r*s); b.position.set(x*s,y*s+.4*s,0); o.add(b); }); break; }
+    }
+    placeOn(P,o,d,-.05); o.rotateY(R()*6.28); g.add(o); }
+  spaceScene.add(g); P.deco=g; }
+
+// ---------------- criaturas de peluche con ojos saltones ----------------
+function makeCritter(P,i){ const R=rngOf(P.seed*13+i*7), o=new THREE.Group(), col=P.critPal[i%P.critPal.length], mat=felt(col), s=.6+R()*.7, kind=(R()*4)|0;
+  const body=new THREE.Mesh(sphereG,mat); body.scale.set(.75*s,(kind===1?1.2:.8)*s,.7*s); body.position.y=(kind===1?1.1:.8)*s; o.add(body);
+  const top=(kind===1?2.2:1.55)*s;
+  // orejitas, antenas o cuernitos
+  if(kind===0) [-1,1].forEach(q=>{ const e=new THREE.Mesh(new THREE.ConeGeometry(.18*s,.4*s,6),mat); e.position.set(q*.35*s,top-.05*s,0); e.rotation.z=-q*.3; o.add(e); });
+  if(kind===2) [-1,1].forEach(q=>{ const a=new THREE.Mesh(fCyl,felt('#33343b')); a.scale.set(.03,.5*s,.03); a.position.set(q*.2*s,top+.15*s,0); a.rotation.z=-q*.3; o.add(a); const b=new THREE.Mesh(sphereG,felt(P.critPal[(i+2)%6])); b.scale.setScalar(.12*s); b.position.set(q*.28*s,top+.42*s,0); o.add(b); });
+  if(kind===3){ const t=new THREE.Mesh(sphereG,felt('#ffffff')); t.scale.setScalar(.22*s); t.position.set(0,.6*s,-.7*s); o.add(t); }
+  // patitas
+  const feet=[]; const nf=R()<.5?2:4; for(let k=0;k<nf;k++){ const f=new THREE.Mesh(sphereG,mat); f.scale.set(.18*s,.12*s,.24*s); const a=nf===2?(k?.4:-.4):[-.5,.5][k%2]; f.position.set(a*s,.1*s,nf===2?.05:(k<2?.3:-.3)*s); o.add(f); feet.push(f); }
+  // ojos saltones (1 a 3)
+  const ne=1+((R()*3)|0), eyes=[]; for(let k=0;k<ne;k++){ const ex=ne===1?0:(k-(ne-1)/2)*.32*s, ey=(kind===1?1.65:1.05)*s+(ne===3&&k===1?.18*s:0);
+    const w=new THREE.Mesh(sphereG,eyeWhiteMat); const er=(ne===1?.3:.2)*s; w.scale.setScalar(er); w.position.set(ex,ey,.55*s); o.add(w);
+    const p=new THREE.Mesh(sphereG,eyeMat); p.scale.setScalar(er*.48); p.position.set(ex,ey,.55*s+er*.82); o.add(p); eyes.push({p, base:p.position.clone(), off:new THREE.Vector2(), v:new THREE.Vector2(), er}); }
+  o.traverse(m=>{ if(m.isMesh) m.castShadow=true; });
+  const d=new THREE.Vector3(R()-.5,R()-.5,R()-.5).normalize(), hd=new THREE.Vector3(R()-.5,R()-.5,R()-.5); hd.addScaledVector(d,-hd.dot(d)).normalize();
+  spaceScene.add(o); return {o, d, hd, sp:.8+R()*1.2, t:R()*10, eyes, feet, s, turn:0}; }
+const eyeWhiteMat=new THREE.MeshStandardMaterial({color:'#ffffff', roughness:.25});
+function spawnCritters(P){ if(P.home) return; P.critters=[]; const n=Math.min(10,4+Math.round(P.R/20)); for(let i=0;i<n;i++) P.critters.push(makeCritter(P,i)); }
+const _scm=new THREE.Matrix4(), _scx=new THREE.Vector3(), _scz=new THREE.Vector3();
+function updateCrittersSpace(P,dt,t){ if(!P.critters) return;
+  for(const c of P.critters){ c.t+=dt; if(Math.random()<dt*.3) c.turn=(Math.random()-.5)*2;
+    // avanzar sobre la esfera y girar un poquito
+    c.hd.applyAxisAngle(c.d,c.turn*dt); const step=c.sp*dt/P.R; c.d.addScaledVector(c.hd,step).normalize(); c.hd.addScaledVector(c.d,-c.hd.dot(c.d)).normalize();
+    // si el jugador está cerca, se acercan con curiosidad
+    if(SP.mode==='walk' && SP.planet===P){ _scx.copy(SP.pos).sub(P.c).normalize(); const dd=c.d.dot(_scx); if(dd>.997 && dd<.99995){ _scz.copy(_scx).addScaledVector(c.d,-dd).normalize(); c.hd.lerp(_scz,dt*.8).normalize(); } }
+    const hop=Math.abs(Math.sin(c.t*c.sp*4))*.25*c.s; placeOn(P,c.o,c.d,hop);
+    _scx.crossVectors(c.d,c.hd).normalize(); _scm.makeBasis(_scx.negate(),c.d,c.hd); c.o.quaternion.setFromRotationMatrix(_scm);
+    c.feet.forEach((f,k)=>f.position.y=.1*c.s+Math.max(0,Math.sin(c.t*c.sp*8+k*Math.PI))*.12*c.s);
+    // pupilas que se bambolean (resorte con inercia)
+    const jx=Math.sin(c.t*c.sp*8)*1.2, jy=-Math.abs(Math.cos(c.t*c.sp*8))*1.5;
+    for(const e of c.eyes){ e.v.x+=(-e.off.x*60+jx-e.v.x*4)*dt; e.v.y+=(-e.off.y*60+jy-e.v.y*4)*dt; e.off.addScaledVector(e.v,dt); const L=e.off.length(), M=.42; if(L>M) e.off.multiplyScalar(M/L);
+      e.p.position.set(e.base.x+e.off.x*e.er, e.base.y+e.off.y*e.er, e.base.z); } } }
+
+// ---------------- banderas: puntos para viajar (en la isla o en planetas) ----------------
+ITEMS.flag={name:'Bandera', icon:'<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 5v31" stroke="#8a6a3e" stroke-width="3" stroke-linecap="round"/><path d="M12 6c6-3 10 3 17 0v13c-7 3-11-3-17 0z" fill="#e5534b" stroke="#a8323a" stroke-width="1.6" stroke-linejoin="round"/><circle cx="20" cy="12.5" r="2.6" fill="#ffd36b"/></svg>'};
+if(!inventory.includes('flag')) inventory.push('flag');
+if(!hotbar.includes('flag')){ const i=hotbar.indexOf(null); if(i>=0) hotbar[i]='flag'; }
+const flags=(()=>{ try{ const a=JSON.parse(localStorage.getItem('mundoPelucheBanderas')||'[]'); return Array.isArray(a)?a.filter(f=>f&&typeof f.n==='string').slice(0,12):[]; }catch(e){ return []; } })();
+function saveFlags(){ try{ localStorage.setItem('mundoPelucheBanderas',JSON.stringify(flags)); }catch(e){} }
+const FLAG_COLS=['#e5534b','#4f86c6','#f6c445','#6fbf5a','#c77dff','#ff9a3c'];
+function flagMesh(col){ const g=new THREE.Group(); const p=new THREE.Mesh(fCyl,new THREE.MeshStandardMaterial({color:'#8a6a3e'})); p.scale.set(.06,2.6,.06); p.position.y=1.3; g.add(p);
+  const cl=new THREE.Mesh(new THREE.PlaneGeometry(1.1,.7,6,1),new THREE.MeshStandardMaterial({color:col, side:THREE.DoubleSide, roughness:.8})); cl.position.set(.58,2.25,0); g.add(cl); g.userData.cloth=cl;
+  const k=new THREE.Mesh(sphereG,new THREE.MeshStandardMaterial({color:'#ffd36b', metalness:.5, roughness:.3})); k.scale.setScalar(.1); k.position.y=2.65; g.add(k); g.traverse(m=>{ if(m.isMesh) m.castShadow=true; }); return g; }
+const islandFlags=[];
+function showIslandFlags(){ islandFlags.forEach(m=>scene.remove(m)); islandFlags.length=0; flags.forEach(f=>{ if(f.w!=='isla') return; const m=flagMesh(f.c); m.position.set(f.x,f.y,f.z); scene.add(m); islandFlags.push(m); }); }
+function showFlags(P,on){ (P.flagMeshes||[]).forEach(m=>spaceScene.remove(m)); P.flagMeshes=[]; if(!on) return;
+  flags.forEach(f=>{ if(f.w!==P.key) return; const m=flagMesh(f.c), d=new THREE.Vector3(f.dx,f.dy,f.dz).normalize(); placeOn(P,m,d,0); spaceScene.add(m); P.flagMeshes.push(m); }); }
+function plantFlag(){ const c=FLAG_COLS[flags.length%FLAG_COLS.length]; let f;
+  if(SP.on && SP.mode==='walk' && SP.planet){ const P=SP.planet, d=SP.pos.clone().sub(P.c).normalize(); f={n:P.name, w:P.key, dx:+d.x.toFixed(4), dy:+d.y.toFixed(4), dz:+d.z.toFixed(4), c}; }
+  else if(!SP.on){ let near=TELEPORTS[0], bd=1e9; for(const t of TELEPORTS){ const d=Math.hypot(t.x-player.pos.x,t.z-player.pos.z); if(d<bd){ bd=d; near=t; } }
+    f={n:(bd<60?near.name:'Cerca de '+near.name)+' (isla)', w:'isla', x:+player.pos.x.toFixed(2), y:+player.pos.y.toFixed(2), z:+player.pos.z.toFixed(2), c}; }
+  if(!f) return; if(flags.length>=12) flags.shift(); flags.push(f); saveFlags();
+  if(f.w==='isla') showIslandFlags(); else showFlags(SP.planet,true);
+  try{ const R=audio.raw(); const t=R.ctx.currentTime; [523,659,784].forEach((q,i)=>R.tone('triangle',q,q,t+i*.09,.14,.07)); }catch(e){}
+  flashNote('Bandera plantada: '+f.n+'. Viaja aquí desde el mapa'); renderFlagList(); }
+function goFlag(i){ const f=flags[i]; if(!f) return; closeMap(false);
+  if(f.w==='isla'){ if(SP.on) exitSpace(true); arWarp(f.x,f.y+.05,f.z); flashNote('Viajaste a tu bandera: '+f.n); return; }
+  const P=planetByKey(f.w); if(!P) return; enterSpace('walk',{P, d:new THREE.Vector3(f.dx,f.dy,f.dz).normalize()}); }
+function renderFlagList(){ const box=ui('mapFlagList'); if(!box) return; box.textContent='';
+  if(!flags.length){ const s=document.createElement('span'); s.className='flag-empty'; s.textContent='Planta tu bandera (en el inventario) donde quieras volver.'; box.appendChild(s); return; }
+  flags.forEach((f,i)=>{ const w=document.createElement('span'); w.className='flag-chip'; const b=document.createElement('button'); b.type='button'; b.innerHTML=`<i style="background:${f.c}"></i>`; const t=document.createElement('span'); t.textContent=f.n; b.appendChild(t); b.onclick=()=>goFlag(i);
+    const x=document.createElement('button'); x.type='button'; x.className='flag-x'; x.textContent='✕'; x.title='Quitar bandera'; x.onclick=()=>{ flags.splice(i,1); saveFlags(); showIslandFlags(); if(SP.planet) showFlags(SP.planet,SP.planet.hi); renderFlagList(); };
+    w.append(b,x); box.appendChild(w); }); }
+showIslandFlags(); renderFlagList();
+
+// ======================================================================================
+// ---------- Estado del jugador: subir al cohete, despegar, volar, aterrizar y caminar ----------
+// ======================================================================================
+const SP={on:false, mode:'', pos:new THREE.Vector3(), q:new THREE.Quaternion(), speed:0, planet:null, up:new THREE.Vector3(0,1,0), camFwd:new THREE.Vector3(0,0,1), face:new THREE.Vector3(0,0,1),
+  hv:0, vy:0, walk:0, vel:new THREE.Vector3(), arrived:'', anim:null, lastYaw:0, near:null, chomp:0, rocketAt:null, rocketUp:new THREE.Vector3()};
+const myRocket=makeRocket(); myRocket.g.visible=false; spaceScene.add(myRocket.g); myRocket.lad.visible=false;
+const fadeEl=()=>ui('spFade');
+function fade(on,ms=600){ const el=fadeEl(); el.style.transition='opacity '+ms+'ms'; el.hidden=false; requestAnimationFrame(()=>{ el.style.opacity=on?'1':'0'; }); if(!on) setTimeout(()=>{ if(el.style.opacity==='0') el.hidden=true; },ms+50); }
+// ---- en la isla ----
+function rocketActions(){ const rk=player.rk;
+  if(rk){ if(rk.ph==='seat') return [{label:'¡Despegar!', run:()=>{ rk.ph='launch'; rk.t=0; try{ audio.cam(); }catch(e){} sendPresence(true); }}, {label:'Bajar', run:rocketGetOff}]; return [null,null]; }
+  if(player.car||player.ac||player.pg||player.mg||AR.me.st>=2) return null;
+  const b=rkLocal(0,0,RK_LADDER_Z+.5); if(Math.hypot(player.pos.x-b.x,player.pos.z-b.z)<1.8 && Math.abs(player.pos.y-RK.h)<2) return [{label:'Subir al cohete', run:()=>{ player.rk={ph:'climb', t:0}; holding=false; try{ applyHeld(); renderHotbar(); }catch(e){} }}, null];
+  return null; }
+function rocketGetOff(){ const b=rkLocal(0,0,RK_LADDER_Z+1.2); player.rk=null; player.pos.set(b.x,RK.h,b.z); player.vel.set(0,0,0); player.vy=0; plush.visible=true; islandRocket.door.rotation.y=0; sendPresence(true); }
+const _rb=new THREE.Vector3(), _rt=new THREE.Vector3();
+function rocketUpdate(dt){ const rk=player.rk; if(!rk) return; rk.t+=dt; const R=islandRocket;
+  if(rk.ph==='climb'){ const k=Math.min(1,rk.t/3.2); rkLocal(0,k*RK_DOOR_Y,RK_LADDER_Z+.42,_rb); player.pos.copy(_rb); player.facing=RK.yaw+Math.PI; player.vel.set(0,0,0); player.vy=0; player.grounded=true;
+    if(k>=1){ rk.ph='door'; rk.t=0; try{ audio.door(true); }catch(e){} } }
+  else if(rk.ph==='door'){ const k=Math.min(1,rk.t/1.1); R.door.rotation.y=-1.7*Math.min(1,k*1.6); rkLocal(0,RK_DOOR_Y+.06,RK_LADDER_Z+.42-(1.9*Math.max(0,(k-.45)/.55)),_rb); player.pos.copy(_rb);
+    if(k>=1){ rk.ph='seat'; rk.t=0; sendPresence(true); } }
+  else if(rk.ph==='seat'){ R.door.rotation.y+=(0-R.door.rotation.y)*Math.min(1,dt*3); }
+  else if(rk.ph==='launch'){ R.door.rotation.y=0; const t=rk.t, y=t<1.2?0:3*(t-1.2)*(t-1.2); R.g.position.y=RK.h+y; R.flames.visible=true; const fl=.8+Math.random()*.4+(t<1.2?-.4:Math.min(1,t*.2)); R.flames.scale.set(fl,fl*(1+Math.min(1.5,t*.3)),fl);
+    if(Math.random()<dt*20){ try{ splashBurst(RK.x+(Math.random()-.5)*4,RK.h+.5,RK.z+(Math.random()-.5)*4,.25); }catch(e){} }
+    if(!rk.snd){ rk.snd=1; try{ const A=audio.raw(); A.noise(A.ctx.currentTime,6.5,500,.35); A.tone('sawtooth',60,180,A.ctx.currentTime,6.5,.06); }catch(e){} }
+    if(t>5.6 && !rk.fading){ rk.fading=1; fade(true,1300); }
+    if(t>7){ R.g.position.y=RK.h; R.flames.visible=false; player.rk=null; enterSpace('fly'); } } }
+function rocketPose(t,dt){ const rk=player.rk; if(!rk) return; if(rk.ph==='climb'){ pgPoseLimbs(plush,{climb:rk.t/3.2*3},t,dt,0); } if(rk.ph==='seat'||rk.ph==='launch') plush.visible=false; }
+function rocketCamera(dt){ const rk=player.rk; if(!rk || (rk.ph!=='seat' && rk.ph!=='launch')) return false; const R=islandRocket.g;
+  const ty=R.position.y+12, d=rk.ph==='launch'?40+rk.t*6:34; _rt.set(R.position.x,ty,R.position.z);
+  const want=_rb.set(R.position.x+Math.sin(yaw)*d, (rk.ph==='launch'?RK.h+6+rk.t*rk.t*1.2:ty+4)+Math.max(0,pitch)*-8, R.position.z+Math.cos(yaw)*d);
+  camera.position.lerp(want,1-Math.exp(-dt*4)); if(rk.ph==='launch' && rk.t>1.2) camera.position.x+=(Math.random()-.5)*.3; camera.lookAt(_rt); plush.visible=false; return true; }
+
+// ---- entrar y salir del espacio ----
+function enterSpace(mode,o={}){ const was=SP.on; SP.on=true; fade(true,10); spaceScene.add(plush); if(player.mg) stopMini(); if(AR.me.a>=0) arLeave();
+  camera.far=90000; camera.updateProjectionMatrix(); player.rk=null; SP.arrived=''; SP.anim=null; holding=false; try{ applyHeld(); renderHotbar(); }catch(e){}
+  if(mode==='fly'){ SP.mode='fly'; SP.pos.set(0,HOME.R+380,0); SP.q.setFromUnitVectors(new THREE.Vector3(0,1,0),MOON.c.clone().sub(SP.pos).normalize()); SP.speed=40; SP.planet=null; }
+  else { const P=o.P; SP.mode='walk'; SP.planet=P; planetMesh(P); planetHi(P,true); const d=o.d.clone(); SP.pos.copy(P.c).addScaledVector(d,surfR(P,d)); SP.hv=0; SP.vy=0;
+    SP.up.copy(d); SP.camFwd.copy(Math.abs(d.y)<.9?new THREE.Vector3(0,1,0):new THREE.Vector3(1,0,0)).addScaledVector(d,-1).normalize(); SP.camFwd.addScaledVector(d,-SP.camFwd.dot(d)).normalize(); SP.face.copy(SP.camFwd);
+    // el cohete queda estacionado junto a ti
+    const rd=d.clone().addScaledVector(_r.crossVectors(SP.camFwd,d).normalize(),9/P.R).normalize(); parkRocket(P,rd); SP.arrived=P.key; bigText('Llegaste a '+P.name,1600); }
+  SP.lastYaw=yaw; myRocket.g.visible=true; spaceButtons(true); renderSpaceHud(true); setTimeout(()=>fade(false,900),60); try{ sendPresence(true); }catch(e){} }
+function exitSpace(quiet){ if(!SP.on) return; SP.on=false; SP.mode=''; scene.add(plush); myRocket.g.visible=false; spaceButtons(false);
+  if(SP.planet) planetHi(SP.planet,false); SP.planet=null; camera.far=settings.draw*1.05+15; camera.updateProjectionMatrix(); camera.up.set(0,1,0);
+  const b=rkLocal(0,0,RK_LADDER_Z+1.5); player.pos.set(b.x,RK.h,b.z); player.vel.set(0,0,0); player.vy=0; player.grounded=true; player.facing=RK.yaw; yaw=RK.yaw+Math.PI; plush.visible=true; plush.quaternion.identity(); plush.rotation.order='YXZ';
+  ui('spHud').hidden=true; if(!quiet){ fade(true,10); setTimeout(()=>fade(false,900),80); bigText('¡De vuelta en la isla!',1600); } try{ sendPresence(true); }catch(e){} }
+function parkRocket(P,d){ SP.rocketAt={P, d:d.clone()}; placeOn(P,myRocket.g,d,0); myRocket.flames.visible=false; myRocket.door.rotation.y=-1.6; }
+// ---- botones táctiles: en vuelo "Saltar" acelera y "Tirarse" frena ----
+function spaceButtons(on){ try{ centerText(ui('tJump'), on&&SP.mode==='fly'?'Acelerar':'Saltar'); centerText(ui('tDive'), on&&SP.mode==='fly'?'Frenar':'Tirarse'); }catch(e){} }
+// ---- cada cuadro ----
+const _f=new THREE.Vector3(), _u=new THREE.Vector3(), _r=new THREE.Vector3(), _m=new THREE.Matrix4(), _qq=new THREE.Quaternion(), _d=new THREE.Vector3();
+let spCheckT=0, spVisible=[];
+function spaceUpdate(dt,t){
+  // planetas a la vista (se revisa dos veces por segundo)
+  spCheckT-=dt; if(spCheckT<=0){ spCheckT=.5; spVisible=nearbyPlanets(SP.pos,2); for(const P of spVisible){ planetMesh(P); }
+    for(const P of planets.values()) if(P && P.mesh){ const far=P.c.distanceTo(SP.pos)>SPACE_CELL*3.2 && !P.home && P!==MOON; P.mesh.visible=!far; if(P.ringMesh) P.ringMesh.visible=!far; } }
+  // el planeta más cercano (por distancia a su superficie)
+  let best=null, bd=1e12; for(const P of spVisible){ const d=P.c.distanceTo(SP.pos)-P.R; if(d<bd){ bd=d; best=P; } } SP.near=best; SP.nearD=bd;
+  for(const P of spVisible){ if(P.home) continue; const d=P.c.distanceTo(SP.pos)-P.R; if(d<P.R*3+250) planetHi(P,true); else if(d>P.R*4+400 && P.hi && SP.planet!==P) planetHi(P,false); if(P.hi) updateCrittersSpace(P,dt,t); }
+  if(SP.anim){ spaceAnim(dt); return; }
+  if(SP.mode==='fly') flyUpdate(dt,best,bd); else if(SP.mode==='walk') walkUpdate(dt,t);
+  if(SP.chomp>0) SP.chomp-=dt; }
+function flyUpdate(dt,best,bd){
+  let yawIn=0, pitchIn=0; if(keys.KeyA||keys.ArrowLeft) yawIn+=1; if(keys.KeyD||keys.ArrowRight) yawIn-=1; if(keys.ArrowUp) pitchIn-=1; if(keys.ArrowDown) pitchIn+=1; yawIn-=stick.x; pitchIn+=stick.y;
+  const thrust=keys.KeyW||keys.Space||touchHold.up, brake=keys.KeyS||keys.KeyQ||touchHold.down;
+  // girar el cohete en su propio marco (nariz = +y del cohete)
+  _qq.setFromAxisAngle(_r.set(0,0,1),yawIn*1.4*dt); SP.q.multiply(_qq); _qq.setFromAxisAngle(_r.set(1,0,0),-pitchIn*1.2*dt); SP.q.multiply(_qq); SP.q.normalize();
+  if(thrust) SP.speed=Math.min(520,SP.speed+(SP.speed<120?60:140)*dt); else if(brake) SP.speed=Math.max(0,SP.speed-220*dt); else SP.speed=Math.max(25,SP.speed-8*dt);
+  _f.set(0,1,0).applyQuaternion(SP.q); SP.pos.addScaledVector(_f,SP.speed*dt);
+  // no atravesar planetas
+  if(best){ const toC=_d.copy(SP.pos).sub(best.c), dist=toC.length(), r=(best.home?best.R:surfR(best,toC.clone().normalize()))+12; if(dist<r){ SP.pos.copy(best.c).addScaledVector(toC.normalize(),r); SP.speed=Math.min(SP.speed,20); } }
+  myRocket.g.position.copy(SP.pos).addScaledVector(_f,-11); myRocket.g.quaternion.copy(SP.q); myRocket.door.rotation.y=0;
+  myRocket.flames.visible=SP.speed>30; const fl=.5+SP.speed/520+(thrust?.4:0)+Math.random()*.2; myRocket.flames.scale.set(fl,fl*(thrust?1.6:1),fl);
+  // llegando a un planeta
+  if(best && !best.home && bd<best.R*2.5+150 && SP.arrived!==best.key){ SP.arrived=best.key; bigText('Llegando a '+best.name,2200); flashNote(best.name+': planeta '+SHAPE_N[best.shape]+' de '+best.t.n+(best.edible?' · ¡se puede morder!':'')); }
+  if(best && bd>best.R*4+400 && SP.arrived===best.key) SP.arrived='';
+  renderSpaceHud(); }
+// aterrizar: el cohete baja hasta la superficie y se para derecho
+function startLanding(P){ const d=SP.pos.clone().sub(P.c).normalize(), from=myRocket.g.position.clone(), fq=myRocket.g.quaternion.clone();
+  const to=P.c.clone().addScaledVector(d,surfR(P,d)), tq=new THREE.Quaternion().setFromUnitVectors(_y1,d);
+  SP.anim={kind:'land', t:0, dur:3, from, fq, to, tq, P, d}; SP.speed=0; spaceButtons(true); }
+function startTakeoff(){ const at=SP.rocketAt; if(!at) return; const P=at.P, d=at.d; const from=myRocket.g.position.clone();
+  SP.anim={kind:'off', t:0, dur:2.2, from, P, d}; myRocket.door.rotation.y=0; plush.visible=false; try{ const A=audio.raw(); A.noise(A.ctx.currentTime,2.2,500,.3); }catch(e){} }
+function spaceAnim(dt){ const a=SP.anim; a.t+=dt; const k=Math.min(1,a.t/a.dur), e=k*k*(3-2*k);
+  if(a.kind==='land'){ myRocket.g.position.lerpVectors(a.from,a.to,e); myRocket.g.quaternion.slerpQuaternions(a.fq,a.tq,e); myRocket.flames.visible=true; myRocket.flames.scale.setScalar(.6+Math.random()*.3);
+    _f.set(0,1,0).applyQuaternion(myRocket.g.quaternion); SP.pos.copy(myRocket.g.position).addScaledVector(_f,11);
+    if(k>=1){ myRocket.flames.visible=false; SP.anim=null; const P=a.P, d=a.d; parkRocket(P,d); SP.mode='walk'; SP.planet=P;
+      // salir caminando por la puerta
+      SP.camFwd.copy(Math.abs(d.y)<.9?_u.set(0,1,0):_u.set(1,0,0)); SP.camFwd.addScaledVector(d,-SP.camFwd.dot(d)).normalize(); const side=SP.camFwd.clone();
+      const pd=d.clone().addScaledVector(side,7/P.R).normalize(); SP.pos.copy(P.c).addScaledVector(pd,surfR(P,pd)); SP.face.copy(side); SP.up.copy(pd); SP.hv=0; SP.vy=0; SP.camFwd.crossVectors(pd,side).normalize();   // el cohete queda a un lado de la vista
+      plush.visible=true; spaceButtons(true); bigText(P.name,1400); try{ audio.land(1); }catch(e){} sendPresence(true); } }
+  else if(a.kind==='off'){ const up=_u.copy(a.d); myRocket.g.position.copy(a.from).addScaledVector(up,a.t*a.t*12); myRocket.flames.visible=true; myRocket.flames.scale.setScalar(.8+Math.random()*.4);
+    _f.set(0,1,0).applyQuaternion(myRocket.g.quaternion); SP.pos.copy(myRocket.g.position).addScaledVector(_f,11);
+    if(k>=1){ SP.anim=null; SP.mode='fly'; SP.q.copy(myRocket.g.quaternion); SP.speed=60; SP.rocketAt=null; if(SP.planet){ /* se queda en alta mientras sigas cerca */ } SP.planet=null; spaceButtons(true); sendPresence(true); } } }
+function walkUpdate(dt,t){ const P=SP.planet; if(!P){ SP.mode='fly'; return; }
+  // marco local: arriba = desde el centro del planeta
+  SP.up.copy(SP.pos).sub(P.c).normalize(); const up=SP.up;
+  // la cámara gira con el ratón o el dedo (cambio de "yaw")
+  const dy=yaw-SP.lastYaw; SP.lastYaw=yaw; if(dy) SP.camFwd.applyAxisAngle(up,dy);
+  SP.camFwd.addScaledVector(up,-SP.camFwd.dot(up)).normalize();
+  let f=0,s=0; if(keys.KeyW||keys.ArrowUp) f+=1; if(keys.KeyS||keys.ArrowDown) f-=1; if(keys.KeyD||keys.ArrowRight) s+=1; if(keys.KeyA||keys.ArrowLeft) s-=1; f-=stick.y; s+=stick.x;
+  const mag=Math.min(1,Math.hypot(f,s)), run=(settings.alwaysRun?!(keys.ShiftLeft||keys.ShiftRight):(keys.ShiftLeft||keys.ShiftRight))||Math.hypot(stick.x,stick.y)>.95;
+  _r.crossVectors(SP.camFwd,up).normalize();   // derecha de la cámara
+  _d.set(0,0,0).addScaledVector(SP.camFwd,f).addScaledVector(_r,s); const dl=_d.length();
+  const sp=(run?7.5:4.2)*mag; const target=dl>.01?_d.multiplyScalar(sp/dl):_d.set(0,0,0);
+  SP.vel.lerp(target,1-Math.exp(-dt*10)); SP.vel.addScaledVector(up,-SP.vel.dot(up));
+  if(SP.vel.lengthSq()>.04) SP.face.lerp(_f.copy(SP.vel).normalize(),1-Math.exp(-dt*12)).normalize();
+  SP.face.addScaledVector(up,-SP.face.dot(up)).normalize();
+  // moverse sobre la superficie
+  SP.pos.addScaledVector(SP.vel,dt); const d=_u.copy(SP.pos).sub(P.c).normalize(); const ground=surfR(P,d);
+  if((keys.Space||touchHold.up) && SP.hv<=.02 && SP.vy<=0){ SP.vy=8.2; try{ audio.jump(); }catch(e){} }
+  SP.vy-=18*dt; SP.hv+=SP.vy*dt; if(SP.hv<=0){ if(SP.vy<-6) player.squash=1; SP.hv=0; SP.vy=0; }
+  SP.pos.copy(P.c).addScaledVector(d,ground+SP.hv);
+  SP.walkMv=Math.min(1,SP.vel.length()/4.2); SP.walk+=dt*(6+SP.walkMv*6)*(SP.walkMv>.05?1:0);
+  renderSpaceHud(); }
+// pose y lugar del peluche en el espacio
+function spacePose(t,dt){ if(!SP.on) return; const P=SP.planet;
+  if(SP.mode==='walk' && P && !SP.anim){ const air=SP.hv>.3, mv=SP.walkMv||0;
+    poseLimbs(plush,t,dt,Math.sin(SP.walk)*.7*mv,air,0,false,null,SP.walk,mv,false);
+    if(SP.chomp>0){ const k=SP.chomp/.5; plush.userData.arms.forEach(a=>{ a.rotation.x=-1.4*k; }); }
+    const bob=Math.abs(Math.sin(SP.walk))*.06*mv; plush.position.copy(SP.pos).addScaledVector(SP.up,bob);
+    _r.crossVectors(SP.up,SP.face).normalize(); _m.makeBasis(_r,SP.up,SP.face); plush.quaternion.setFromRotationMatrix(_m);
+    const sq=player.squash*.18+(SP.chomp>0?.15*Math.sin(SP.chomp*30):0); plush.userData.body.scale.set(1+sq*.6,1-sq,.78*(1+sq*.6)); shapeHead(plush); plush.visible=true; }
+  else plush.visible=false; }
+const _ct=new THREE.Vector3(), _cw=new THREE.Vector3();
+function spaceCamera(dt){ if(!SP.on) return false;
+  if(SP.mode==='walk' && !SP.anim){ const up=SP.up, p=THREE.MathUtils.clamp(.32-pitch,-.1,1.25), dist=camDist;
+    _ct.copy(SP.pos).addScaledVector(up,1.4); _cw.copy(_ct).addScaledVector(SP.camFwd,-Math.cos(p)*dist).addScaledVector(up,Math.sin(p)*dist);
+    // que la cámara no se meta al planeta
+    const P=SP.planet; if(P){ const dd=_d.copy(_cw).sub(P.c), r=surfR(P,dd.clone().normalize())+.6; if(dd.length()<r) _cw.copy(P.c).addScaledVector(dd.normalize(),r); }
+    if(camera.position.distanceTo(_cw)>30){ camera.position.copy(_cw); camera.up.copy(up); }   // recién llegado: sin viajar la cámara desde lejos
+    camera.up.lerp(up,1-Math.exp(-dt*8)).normalize(); camera.position.lerp(_cw,1-Math.exp(-dt*12)); camera.lookAt(_ct); return true; }
+  // volando: detrás y un poco arriba del cohete
+  const g=myRocket.g; _f.set(0,1,0).applyQuaternion(g.quaternion); _u.set(0,0,-1).applyQuaternion(g.quaternion);
+  const back=SP.anim?55:42+SP.speed*.04; _cw.copy(g.position).addScaledVector(_f,-back+14).addScaledVector(_u,-12);
+  camera.up.lerp(_u.negate(),1-Math.exp(-dt*3)).normalize(); camera.position.lerp(_cw,1-Math.exp(-dt*(SP.anim?3:6))); camera.lookAt(_ct.copy(g.position).addScaledVector(_f,16)); return true; }
+// botones de acción en el espacio
+function spaceActions(){ if(SP.anim) return [null,null];
+  if(SP.mode==='fly'){ const P=SP.near; const land = P && (P.home ? SP.nearD<P.R*.6+120 : SP.nearD<P.R*.8+90) ? (P.home?{label:'Aterrizar en la isla', run:()=>{ fade(true,700); setTimeout(()=>exitSpace(false),720); }}:{label:'Aterrizar en '+P.name, run:()=>startLanding(P)}) : null;
+    return [land, {label:'Volver a la isla', run:()=>{ fade(true,700); setTimeout(()=>exitSpace(false),720); }}]; }
+  if(SP.mode==='walk'){ const P=SP.planet; let a=null, b=null;
+    if(SP.rocketAt && SP.pos.distanceTo(myRocket.g.position)<8.5) a={label:'Subir al cohete', run:startTakeoff};
+    else if(heldItem()==='flag') a={label:'Plantar bandera', run:plantFlag};
+    else if(P && P.edible) a={label:'Morder', run:spaceBite};
+    b={label:'Volver a la isla', run:()=>{ fade(true,700); setTimeout(()=>exitSpace(false),720); }};
+    return [a,b]; }
+  return null; }
+// ¡ñam! una mordida frente a ti que todos en la sala ven
+const myBites=[];
+function spaceBite(){ const P=SP.planet; if(!P || !P.edible || SP.chomp>0) return; const d=_d.copy(SP.pos).addScaledVector(SP.face,2.6).sub(P.c).normalize();
+  const b={d:d.clone(), s:3.4+Math.random()*.8}; addBite(P,b,true); SP.chomp=.5;
+  try{ const A=audio.raw(); const t=A.ctx.currentTime; A.noise(t,.12,1400,.25); A.tone('square',220,140,t+.05,.1,.12); A.noise(t+.14,.1,900,.2); }catch(e){}
+  try{ const w=P.c.clone().addScaledVector(d,surfR(P,d)); splashBurst(w.x,w.y,w.z,.4); }catch(e){} }
+function biteKey(key,d){ return key+':'+Math.round(d.x*500)+','+Math.round(d.y*500)+','+Math.round(d.z*500); }
+const knownBites=new Map();
+function addBite(P,b,mine){ const k=biteKey(P.key,b.d); if(knownBites.has(k)) return; knownBites.set(k,[P.key,Math.round(b.d.x*1000),Math.round(b.d.y*1000),Math.round(b.d.z*1000),Math.round(b.s*10)]);
+  if(knownBites.size>260){ const first=knownBites.keys().next().value; knownBites.delete(first); }
+  P.bites.push(b); if(P.hi) planetRebite(P,b); if(mine) try{ sendPresence(true); }catch(e){} }
+// ---- HUD del espacio ----
+let spHudKey='';
+function renderSpaceHud(force){ const el=ui('spHud'); if(!SP.on){ el.hidden=true; return; } let txt='';
+  if(SP.mode==='fly'){ const P=SP.near; txt=(P?(P.home?'Isla Peluche':P.name)+' · '+(SP.nearD>1000?(SP.nearD/1000).toFixed(1)+' km':Math.max(0,Math.round(SP.nearD))+' m'):'')+' · '+Math.round(SP.speed*3.6)+' km/h'; }
+  else if(SP.planet) txt=SP.planet.name+' · '+SP.planet.t.n+(SP.planet.edible?' · 🍴':'');
+  if(force || txt!==spHudKey){ spHudKey=txt; el.hidden=false; ui('spTxt').textContent=txt; } }
+// ---- multijugador en el espacio ----
+function spacePresence(){ const out={sp:null, bt:null, rk:null};
+  if(player.rk && (player.rk.ph==='seat'||player.rk.ph==='launch')) out.rk=[player.rk.ph==='launch'?2:1, r2(islandRocket.g.position.y-RK.h)];
+  if(SP.on){ const p=SP.mode==='fly'?myRocket.g.position:SP.pos, f=SP.mode==='fly'?_f.set(0,1,0).applyQuaternion(SP.q):SP.face, u=SP.mode==='fly'?_u.set(0,0,-1).applyQuaternion(SP.q):SP.up;
+    out.sp=[SP.mode==='fly'||SP.anim?1:2, Math.round(p.x*10)/10, Math.round(p.y*10)/10, Math.round(p.z*10)/10, r2(f.x), r2(f.y), r2(f.z), r2(u.x), r2(u.y), r2(u.z), SP.planet?SP.planet.key:'', r2(SP.walkMv||0)]; }
+  if(knownBites.size) out.bt=[...knownBites.values()];
+  return out; }
+function parseSpace(r,pr){ const s=pr.sp; r.sp = Array.isArray(s) && s.length>=11 && s.slice(1,10).every(Number.isFinite) ? s : null;
+  r.rk = Array.isArray(pr.rk) && pr.rk.length===2 && pr.rk.every(Number.isFinite) ? pr.rk : null;
+  // mordidas de todos (cada quien vuelve a anunciar las que conoce: así duran mientras haya alguien en la sala)
+  if(Array.isArray(pr.bt)) for(const e of pr.bt.slice(0,300)){ if(!Array.isArray(e) || e.length!==5 || typeof e[0]!=='string' || !e.slice(1).every(Number.isFinite)) continue;
+    const P=planetByKey(e[0]); if(!P || !P.edible) continue; const d=new THREE.Vector3(e[1],e[2],e[3]).normalize(); addBite(P,{d, s:Math.min(6,Math.max(1,e[4]/10))},false); } }
+const remoteRockets=new Map();
+function remoteRocketFor(r,space){ let rr=remoteRockets.get(r); if(!rr){ rr=makeRocket(); rr.lad.visible=false; remoteRockets.set(r,rr); } const want=space?spaceScene:scene; if(rr.g.parent!==want) want.add(rr.g); return rr; }
+function updateSpaceRemotes(dt,t){
+  for(const r of mp.remotes.values()){ const rr=remoteRockets.get(r);
+    if(SP.on && r.sp){ if(r.obj.parent!==spaceScene){ spaceScene.add(r.obj); r.obj.rotation.order='XYZ'; }
+      const s=r.sp; r.spPos=r.spPos||new THREE.Vector3(s[1],s[2],s[3]); r.spPos.lerp(_ct.set(s[1],s[2],s[3]),1-Math.exp(-dt*10));
+      if(s[0]===1){ r.obj.visible=false; const R=remoteRocketFor(r,true); R.g.visible=true; _f.set(s[4],s[5],s[6]); _u.set(s[7],s[8],s[9]); R.g.position.copy(r.spPos); _r.crossVectors(_f,_u); _m.makeBasis(_r,_f,_u.negate()); R.g.quaternion.setFromRotationMatrix(_m); R.flames.visible=true; }
+      else { if(rr) rr.g.visible=false; r.obj.visible=true; _u.set(s[7],s[8],s[9]).normalize(); _f.set(s[4],s[5],s[6]); _f.addScaledVector(_u,-_f.dot(_u)).normalize(); r.obj.position.copy(r.spPos);
+        _r.crossVectors(_u,_f).normalize(); _m.makeBasis(_r,_u,_f); r.obj.quaternion.setFromRotationMatrix(_m);
+        const mv=s[11]||0; r.spWalk=(r.spWalk||0)+dt*(6+mv*6)*(mv>.05?1:0); poseLimbs(r.obj,t,dt,Math.sin(r.spWalk)*.7*mv,false,0,false,null,r.spWalk,mv,false); }
+      r.label.visible=true; }
+    else { if(r.obj.parent!==scene){ scene.add(r.obj); r.obj.quaternion.identity(); r.obj.rotation.order='YXZ'; }
+      if(r.sp && !SP.on) r.obj.visible=false; else if(!r.rk) r.obj.visible=true;
+      if(r.rk){ r.obj.visible=false; if(r.rk[0]===2 && !SP.on){ const R=remoteRocketFor(r,false); R.g.visible=true; R.g.position.set(RK.x,RK.h+r.rk[1],RK.z); R.g.rotation.y=RK.yaw; R.flames.visible=true; } else if(rr) rr.g.visible=false; }
+      else if(rr && !(SP.on && r.sp)) rr.g.visible=false; }
+    if(rr && !mp.remotes.has(r)) { rr.g.parent&&rr.g.parent.remove(rr.g); remoteRockets.delete(r); } }
+  for(const [r,rr] of remoteRockets) if(![...mp.remotes.values()].includes(r)){ rr.g.parent&&rr.g.parent.remove(rr.g); remoteRockets.delete(r); } }
+// el cohete de la isla: pantalla de diagnóstico del mapa y del menú
+ui('spExit').onclick=()=>{ fade(true,500); setTimeout(()=>exitSpace(false),520); };
+
 // presencia: en qué minijuego estoy (y datos del hockey)
 function mgPresence(){ const M=player.mg; if(!M) return {mg:null, hk:null}; const i=MINIS.indexOf(M.g); return {mg:[i, M.act|0, M.actX|0], hk:M.g.presence?M.g.presence(M):null}; }
 renderCoins();
@@ -6779,8 +7239,9 @@ function update(dt,t){
   updateCritters(dt);
   updateMinis(dt);
   arenaUpdate(dt);
+  if(state==='play'){ rocketUpdate(dt); if(SP.on) spaceUpdate(dt,t); }
   const dv=player.dive;
-  if(state==='play' && !player.car && !player.ac && !player.pg && !bowMoving && !player.mg && !arBall() && !arFrozen()){
+  if(state==='play' && !player.car && !player.ac && !player.pg && !bowMoving && !player.mg && !arBall() && !arFrozen() && !SP.on && !player.rk){
     let f=0,s=0;
     if(keys.KeyW||keys.ArrowUp) f+=1;
     if(keys.KeyS||keys.ArrowDown) f-=1;
@@ -6955,7 +7416,7 @@ function update(dt,t){
   if(acPose){ const w=placeInAircraft(plush, aircraft[player.ac.i], acPose); player.pos.copy(w); player.groundY=w.y; }
   if(pgPose){ placePlay(plush,pgPose); player.pos.set(...pgPose.pos); player.groundY=pgPose.pos[1]; player.facing=pgPose.yaw; }
   if(player.mg && state==='play') mgPose(t,dt);
-  if(state==='play') arenaPose(t,dt);
+  if(state==='play'){ arenaPose(t,dt); rocketPose(t,dt); spacePose(t,dt); }
   else if(state==='play' && performance.now()/1000<player.pushUntil) pgPoseLimbs(plush,{push:1},t,dt,player.walk);
   if(state==='play' && !player.car && !player.ac && !player.pg) pulledByOthers(dt);
   myBowPose(dt);
@@ -6977,6 +7438,8 @@ function update(dt,t){
     { camera.position.set(Math.sin(a)*4.2 - 1.2, 1.6, Math.cos(a)*1.5+4.2);
     camera.lookAt(-1.1, 1.15, 0); }
     plush.visible=true;
+  } else if(state==='play' && SP.on && spaceCamera(dt)){
+  } else if(state==='play' && rocketCamera(dt)){
   } else if(state==='play' && arenaCamera(dt)){
   } else if(player.mg && mgCamera(dt)){
   } else if(player.ac && acPose){
@@ -7039,7 +7502,7 @@ function update(dt,t){
     if(cakeSolid(camera.position.x,camera.position.y,camera.position.z)) camera.position.copy(want);   // nunca quedarse dentro del pastel
     camera.lookAt(target);
   }
-  setUnderwaterView(camera.position.y < waterLevelAt(camera.position.x,camera.position.z)-.03);
+  setUnderwaterView(!SP.on && camera.position.y < waterLevelAt(camera.position.x,camera.position.z)-.03);
 
   // Burbujas cuando la cabeza está bajo el agua
   let emitter=null;
@@ -7075,10 +7538,11 @@ function frame(){
   if(state!=='pause') update(dt,t);
   updateSky(dt);
   updateRemotes(dt,t);
+  updateSpaceRemotes(dt,t);
   updateOutfitGlow();
   if(state==='play') sendPresence(false);
   if(mp.room && performance.now()-mp.heartbeat>4000){ mp.heartbeat=performance.now(); mp.lastPayload=''; sendPresence(true); updateRoomUI(); }   // latido
-  if(shopOpen()) renderStudio(dt); else renderer.render(scene,camera);
+  if(shopOpen()) renderStudio(dt); else renderer.render(SP.on&&state!=='menu'?spaceScene:scene,camera);
   fpsFrames++; fpsTime+=raw;
   if(fpsTime>=.5){ if(settings.fps){ const t2=Math.round(fpsFrames/fpsTime)+' FPS'+(resScale<.99?` · ${Math.round(resScale*100)}%`:''); if(fpsEl.textContent!==t2) fpsEl.textContent=t2; } fpsFrames=0; fpsTime=0; }
   if(state==='play') autoResolution(raw);
