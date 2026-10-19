@@ -124,6 +124,9 @@ body.not-play .mg-hud, body.not-play .mg-ctl, body.not-play .mg-result{display:n
 .book-pl canvas{width:100%;max-width:118px;aspect-ratio:1;}
 .book-pl b{font-size:15px;line-height:1.1;}
 .book-pl small{font-size:11px;font-weight:700;opacity:.85;line-height:1.25;}
+.book-others{margin:-4px 0 0;font-size:12.5px;font-weight:800;color:#6a5a7c;}
+.book-sp .book-vio{color:#7d5bd6;opacity:1;}
+.book-pl .book-cnt{max-width:100%;}
 .book-pl .book-who{opacity:.7;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .book-empty{grid-column:1/-1;margin:20px 10px;font-size:15px;font-weight:700;color:#5a4a6c;text-align:center;line-height:1.4;}
 .book-detail{overflow:auto;display:flex;flex-direction:column;gap:10px;padding:2px 4px 6px;}
@@ -814,7 +817,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='66';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='67';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -7139,11 +7142,18 @@ function updateCrittersSpace(P,dt,t){ if(!P.critters) return; const here=SP.mode
       e.p.position.set(e.base.x+e.off.x*e.er, e.base.y+e.off.y*e.er, e.base.z); }
     // ¿la viste de cerca? queda anotada en tu libro
     if(here && !speciesSeen.has(sp.key) && SP.pos.distanceTo(c.o.position)<10+c.s*3) markSeen(P,sp); } }
+// planetas que ya pisaste (con el lugar donde llegaste, para poder volver) — se guardan en este navegador
+const visitedPl=(()=>{ try{ const o=JSON.parse(localStorage.getItem('mundoPeluchePlanetas')||'{}'); return o&&typeof o==='object'&&!Array.isArray(o)?o:{}; }catch(e){ return {}; } })();
+function markVisited(P,d){ if(P.home || visitedPl[P.key]) return; visitedPl[P.key]=[+d.x.toFixed(3),+d.y.toFixed(3),+d.z.toFixed(3)];
+  const ks=Object.keys(visitedPl); if(ks.length>80) delete visitedPl[ks[0]]; try{ localStorage.setItem('mundoPeluchePlanetas',JSON.stringify(visitedPl)); }catch(e){}
+  const reward=10+Math.round(P.R/20); setTimeout(()=>{ flashNote('¡Planeta descubierto: '+P.name+'! +'+reward+' monedas · ya está en tu libro'); try{ addCoins(reward); sendPresence(true); }catch(e){} },1700); }
+// especies que ya viste de un planeta, como bits (para mandarlas a la sala)
+function seenMask(P){ let m=0; speciesOf(P).forEach((q,i)=>{ if(speciesSeen.has(q.key)) m|=1<<i; }); return m; }
 // especies que ya viste (se guardan en este navegador)
 const speciesSeen=new Set((()=>{ try{ const a=JSON.parse(localStorage.getItem('mundoPelucheEspecies')||'[]'); return Array.isArray(a)?a.filter(x=>typeof x==='string'):[]; }catch(e){ return []; } })());
 function markSeen(P,sp){ speciesSeen.add(sp.key); try{ localStorage.setItem('mundoPelucheEspecies',JSON.stringify([...speciesSeen].slice(-3000))); }catch(e){}
-  const all=speciesOf(P), got=all.filter(q=>speciesSeen.has(q.key)).length;
-  flashNote('¡Especie nueva: '+sp.name+'! ('+got+'/'+all.length+' en '+P.name+') · mírala en tu libro');
+  const all=speciesOf(P), got=all.filter(q=>speciesSeen.has(q.key)).length, reward=5+Math.round(sp.size*3);
+  flashNote('¡Especie nueva: '+sp.name+'! ('+got+'/'+all.length+' en '+P.name+') · +'+reward+' monedas'); try{ addCoins(reward); sendPresence(true); }catch(e){}
   try{ const A=audio.raw(); const t=A.ctx.currentTime; [784,988,1318].forEach((f,k)=>A.tone('triangle',f,f,t+k*.08,.12,.06)); }catch(e){} }
 
 // ---------------- ambiente al caminar: cielo, niebla, estrellas y partículas ----------------
@@ -7217,9 +7227,19 @@ showIslandFlags(); renderFlagList();
 
 // ---------------- Libro de planetas: los planetas con bandera (tuyas y de la sala), su información y sus especies ----------------
 const BOOK={view:'list', key:null};
-function bookPlanets(){ const m=new Map(); const add=(f,who)=>{ const P=planetByKey(f.w); if(!P || P.home) return; let e=m.get(P.key);
-    if(!e){ e={P, who:[], d:new THREE.Vector3(f.dx,f.dy,f.dz).normalize()}; m.set(P.key,e); } if(!e.who.includes(who)) e.who.push(who); };
-  flags.forEach(f=>{ if(f.w!=='isla') add(f,'Tú'); }); roomFlags().forEach(f=>add(f,f.who)); return [...m.values()]; }
+function bookPlanets(){ const m=new Map(); const get=(w,dx,dy,dz)=>{ const P=planetByKey(w); if(!P || P.home) return null; let e=m.get(P.key);
+    if(!e){ const d=new THREE.Vector3(dx,dy,dz); if(d.lengthSq()<1e-6) d.set(0,1,0); e={P, who:[], disc:[], prog:new Map(), d:d.normalize()}; m.set(P.key,e); } return e; };
+  const flag=(f,who)=>{ const e=get(f.w,f.dx,f.dy,f.dz); if(e && !e.who.includes(who)) e.who.push(who); };
+  flags.forEach(f=>{ if(f.w!=='isla') flag(f,'Tú'); });
+  for(const k of Object.keys(visitedPl)){ const v=visitedPl[k]; if(!Array.isArray(v)) continue; const e=get(k,v[0],v[1],v[2]); if(e && !e.disc.includes('Tú')) e.disc.push('Tú'); }
+  for(const e of m.values()) e.prog.set('Tú',seenMask(e.P));
+  try{ for(const r of mp.remotes.values()){ const nm=r.name||'Alguien';
+    if(Array.isArray(r.fl)) r.fl.forEach(f=>flag(f,nm));
+    if(Array.isArray(r.pv)) r.pv.forEach(v=>{ const e=get(v.w,v.dx,v.dy,v.dz); if(!e) return; if(!e.disc.includes(nm)) e.disc.push(nm); e.prog.set(nm,v.m); }); } }catch(e){}
+  const out=[...m.values()]; out.forEach(e=>{ if(!e.prog.has('Tú')) e.prog.set('Tú',seenMask(e.P)); });
+  return out; }
+const bits=m=>{ let n=0; while(m){ n+=m&1; m>>>=1; } return n; };
+function progText(e,n){ return [...e.prog].filter(([w,mk])=>w==='Tú'||mk).map(([w,mk])=>w+' '+bits(mk)+'/'+n).join(' · '); }
 const _tw=new THREE.Vector3(), _tu=new THREE.Vector3(), _tv=new THREE.Vector3(), _td=new THREE.Vector3();
 // dibujito del planeta (su silueta real con forma y relieve, su color, su tela, su halo y su anillo)
 function drawPlanetThumb(cv,P,sized){ const S=cv.width, g=cv.getContext('2d'); g.clearRect(0,0,S,S);
@@ -7289,13 +7309,13 @@ function renderBook(){ if(!bookIsOpen()) return; const list=ui('bookList'), det=
   const e=BOOK.view==='detail' ? items.find(x=>x.P.key===BOOK.key) : null; if(BOOK.view==='detail' && !e) BOOK.view='list';
   list.hidden=BOOK.view!=='list'; det.hidden=BOOK.view!=='detail'; back.hidden=BOOK.view!=='detail'; ui('bookTitle').textContent=BOOK.view==='detail'?e.P.name:'Libro de planetas';
   if(BOOK.view==='list'){ list.textContent='';
-    if(!items.length){ const s=document.createElement('p'); s.className='book-empty'; s.textContent='Aún no hay planetas con bandera. Viaja en el cohete, aterriza en un planeta y planta tu bandera: aparecerá aquí para todos en la sala.'; list.appendChild(s); return; }
+    if(!items.length){ const s=document.createElement('p'); s.className='book-empty'; s.textContent='Aún no hay planetas. Viaja en el cohete y aterriza en un planeta: cada planeta que descubras (y los que descubran los demás de la sala) aparecerá aquí.'; list.appendChild(s); return; }
     for(const it of items){ const P=it.P, sp=speciesOf(P), got=sp.filter(q=>speciesSeen.has(q.key)).length;
       const b=document.createElement('button'); b.type='button'; b.className='book-pl'; b.setAttribute('aria-label','Ver '+P.name);
       const cv=document.createElement('canvas'); cv.width=cv.height=160; drawPlanetThumb(cv,P,true);
       const n=document.createElement('b'); n.textContent=P.name; const m=document.createElement('small'); m.textContent=sizeName(P.R)+' · '+P.t.n;
-      const s2=document.createElement('small'); s2.className='book-cnt'; s2.textContent='🐾 '+got+'/'+sp.length+' especies';
-      const w=document.createElement('small'); w.className='book-who'; w.textContent='🚩 '+it.who.join(', ');
+      const s2=document.createElement('small'); s2.className='book-cnt'; s2.textContent='🐾 '+progText(it,sp.length);
+      const w=document.createElement('small'); w.className='book-who'; w.textContent=it.who.length?'🚩 '+it.who.join(', '):'🔭 '+it.disc.join(', ');
       b.append(cv,n,m,s2,w); b.onclick=()=>{ BOOK.view='detail'; BOOK.key=P.key; try{ audio.paper(); }catch(e){} renderBook(); }; list.appendChild(b); }
     return; }
   // ficha del planeta
@@ -7306,14 +7326,17 @@ function renderBook(){ if(!bookIsOpen()) return; const list=ui('bookList'), det=
   add('Tamaño', sizeName(P.R)[0].toUpperCase()+sizeName(P.R).slice(1)+' · '+Math.round(P.R*2)+' m de ancho');
   add('Forma', SHAPE_N[P.shape]+(P.ring?', con anillo':'')); add('Hecho de', P.t.n); add('¿Se come?', P.edible?'¡Sí! Puedes morderlo 🍴':'No, mejor no');
   add('Atmósfera', P.t.atm?(P.t.sky?'Sí, con cielo de color':'Sí'):'No (cielo de estrellas)'); add('Relieve', reliefName(P));
-  add('Ambiente', P.t.part?PART_K[P.t.part].n:'tranquilo'); add('Banderas', e.who.join(', '));
+  add('Ambiente', P.t.part?PART_K[P.t.part].n:'tranquilo'); add('Descubierto por', e.disc.join(', ')||'—'); if(e.who.length) add('Banderas', e.who.join(', '));
   top.appendChild(facts); det.appendChild(top);
   const go=document.createElement('button'); go.type='button'; go.className='book-go'; go.textContent='Viajar a '+P.name; go.onclick=()=>bookTravel(e); det.appendChild(go);
   const got=sp.filter(q=>speciesSeen.has(q.key)).length; const h=document.createElement('h3'); h.className='book-h'; h.textContent='Especies: '+got+' de '+sp.length+' descubiertas'; det.appendChild(h);
+  const others=[...e.prog].filter(([w,mk])=>w!=='Tú'); if(others.length){ const o=document.createElement('p'); o.className='book-others'; o.textContent='En la sala: '+others.map(([w,mk])=>w+' '+bits(mk)+'/'+sp.length).join(' · '); det.appendChild(o); }
   const grid=document.createElement('div'); grid.className='book-sp';
   for(const s of sp){ const seen=speciesSeen.has(s.key), c=document.createElement('div'); c.className=seen?'':'unseen'; const cc=document.createElement('canvas'); cc.width=cc.height=128; drawSpecies(cc,s,seen);
     const n=document.createElement('b'); n.textContent=seen?s.name:'???'; const m=document.createElement('small'); m.textContent=seen?SP_SHAPE_N[s.shape]+' '+sizeLabel(s.size)+' '+SP_MAT_N[s.mat]:'Aún no la ves';
-    c.append(cc,n,m); grid.appendChild(c); }
+    const vio=others.filter(([w,mk])=>mk&(1<<s.i)).map(([w])=>w); c.append(cc,n,m);
+    if(vio.length){ const v=document.createElement('small'); v.className='book-vio'; v.textContent=(seen?'También la vio: ':'La vio: ')+vio.join(', '); c.appendChild(v); }
+    grid.appendChild(c); }
   det.appendChild(grid); det.scrollTop=0; }
 function bookTravel(e){ if(player.car||player.pg){ flashNote('Bájate primero para viajar'); return; } closeBook(false); BOOK.view='list';
   enterSpace('walk',{P:e.P, d:e.d.clone()}); flashNote('Viajaste a '+e.P.name); }
@@ -7366,7 +7389,7 @@ function enterSpace(mode,o={}){ const was=SP.on; SP.on=true; fade(true,10); spac
   else { const P=o.P; if(SP.planet && SP.planet!==P) planetHi(SP.planet,false); SP.mode='walk'; SP.planet=P; planetMesh(P); planetHi(P,true); const d=o.d.clone(); SP.pos.copy(P.c).addScaledVector(d,surfR(P,d)); SP.hv=0; SP.vy=0;
     SP.up.copy(d); SP.camFwd.copy(Math.abs(d.y)<.9?new THREE.Vector3(0,1,0):new THREE.Vector3(1,0,0)).addScaledVector(d,-1).normalize(); SP.camFwd.addScaledVector(d,-SP.camFwd.dot(d)).normalize(); SP.face.copy(SP.camFwd);
     // el cohete queda estacionado junto a ti
-    const rd=d.clone().addScaledVector(_r.crossVectors(SP.camFwd,d).normalize(),9/P.R).normalize(); parkRocket(P,rd); SP.arrived=P.key; bigText('Llegaste a '+P.name,1600); }
+    const rd=d.clone().addScaledVector(_r.crossVectors(SP.camFwd,d).normalize(),9/P.R).normalize(); parkRocket(P,rd); SP.arrived=P.key; bigText('Llegaste a '+P.name,1600); markVisited(P,d); }
   SP.lastYaw=yaw; myRocket.g.visible=true; spaceButtons(true); renderSpaceHud(true); setTimeout(()=>fade(false,900),60); try{ sendPresence(true); }catch(e){} }
 function exitSpace(quiet){ if(!SP.on) return; SP.on=false; SP.mode=''; scene.add(plush); myRocket.g.visible=false; spaceButtons(false);
   if(SP.planet) planetHi(SP.planet,false); SP.planet=null; camera.far=settings.draw*1.05+15; camera.updateProjectionMatrix(); camera.up.set(0,1,0);
@@ -7418,7 +7441,7 @@ function startTakeoff(){ const at=SP.rocketAt; if(!at) return; const P=at.P, d=a
 function spaceAnim(dt){ const a=SP.anim; a.t+=dt; const k=Math.min(1,a.t/a.dur), e=k*k*(3-2*k);
   if(a.kind==='land'){ myRocket.g.position.lerpVectors(a.from,a.to,e); myRocket.g.quaternion.slerpQuaternions(a.fq,a.tq,e); myRocket.flames.visible=true; myRocket.flames.scale.setScalar(.6+Math.random()*.3);
     _f.set(0,1,0).applyQuaternion(myRocket.g.quaternion); SP.pos.copy(myRocket.g.position).addScaledVector(_f,11);
-    if(k>=1){ myRocket.flames.visible=false; SP.anim=null; const P=a.P, d=a.d; parkRocket(P,d); SP.mode='walk'; SP.planet=P;
+    if(k>=1){ myRocket.flames.visible=false; SP.anim=null; const P=a.P, d=a.d; parkRocket(P,d); markVisited(P,d); SP.mode='walk'; SP.planet=P;
       // salir caminando por la puerta
       SP.camFwd.copy(Math.abs(d.y)<.9?_u.set(0,1,0):_u.set(1,0,0)); SP.camFwd.addScaledVector(d,-SP.camFwd.dot(d)).normalize(); const side=SP.camFwd.clone();
       const pd=d.clone().addScaledVector(side,7/P.R).normalize(); SP.pos.copy(P.c).addScaledVector(pd,surfR(P,pd)); SP.face.copy(side); SP.up.copy(pd); SP.hv=0; SP.vy=0; SP.camFwd.crossVectors(pd,side).normalize();   // el cohete queda a un lado de la vista
@@ -7497,12 +7520,13 @@ function renderSpaceHud(force){ const el=ui('spHud'); if(!SP.on){ el.hidden=true
   else if(SP.planet) txt=SP.planet.name+' · '+SP.planet.t.n+(SP.planet.edible?' · 🍴':'');
   if(force || txt!==spHudKey){ spHudKey=txt; el.hidden=false; ui('spTxt').textContent=txt; } }
 // ---- multijugador en el espacio ----
-function spacePresence(){ const out={sp:null, bt:null, rk:null, fl:null};
+function spacePresence(){ const out={sp:null, bt:null, rk:null, fl:null, pv:null};
   if(player.rk && (player.rk.ph==='seat'||player.rk.ph==='launch')) out.rk=[player.rk.ph==='launch'?2:1, r2(islandRocket.g.position.y-RK.h)];
   if(SP.on){ const p=SP.mode==='fly'?myRocket.g.position:SP.pos, f=SP.mode==='fly'?_f.set(0,1,0).applyQuaternion(SP.q):SP.face, u=SP.mode==='fly'?_u.set(0,0,-1).applyQuaternion(SP.q):SP.up;
     out.sp=[SP.mode==='fly'||SP.anim?1:2, Math.round(p.x*10)/10, Math.round(p.y*10)/10, Math.round(p.z*10)/10, r2(f.x), r2(f.y), r2(f.z), r2(u.x), r2(u.y), r2(u.z), SP.planet?SP.planet.key:'', r2(SP.walkMv||0)]; }
   if(knownBites.size) out.bt=[...knownBites.values()];
   const fl=flags.filter(f=>f.w!=='isla').map(f=>[f.w,f.dx,f.dy,f.dz,f.c]); if(fl.length) out.fl=fl;
+  const pv=Object.keys(visitedPl).slice(-30).map(k=>{ const P=planetByKey(k), v=visitedPl[k]; return P&&Array.isArray(v)?[k,v[0],v[1],v[2],seenMask(P)]:null; }).filter(Boolean); if(pv.length) out.pv=pv;
   return out; }
 function parseSpace(r,pr){ const s=pr.sp; r.sp = Array.isArray(s) && s.length>=11 && s.slice(1,10).every(Number.isFinite) ? s : null;
   r.rk = Array.isArray(pr.rk) && pr.rk.length===2 && pr.rk.every(Number.isFinite) ? pr.rk : null;
@@ -7511,7 +7535,10 @@ function parseSpace(r,pr){ const s=pr.sp; r.sp = Array.isArray(s) && s.length>=1
     const P=planetByKey(e[0]); if(!P || !P.edible) continue; const d=new THREE.Vector3(e[1],e[2],e[3]).normalize(); addBite(P,{d, s:Math.min(18,Math.max(1,e[4]/10))},false); }
   // banderas en planetas (salen en el Libro de planetas de todos)
   const fl=Array.isArray(pr.fl)?pr.fl.slice(0,12).filter(e=>Array.isArray(e)&&e.length===5&&typeof e[0]==='string'&&e[0].length<40&&e.slice(1,4).every(Number.isFinite)&&/^#[0-9a-f]{6}$/i.test(e[4])).map(e=>({w:e[0], dx:e[1], dy:e[2], dz:e[3], c:e[4]})):null;
-  const sig=fl?JSON.stringify(fl):''; if(sig!==(r.flSig||'')){ r.flSig=sig; r.fl=fl; flagsDirty=true; if(bookIsOpen()) renderBook(); } }
+  const sig=fl?JSON.stringify(fl):''; if(sig!==(r.flSig||'')){ r.flSig=sig; r.fl=fl; flagsDirty=true; if(bookIsOpen()) renderBook(); }
+  // su progreso: planetas que descubrió y qué especies ha visto (solo mientras esté en la sala)
+  const pv=Array.isArray(pr.pv)?pr.pv.slice(0,30).filter(e=>Array.isArray(e)&&e.length===5&&typeof e[0]==='string'&&e[0].length<40&&e.slice(1).every(Number.isFinite)).map(e=>({w:e[0], dx:e[1], dy:e[2], dz:e[3], m:e[4]|0})):null;
+  const ps=pv?JSON.stringify(pv):''; if(ps!==(r.pvSig||'')){ r.pvSig=ps; r.pv=pv; if(bookIsOpen()) renderBook(); } }
 const remoteRockets=new Map();
 function remoteRocketFor(r,space){ let rr=remoteRockets.get(r); if(!rr){ rr=makeRocket(); rr.lad.visible=false; remoteRockets.set(r,rr); } const want=space?spaceScene:scene; if(rr.g.parent!==want) want.add(rr.g); return rr; }
 function updateSpaceRemotes(dt,t){
