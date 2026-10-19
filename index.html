@@ -817,7 +817,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='68';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='69';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -7359,10 +7359,20 @@ const myRocket=makeRocket(); myRocket.g.visible=false; spaceScene.add(myRocket.g
 const fadeEl=()=>ui('spFade');
 function fade(on,ms=600){ const el=fadeEl(); el.style.transition='opacity '+ms+'ms'; el.hidden=false; requestAnimationFrame(()=>{ el.style.opacity=on?'1':'0'; }); if(!on) setTimeout(()=>{ if(el.style.opacity==='0') el.hidden=true; },ms+50); }
 // ---- en la isla ----
+// hasta 4 en el cohete: el primero que se sentó es el piloto (solo él despega), los demás van de pasajeros
+const RK_SEATS=4;
+function islandCrew(){ const out=[]; if(player.rk && player.rk.ph==='seat') out.push({uid:myUid, name:'Tú', t:player.rk.seatT||0, me:true});
+  for(const r of mp.remotes.values()) if(r.rk && r.rk[0]===1 && !r.sp) out.push({uid:uidOf(r), name:r.name||'Alguien', t:r.rk[2]||0, r});
+  out.sort((a,b)=>a.t-b.t || (a.uid<b.uid?-1:1)); return out; }
 function rocketActions(){ const rk=player.rk;
-  if(rk){ if(rk.ph==='seat') return [{label:'¡Despegar!', run:()=>{ rk.ph='launch'; rk.t=0; try{ audio.cam(); }catch(e){} sendPresence(true); }}, {label:'Bajar', run:rocketGetOff}]; return [null,null]; }
+  if(rk){ if(rk.ph==='seat'){ const crew=islandCrew(), pilot=crew[0];
+      if(!pilot || pilot.me) return [{label:crew.length>1?'¡Despegar! ('+crew.length+' a bordo)':'¡Despegar!', run:()=>{ rk.ph='launch'; rk.t=0; rk.crew=null; try{ audio.cam(); }catch(e){} sendPresence(true); }}, {label:'Bajar', run:rocketGetOff}];
+      return [{label:'Piloto: '+pilot.name, run:()=>flashNote(pilot.name+' maneja el cohete: espera a que despegue')}, {label:'Bajar', run:rocketGetOff}]; }
+    return [null,null]; }
   if(player.car||player.ac||player.pg||player.mg||AR.me.st>=2) return null;
-  const b=rkLocal(0,0,RK_LADDER_Z+.5); if(Math.hypot(player.pos.x-b.x,player.pos.z-b.z)<1.8 && Math.abs(player.pos.y-RK.h)<2) return [{label:'Subir al cohete', run:()=>{ player.rk={ph:'climb', t:0}; holding=false; try{ applyHeld(); renderHotbar(); }catch(e){} }}, null];
+  const b=rkLocal(0,0,RK_LADDER_Z+.5); if(Math.hypot(player.pos.x-b.x,player.pos.z-b.z)<1.8 && Math.abs(player.pos.y-RK.h)<2){ const n=islandCrew().length;
+    if(n>=RK_SEATS) return [{label:'Cohete lleno ('+n+'/'+RK_SEATS+')', run:()=>flashNote('Ya van '+RK_SEATS+' en el cohete: espera el siguiente viaje')}, null];
+    return [{label:n?'Subir al cohete ('+n+'/'+RK_SEATS+')':'Subir al cohete', run:()=>{ player.rk={ph:'climb', t:0}; holding=false; try{ applyHeld(); renderHotbar(); }catch(e){} }}, null]; }
   return null; }
 function rocketGetOff(){ const b=rkLocal(0,0,RK_LADDER_Z+1.2); player.rk=null; player.pos.set(b.x,RK.h,b.z); player.vel.set(0,0,0); player.vy=0; plush.visible=true; islandRocket.door.rotation.y=0; sendPresence(true); }
 const _rb=new THREE.Vector3(), _rt=new THREE.Vector3();
@@ -7370,13 +7380,16 @@ function rocketUpdate(dt){ const rk=player.rk; if(!rk) return; rk.t+=dt; const R
   if(rk.ph==='climb'){ const k=Math.min(1,rk.t/3.2); rkLocal(0,k*RK_DOOR_Y,RK_LADDER_Z+.42,_rb); player.pos.copy(_rb); player.facing=RK.yaw+Math.PI; player.vel.set(0,0,0); player.vy=0; player.grounded=true;
     if(k>=1){ rk.ph='door'; rk.t=0; try{ audio.door(true); }catch(e){} } }
   else if(rk.ph==='door'){ const k=Math.min(1,rk.t/1.1); R.door.rotation.y=-1.7*Math.min(1,k*1.6); rkLocal(0,RK_DOOR_Y+.06,RK_LADDER_Z+.42-(1.9*Math.max(0,(k-.45)/.55)),_rb); player.pos.copy(_rb);
-    if(k>=1){ rk.ph='seat'; rk.t=0; sendPresence(true); } }
-  else if(rk.ph==='seat'){ R.door.rotation.y+=(0-R.door.rotation.y)*Math.min(1,dt*3); }
+    if(k>=1){ rk.ph='seat'; rk.t=0; rk.seatT=Date.now()%1e9; const c=islandCrew(); if(c.length>1 && !c[0].me) flashNote('Vas de pasajero: '+c[0].name+' es el piloto'); sendPresence(true); } }
+  else if(rk.ph==='seat'){ R.door.rotation.y+=(0-R.door.rotation.y)*Math.min(1,dt*3);
+    // si el piloto despega, los pasajeros se van con él
+    if(rk.pilot){ const pr=arRemote(rk.pilot); if(pr && pr.rk && pr.rk[0]===2){ rk.ph='launch'; rk.t=Math.min(5,pr.rk[1]>0?1.2+Math.sqrt(pr.rk[1]/3):0); rk.crew=rk.pilot; bigText('¡Despegamos!',1400); sendPresence(true); return; } }
+    const pilot=islandCrew()[0]; rk.pilot=pilot && !pilot.me ? pilot.uid : null; }
   else if(rk.ph==='launch'){ R.door.rotation.y=0; const t=rk.t, y=t<1.2?0:3*(t-1.2)*(t-1.2); R.g.position.y=RK.h+y; R.flames.visible=true; const fl=.8+Math.random()*.4+(t<1.2?-.4:Math.min(1,t*.2)); R.flames.scale.set(fl,fl*(1+Math.min(1.5,t*.3)),fl);
     if(Math.random()<dt*20){ try{ splashBurst(RK.x+(Math.random()-.5)*4,RK.h+.5,RK.z+(Math.random()-.5)*4,.25); }catch(e){} }
     if(!rk.snd){ rk.snd=1; try{ const A=audio.raw(); A.noise(A.ctx.currentTime,6.5,500,.35); A.tone('sawtooth',60,180,A.ctx.currentTime,6.5,.06); }catch(e){} }
     if(t>5.6 && !rk.fading){ rk.fading=1; fade(true,1300); }
-    if(t>7){ R.g.position.y=RK.h; R.flames.visible=false; player.rk=null; enterSpace('fly'); } } }
+    if(t>7){ R.g.position.y=RK.h; R.flames.visible=false; const crew=rk.crew; player.rk=null; if(crew && arRemote(crew)) enterSpace('ride',{pilot:crew}); else enterSpace('fly'); } } }
 function rocketPose(t,dt){ const rk=player.rk; if(!rk) return; if(rk.ph==='climb'){ pgPoseLimbs(plush,{climb:rk.t/3.2*3},t,dt,0); } if(rk.ph==='seat'||rk.ph==='launch') plush.visible=false; }
 function rocketCamera(dt){ const rk=player.rk; if(!rk || (rk.ph!=='seat' && rk.ph!=='launch')) return false; const R=islandRocket.g;
   const ty=R.position.y+12, d=rk.ph==='launch'?40+rk.t*6:34; _rt.set(R.position.x,ty,R.position.z);
@@ -7386,13 +7399,17 @@ function rocketCamera(dt){ const rk=player.rk; if(!rk || (rk.ph!=='seat' && rk.p
 // ---- entrar y salir del espacio ----
 function enterSpace(mode,o={}){ const was=SP.on; SP.on=true; fade(true,10); spaceScene.add(plush); if(player.mg) stopMini(); if(AR.me.a>=0) arLeave();
   camera.far=90000; camera.updateProjectionMatrix(); player.rk=null; SP.arrived=''; SP.anim=null; holding=false; try{ applyHeld(); renderHotbar(); }catch(e){}
+  SP.seat=null; if(mode!=='ride' && !o.crew) SP.crew=null;
   if(mode==='fly'){ SP.mode='fly'; SP.pos.set(0,HOME.R+380,0); SP.q.setFromUnitVectors(new THREE.Vector3(0,1,0),MOON.c.clone().sub(SP.pos).normalize()); SP.speed=40; SP.planet=null; }
+  else if(mode==='ride'){ if(SP.planet) planetHi(SP.planet,false); SP.mode='ride'; SP.crewT=performance.now(); SP.crew=o.pilot; SP.planet=null; SP.rocketAt=null; SP.speed=0; const r=arRemote(o.pilot); if(r && r.sp) SP.pos.set(r.sp[1],r.sp[2],r.sp[3]); else SP.pos.set(0,HOME.R+380,0);
+    const nm=r&&r.name||'tu amigo'; bigText('Viajas con '+nm,1600); }
   else { const P=o.P; if(SP.planet && SP.planet!==P) planetHi(SP.planet,false); SP.mode='walk'; SP.planet=P; planetMesh(P); planetHi(P,true); const d=o.d.clone(); SP.pos.copy(P.c).addScaledVector(d,surfR(P,d)); SP.hv=0; SP.vy=0;
     SP.up.copy(d); SP.camFwd.copy(Math.abs(d.y)<.9?new THREE.Vector3(0,1,0):new THREE.Vector3(1,0,0)).addScaledVector(d,-1).normalize(); SP.camFwd.addScaledVector(d,-SP.camFwd.dot(d)).normalize(); SP.face.copy(SP.camFwd);
-    // el cohete queda estacionado junto a ti
-    const rd=d.clone().addScaledVector(_r.crossVectors(SP.camFwd,d).normalize(),9/P.R).normalize(); parkRocket(P,rd); SP.arrived=P.key; bigText('Llegaste a '+P.name,1600); markVisited(P,d); }
-  SP.lastYaw=yaw; myRocket.g.visible=true; spaceButtons(true); renderSpaceHud(true); setTimeout(()=>fade(false,900),60); try{ sendPresence(true); }catch(e){} }
-function exitSpace(quiet){ if(!SP.on) return; SP.on=false; SP.mode=''; scene.add(plush); myRocket.g.visible=false; spaceButtons(false);
+    // el cohete queda estacionado junto a ti (si llegaste de pasajero, el cohete es el del piloto)
+    if(o.noRocket) SP.rocketAt=null; else { const rd=d.clone().addScaledVector(_r.crossVectors(SP.camFwd,d).normalize(),9/P.R).normalize(); parkRocket(P,rd); }
+    SP.arrived=P.key; bigText('Llegaste a '+P.name,1600); markVisited(P,d); }
+  SP.lastYaw=yaw; myRocket.g.visible=SP.mode==='fly' || !!SP.rocketAt; spaceButtons(true); renderSpaceHud(true); setTimeout(()=>fade(false,900),60); try{ sendPresence(true); }catch(e){} }
+function exitSpace(quiet){ if(!SP.on) return; SP.on=false; SP.mode=''; SP.seat=null; SP.crew=null; scene.add(plush); myRocket.g.visible=false; spaceButtons(false);
   if(SP.planet) planetHi(SP.planet,false); SP.planet=null; camera.far=settings.draw*1.05+15; camera.updateProjectionMatrix(); camera.up.set(0,1,0);
   const b=rkLocal(0,0,RK_LADDER_Z+1.5); player.pos.set(b.x,RK.h,b.z); player.vel.set(0,0,0); player.vy=0; player.grounded=true; player.facing=RK.yaw; yaw=RK.yaw+Math.PI; plush.visible=true; plush.quaternion.identity(); plush.rotation.order='YXZ';
   spaceScene.background.copy(_space); spaceScene.fog.near=1e8; spaceScene.fog.far=2e8; spStars.material.opacity=1; spNebula.forEach(s=>s.material.opacity=.8); spParts.visible=false; partKind='';
@@ -7416,7 +7433,8 @@ function spaceUpdate(dt,t){
   if(flagsDirty){ flagsDirty=false; for(const P of planets.values()) if(P && P.hi) showFlags(P,true); }
   spaceAmbient(dt);
   if(SP.anim){ spaceAnim(dt); return; }
-  if(SP.mode==='fly') flyUpdate(dt,best,bd); else if(SP.mode==='walk') walkUpdate(dt,t);
+  if(SP.mode==='ride' || (SP.seat && SP.seat.pilot)){ crewUpdate(dt); if(!SP.on) return; }
+  if(SP.mode==='fly') flyUpdate(dt,best,bd); else if(SP.mode==='walk' && !SP.seat) walkUpdate(dt,t); else if(SP.mode==='walk' || SP.mode==='ride') renderSpaceHud();
   if(SP.chomp>0) SP.chomp-=dt; }
 function flyUpdate(dt,best,bd){
   let yawIn=0, pitchIn=0; if(keys.KeyA||keys.ArrowLeft) yawIn+=1; if(keys.KeyD||keys.ArrowRight) yawIn-=1; if(keys.ArrowUp) pitchIn-=1; if(keys.ArrowDown) pitchIn+=1; yawIn-=stick.x; pitchIn+=stick.y;
@@ -7433,6 +7451,29 @@ function flyUpdate(dt,best,bd){
   if(best && !best.home && bd<best.R*2.5+150 && SP.arrived!==best.key){ SP.arrived=best.key; bigText('Llegando a '+best.name,2200); flashNote(best.name+': planeta '+sizeName(best.R)+' '+SHAPE_N[best.shape]+' de '+best.t.n+' · '+speciesOf(best).length+(speciesOf(best).length===1?' especie':' especies')+(best.edible?' · ¡se puede morder!':'')); }
   if(best && bd>best.R*4+400 && SP.arrived===best.key) SP.arrived='';
   renderSpaceHud(); }
+// ---- viajar de pasajero: el cohete del piloto manda ----
+function pilotRocketPos(r,out){ const s=r.sp; if(!s) return null;
+  if((s[0]===2||s[0]===4) && Number.isFinite(s[12])){ const P=planetByKey(s[10]); if(!P) return null; const d=_d.set(s[12],s[13],s[14]).normalize(); return out.copy(P.c).addScaledVector(d,surfR(P,d)+5); }
+  return out.set(s[1],s[2],s[3]); }
+function crewUpdate(dt){ const r=arRemote(SP.crew || (SP.seat&&SP.seat.pilot)); const riding=SP.mode==='ride';
+  if(!r){ // el piloto se fue de la sala
+    if(riding){ SP.mode='fly'; SP.crew=null; SP.speed=40; myRocket.g.visible=true; flashNote('El piloto se fue: ahora manejas tú'); spaceButtons(true); }
+    else { SP.seat=null; flashNote('El piloto se fue de la sala'); }
+    try{ sendPresence(true); }catch(e){} return; }
+  const s=r.sp, nm=r.name||'tu amigo';
+  if(!s){ if(riding && performance.now()-(SP.crewT||0)<6000) return;   // el piloto todavía va saliendo de la isla
+    fade(true,10); exitSpace(false); flashNote('Volviste a la isla con '+nm); return; }   // el piloto volvió a la isla
+  if(riding){
+    if(s[0]===1){ const R=remoteRockets.get(r); if(R && R.g.visible){ SP.pos.copy(R.g.position); SP.q.copy(R.g.quaternion); } else SP.pos.set(s[1],s[2],s[3]); renderSpaceHud(); return; }
+    // el piloto aterrizó: bajas a su lado
+    const P=planetByKey(s[10]); if(!P) return; const at=_ct.set(s[1],s[2],s[3]).sub(P.c).normalize();
+    const side=_cw.set(Math.random()-.5,Math.random()-.5,Math.random()-.5); side.addScaledVector(at,-side.dot(at)).normalize();
+    const d=at.clone().addScaledVector(side,(2.5+Math.random()*2)/P.R).normalize(); enterSpace('walk',{P, d, noRocket:true, crew:SP.crew}); flashNote('Llegaste a '+P.name+' con '+nm); return; }
+  // esperando sentado en el cohete del piloto
+  if(s[0]===1){ SP.seat=null; SP.mode='ride'; SP.crewT=performance.now(); SP.crew=uidOf(r); if(SP.planet){ /* sigue en alta mientras estés cerca */ } SP.planet=null; bigText('¡Despegamos!',1200); try{ sendPresence(true); }catch(e){} return; }
+  const pos=pilotRocketPos(r,_ct); if(pos) SP.pos.copy(pos).addScaledVector(SP.up,-5); }
+// cuántos van en el cohete de alguien (piloto + pasajeros)
+function crewCount(uid){ let n=1; for(const r of mp.remotes.values()){ const s=r.sp; if(s && s[0]===3 && s[12]===uid) n++; } if((SP.seat&&SP.seat.pilot===uid) || SP.crew===uid && SP.mode==='ride') n++; return n; }
 // aterrizar: el cohete baja hasta la superficie y se para derecho
 function startLanding(P){ const d=SP.pos.clone().sub(P.c).normalize(), from=myRocket.g.position.clone(), fq=myRocket.g.quaternion.clone();
   const to=P.c.clone().addScaledVector(d,surfR(P,d)), tq=new THREE.Quaternion().setFromUnitVectors(_y1,d);
@@ -7473,7 +7514,7 @@ function walkUpdate(dt,t){ const P=SP.planet; if(!P){ SP.mode='fly'; return; }
   renderSpaceHud(); }
 // pose y lugar del peluche en el espacio
 function spacePose(t,dt){ if(!SP.on) return; const P=SP.planet;
-  if(SP.mode==='walk' && P && !SP.anim){ const air=SP.hv>.3, mv=SP.walkMv||0;
+  if(SP.mode==='walk' && P && !SP.anim && !SP.seat){ const air=SP.hv>.3, mv=SP.walkMv||0;
     poseLimbs(plush,t,dt,Math.sin(SP.walk)*.7*mv,air,0,false,null,SP.walk,mv,false);
     if(SP.chomp>0){ const k=SP.chomp/.5; plush.userData.arms.forEach(a=>{ a.rotation.x=-1.4*k; }); }
     const bob=Math.abs(Math.sin(SP.walk))*.06*mv; plush.position.copy(SP.pos).addScaledVector(SP.up,bob);
@@ -7489,19 +7530,32 @@ function spaceCamera(dt){ if(!SP.on) return false;
     if(camera.position.distanceTo(_cw)>30){ camera.position.copy(_cw); camera.up.copy(up); }   // recién llegado: sin viajar la cámara desde lejos
     camera.up.lerp(up,1-Math.exp(-dt*8)).normalize(); camera.position.lerp(_cw,1-Math.exp(-dt*12)); camera.lookAt(_ct); return true; }
   // volando: detrás y un poco arriba del cohete
-  const g=myRocket.g; _f.set(0,1,0).applyQuaternion(g.quaternion); _u.set(0,0,-1).applyQuaternion(g.quaternion);
-  const back=SP.anim?55:42+SP.speed*.04; _cw.copy(g.position).addScaledVector(_f,-back+14).addScaledVector(_u,-12); if(camera.position.distanceTo(_cw)>400) camera.position.copy(_cw);
+  const pr=SP.mode==='ride'?remoteRockets.get(arRemote(SP.crew)):null, g=pr&&pr.g.visible?pr.g:myRocket.g; _f.set(0,1,0).applyQuaternion(g.quaternion); _u.set(0,0,-1).applyQuaternion(g.quaternion);
+  const back=SP.anim?55:SP.mode==='ride'?50:42+SP.speed*.04; _cw.copy(g.position).addScaledVector(_f,-back+14).addScaledVector(_u,-12); if(camera.position.distanceTo(_cw)>400) camera.position.copy(_cw);
   camera.up.lerp(_u.negate(),1-Math.exp(-dt*3)).normalize(); camera.position.lerp(_cw,1-Math.exp(-dt*(SP.anim?3:6))); camera.lookAt(_ct.copy(g.position).addScaledVector(_f,16)); return true; }
 // botones de acción en el espacio
 function spaceActions(){ if(SP.anim) return [null,null];
   if(SP.mode==='fly'){ const P=SP.near; const land = P && (P.home ? SP.nearD<P.R*.6+120 : SP.nearD<P.R*.8+90) ? (P.home?{label:'Aterrizar en la isla', run:()=>{ fade(true,700); setTimeout(()=>exitSpace(false),720); }}:{label:'Aterrizar en '+P.name, run:()=>startLanding(P)}) : null;
     return [land, {label:'Volver a la isla', run:()=>{ fade(true,700); setTimeout(()=>exitSpace(false),720); }}]; }
+  if(SP.mode==='ride') return [null, {label:'Volver a la isla', run:()=>{ fade(true,700); setTimeout(()=>exitSpace(false),720); }}];
   if(SP.mode==='walk'){ const P=SP.planet; let a=null, b=null;
-    if(SP.rocketAt && SP.pos.distanceTo(myRocket.g.position)<8.5) a={label:'Subir al cohete', run:startTakeoff};
+    const off={label:'Bajar', run:()=>{ SP.seat=null; plush.visible=true; try{ sendPresence(true); }catch(e){} }};
+    if(SP.seat){ if(SP.seat.own){ const n=crewCount(myUid); return [{label:n>1?'¡Despegar! ('+n+' a bordo)':'¡Despegar!', run:()=>{ SP.seat=null; startTakeoff(); try{ sendPresence(true); }catch(e){} }}, off]; }
+      const r=arRemote(SP.seat.pilot); return [{label:'Piloto: '+(r&&r.name||'…'), run:()=>flashNote('Espera a que '+(r&&r.name||'el piloto')+' despegue')}, off]; }
+    const near=nearRocket();
+    if(near && near.own) a={label:'Subir al cohete', run:()=>{ SP.seat={own:true}; SP.vel.set(0,0,0); try{ sendPresence(true); }catch(e){} }};
+    else if(near){ const n=crewCount(near.uid); a = n>=RK_SEATS ? {label:'Lleno ('+n+'/'+RK_SEATS+')', run:()=>flashNote('Ese cohete ya va lleno')} : {label:'Subir con '+near.name, run:()=>{ SP.seat={pilot:near.uid}; SP.crew=near.uid; SP.vel.set(0,0,0); flashNote('Vas de pasajero: '+near.name+' es el piloto'); try{ sendPresence(true); }catch(e){} }}; }
     else if(heldItem()==='flag') a={label:'Plantar bandera', run:plantFlag};
     else if(P && P.edible) a={label:'Morder', run:spaceBite};
-    b={label:'Volver a la isla', run:()=>{ fade(true,700); setTimeout(()=>exitSpace(false),720); }};
+    b = SP.rocketAt ? {label:'Volver a la isla', run:()=>{ fade(true,700); setTimeout(()=>exitSpace(false),720); }}
+      : {label:'Llamar a mi cohete', run:()=>{ const d=SP.pos.clone().sub(P.c).normalize(), sd=_r.crossVectors(SP.face,d).normalize(); parkRocket(P,d.addScaledVector(sd,7/P.R).normalize()); myRocket.g.visible=true; flashNote('¡Tu cohete llegó!'); try{ audio.land(1); sendPresence(true); }catch(e){} }};
     return [a,b]; }
+  return null; }
+// el cohete estacionado más cercano (el tuyo o el de alguien en el mismo planeta)
+const _nr=new THREE.Vector3();
+function nearRocket(){ if(SP.rocketAt && SP.pos.distanceTo(myRocket.g.position)<8.5) return {own:true};
+  for(const r of mp.remotes.values()){ const s=r.sp; if(!s || !(s[0]===2||s[0]===4) || !SP.planet || s[10]!==SP.planet.key || !Number.isFinite(s[12])) continue;
+    const p=pilotRocketPos(r,_nr); if(p && SP.pos.distanceTo(p)<10) return {uid:uidOf(r), name:r.name||'Alguien'}; }
   return null; }
 // ¡ñam! una mordida frente a ti que todos en la sala ven
 const myBites=[];
@@ -7518,19 +7572,23 @@ function addBite(P,b,mine){ const k=biteKey(P.key,b.d); if(knownBites.has(k)) re
 let spHudKey='';
 function renderSpaceHud(force){ const el=ui('spHud'); if(!SP.on){ el.hidden=true; return; } let txt='';
   if(SP.mode==='fly'){ const P=SP.near; txt=(P?(P.home?'Isla Peluche':P.name)+' · '+(SP.nearD>1000?(SP.nearD/1000).toFixed(1)+' km':Math.max(0,Math.round(SP.nearD))+' m'):'')+' · '+Math.round(SP.speed*3.6)+' km/h'; }
-  else if(SP.planet) txt=SP.planet.name+' · '+SP.planet.t.n+(SP.planet.edible?' · 🍴':'');
+  else if(SP.mode==='ride'){ const r=arRemote(SP.crew), P=SP.near; txt='Con '+(r&&r.name||'…')+(P?' · '+(P.home?'Isla Peluche':P.name)+' · '+(SP.nearD>1000?(SP.nearD/1000).toFixed(1)+' km':Math.max(0,Math.round(SP.nearD))+' m'):''); }
+  else if(SP.planet) txt=SP.planet.name+' · '+SP.planet.t.n+(SP.planet.edible?' · 🍴':'')+(SP.seat?' · 🚀 a bordo':'');
   if(force || txt!==spHudKey){ spHudKey=txt; el.hidden=false; ui('spTxt').textContent=txt; } }
 // ---- multijugador en el espacio ----
 function spacePresence(){ const out={sp:null, bt:null, rk:null, fl:null, pv:null};
-  if(player.rk && (player.rk.ph==='seat'||player.rk.ph==='launch')) out.rk=[player.rk.ph==='launch'?2:1, r2(islandRocket.g.position.y-RK.h)];
+  if(player.rk && (player.rk.ph==='seat'||player.rk.ph==='launch')) out.rk=[player.rk.ph==='launch'?2:1, r2(islandRocket.g.position.y-RK.h), player.rk.seatT||0];
   if(SP.on){ const p=SP.mode==='fly'?myRocket.g.position:SP.pos, f=SP.mode==='fly'?_f.set(0,1,0).applyQuaternion(SP.q):SP.face, u=SP.mode==='fly'?_u.set(0,0,-1).applyQuaternion(SP.q):SP.up;
-    out.sp=[SP.mode==='fly'||SP.anim?1:2, Math.round(p.x*10)/10, Math.round(p.y*10)/10, Math.round(p.z*10)/10, r2(f.x), r2(f.y), r2(f.z), r2(u.x), r2(u.y), r2(u.z), SP.planet?SP.planet.key:'', r2(SP.walkMv||0)]; }
+    const pas = SP.mode==='ride' || (SP.seat && SP.seat.pilot), md = pas?3 : SP.mode==='fly'||SP.anim?1 : SP.seat?4 : 2;
+    out.sp=[md, Math.round(p.x*10)/10, Math.round(p.y*10)/10, Math.round(p.z*10)/10, r2(f.x), r2(f.y), r2(f.z), r2(u.x), r2(u.y), r2(u.z), SP.planet?SP.planet.key:'', r2(SP.walkMv||0)];
+    if(pas) out.sp.push(SP.crew||(SP.seat&&SP.seat.pilot)||'');
+    else if((md===2||md===4) && SP.rocketAt && SP.planet && SP.rocketAt.P===SP.planet){ const d=SP.rocketAt.d; out.sp.push(r2(d.x*100)/100, r2(d.y*100)/100, r2(d.z*100)/100); } }
   if(knownBites.size) out.bt=[...knownBites.values()];
   const fl=flags.filter(f=>f.w!=='isla').map(f=>[f.w,f.dx,f.dy,f.dz,f.c]); if(fl.length) out.fl=fl;
   const pv=Object.keys(visitedPl).slice(-30).map(k=>{ const P=planetByKey(k), v=visitedPl[k]; return P&&Array.isArray(v)?[k,v[0],v[1],v[2],seenMask(P)]:null; }).filter(Boolean); if(pv.length) out.pv=pv;
   return out; }
 function parseSpace(r,pr){ const s=pr.sp; r.sp = Array.isArray(s) && s.length>=11 && s.slice(1,10).every(Number.isFinite) ? s : null;
-  r.rk = Array.isArray(pr.rk) && pr.rk.length===2 && pr.rk.every(Number.isFinite) ? pr.rk : null;
+  r.rk = Array.isArray(pr.rk) && (pr.rk.length===2||pr.rk.length===3) && pr.rk.every(Number.isFinite) ? pr.rk : null;
   // mordidas de todos (cada quien vuelve a anunciar las que conoce: así duran mientras haya alguien en la sala)
   if(Array.isArray(pr.bt)) for(const e of pr.bt.slice(0,300)){ if(!Array.isArray(e) || e.length!==5 || typeof e[0]!=='string' || !e.slice(1).every(Number.isFinite)) continue;
     const P=planetByKey(e[0]); if(!P || !P.edible) continue; const d=new THREE.Vector3(e[1],e[2],e[3]).normalize(); addBite(P,{d, s:Math.min(18,Math.max(1,e[4]/10))},false); }
@@ -7547,13 +7605,16 @@ function updateSpaceRemotes(dt,t){
     if(SP.on && r.sp){ if(r.obj.parent!==spaceScene){ spaceScene.add(r.obj); r.obj.rotation.order='XYZ'; }
       const s=r.sp; r.spPos=r.spPos||new THREE.Vector3(s[1],s[2],s[3]); r.spPos.lerp(_ct.set(s[1],s[2],s[3]),1-Math.exp(-dt*10));
       if(s[0]===1){ r.obj.visible=false; const R=remoteRocketFor(r,true); R.g.visible=true; _f.set(s[4],s[5],s[6]); _u.set(s[7],s[8],s[9]); R.g.position.copy(r.spPos); _r.crossVectors(_f,_u); _m.makeBasis(_r,_f,_u.negate()); R.g.quaternion.setFromRotationMatrix(_m); R.flames.visible=true; }
-      else { if(rr) rr.g.visible=false; r.obj.visible=true; _u.set(s[7],s[8],s[9]).normalize(); _f.set(s[4],s[5],s[6]); _f.addScaledVector(_u,-_f.dot(_u)).normalize(); r.obj.position.copy(r.spPos);
+      else if(s[0]===3){ r.obj.visible=false; if(rr) rr.g.visible=false; }
+      else { const P=planetByKey(s[10]);
+        if(P && Number.isFinite(s[12])){ const R=remoteRocketFor(r,true); R.g.visible=true; R.flames.visible=false; R.door.rotation.y=-1.6; placeOn(P,R.g,_d.set(s[12],s[13],s[14]).normalize(),0); } else if(rr) rr.g.visible=false;
+        r.obj.visible=s[0]!==4; _u.set(s[7],s[8],s[9]).normalize(); _f.set(s[4],s[5],s[6]); _f.addScaledVector(_u,-_f.dot(_u)).normalize(); r.obj.position.copy(r.spPos);
         _r.crossVectors(_u,_f).normalize(); _m.makeBasis(_r,_u,_f); r.obj.quaternion.setFromRotationMatrix(_m);
         const mv=s[11]||0; r.spWalk=(r.spWalk||0)+dt*(6+mv*6)*(mv>.05?1:0); poseLimbs(r.obj,t,dt,Math.sin(r.spWalk)*.7*mv,false,0,false,null,r.spWalk,mv,false); }
-      r.label.visible=true; }
+      r.label.visible=r.obj.visible; }
     else { if(r.obj.parent!==scene){ scene.add(r.obj); r.obj.quaternion.identity(); r.obj.rotation.order='YXZ'; }
       if(r.sp && !SP.on) r.obj.visible=false; else if(!r.rk) r.obj.visible=true;
-      if(r.rk){ r.obj.visible=false; if(r.rk[0]===2 && !SP.on){ const R=remoteRocketFor(r,false); R.g.visible=true; R.g.position.set(RK.x,RK.h+r.rk[1],RK.z); R.g.rotation.y=RK.yaw; R.flames.visible=true; } else if(rr) rr.g.visible=false; }
+      if(r.rk){ r.obj.visible=false; if(r.rk[0]===2 && !SP.on && !(player.rk && player.rk.ph==='launch')){ const R=remoteRocketFor(r,false); R.g.visible=true; R.g.position.set(RK.x,RK.h+r.rk[1],RK.z); R.g.rotation.y=RK.yaw; R.flames.visible=true; } else if(rr) rr.g.visible=false; }
       else if(rr && !(SP.on && r.sp)) rr.g.visible=false; }
     if(rr && !mp.remotes.has(r)) { rr.g.parent&&rr.g.parent.remove(rr.g); remoteRockets.delete(r); } }
   for(const [r,rr] of remoteRockets) if(![...mp.remotes.values()].includes(r)){ rr.g.parent&&rr.g.parent.remove(rr.g); remoteRockets.delete(r); } }
