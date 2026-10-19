@@ -663,7 +663,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='51';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='52';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -4686,6 +4686,155 @@ function remoteBowPose(r){
   poseBowOn(r.obj,R,{pitch:b[5], draw:b[0]===0?1:0, mode:b[0], target:at, extend:b[0]===1?1:0, pull:b[0]===4?1:0, reachK:1, vel}, at, b[0]>=3);
 }
 
+// ---------- Animalitos de peluche y gomitas vivientes (con ojos saltones) ----------
+// Se mueven solos con la hora del reloj, así que todos los jugadores los ven en el mismo lugar.
+// Los ojos saltones tienen física: la bolita negra cae por su peso y se sacude con cada salto, vuelta o frenón.
+const critters=[];
+(function makeCritters(){
+  let seed=4242; const rnd=(a=0,b=1)=>{ seed=(seed*1664525+1013904223)>>>0; return a+seed/4294967296*(b-a); };
+  const coneG=new THREE.ConeGeometry(1,1,10), cylG3=new THREE.CylinderGeometry(1,1,1,10);
+  const G={s:sphereG, c:coneG, y:cylG3};
+  const fm={}, feltM=h=>fm[h]||(fm[h]=felt(h,'rgba(0,0,0,.12)'));
+  const gm={}, gummyM=h=>gm[h]||(gm[h]=new THREE.MeshStandardMaterial({color:h, roughness:.12, metalness:0, transparent:true, opacity:.8, emissive:h, emissiveIntensity:.22}));
+  const dark='#3a2a22';
+  // piezas: [forma, color, x,y,z, sx,sy,sz, rx,ry,rz]  ·  ojos: [x,y,z,r] (se pone uno a cada lado)
+  const SPECIES={
+    conejo:{hop:1, speed:1.3, eyes:[.1,.74,.355,.075], build:(A,B)=>[['s',A,0,.32,0,.3,.32,.34],['s',A,0,.68,.14,.24,.24,.24],['s',A,.09,.98,.08,.07,.25,.045,0,0,-.15],['s',A,-.09,.98,.08,.07,.25,.045,0,0,.15],
+      ['s',B,.09,.98,.11,.045,.19,.02,0,0,-.15],['s',B,-.09,.98,.11,.045,.19,.02,0,0,.15],['s','#ffffff',0,.33,-.33,.09,.09,.09],['s',A,.13,.05,.12,.1,.06,.16],['s',A,-.13,.05,.12,.1,.06,.16],
+      ['s','#fff6f0',0,.61,.33,.1,.07,.06],['s','#ff8fab',0,.65,.38,.03,.025,.025]], colors:[['#f4f1ea','#ffb3c6'],['#b9a48e','#ffc2d1'],['#8a6a50','#f5c6a5'],['#d9d4e6','#ffb3c6']]},
+    osito:{speed:1.0, eyes:[.1,.93,.23,.07], build:(A,B)=>[['s',A,0,.38,0,.33,.36,.3],['s',A,0,.85,.04,.28,.28,.27],['s',A,.2,1.08,0,.1,.1,.06],['s',A,-.2,1.08,0,.1,.1,.06],['s',B,.2,1.08,.03,.06,.06,.04],['s',B,-.2,1.08,.03,.06,.06,.04],
+      ['s',B,0,.79,.27,.13,.1,.08],['s',dark,0,.84,.34,.045,.035,.03],['s',A,.32,.46,.06,.09,.2,.09,0,0,.5],['s',A,-.32,.46,.06,.09,.2,.09,0,0,-.5],['s',A,.15,.1,.08,.11,.13,.13],['s',A,-.15,.1,.08,.11,.13,.13],['s',B,0,.38,.24,.2,.22,.06]],
+      colors:[['#a0703f','#e8c99a'],['#d8a35a','#f6e2b8'],['#6e4b3a','#d9b48c'],['#e9a7b8','#fbe3ea']]},
+    cerdito:{speed:.9, eyes:[.11,.72,.55,.06], build:(A,B)=>[['s',A,0,.42,0,.4,.34,.46],['s',A,0,.62,.36,.28,.27,.26],['y',B,0,.6,.62,.12,.08,.12,Math.PI/2],['s',dark,.04,.62,.665,.022,.03,.01],['s',dark,-.04,.62,.665,.022,.03,.01],
+      ['c',A,.16,.88,.3,.08,.16,.06,-.3,0,-.3],['c',A,-.16,.88,.3,.08,.16,.06,-.3,0,.3],['y',A,.2,.12,.22,.07,.24,.07],['y',A,-.2,.12,.22,.07,.24,.07],['y',A,.2,.12,-.22,.07,.24,.07],['y',A,-.2,.12,-.22,.07,.24,.07],['s',B,0,.5,-.46,.05,.05,.05]],
+      colors:[['#f7b6c2','#f08aa0'],['#f3c9b0','#e59a86']]},
+    gatito:{speed:1.2, eyes:[.1,.76,.535,.07], build:(A,B)=>[['s',A,0,.36,0,.25,.27,.38],['s',A,0,.7,.3,.25,.24,.23],['c',A,.14,.94,.28,.09,.18,.06],['c',A,-.14,.94,.28,.09,.18,.06],['c',B,.14,.92,.3,.05,.11,.03],['c',B,-.14,.92,.3,.05,.11,.03],
+      ['s','#fff8f0',0,.63,.48,.11,.08,.06],['s','#ff8fab',0,.68,.53,.025,.02,.02],['y',A,0,.55,-.5,.045,.5,.045,-.8],['y',A,.13,.12,.18,.06,.24,.06],['y',A,-.13,.12,.18,.06,.24,.06],['y',A,.13,.12,-.18,.06,.24,.06],['y',A,-.13,.12,-.18,.06,.24,.06]],
+      colors:[['#f2a65a','#ffd1b0'],['#7d7a85','#f3c6d0'],['#2e2a33','#f3c6d0'],['#f6efe4','#ffc2d1']]},
+    ovejita:{speed:.8, eyes:[.085,.68,.595,.06], build:(A,B)=>{ const p=[['s',B,0,.62,.42,.17,.2,.2],['s',B,.18,.68,.38,.1,.04,.06,0,0,-.4],['s',B,-.18,.68,.38,.1,.04,.06,0,0,.4],
+      ['y',B,.15,.14,.18,.06,.28,.06],['y',B,-.15,.14,.18,.06,.28,.06],['y',B,.15,.14,-.18,.06,.28,.06],['y',B,-.15,.14,-.18,.06,.28,.06]];
+      [[0,.5,0,.32],[.2,.55,.1,.2],[-.2,.55,.1,.2],[.18,.48,-.18,.22],[-.18,.48,-.18,.22],[0,.7,-.05,.22],[0,.66,.22,.2],[0,.45,-.3,.2]].forEach(([x,y,z,r])=>p.push(['s',A,x,y,z,r,r*.9,r])); return p; },
+      colors:[['#fbf8f1','#3a3236'],['#f2eadf','#6b5a4e']]},
+    pato:{swim:1, speed:.7, eyes:[.075,.56,.33,.05], build:(A,B)=>[['s',A,0,.2,0,.25,.19,.32],['s',A,0,.5,.18,.17,.17,.17],['s',B,0,.47,.37,.08,.03,.12],['s',A,.22,.24,0,.07,.11,.2],['s',A,-.22,.24,0,.07,.11,.2],['c',A,0,.3,-.32,.08,.16,.06,-1.9]],
+      colors:[['#ffd84d','#f39237'],['#fff4d6','#f39237']]},
+  };
+  const GUMMY={
+    osoGoma:{gummy:1, speed:1.1, hop:.6, eyes:[.095,.92,.225,.085], build:(A,B)=>[['s',A,0,.38,0,.3,.36,.26],['s',B,0,.84,0,.26,.26,.24],['s',B,.18,1.06,0,.09,.09,.07],['s',B,-.18,1.06,0,.09,.09,.07],
+      ['s',A,.3,.5,.05,.1,.18,.1,0,0,.6],['s',A,-.3,.5,.05,.1,.18,.1,0,0,-.6],['s',A,.14,.1,.05,.12,.14,.12],['s',A,-.14,.1,.05,.12,.14,.12],['s',B,0,.78,.21,.11,.08,.06],['s',B,0,.4,.2,.17,.2,.06]],
+      colors:[['#ff4d5e','#ff4d5e'],['#ffb02e','#ffb02e'],['#7ed957','#7ed957'],['#4fc3f7','#4fc3f7'],['#c77dff','#c77dff'],['#ffe14d','#ffe14d'],['#ff4d5e','#ffe14d'],['#7ed957','#ffb02e'],['#4fc3f7','#ff8fc0'],['#c77dff','#7ed957'],['#ffffff','#ff4d5e'],['#ffb02e','#c77dff']]},
+  };
+  const build=(def,A,B,gummy)=>{ const g=new THREE.Group(), body=new THREE.Group(); g.add(body);
+    def.build(A,B).forEach(([sh,col,x,y,z,sx,sy,sz,rx=0,ry=0,rz=0])=>{ const m=new THREE.Mesh(G[sh], gummy?gummyM(col):feltM(col)); m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.rotation.set(rx,ry,rz); body.add(m); });
+    mergeStatic(body); body.traverse(o=>{ if(o.isMesh){ o.castShadow=Q0==='mid'||Q0==='high'; o.receiveShadow=false; } }); g.visible=false; scene.add(g); return {g, body}; };
+  const add=(kind,def,home,R,opts={})=>{ const [A,B]=def.colors[critters.length%def.colors.length];
+    const {g,body}=build(def,A,B,!!def.gummy); const s=opts.scale||1; g.scale.setScalar(s);
+    critters.push({kind, def, g, body, home, R, s, sp:def.speed*(.8+rnd()*.4), ph:[rnd(0,6.28),rnd(0,6.28),rnd(0,6.28),rnd(0,6.28)], w:rnd(.12,.22), pw:rnd(.25,.5), yaw:rnd(0,6.28),
+      pos:new THREE.Vector3(), vel:new THREE.Vector3(), acc:new THREE.Vector3(), shy:new THREE.Vector2(), eyes:[0,1].map(()=>({p:new THREE.Vector2(0,-.9), v:new THREE.Vector2()})), first:true, ground:opts.ground }); };
+  // lugares buenos en la isla: pasto seco, lejos del mar, lago, castillo, parque, aeropuerto y pista
+  const okSpot=(x,z)=>{ const h=terrainH(x,z); if(h<SEA_Y+1.4 || coastC(x,z)>.8) return false; if(Math.hypot(x-LAKE.x,z-LAKE.z)<LAKE.R+7) return false;
+    if(Math.hypot(x,z)<CAKE.R+8) return false; if(Math.hypot(x-PG.x,z-PG.z)<PG.R+6) return false; if(airportFlat(x,z)>.01) return false;
+    if(trackNearest(x,z).d<TRACK_W) return false; return true; };
+  const kinds=['conejo','conejo','osito','cerdito','gatito','ovejita','conejo','gatito','osito','ovejita'], NA=MIN_Q?18:34;
+  for(let i=0,tries=0;i<NA && tries<4000;tries++){ const a=rnd(0,Math.PI*2), r=rnd(45,470), x=Math.cos(a)*r, z=Math.sin(a)*r; if(!okSpot(x,z)) continue;
+    const k=kinds[i%kinds.length]; add(k,SPECIES[k],new THREE.Vector2(x,z),rnd(4,8)); i++; }
+  // patitos nadando en el lago
+  for(let i=0;i<5;i++){ const a=i/5*Math.PI*2+.4, r=LAKE.R*.45; add('pato',SPECIES.pato,new THREE.Vector2(LAKE.x+Math.cos(a)*r,LAKE.z+Math.sin(a)*r),LAKE.R*.25); }
+  // gomitas vivientes en la plaza del castillo y adentro (planta baja)
+  const NB=MIN_Q?8:14;
+  for(let i=0;i<NB;i++){ const inside=i%3===0, a=rnd(0,Math.PI*2), r=inside?rnd(5,7.5):rnd(25,34);
+    add('osoGoma',GUMMY.osoGoma,new THREE.Vector2(Math.cos(a)*r,Math.sin(a)*r),inside?2.2:3.5,{scale:1.05,ground:'cake'}); }
+  // serpientes de gomita: muchos segmentos de colores
+  const NS=MIN_Q?3:6, segMat=new THREE.MeshStandardMaterial({color:0xffffff, roughness:.12, transparent:true, opacity:.82, emissive:0x553344, emissiveIntensity:.18});
+  const COMBOS=[['#ff4d5e','#ffe14d','#7ed957'],['#4fc3f7','#ffffff','#ff8fc0'],['#c77dff','#ffb02e'],['#7ed957','#ff4d5e'],['#ffe14d','#4fc3f7','#ff4d5e','#7ed957'],['#ff8fc0','#c77dff','#ffffff']];
+  for(let i=0;i<NS;i++){ const inside=i%3===2, a=rnd(0,Math.PI*2), r=inside?rnd(5.5,7):rnd(26,33), N=22;
+    const im=new THREE.InstancedMesh(sphereG,segMat,N); im.frustumCulled=false; im.visible=false; scene.add(im);
+    const combo=COMBOS[i%COMBOS.length], col=new THREE.Color(); for(let k=0;k<N;k++) im.setColorAt(k,col.set(combo[Math.floor(k/2)%combo.length]).convertSRGBToLinear());
+    critters.push({kind:'serpiente', snake:true, im, N, home:new THREE.Vector2(Math.cos(a)*r,Math.sin(a)*r), R:inside?2.4:4.5, s:1, sp:rnd(.9,1.2), ph:[rnd(0,6.28),rnd(0,6.28),rnd(0,6.28),rnd(0,6.28)], w:rnd(.1,.16),
+      def:{eyes:[.075,.12,.11,.06]}, pos:new THREE.Vector3(), vel:new THREE.Vector3(), acc:new THREE.Vector3(), shy:new THREE.Vector2(), yaw:0, eyes:[0,1].map(()=>({p:new THREE.Vector2(0,-.9), v:new THREE.Vector2()})), first:true, ground:'cake' }); }
+})();
+// ojos saltones: todos los blancos en un solo dibujo y todas las bolitas negras en otro
+// como los de manualidades: base blanca plana, bolita negra grande suelta y un domo transparente que brilla
+const eyeWhites=new THREE.InstancedMesh(sphereG, new THREE.MeshStandardMaterial({color:0xf4f4f2, roughness:.45, metalness:0}), critters.length*2);
+const eyePupils=new THREE.InstancedMesh(sphereG, new THREE.MeshStandardMaterial({color:0x0c0c0c, roughness:.5}), critters.length*2);
+const eyeDomes=new THREE.InstancedMesh(sphereG, new THREE.MeshStandardMaterial({color:0xffffff, roughness:.04, metalness:.1, transparent:true, opacity:.22, depthWrite:false}), critters.length*2);
+eyeWhites.frustumCulled=eyePupils.frustumCulled=eyeDomes.frustumCulled=false; eyeDomes.renderOrder=3; scene.add(eyeWhites, eyePupils, eyeDomes);
+{ const z=new THREE.Matrix4().makeScale(0,0,0); for(let i=0;i<critters.length*2;i++){ eyeWhites.setMatrixAt(i,z); eyePupils.setMatrixAt(i,z); eyeDomes.setMatrixAt(i,z); } }
+const _cm=new THREE.Matrix4(), _cl=new THREE.Matrix4(), _cq=new THREE.Quaternion(), _cp=new THREE.Vector3(), _cs=new THREE.Vector3(), _cv=new THREE.Vector3(), _ce=new THREE.Euler(), _cz=new THREE.Matrix4().makeScale(0,0,0);
+// camino de paseo: avanza con pausas (u' = vel·(1+sin) llega a 0 de vez en cuando)
+function critterPath(c,t,out){ const u=c.sp*(t-Math.cos(t*c.pw+c.ph[3])/c.pw)*c.w;
+  out.set(c.home.x+c.R*(.62*Math.sin(u+c.ph[0])+.38*Math.sin(u*1.7+c.ph[1])), 0, c.home.y+c.R*(.62*Math.cos(u*1.1+c.ph[2])+.38*Math.sin(u*2.3+c.ph[0]))); return out; }
+function snakePath(c,u,out){ out.set(c.home.x+c.R*(.6*Math.sin(u+c.ph[0])+.4*Math.sin(u*1.9+c.ph[1])), 0, c.home.y+c.R*(.6*Math.cos(u*1.2+c.ph[2])+.4*Math.sin(u*2.1+c.ph[0]))); return out; }
+const critterGround=(c,x,z)=>c.kind==='pato' ? WATER_Y-.06 : terrainH(x,z)+(c.ground==='cake'?.08:0);
+// física de la bolita negra: cae por su peso y se mueve con la aceleración del animalito (en su propio marco)
+function stepPupils(c,dt){
+  const cy=Math.cos(c.yaw), sy=Math.sin(c.yaw);
+  const ax=-(c.acc.x*cy-c.acc.z*sy), ay=-9.8-c.acc.y;   // fuerza que siente el ojo (derecha del animalito y arriba)
+  for(const e of c.eyes){ e.v.x+=ax*dt*3.2; e.v.y+=ay*dt*3.2; e.v.multiplyScalar(Math.exp(-dt*2.2)); e.p.addScaledVector(e.v,dt);
+    const L=e.p.length(); if(L>1){ e.p.multiplyScalar(1/L); const vn=e.v.x*e.p.x+e.v.y*e.p.y; if(vn>0){ e.v.x-=1.45*vn*e.p.x; e.v.y-=1.45*vn*e.p.y; } } }
+}
+const CRITTER_FAR=95;
+function updateCritters(dt){
+  if(!critters.length) return;
+  const t=(Date.now()/1000)%100000, cx=camera.position.x, cz=camera.position.z, far=Math.min(CRITTER_FAR, settings.draw+10);
+  let ei=0;
+  for(const c of critters){
+    const d=Math.hypot(c.home.x-cx, c.home.y-cz)-c.R;
+    const on=d<far && state!=='menu';
+    if(!on){ if(c.vis){ c.vis=false; if(c.snake) c.im.visible=false; else c.g.visible=false; for(let k=0;k<2;k++){ eyeWhites.setMatrixAt(ei+k,_cz); eyePupils.setMatrixAt(ei+k,_cz); eyeDomes.setMatrixAt(ei+k,_cz); } c.first=true; } ei+=2; continue; }
+    if(!c.vis){ c.vis=true; if(c.snake) c.im.visible=true; else c.g.visible=true; }
+    // se aparta un poquito si el jugador se le acerca (solo en tu pantalla)
+    const px=player.pos.x-c.pos.x, pz=player.pos.z-c.pos.z, pd=Math.hypot(px,pz);
+    if(pd<1.6 && pd>.01 && !c.first){ c.shy.x-=px/pd*(1.6-pd)*dt*4; c.shy.y-=pz/pd*(1.6-pd)*dt*4; }
+    c.shy.multiplyScalar(Math.exp(-dt*.35)); if(c.shy.length()>3) c.shy.setLength(3);
+    let p;
+    if(c.snake){ const u=c.sp*t*c.w; p=snakePath(c,u,_cp); }
+    else p=critterPath(c,t,_cp);
+    p.x+=c.shy.x; p.z+=c.shy.y;
+    const gy=critterGround(c,p.x,p.z);
+    // velocidad y aceleración (suavizadas) para mover los ojos y orientar al animalito
+    if(c.first){ c.pos.set(p.x,gy,p.z); c.vel.set(0,0,0); c.acc.set(0,0,0); c.first=false; }
+    _cv.set((p.x-c.pos.x)/Math.max(dt,1e-3), 0, (p.z-c.pos.z)/Math.max(dt,1e-3));
+    const spd=Math.hypot(_cv.x,_cv.z);
+    c.phase=(c.phase||0)+dt*(4+spd*5);
+    let y=gy, tilt=0, roll=0, sq=1;
+    if(!c.snake){
+      if(c.def.hop){ const hop=Math.abs(Math.sin(c.phase*1.15))*Math.min(1,spd*.9)*.38*c.def.hop; y+=hop; sq=1+(.08-hop*.3)*Math.min(1,spd); tilt=-Math.cos(c.phase*1.15)*.18*Math.min(1,spd); }
+      else if(c.def.swim){ y+=Math.sin(t*2+c.ph[0])*.03; roll=Math.sin(t*1.6+c.ph[1])*.05; }
+      else { y+=Math.abs(Math.sin(c.phase))*.05*Math.min(1,spd); roll=Math.sin(c.phase)*.13*Math.min(1,spd); }
+    }
+    const vy=(y-c.pos.y)/Math.max(dt,1e-3);
+    _cv.y=vy;
+    const k=1-Math.exp(-dt*14); const nax=(_cv.x-c.vel.x)/Math.max(dt,1e-3), nay=(_cv.y-c.vel.y)/Math.max(dt,1e-3), naz=(_cv.z-c.vel.z)/Math.max(dt,1e-3);
+    c.acc.x+=(THREE.MathUtils.clamp(nax,-60,60)-c.acc.x)*k; c.acc.y+=(THREE.MathUtils.clamp(nay,-80,80)-c.acc.y)*k; c.acc.z+=(THREE.MathUtils.clamp(naz,-60,60)-c.acc.z)*k;
+    c.vel.copy(_cv); c.pos.set(p.x,y,p.z);
+    if(spd>.15){ let want=Math.atan2(_cv.x,_cv.z), dy=want-c.yaw; dy=Math.atan2(Math.sin(dy),Math.cos(dy)); const turn=dy*(1-Math.exp(-dt*6)); c.yaw+=turn; }
+    stepPupils(c,dt);
+    let head;
+    if(c.snake){
+      // cuerpo: cada segmento sigue el camino de la cabeza un poco atrás, ondulando de lado
+      const u0=c.sp*t*c.w, du=.15/(c.R*1.3);   // separación entre segmentos (pegaditos)
+      for(let i=0;i<c.N;i++){ const ui=u0-i*du; snakePath(c,ui,_cs); const a=snakePath(c,ui+.002,_cv); const tx=a.x-_cs.x, tz=a.z-_cs.z, tl=Math.hypot(tx,tz)||1;
+        const wig=Math.sin(t*5-i*.6)*.18*Math.min(1,i/3); const x=_cs.x+(-tz/tl)*wig+c.shy.x, z=_cs.z+(tx/tl)*wig+c.shy.y;
+        const r=(i===0?.2:.17*(1-i/c.N*.55)); const yy=terrainH(x,z)+.08+r*.85+(i===0?.05:0);
+        _cm.compose(_cp.set(x,yy,z),_cq.identity(),_cs.set(r*(i===0?1.15:1),r*(i===0?.95:.9),r*(i===0?1.3:1))); c.im.setMatrixAt(i,_cm);
+        if(i===0){ c.pos.set(x,yy,z); } }
+      c.im.instanceMatrix.needsUpdate=true;
+      _ce.set(0,c.yaw,0); _cq.setFromEuler(_ce); _cm.compose(c.pos,_cq,_cs.set(1,1,1)); head=_cm;
+    } else {
+      c.g.position.set(c.pos.x,c.pos.y,c.pos.z); c.g.rotation.set(tilt,c.yaw,roll,'YXZ'); c.body.scale.set(1/Math.sqrt(sq),sq,1/Math.sqrt(sq));
+      c.g.updateMatrix(); c.body.updateMatrix(); head=_cm.multiplyMatrices(c.g.matrix,c.body.matrix);
+    }
+    // ojos: blanco brillante y bolita negra que se mueve dentro
+    const [ex,eyY,ez,er]=c.def.eyes;
+    for(let s=0;s<2;s++){ const sd=s?-1:1, e=c.eyes[s];
+      _cl.compose(_cp.set(ex*sd,eyY,ez),_cq.identity(),_cs.set(er,er,er*.3)); _cl.premultiply(head); eyeWhites.setMatrixAt(ei+s,_cl);
+      _cl.compose(_cp.set(ex*sd+e.p.x*er*.36,eyY+e.p.y*er*.36,ez+er*.3),_cq.identity(),_cs.set(er*.6,er*.6,er*.08)); _cl.premultiply(head); eyePupils.setMatrixAt(ei+s,_cl);
+      _cl.compose(_cp.set(ex*sd,eyY,ez+er*.05),_cq.identity(),_cs.set(er*.97,er*.97,er*.5)); _cl.premultiply(head); eyeDomes.setMatrixAt(ei+s,_cl); }
+    ei+=2;
+  }
+  eyeWhites.instanceMatrix.needsUpdate=true; eyePupils.instanceMatrix.needsUpdate=true; eyeDomes.instanceMatrix.needsUpdate=true;
+}
+
 // ---------- Bucle ----------
 function resize(){
   const w=innerWidth,h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();
@@ -4727,6 +4876,7 @@ function update(dt,t){
   const bowMoving = state==='play' && updateMyBow(dt);
   updatePlayground(dt);
   updatePortals(dt);
+  updateCritters(dt);
   const dv=player.dive;
   if(state==='play' && !player.car && !player.ac && !player.pg && !bowMoving){
     let f=0,s=0;
