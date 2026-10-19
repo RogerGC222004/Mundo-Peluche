@@ -615,7 +615,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='42';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='43';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -2221,7 +2221,7 @@ tap(camChip,()=>setCam(camMode==='third'?'first':'third'));
 hold(ui('tJump'),()=>{ touchHold.up=true; jump(); },()=>{ touchHold.up=false; });
 hold(ui('tDive'),()=>{ touchHold.down=true; startDive(); },()=>{ touchHold.down=false; });
 
-function jump(){ if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see')){ stopPlay(); return; } if(player.grounded && !player.dive && !player.swim && !player.car && !player.ac && !player.pg){ player.vy=7.2; player.grounded=false; audio.jump(); } }
+function jump(){ if(hook.mode>=2){ bowRelease(); return; } if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see')){ stopPlay(); return; } if(player.grounded && !player.dive && !player.swim && !player.car && !player.ac && !player.pg){ player.vy=7.2; player.grounded=false; audio.jump(); } }
 
 addEventListener('keydown',e=>{
   if(state!=='play'){ return; }
@@ -2240,7 +2240,7 @@ document.addEventListener('pointerlockchange',()=>{
 
 // Mirar con ratón: bloqueo de puntero o arrastre
 let dragging=false;
-canvas.addEventListener('mousedown',e=>{ if(state!=='play')return; dragging=true; if(!document.pointerLockElement && !overlaysOpen()) lockPointer(); });
+canvas.addEventListener('mousedown',e=>{ if(state!=='play')return; if(document.pointerLockElement && e.button===0 && bowHeld() && hook.mode===0){ bowShoot(); return; } dragging=true; if(!document.pointerLockElement && !overlaysOpen()) lockPointer(); });
 addEventListener('mouseup',()=>dragging=false);
 addEventListener('mousemove',e=>{
   if(state!=='play') return;
@@ -2508,6 +2508,7 @@ function sendPresence(force){
     ap: iPilot() ? (a=>[a.i, r2(a.x), r2(a.y), r2(a.z), Math.round(a.h*1000)/1000, Math.round(a.p*1000)/1000, Math.round(a.b*1000)/1000, r2(a.v), r2(a.vy), r2(a.rotor), a.onGround?1:0, r2(a.thr)])(aircraft[player.ac.i]) : null,
     as: aircraft.map(a=>[Math.round(a.x*10)/10, r2(a.y), Math.round(a.z*10)/10, Math.round(a.h*100)/100, a.t]),
     sd: aircraft.map(a=>[a.stairs, a.door, a.sdT]),
+    id: myUid, bw: bowPresence(),
     pl: player.pg ? [PG_KINDS.indexOf(player.pg.k), player.pg.i, r2(player.pg.v||0)] : null,
     pu: myPush.i>=0 ? [myPush.i, myPush.t] : null,
     ai: player.ac && player.acPose ? (A=>[A.i, A.mode==='seated'||A.mode==='sitting'?A.seat:-1, r2(player.acPose.l[0]), r2(player.acPose.l[1]), r2(player.acPose.l[2]), r2(player.acPose.f||0), r2(player.acPose.sit||0), r2(player.acPose.walk?(player.acPose.mv||1):0), r2(player.acPose.armsUp||0), player.acPose.air?1:0])(player.ac) : null
@@ -2546,7 +2547,7 @@ function makeRemote(color,name){
 }
 function removeRemote(k){
   const r=mp.remotes.get(k); if(!r) return;
-  scene.remove(r.obj, r.blob);
+  scene.remove(r.obj, r.blob); { const rg=r.obj.userData.bowRig; if(rg){ scene.remove(rg.arrow); rg.rope.forEach(m=>scene.remove(m)); } }
   if(r.label.material.map) r.label.material.map.dispose(); r.label.material.dispose(); r.blob.material.dispose();
   mp.remotes.delete(k);
 }
@@ -2569,7 +2570,7 @@ function onPeers({peers}){
     r.facing=clampN(pr.f,-4,4,0); r.moving=clampN(pr.m,0,1,0); r.air=pr.a===true; r.swim=pr.s===true;
     const nd=clampN(pr.d,0,DIVE_FLAT,0);
     if(nd>.5 && r.diveTarget<=.5 && !r.swim) audio.flop(.5);
-    r.diveTarget=nd; r.held = pr.h==='map' ? 'map' : null;
+    r.diveTarget=nd; r.held = pr.h==='map' ? 'map' : pr.h==='bow' ? 'bow' : null; parseBow(r,pr);
     const w=clampN(pr.w,0,Infinity,0);
     if(r.w!==undefined && w!==r.w){ r.waveUntil=clock.elapsedTime+1.6; audio.wave(); }
     r.w=w;
@@ -2627,6 +2628,7 @@ function onPeers({peers}){
 function updateRemotes(dt,t){
   const k=1-Math.exp(-dt*12);
   for(const r of mp.remotes.values()){
+    if((!r.bw || r.held!=='bow') && r.obj.userData.bowRig) hideBowRig(r.obj.userData.bowRig);
     if(r.ai && updateRemoteInAir(r,dt,t)) continue;
     if(r.pl && updateRemoteInPlay(r,dt,t)) continue;
     if(r.wasAir){ r.wasAir=false; r.al=null; }
@@ -2653,6 +2655,7 @@ function updateRemotes(dt,t){
     // Apodo siempre arriba del cuerpo, aunque el peluche esté acostado
     { const a=r.dive, H=2.42-1.5*Math.sin(a)/Math.sin(DIVE_FLAT), F=.85*Math.sin(a);
       r.label.position.set(0, H*Math.cos(a)+F*Math.sin(a), -H*Math.sin(a)+F*Math.cos(a)); }
+    if(r.bw && r.held==='bow') remoteBowPose(r);
     const fwd=Math.sin(r.dive)*.85;
     { const bx=r.pos.x+Math.sin(r.obj.rotation.y)*fwd, bz=r.pos.z+Math.cos(r.obj.rotation.y)*fwd, by=terrainH(bx,bz);
       r.blob.position.set(bx, Math.max(by, Math.min(r.pos.y, by+3))+.06, bz); r.blob.visible = !r.swim && r.pos.y > waterLevelAt(r.pos.x,r.pos.z)-.05; }
@@ -2694,8 +2697,9 @@ addEventListener('keydown',e=>{ if(state==='play' && e.code==='KeyG' && !e.repea
 const ITEMS={
   map:{name:'Mapa', icon:'<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 10l10-4 10 4 10-4v24l-10 4-10-4-10 4z" fill="#f3e6c4" stroke="#5a4426" stroke-width="2" stroke-linejoin="round"/><path d="M15 6v24M25 10v24" stroke="#5a4426" stroke-width="1.5" stroke-dasharray="2.5 2"/><path d="M8 25c3-3 5 1 7-2" stroke="#6fae3e" stroke-width="2.2" fill="none" stroke-linecap="round"/><circle cx="20" cy="18" r="3.2" fill="#ffd36b" stroke="#8a6a3e" stroke-width="1.4"/><path d="M27 15c2 1 4 0 5 2" stroke="#7fb8de" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>'}
 };
-const inventory=['map'];
-const hotbar=['map',null,null,null,null];
+ITEMS.bow={name:'Arco', icon:'<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M12 5c12 4 16 12 16 15s-4 11-16 15" fill="none" stroke="#a8743f" stroke-width="3.5" stroke-linecap="round"/><path d="M12 5v30" stroke="#f3ead2" stroke-width="1.6"/><path d="M8 20h22" stroke="#5a3b22" stroke-width="2.2" stroke-linecap="round"/><circle cx="32" cy="20" r="3.6" fill="#e0393b"/></svg>'};
+const inventory=['map','bow'];
+const hotbar=['map','bow',null,null,null];
 let selectedSlot=0, holding=false;
 const heldItem=()=> holding ? hotbar[selectedSlot] : null;
 const hotbarEl=ui('hotbar'), invEl=ui('inv'), mapWrap=ui('mapWrap');
@@ -3282,6 +3286,7 @@ function scanActions(){
   if(state!=='play'){ setActions(null,null); return; }
   { const [x,y]=airActions(); if(x||y||player.ac){ setActions(x,y); return; } }
   { const [x,y]=pgActions(); if(x||y||player.pg){ setActions(x,y); return; } }
+  { const ba=bowActions(); if(ba){ setActions(ba[0],ba[1]); return; } }
   if(player.car){
     const a=player.car, c=cars[a.i];
     if(a.kind!=='seated'){ setActions(null,null); return; }
@@ -4175,6 +4180,284 @@ function updateRemoteInPlay(r,dt,t){
   return true;
 }
 
+// ---------- Arco con flecha de ventosa y carrete de cuerda ----------
+// La flecha (palito con punta roja) se pega a lo que toque. Luego puedes ir hacia allá (el brazo del carrete se estira
+// hasta el punto y te jala) o jalar lo que atrapaste (el brazo se dobla hacia adentro). Lo pesado o fijo no se mueve;
+// a otro peluche sí, pero despacio.
+const myUid=Math.random().toString(36).slice(2,10);
+const BOW={speed:46, grav:5, range:70, goSpeed:17, pullPeluche:3.2, pullLight:9, reach:.22};
+const BOW_SIDE=1, REEL_SIDE=-1;              // brazo que sostiene el arco y brazo con el carrete (el que jala la cuerda)
+const bowMats={wood:felt('#a8743f','rgba(60,30,10,.2)'), dark:felt('#5a3b22','rgba(0,0,0,.2)'), red:felt('#e0393b','rgba(90,0,0,.2)'), strap:felt('#3d6fb0','rgba(0,0,30,.2)'),
+  reel:felt('#f2c94c','rgba(90,60,0,.2)'), hub:felt('#7a7f8c'), rope:new THREE.MeshStandardMaterial({color:0xf3ead2, roughness:1}), feather:felt('#fbf3e4')};
+// arco: medialuna con su cuerda
+function makeBowModel(){
+  const g=new THREE.Group();
+  const arc=new THREE.Mesh(new THREE.TorusGeometry(.42,.028,8,28,Math.PI*.82), bowMats.wood);
+  arc.rotation.set(0,-Math.PI/2,-Math.PI*.41); g.add(arc);      // medialuna vertical: el agarre al frente (+z), las puntas atrás
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,.14,10), bowMats.dark); grip.position.z=.42; g.add(grip);
+  const a1=Math.PI*.41, tip=[0, Math.sin(a1)*.42, Math.cos(a1)*.42];
+  const str=[0,1].map(()=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(.006,.006,1,4), bowMats.rope); g.add(m); return m; });
+  g.userData={tipY:tip[1], tipZ:tip[2], str, nock:new THREE.Vector3(0,0,tip[2])};
+  g.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); return g;
+}
+// flecha: palito, punta redonda roja (ventosa) y plumitas
+function makeArrowModel(){
+  const g=new THREE.Group();
+  const shaft=new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,.62,6), bowMats.wood); shaft.rotation.x=Math.PI/2; shaft.position.z=-.31; g.add(shaft);
+  const tip=new THREE.Mesh(sphereG, bowMats.red); tip.scale.set(.075,.075,.045); g.add(tip);       // círculo rojo al frente
+  [0,1,2].forEach(k=>{ const q=new THREE.Group(); q.rotation.z=k*Math.PI*2/3; q.position.z=-.56; const f=new THREE.Mesh(new THREE.BoxGeometry(.004,.06,.12), bowMats.feather); f.position.y=.035; q.add(f); g.add(q); });
+  g.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); return g;
+}
+// carrete en el brazo: rueda plana con un hoyo por donde sale la cuerda, sujeta con una banda de tela
+function makeReel(){
+  const g=new THREE.Group();
+  const band=new THREE.Mesh(new THREE.CylinderGeometry(ARM_R+.02,ARM_R+.02,.12,14,1,true), bowMats.strap); band.material.side=THREE.DoubleSide; g.add(band);
+  const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.12,.12,.07,20), bowMats.reel); wheel.rotation.z=Math.PI/2; wheel.position.set(0,0,.15); g.add(wheel);
+  const hub=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.075,12), bowMats.hub); hub.rotation.z=Math.PI/2; hub.position.copy(wheel.position); g.add(hub);
+  const hole=new THREE.Mesh(new THREE.CylinderGeometry(.022,.022,.02,10), bowMats.dark); hole.position.set(0,.0,.27); hole.rotation.x=Math.PI/2; g.add(hole);
+  g.userData.hole=hole; g.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); return g;
+}
+// cuerda: segmentos (cilindros) a lo largo de una curva un poco colgada
+function makeRope(){ const segs=[]; for(let i=0;i<10;i++){ const m=new THREE.Mesh(new THREE.CylinderGeometry(.026,.026,1,5,1,true), bowMats.rope); m.visible=false; scene.add(m); segs.push(m); } return segs; }
+const bw_ra=new THREE.Vector3(), bw_rb=new THREE.Vector3(), bw_rc=new THREE.Vector3(), bw_up=new THREE.Vector3(0,1,0), bw_q=new THREE.Quaternion();
+function drawRope(segs,a,b,sag){
+  if(!a){ segs.forEach(m=>m.visible=false); return; }
+  const n=segs.length, L=a.distanceTo(b); let px=a.x, py=a.y, pz=a.z;
+  for(let i=1;i<=n;i++){ const t=i/n; const x=a.x+(b.x-a.x)*t, z=a.z+(b.z-a.z)*t, y=a.y+(b.y-a.y)*t-sag*L*4*t*(1-t);
+    const m=segs[i-1]; bw_ra.set(px,py,pz); bw_rb.set(x,y,z); const d=bw_rb.distanceTo(bw_ra);
+    m.visible=d>1e-4; m.position.copy(bw_ra).add(bw_rb).multiplyScalar(.5); m.scale.set(1,d,1);
+    if(d>1e-4) m.quaternion.setFromUnitVectors(bw_up, bw_rc.copy(bw_rb).sub(bw_ra).divideScalar(d));
+    px=x; py=y; pz=z; }
+}
+// Equipo de un peluche (arco en la mano, carrete en el brazo, flecha y cuerda)
+function bowRig(obj){
+  if(obj.userData.bowRig) return obj.userData.bowRig;
+  const bow=makeBowModel(); bow.visible=false; obj.add(bow);
+  const arm=obj.userData.arms.find(a=>a.userData.side===REEL_SIDE);
+  const reel=makeReel(); reel.position.y=-ARM_UP*.55; reel.visible=false; arm.add(reel);
+  const nockArrow=makeArrowModel(); nockArrow.visible=false; obj.add(nockArrow);     // flecha lista en el arco
+  const arrow=makeArrowModel(); arrow.visible=false; scene.add(arrow);                 // flecha disparada
+  const rope=makeRope();
+  return obj.userData.bowRig={bow, reel, nockArrow, arrow, rope, stretch:1};
+}
+function hideBowRig(rig){ if(!rig) return; rig.bow.visible=rig.reel.visible=rig.nockArrow.visible=rig.arrow.visible=false; drawRope(rig.rope,null); const arm=rig.reel.parent; if(arm) arm.userData.joint.scale.y=1; }
+// Brazo de dos partes que alcanza un punto (en coordenadas del peluche). stretch: el antebrazo se estira si no llega.
+const bw_S=new THREE.Vector3(), bw_D=new THREE.Vector3(), bw_U=new THREE.Vector3(), bw_E=new THREE.Vector3(), bw_F=new THREE.Vector3(), bw_hint=new THREE.Vector3(), bw_qi=new THREE.Quaternion(), bw_down=new THREE.Vector3(0,-1,0);
+function reachArm(arm,target,hint,stretch){
+  bw_S.copy(arm.position); bw_D.copy(target).sub(bw_S); let d=bw_D.length(); const a=ARM_UP, b=ARM_LOW; bw_D.normalize();
+  const joint=arm.userData.joint;
+  if(stretch && d>a+b-.01){ arm.quaternion.setFromUnitVectors(bw_down,bw_D); joint.quaternion.identity(); joint.scale.y=Math.max(1,(d-a)/b); return; }
+  joint.scale.y=1; d=THREE.MathUtils.clamp(d,Math.abs(a-b)+.02,a+b-.01);
+  const cosA=(a*a+d*d-b*b)/(2*a*d), sinA=Math.sqrt(Math.max(0,1-cosA*cosA));
+  bw_hint.copy(hint).addScaledVector(bw_D,-hint.dot(bw_D)).normalize();
+  bw_U.copy(bw_D).multiplyScalar(cosA).addScaledVector(bw_hint,sinA).normalize();
+  arm.quaternion.setFromUnitVectors(bw_down,bw_U);
+  bw_E.copy(bw_S).addScaledVector(bw_U,a); bw_F.copy(bw_S).addScaledVector(bw_D,d).sub(bw_E).normalize();
+  bw_qi.copy(arm.quaternion).invert(); bw_F.applyQuaternion(bw_qi); joint.quaternion.setFromUnitVectors(bw_down,bw_F);
+}
+// Pose con el arco: el peluche mira hacia donde apunta; una mano en la mitad del arco y la otra jalando la cuerda
+const SHOULDER_Y=BODY_Y+.98;
+const bw_bt=new THREE.Vector3(), bw_ht=new THREE.Vector3(), bw_w=new THREE.Vector3(), bw_inv=new THREE.Matrix4();
+function bowPose(obj,rig,o){
+  // o: {pitch, draw(0..1), mode, target(world Vector3|null), extend(0..1 brazo estirado al soltar), pull(0..1)}
+  const p=THREE.MathUtils.clamp(o.pitch,-1,1), fz=Math.cos(p), fy=Math.sin(p);
+  const bowArm=obj.userData.arms.find(a=>a.userData.side===BOW_SIDE), reelArm=obj.userData.arms.find(a=>a.userData.side===REEL_SIDE);
+  // mano del arco: estirada hacia adelante, un poquito hacia el centro
+  const reachL=ARM_UP+ARM_LOW-.03;
+  bw_bt.set(bowArm.position.x*.35, SHOULDER_Y+fy*reachL, fz*reachL);
+  reachArm(bowArm,bw_bt,bw_hint.set(BOW_SIDE,-.3,0),false);
+  rig.bow.visible=true; rig.bow.position.copy(bw_bt); rig.bow.rotation.set(-p,0,0); rig.bow.translateZ(-.42);   // el agarre queda en la mano
+  // cuerda del arco: de la punta de arriba a la de abajo pasando por los dedos que jalan
+  const draw=o.draw;
+  const nockZ=rig.bow.userData.tipZ-draw*.42;
+  rig.bow.userData.nock.set(0,0,nockZ);
+  { const ty=rig.bow.userData.tipY, tz=rig.bow.userData.tipZ;   // la cuerda del arco en V: de cada punta a los dedos
+    rig.bow.userData.str.forEach((m,i)=>{ const sy=i?-ty:ty; bw_ra.set(0,sy,tz); bw_rb.set(0,0,nockZ); const L=bw_ra.distanceTo(bw_rb);
+      m.position.copy(bw_ra).add(bw_rb).multiplyScalar(.5); m.scale.set(1,L,1); m.quaternion.setFromUnitVectors(bw_up,bw_rc.copy(bw_rb).sub(bw_ra).normalize()); }); }
+  // mano que jala: en la cuerda (cerca de la cara) o estirada hacia la flecha
+  obj.updateMatrixWorld(true);
+  if(o.target && o.mode===3){
+    // yendo hacia la flecha: el brazo del carrete se estira hasta el punto
+    bw_inv.copy(obj.matrixWorld).invert(); bw_ht.copy(o.target).applyMatrix4(bw_inv);
+    const k=o.reachK??1; bw_w.copy(bw_ht).sub(reelArm.position); bw_ht.copy(reelArm.position).addScaledVector(bw_w,Math.max(.05,k));
+    reachArm(reelArm,bw_ht,bw_hint.set(REEL_SIDE,-.5,-.3),true);
+  } else if(o.pull>0){
+    // jalando: el brazo se dobla hacia adentro y se sacude un poco
+    const sh=Math.sin(performance.now()*.04)*.02*o.pull;
+    bw_ht.set(reelArm.position.x*.4+sh, SHOULDER_Y-.12+sh, .12-.05*o.pull);
+    reachArm(reelArm,bw_ht,bw_hint.set(REEL_SIDE*.4,-.6,-1),false);
+  } else {
+    // en la cuerda del arco; al soltar la flecha el brazo se estira hacia adelante
+    const bowLocal=bw_w.copy(rig.bow.userData.nock); rig.bow.localToWorld(bowLocal); bw_inv.copy(obj.matrixWorld).invert(); bowLocal.applyMatrix4(bw_inv);
+    bw_ht.copy(bowLocal);
+    if(o.extend>0) bw_ht.lerp(bw_S.set(reelArm.position.x*.6, SHOULDER_Y+fy*.58, fz*.58), o.extend);
+    reachArm(reelArm,bw_ht,bw_hint.set(REEL_SIDE,-.4,-.6),false);
+  }
+  rig.reel.visible=true;
+}
+const bw_hole=new THREE.Vector3();
+const bwTail=new THREE.Vector3();
+function reelHole(rig){ rig.reel.userData.hole.getWorldPosition(bw_hole); return bw_hole; }
+// ---- Mi arco ----
+const hook={mode:0, pos:new THREE.Vector3(), vel:new THREE.Vector3(), kind:null, ref:null, off:new THREE.Vector3(), t:0, extend:0, pull:0, reachK:0, strainT:0, from:new THREE.Vector3()};
+// mode: 0 nada · 1 volando · 2 pegada · 3 yendo hacia allá · 4 jalando
+const bowHeld=()=>state==='play' && heldItem()==='bow' && !player.car && !player.ac && !player.pg && !player.swim && !player.dive;
+function aimPitch(){ bw_cf.set(0,0,-1).applyQuaternion(camera.quaternion); return Math.asin(THREE.MathUtils.clamp(bw_cf.y,-1,1)); }
+const bw_cf=new THREE.Vector3(), bw_cp=new THREE.Vector3(), bw_hit={};
+function cameraAim(){
+  // punto al que apunta la mira (centro de la pantalla)
+  bw_cf.set(0,0,-1).applyQuaternion(camera.quaternion); bw_cp.copy(camera.position);
+  const h=traceShot(bw_cp,bw_cf,BOW.range+12,null,true);
+  return h ? h.p.clone() : bw_cp.clone().addScaledVector(bw_cf,BOW.range);
+}
+// ¿Qué hay en este punto? (suelo, agua, árbol/roca/pared, coche, avión, otro peluche)
+function hitAt(p,ignoreSelf){
+  const g=groundAt(p.x,p.z,p.y+.3);
+  for(const r of mp.remotes.values()){ const dx=p.x-r.pos.x, dz=p.z-r.pos.z; if(dx*dx+dz*dz<.36 && p.y>r.pos.y-.05 && p.y<r.pos.y+1.95) return {kind:'peluche', ref:r}; }
+  for(const c of cars){ const dx=p.x-c.x, dz=p.z-c.z; if(dx*dx+dz*dz<4.4 && p.y>c.y-.1 && p.y<c.y+1.8){ const ch=Math.cos(c.h), sh=Math.sin(c.h), lx=dx*ch-dz*sh, lz=dx*sh+dz*ch; if(Math.abs(lx)<1.05 && Math.abs(lz)<2.2) return {kind:'car', ref:c}; } }
+  for(const a of aircraft){ if(Math.abs(p.x-a.x)>16 || Math.abs(p.z-a.z)>16) continue; const [lx,lz]=airWorldToLocalFlat(a,p.x,p.z);
+    const boxes=a.T.kind==='plane' ? [[0,PL.R+.2,(PL.len[0]+PL.len[1])/2,(PL.len[1]-PL.len[0])/2, a.y+PL.FY+PL.R],[5,4.5,.4,1.6,a.y+PL.FY+.3],[-5,4.5,.4,1.6,a.y+PL.FY+.3]] : [[0,1.5,0,2.4,a.y+3.4]];
+    for(const [cx,hx,cz,hz,top] of boxes) if(Math.abs(lx-cx)<hx && Math.abs(lz-cz)<hz && p.y<top && p.y>a.y-.2) return {kind:'air', ref:a}; }
+  for(const o of obstacles){ const dx=p.x-o.x, dz=p.z-o.z; if(dx*dx+dz*dz<o.r*o.r && p.y<o.top && p.y>(o.bot??-99) && p.y>g-.5) return {kind:'solid'}; }
+  if(p.y<=g) return {kind:'ground'};
+  const lvl=waterLevelAt(p.x,p.z); if(p.y<lvl && terrainH(p.x,p.z)<lvl) return {kind:'water'};
+  return null;
+}
+function traceShot(from,dir,maxD,_,ignoreSelf){
+  const step=.35; const p=bw_rc.copy(from);
+  for(let d=0; d<maxD; d+=step){ p.addScaledVector(dir,step); const h=hitAt(p,ignoreSelf); if(h && h.kind!=='self') return {p:p.clone(), ...h}; }
+  return null;
+}
+function bowShoot(){
+  if(!bowHeld() || hook.mode===1) return;
+  const f=yaw+Math.PI, ap=aimPitch(), start=new THREE.Vector3(player.pos.x+Math.sin(f)*.55, player.pos.y+SHOULDER_Y+Math.sin(ap)*.55, player.pos.z+Math.cos(f)*.55);   // desde el arco
+  const aim=cameraAim(), dir=aim.sub(start).normalize();
+  hook.mode=1; hook.pos.copy(start).addScaledVector(dir,.4); hook.vel.copy(dir).multiplyScalar(BOW.speed); hook.from.copy(player.pos); hook.t=0; hook.extend=1; hook.kind=null; hook.ref=null;
+  audio.jump(); try{ audio.wave(); }catch(e){}
+  try{ sendPresence(true); }catch(e){}
+}
+function bowRelease(silent){ if(!hook.mode) return; hook.mode=0; hook.kind=null; hook.ref=null; hook.pull=0; if(!silent) audio.getup(); try{ sendPresence(true); }catch(e){} }
+function hookPoint(out){
+  if(hook.kind==='peluche' && hook.ref){ const r=hook.ref; const f=r.obj.rotation.y, c=Math.cos(f), s=Math.sin(f); return out.set(r.pos.x+hook.off.x*c+hook.off.z*s, r.pos.y+hook.off.y, r.pos.z-hook.off.x*s+hook.off.z*c); }
+  if(hook.kind==='car' && hook.ref){ const c=hook.ref, ch=Math.cos(c.h), sh=Math.sin(c.h); return out.set(c.x+hook.off.x*ch+hook.off.z*sh, c.y+hook.off.y, c.z-hook.off.x*sh+hook.off.z*ch); }
+  if(hook.kind==='air' && hook.ref){ const a=hook.ref, ch=Math.cos(a.h), sh=Math.sin(a.h); return out.set(a.x+hook.off.x*ch+hook.off.z*sh, a.y+hook.off.y, a.z-hook.off.x*sh+hook.off.z*ch); }
+  return out.copy(hook.pos);
+}
+function stickTo(h,p){
+  hook.mode=2; hook.kind=h.kind; hook.ref=h.ref||null; hook.pos.copy(p); hook.vel.normalize();
+  const setOff=(x,y,z,yawA)=>{ const dx=p.x-x, dz=p.z-z, c=Math.cos(yawA), s=Math.sin(yawA); hook.off.set(dx*c-dz*s, p.y-y, dx*s+dz*c); };
+  if(h.kind==='peluche') setOff(h.ref.pos.x,h.ref.pos.y,h.ref.pos.z,h.ref.obj.rotation.y);
+  if(h.kind==='car') setOff(h.ref.x,h.ref.y,h.ref.z,h.ref.h);
+  if(h.kind==='air') setOff(h.ref.x,h.ref.y,h.ref.z,h.ref.h);
+  audio.land(.5);
+  try{ sendPresence(true); }catch(e){}
+}
+const weightOf=k=> k==='peluche' ? 'medio' : k==='light' ? 'ligero' : 'pesado';
+function bowGo(){ if(hook.mode!==2) return; hook.mode=3; hook.reachK=0; player.vy=0; player.grounded=false; audio.jump(); try{ sendPresence(true); }catch(e){} }
+function bowPull(){ if(hook.mode!==2) return; hook.mode=4; hook.t=0; hook.strainT=0; audio.getup();
+  if(hook.kind==='peluche' && hook.ref) flashNote('Jalando a '+(hook.ref.name||'otro peluche')+'…');
+  try{ sendPresence(true); }catch(e){} }
+const bw_hp=new THREE.Vector3(), bw_dv=new THREE.Vector3();
+// Se llama cada cuadro antes de mover al jugador. Devuelve true si el arco está moviendo al jugador.
+function updateMyBow(dt){
+  const held=bowHeld();
+  if(!held && hook.mode) bowRelease(true);
+  hook.extend=Math.max(0,hook.extend-dt*3);
+  if(hook.mode===1){
+    hook.t+=dt; const steps=Math.ceil(hook.vel.length()*dt/.3);
+    for(let i=0;i<steps;i++){ hook.vel.y-=BOW.grav*dt/steps; const prev=bw_dv.copy(hook.pos); hook.pos.addScaledVector(hook.vel,dt/steps);
+      const h=hitAt(hook.pos,true);
+      if(h){ if(h.kind==='water'){ waterRipple(hook.pos.x,hook.pos.z,.12); audio.splash(.4); flashNote('La flecha cayó al agua'); bowRelease(true); return false; }
+        if(h.kind==='self') continue;
+        hook.pos.copy(prev); stickTo(h,hook.pos); break; }
+      if(hook.pos.distanceTo(player.pos)>BOW.range){ flashNote('Se acabó la cuerda'); bowRelease(true); return false; } }
+    if(hook.t>4) bowRelease(true);
+  }
+  if(hook.mode>=2) hookPoint(hook.pos);
+  if(hook.mode>=2 && hook.kind==='peluche' && (!hook.ref || ![...mp.remotes.values()].includes(hook.ref))){ bowRelease(true); return false; }
+  if(hook.mode===2 && hook.pos.distanceTo(player.pos)>BOW.range+8){ flashNote('La cuerda se soltó'); bowRelease(true); }
+  if(hook.mode===3){
+    // primero el brazo se estira hasta el punto y luego te lleva
+    hook.reachK=Math.min(1,hook.reachK+dt/BOW.reach);
+    if(hook.reachK<1) return true;
+    bw_hp.copy(hook.pos); if(hook.kind==='peluche') bw_hp.y=hook.ref.pos.y;
+    const body=bw_dv.copy(player.pos);           // los pies llegan al punto (a un peluche: a su lado)
+    const to=bw_hp.clone().sub(body); const d=to.length(), stop=hook.kind==='peluche'?1.1:.35;
+    if(d<stop){ player.vel.set(0,0,0); player.vy=hook.kind==='ground'?0:1.5; player.grounded=false; bowRelease(true); audio.land(.6); return false; }
+    const sp=Math.min(BOW.goSpeed, d*6); to.multiplyScalar(sp/d);
+    player.pos.addScaledVector(to,dt); player.vel.set(to.x*.25,0,to.z*.25); player.vy=0;
+    const g=groundAt(player.pos.x,player.pos.z,player.pos.y+.3); if(player.pos.y<g) player.pos.y=g;
+    player.facing=Math.atan2(to.x,to.z); player.groundY=g; player.grounded=false;
+    return true;
+  }
+  if(hook.mode===4){
+    hook.t+=dt; hook.pull=Math.min(1,hook.pull+dt*5);
+    const w=weightOf(hook.kind);
+    if(w==='pesado'){ if(hook.t>1.2){ flashNote(hook.kind==='ground'||hook.kind==='solid' ? 'Está bien pegada: eso no se mueve' : 'Es demasiado pesado para jalarlo'); hook.mode=2; hook.pull=0; try{ sendPresence(true); }catch(e){} } }
+    else if(hook.kind==='peluche'){ const r=hook.ref; if(r && Math.hypot(r.pos.x-player.pos.x,r.pos.z-player.pos.z)<1.7){ bowRelease(true); flashNote('¡Lo trajiste!'); } else if(hook.t>9) { hook.mode=2; hook.pull=0; } }
+  } else hook.pull=Math.max(0,hook.pull-dt*4);
+  return false;
+}
+// Otro jugador me está jalando: me muevo despacio hacia él
+function pulledByOthers(dt){
+  for(const r of mp.remotes.values()){ const b=r.bw; if(!b || b[0]!==4 || b[4]!==1 || r.bwT!==myUid) continue;
+    const dx=r.pos.x-player.pos.x, dz=r.pos.z-player.pos.z, d=Math.hypot(dx,dz); if(d<1.6) continue;
+    const s=BOW.pullPeluche*dt/d; player.pos.x+=dx*s; player.pos.z+=dz*s;
+    if(!r.pullNoted || performance.now()-r.pullNoted>6000){ r.pullNoted=performance.now(); flashNote((r.name||'Alguien')+' te está jalando con su arco'); } }
+}
+function bowActions(){
+  if(!bowHeld()) return null;
+  if(hook.mode===0) return [{label:'Disparar', run:bowShoot}, null];
+  if(hook.mode===1) return [{label:'Disparar', disabled:true, run:()=>{}}, null];
+  if(hook.mode===2) return [{label:'Ir hacia allá', run:bowGo}, {label:'Jalar', run:bowPull}];
+  return [{label:'Soltar', run:()=>bowRelease()}, null];
+}
+// Dibujo de mi arco y de los arcos de los demás
+function poseBowOn(obj,rig,o,arrowPos,ropeTaut){
+  if(!o){ hideBowRig(rig); return; }
+  bowPose(obj,rig,o);
+  rig.nockArrow.visible=o.mode===0; if(rig.nockArrow.visible){ const n=rig.bow.userData.nock; rig.nockArrow.position.copy(rig.bow.position); rig.nockArrow.rotation.copy(rig.bow.rotation); rig.nockArrow.translateZ(n.z+.62); }
+  if(o.mode>=1 && arrowPos){ rig.arrow.visible=true; rig.arrow.position.copy(arrowPos);
+    if(o.vel && o.vel.lengthSq()>1e-4) rig.arrow.lookAt(bw_ra.copy(arrowPos).add(o.vel));
+    const hole=reelHole(rig); const tail=bwTail.copy(rig.arrow.position); bw_rc.set(0,0,-.62).applyQuaternion(rig.arrow.quaternion); tail.add(bw_rc);
+    drawRope(rig.rope, hole, tail, ropeTaut?0:.035);
+  } else { rig.arrow.visible=false; drawRope(rig.rope,null); }
+}
+function myBowPose(dt){
+  const rig=bowRig(plush);
+  if(!bowHeld()){ hideBowRig(rig); return; }
+  const p=aimPitch();
+  poseBowOn(plush,rig,{pitch:p, draw:hook.mode===0?1:0, mode:hook.mode, target:hook.mode>=1?hook.pos:null, extend:hook.extend, pull:hook.pull, reachK:hook.reachK, vel:hook.mode===1?hook.vel:null}, hook.pos, hook.mode>=3);
+  myBowAim=p;
+}
+let myBowAim=0;
+function bowPresence(){
+  if(!bowHeld()) return null;
+  const m=hook.mode, r2b=v=>Math.round(v*100)/100;
+  if(m>=2 && hook.kind==='peluche' && hook.ref && hook.ref.uid) return [m, r2b(hook.off.x), r2b(hook.off.y), r2b(hook.off.z), 1, r2b(myBowAim), hook.ref.uid];
+  return [m, r2b(hook.pos.x), r2b(hook.pos.y), r2b(hook.pos.z), 0, r2b(myBowAim)];
+}
+function parseBow(r,pr){
+  r.uid=typeof pr.id==='string' ? pr.id.slice(0,12) : null;
+  const b=pr.bw; r.bwT=null;
+  if(Array.isArray(b) && (b.length===6 || b.length===7) && b.slice(0,6).every(Number.isFinite) && b[0]>=0 && b[0]<=4){ r.bw=b; if(b.length===7 && typeof b[6]==='string') r.bwT=b[6].slice(0,12); }
+  else r.bw=null;
+}
+const bw_ap=new THREE.Vector3(), bw_apv=new THREE.Vector3();
+function remoteBowPose(r){
+  const b=r.bw; const rig=r.obj.userData.bowRig;
+  if(!b || r.held!=='bow'){ if(rig) hideBowRig(rig); r.bwPrev=null; return; }
+  const R=bowRig(r.obj); let at=null;
+  if(b[0]>=1){
+    if(b[4]===1){ // pegada a un peluche: a mí o a otro
+      let tgt=null; if(r.bwT===myUid) tgt={pos:player.pos, f:player.facing}; else for(const q of mp.remotes.values()) if(q.uid===r.bwT) tgt={pos:q.pos, f:q.obj.rotation.y};
+      if(tgt){ const c=Math.cos(tgt.f), s=Math.sin(tgt.f); at=bw_ap.set(tgt.pos.x+b[1]*c+b[3]*s, tgt.pos.y+b[2], tgt.pos.z-b[1]*s+b[3]*c); }
+    } else at=bw_ap.set(b[1],b[2],b[3]);
+  }
+  let vel=null; if(at && b[0]===1){ if(r.bwPrev) vel=bw_apv.copy(at).sub(r.bwPrev); r.bwPrev=(r.bwPrev||new THREE.Vector3()).copy(at); } else r.bwPrev=null;
+  poseBowOn(r.obj,R,{pitch:b[5], draw:b[0]===0?1:0, mode:b[0], target:at, extend:b[0]===1?1:0, pull:b[0]===4?1:0, reachK:1, vel}, at, b[0]>=3);
+}
+
 // ---------- Bucle ----------
 function resize(){
   const w=innerWidth,h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();
@@ -4200,6 +4483,7 @@ function refreshFog(){
 }
 function setUnderwaterView(on){ if(on===underwaterView) return; underwaterView=on; refreshFog(); audio.underwater(on); }
 
+let camAim=0;
 const _camT=new THREE.Vector3(), _camO=new THREE.Vector3(), _camW=new THREE.Vector3();
 function update(dt,t){
   const {body}=plush.userData;
@@ -4212,9 +4496,10 @@ function update(dt,t){
   player.acPose=acPose;
   let pgPose=null;
   if(state==='play' && player.pg) pgPose=updateMyPlay(dt);
+  const bowMoving = state==='play' && updateMyBow(dt);
   updatePlayground(dt);
   const dv=player.dive;
-  if(state==='play' && !player.car && !player.ac && !player.pg){
+  if(state==='play' && !player.car && !player.ac && !player.pg && !bowMoving){
     let f=0,s=0;
     if(keys.KeyW||keys.ArrowUp) f+=1;
     if(keys.KeyS||keys.ArrowDown) f-=1;
@@ -4337,7 +4622,7 @@ function update(dt,t){
 
     // Orientación (fija mientras está tirado)
     if(player.dive){}
-    else if(camMode==='first'){ player.facing = yaw+Math.PI; }
+    else if(camMode==='first' || bowHeld()){ player.facing = yaw+Math.PI; }
     else if(Math.hypot(player.vel.x,player.vel.z)>.25){
       const want=Math.atan2(player.vel.x,player.vel.z);
       let diff=want-player.facing; diff=Math.atan2(Math.sin(diff),Math.cos(diff));
@@ -4387,6 +4672,9 @@ function update(dt,t){
   if(acPose){ const w=placeInAircraft(plush, aircraft[player.ac.i], acPose); player.pos.copy(w); player.groundY=w.y; }
   if(pgPose){ placePlay(plush,pgPose); player.pos.set(...pgPose.pos); player.groundY=pgPose.pos[1]; player.facing=pgPose.yaw; }
   else if(state==='play' && performance.now()/1000<player.pushUntil) pgPoseLimbs(plush,{push:1},t,dt,player.walk);
+  if(state==='play' && !player.car && !player.ac && !player.pg) pulledByOthers(dt);
+  myBowPose(dt);
+  crossEl.hidden = !(state==='play' && (camMode==='first' || bowHeld()));
   const fwd=Math.sin(player.diveAngle)*.85;
   blob.position.set(player.pos.x+Math.sin(player.facing)*fwd, player.groundY+.06, player.pos.z+Math.cos(player.facing)*fwd);
   blob.visible = !player.inWater && !player.swim && !player.car && !player.ac && !pgPose;
@@ -4454,7 +4742,9 @@ function update(dt,t){
     const p=THREE.MathUtils.clamp(.32 - pitch, -.15, 1.35);
     const s=player.swim?0:Math.sin(player.diveAngle);
     const target=_camT.set(player.pos.x+Math.sin(player.facing)*s*.8, player.pos.y+1.42-s*.9, player.pos.z+Math.cos(player.facing)*s*.8);
-    const off=_camO.set(Math.sin(yaw)*Math.cos(p), Math.sin(p), Math.cos(yaw)*Math.cos(p)).multiplyScalar(camDist);
+    const aiming=bowHeld() && hook.mode!==3; camAim+=((aiming?1:0)-camAim)*(1-Math.exp(-dt*8));
+    if(camAim>.01) target.add(_camO.set(Math.cos(yaw)*.85, .35, -Math.sin(yaw)*.85).multiplyScalar(camAim));   // con el arco: cámara sobre el hombro
+    const off=_camO.set(Math.sin(yaw)*Math.cos(p), Math.sin(p), Math.cos(yaw)*Math.cos(p)).multiplyScalar(camDist*(1-.35*camAim));
     const want=_camW.copy(target).add(off);
     const floorY=Math.max(terrainH(want.x,want.z), inLake(want.x,want.z,4)?WATER_Y:-999)+.45; if(want.y<floorY) want.y=floorY;
     clampCamToCake(target,want);
