@@ -663,7 +663,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='50';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='51';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -2984,7 +2984,15 @@ const mapBase=document.createElement('canvas'); mapBase.width=mapBase.height=MAP
 const TELEPORTS=[{id:'inicio', name:'Inicio', x:START.x, z:START.z}, {id:'pista', name:'Pista', x:MAP.park.x-6, z:MAP.park.z+30}, {id:'aero', name:'Aeropuerto', ...(([x,z])=>({x,z}))(airportXZ(85,-80))}, {id:'parque', name:'Parque', x:PG.x+1, z:PG.z+2}];
 
 // ---------- Portales del segundo piso del castillo: arcos de mini bombones que llevan a los lugares del mapa ----------
-const portals=[];
+const portals=[], signGlow=[], signLights=[];
+const signMats=(()=>{ const c=document.createElement('canvas'); c.width=256; c.height=128; const g=c.getContext('2d');
+  g.fillStyle='#5b3220'; g.fillRect(0,0,256,128); for(let i=0;i<4;i++) for(let j=0;j<2;j++){ g.fillStyle='#6e3d27'; g.fillRect(6+i*63,6+j*61,56,54); g.fillStyle='rgba(255,255,255,.08)'; g.fillRect(6+i*63,6+j*61,56,6); }
+  const sp=['#ff5d6c','#ffe14d','#7ed957','#4fc3f7','#c77dff','#ffffff']; for(let i=0;i<70;i++){ g.save(); g.translate(Math.random()*256,Math.random()*128); g.rotate(Math.random()*6.3); g.fillStyle=sp[i%6]; g.fillRect(-4,-1.2,8,2.4); g.restore(); }
+  const bt=new THREE.CanvasTexture(c); bt.encoding=THREE.sRGBEncoding;
+  const cc=document.createElement('canvas'); cc.width=32; cc.height=128; const q=cc.getContext('2d'); q.fillStyle='#fffaf3'; q.fillRect(0,0,32,128); q.fillStyle='#e0303a'; for(let y=-32;y<160;y+=32){ q.beginPath(); q.moveTo(0,y); q.lineTo(32,y-16); q.lineTo(32,y-4); q.lineTo(0,y+12); q.fill(); }
+  const ct=new THREE.CanvasTexture(cc); ct.encoding=THREE.sRGBEncoding; ct.wrapS=ct.wrapT=THREE.RepeatWrapping; ct.repeat.set(1,3);
+  return {bar:new THREE.MeshStandardMaterial({map:bt, roughness:.4}), choco:new THREE.MeshStandardMaterial({color:0x4a2614, roughness:.4}), cane:new THREE.MeshStandardMaterial({map:ct, roughness:.3}),
+    icing:new THREE.MeshStandardMaterial({color:0xffb6d5, roughness:.35}), cherry:new THREE.MeshStandardMaterial({color:0xc8102e, roughness:.25})}; })();
 (function castlePortals(){
   const dests=[...TELEPORTS.filter(t=>t.id!=='inicio'), ...TELEPORTS.filter(t=>t.id==='inicio')]; if(!dests.length) return;   // Inicio: baja a la planta baja
   const H=CAKE.H, [[,h1],[l2,h2]]=[CAKE_ST.holes[0],CAKE_ST.holes[1]];
@@ -3017,15 +3025,20 @@ const portals=[];
     // centro del portal: remolino de colores que gira
     const tex=swirlTex(TINTS[pi%TINTS.length]); tex.repeat.set(1,1);
     const surf=new THREE.Mesh(archGeo,new THREE.MeshBasicMaterial({map:tex, transparent:true, opacity:.85, side:THREE.DoubleSide, depthWrite:false})); surf.position.y=.17; g.add(surf);
-    // cartel al lado con el nombre del lugar
+    // cartel de dulce: tableta de chocolate con glaseado rosa escurriendo, chispas, bastón de caramelo de poste y una cereza
+    const sx=RW+1.3, BW=2.2, BH=.95, by=2.05;
+    const cane=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,by+.1,10), signMats.cane); cane.position.set(sx,(by+.1)/2,-.2); g.add(cane);
+    const hook=new THREE.Mesh(new THREE.TorusGeometry(.2,.09,8,14,Math.PI), signMats.cane); hook.position.set(sx-.2,by+BH/2+.25,-.2); g.add(hook);
+    const board=new THREE.Mesh(new THREE.BoxGeometry(BW,BH,.16),[signMats.choco,signMats.choco,signMats.choco,signMats.choco,signMats.bar,signMats.bar]); board.position.set(sx,by,-.02); board.castShadow=true; g.add(board);
+    for(let k=0;k<11;k++){ const x=sx-BW/2+.1+k*(BW-.2)/10, d=new THREE.Mesh(sphereG,signMats.icing); d.scale.set(.13,.09+((k*5)%3)*.04,.1); d.position.set(x,by+BH/2-((k*5)%3)*.04,.07); g.add(d); }   // glaseado que escurre
+    const ch=new THREE.Mesh(sphereG,signMats.cherry); ch.scale.setScalar(.16); ch.position.set(sx+BW/2-.15,by+BH/2+.14,0); g.add(ch);
+    // letras de glaseado: de día se ven normales y de noche brillan
     const sc=document.createElement('canvas'); sc.width=512; sc.height=192; const sTex=new THREE.CanvasTexture(sc); sTex.encoding=THREE.sRGBEncoding;
-    const drawSign=()=>{ const q=sc.getContext('2d'); q.clearRect(0,0,512,192); q.fillStyle='#f6e7c8'; q.fillRect(0,0,512,192); q.fillStyle='#e0303a'; q.fillRect(0,0,512,16); q.fillRect(0,176,512,16);
-      q.strokeStyle='#8a6a3e'; q.lineWidth=5; q.setLineDash([16,12]); q.strokeRect(14,26,484,140);
-      q.font='800 92px Sniglet, Nunito, sans-serif'; q.fillStyle='#4a2614'; q.textAlign='center'; q.textBaseline='middle'; q.fillText(d.name,256,100,460); sTex.needsUpdate=true; };
+    const drawSign=()=>{ const q=sc.getContext('2d'); q.clearRect(0,0,512,192); q.font='800 96px Sniglet, Nunito, sans-serif'; q.textAlign='center'; q.textBaseline='middle';
+      q.lineJoin='round'; q.lineWidth=14; q.strokeStyle='#ff8fc0'; q.strokeText(d.name,256,104,470); q.fillStyle='#fff6fb'; q.fillText(d.name,256,104,470); sTex.needsUpdate=true; };
     drawSign(); if(document.fonts) document.fonts.ready.then(drawSign);
-    const sx=RW+1.3; const post=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,2.2,8), new THREE.MeshStandardMaterial({color:0x8a5530, roughness:.6})); post.position.set(sx,1.1,.05); g.add(post);
-    const boardM=[new THREE.MeshStandardMaterial({color:0xd9a35e,roughness:.8})]; const front=new THREE.MeshStandardMaterial({map:sTex, roughness:.8});
-    const board=new THREE.Mesh(new THREE.BoxGeometry(2.1,.8,.08),[boardM[0],boardM[0],boardM[0],boardM[0],front,front]); board.position.set(sx,2.05,.05); board.castShadow=true; g.add(board);
+    const txt=new THREE.Mesh(new THREE.PlaneGeometry(BW*.92,BH*.92*1.05), new THREE.MeshStandardMaterial({map:sTex, emissiveMap:sTex, emissive:0xffffff, emissiveIntensity:0, transparent:true, depthWrite:false, roughness:.5}));
+    txt.position.set(sx,by-.04,.065); g.add(txt); signGlow.push(txt.material);
     // que no se atraviesen los postes ni el cartel (solo en el segundo piso)
     [[-RW,0],[RW,0],[sx,0]].forEach(([x])=>{ obstacles.push({x:cx+tx*0+(-tz*0)+ (Math.cos(g.rotation.y)*x), z:cz-(Math.sin(g.rotation.y)*x), r:.32, top:H+4, bot:H-.3, walk:false}); });
     portals.push({a, cx, cz, nx, nz, tx:Math.cos(g.rotation.y), tz:-Math.sin(g.rotation.y), dest:d, tex});
@@ -3035,6 +3048,7 @@ const portals=[];
 let portalCool=0;
 function updatePortals(dt){
   for(const p of portals) p.tex.rotation-=dt*1.6;
+  { const night=1-(sky.dayK??1), k=Math.max(0,(night-.25)/.75); signGlow.forEach(m=>m.emissiveIntensity=k*1.1); }   // las letras brillan de noche
   if(state!=='play' || player.car || player.ac || player.pg || performance.now()<portalCool) return;
   const P=player.pos; if(Math.abs(P.y-CAKE.H)>1.2) return;
   for(const p of portals){ const dx=P.x-p.cx, dz=P.z-p.cz, lx=dx*p.tx+dz*p.tz, lz=dx*p.nx+dz*p.nz;
