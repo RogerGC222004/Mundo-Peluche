@@ -663,7 +663,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='49';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='50';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -2982,6 +2982,64 @@ const mapBase=document.createElement('canvas'); mapBase.width=mapBase.height=MAP
 
 // Lugares a los que se puede viajar desde el mapa
 const TELEPORTS=[{id:'inicio', name:'Inicio', x:START.x, z:START.z}, {id:'pista', name:'Pista', x:MAP.park.x-6, z:MAP.park.z+30}, {id:'aero', name:'Aeropuerto', ...(([x,z])=>({x,z}))(airportXZ(85,-80))}, {id:'parque', name:'Parque', x:PG.x+1, z:PG.z+2}];
+
+// ---------- Portales del segundo piso del castillo: arcos de mini bombones que llevan a los lugares del mapa ----------
+const portals=[];
+(function castlePortals(){
+  const dests=[...TELEPORTS.filter(t=>t.id!=='inicio'), ...TELEPORTS.filter(t=>t.id==='inicio')]; if(!dests.length) return;   // Inicio: baja a la planta baja
+  const H=CAKE.H, [[,h1],[l2,h2]]=[CAKE_ST.holes[0],CAKE_ST.holes[1]];
+  const sideA=(h1+l2)/2, sideB=(h2+CAKE_ST.holes[0][0]+Math.PI*2)/2;   // las dos orillas libres del segundo piso (entre los huecos de las escaleras)
+  const half=Math.ceil(dests.length/2), R0=CAKE_ST.r0-1.6, GAP=5.2/R0;   // separación entre portales (en ángulo)
+  const angs=[]; [[sideA,dests.slice(0,half)],[sideB,dests.slice(half)]].forEach(([c,list])=>list.forEach((d,i)=>angs.push([c+(i-(list.length-1)/2)*GAP, d])));
+  const RW=1.15, HP=2.0, TINTS=['#ff7eb6','#7fd0ff','#9be37a','#ffd34d','#c59bff','#ff9d5c'];
+  // camino del marco (en el plano del portal): poste izquierdo, arco y poste derecho
+  const path=[]; const step=.27;
+  for(let y=0;y<HP;y+=step) path.push([-RW,y]);
+  const na=Math.round(Math.PI*RW/step); for(let k=0;k<=na;k++){ const t=Math.PI-k/na*Math.PI; path.push([Math.cos(t)*RW, HP+Math.sin(t)*RW]); }
+  for(let y=HP-step;y>=0;y-=step) path.push([RW,y]);
+  const N=angs.length*path.length*2, bon=new THREE.InstancedMesh(sphereG, new THREE.MeshStandardMaterial({roughness:.35}), N), dots=new THREE.InstancedMesh(sphereG, new THREE.MeshStandardMaterial({color:0xfff8f0, roughness:.5}), N);
+  const BON=['#5b3220','#8a5530','#f6b6c4','#fff1e0','#5b3220','#ff9ec0'].map(h=>new THREE.Color(h).convertSRGBToLinear());
+  const o=new THREE.Object3D(); let n=0;
+  const swirlTex=(tint)=>{ const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d'), gr=g.createRadialGradient(64,64,4,64,64,64);
+    gr.addColorStop(0,'#ffffff'); gr.addColorStop(.35,tint); gr.addColorStop(1,'#3b2a6b'); g.fillStyle=gr; g.fillRect(0,0,128,128);
+    g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=5; for(let k=0;k<3;k++){ g.beginPath(); for(let t=0;t<9;t+=.1){ const r=t*7; g.lineTo(64+Math.cos(t+k*2.09)*r,64+Math.sin(t+k*2.09)*r); } g.stroke(); }
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.center.set(.5,.5); return t; };
+  const archShape=new THREE.Shape(); archShape.moveTo(-RW,0); archShape.lineTo(-RW,HP); archShape.absarc(0,HP,RW,Math.PI,0,true); archShape.lineTo(RW,0); archShape.lineTo(-RW,0);
+  const archGeo=new THREE.ShapeGeometry(archShape,20);
+  { const uv=archGeo.attributes.uv, ps=archGeo.attributes.position; for(let i=0;i<uv.count;i++) uv.setXY(i,(ps.getX(i)+RW)/(2*RW),(ps.getY(i))/(HP+RW)); }
+  angs.forEach(([a,d],pi)=>{
+    const cx=Math.cos(a)*R0, cz=Math.sin(a)*R0, nx=-Math.cos(a), nz=-Math.sin(a), tx=-Math.sin(a), tz=Math.cos(a);
+    const g=new THREE.Group(); g.position.set(cx,H,cz); g.rotation.y=Math.atan2(nx,nz); scene.add(g);
+    // marco: dos capas de bombones pegados
+    path.forEach(([x,y],k)=>[-.1,.1].forEach((zz,l)=>{ const s=.17+((k*7+l*3)%3)*.02;
+      o.position.set(x,y+.17,zz); o.scale.set(s,s*.85,s); o.rotation.set(0,0,0); o.updateMatrix(); o.matrix.premultiply(g.matrix.compose(g.position,g.quaternion,g.scale)); bon.setMatrixAt(n,o.matrix); bon.setColorAt(n,BON[(k+l*2+pi)%BON.length]);
+      o.position.set(x,y+.17+s*.82,zz); o.scale.set(s*.38,s*.14,s*.38); o.updateMatrix(); o.matrix.premultiply(g.matrix); dots.setMatrixAt(n,o.matrix); n++; }));
+    // centro del portal: remolino de colores que gira
+    const tex=swirlTex(TINTS[pi%TINTS.length]); tex.repeat.set(1,1);
+    const surf=new THREE.Mesh(archGeo,new THREE.MeshBasicMaterial({map:tex, transparent:true, opacity:.85, side:THREE.DoubleSide, depthWrite:false})); surf.position.y=.17; g.add(surf);
+    // cartel al lado con el nombre del lugar
+    const sc=document.createElement('canvas'); sc.width=512; sc.height=192; const sTex=new THREE.CanvasTexture(sc); sTex.encoding=THREE.sRGBEncoding;
+    const drawSign=()=>{ const q=sc.getContext('2d'); q.clearRect(0,0,512,192); q.fillStyle='#f6e7c8'; q.fillRect(0,0,512,192); q.fillStyle='#e0303a'; q.fillRect(0,0,512,16); q.fillRect(0,176,512,16);
+      q.strokeStyle='#8a6a3e'; q.lineWidth=5; q.setLineDash([16,12]); q.strokeRect(14,26,484,140);
+      q.font='800 92px Sniglet, Nunito, sans-serif'; q.fillStyle='#4a2614'; q.textAlign='center'; q.textBaseline='middle'; q.fillText(d.name,256,100,460); sTex.needsUpdate=true; };
+    drawSign(); if(document.fonts) document.fonts.ready.then(drawSign);
+    const sx=RW+1.3; const post=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,2.2,8), new THREE.MeshStandardMaterial({color:0x8a5530, roughness:.6})); post.position.set(sx,1.1,.05); g.add(post);
+    const boardM=[new THREE.MeshStandardMaterial({color:0xd9a35e,roughness:.8})]; const front=new THREE.MeshStandardMaterial({map:sTex, roughness:.8});
+    const board=new THREE.Mesh(new THREE.BoxGeometry(2.1,.8,.08),[boardM[0],boardM[0],boardM[0],boardM[0],front,front]); board.position.set(sx,2.05,.05); board.castShadow=true; g.add(board);
+    // que no se atraviesen los postes ni el cartel (solo en el segundo piso)
+    [[-RW,0],[RW,0],[sx,0]].forEach(([x])=>{ obstacles.push({x:cx+tx*0+(-tz*0)+ (Math.cos(g.rotation.y)*x), z:cz-(Math.sin(g.rotation.y)*x), r:.32, top:H+4, bot:H-.3, walk:false}); });
+    portals.push({a, cx, cz, nx, nz, tx:Math.cos(g.rotation.y), tz:-Math.sin(g.rotation.y), dest:d, tex});
+  });
+  bon.count=dots.count=n; bon.instanceMatrix.needsUpdate=true; bon.castShadow=true; bon.frustumCulled=dots.frustumCulled=false; scene.add(bon, dots);
+})();
+let portalCool=0;
+function updatePortals(dt){
+  for(const p of portals) p.tex.rotation-=dt*1.6;
+  if(state!=='play' || player.car || player.ac || player.pg || performance.now()<portalCool) return;
+  const P=player.pos; if(Math.abs(P.y-CAKE.H)>1.2) return;
+  for(const p of portals){ const dx=P.x-p.cx, dz=P.z-p.cz, lx=dx*p.tx+dz*p.tz, lz=dx*p.nx+dz*p.nz;
+    if(Math.abs(lx)<1.0 && Math.abs(lz)<.35){ portalCool=performance.now()+2500; teleportTo(p.dest); return; } }
+}
 const mapCv=ui('mapCanvas'), mctx=mapCv.getContext('2d');
 // Vista del mapa: zoom (1 = isla entera) y punto del mapa que queda en el centro
 const mapView={z:1, cx:MAP_PX/2, cy:MAP_PX/2};
@@ -4654,6 +4712,7 @@ function update(dt,t){
   if(state==='play' && player.pg) pgPose=updateMyPlay(dt);
   const bowMoving = state==='play' && updateMyBow(dt);
   updatePlayground(dt);
+  updatePortals(dt);
   const dv=player.dive;
   if(state==='play' && !player.car && !player.ac && !player.pg && !bowMoving){
     let f=0,s=0;
