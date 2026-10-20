@@ -817,7 +817,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='69';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='70';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -2148,6 +2148,7 @@ const player={pos:new THREE.Vector3(0,.12,0), vel:new THREE.Vector3(), vy:0, gro
 const DIVE_FLAT=1.48;                         // inclinación al quedar de panza (rad)
 const diveLift=a=>.36*Math.sin(a);            // sube el cuerpo para que la panza quede sobre el suelo
 function startDive(){
+  if(typeof SP!=='undefined' && SP.on){ spaceDive(); return; }
   if(state!=='play' || player.dive || player.swim || player.car || player.ac || player.pg || player.mg) return;
   const dx=Math.sin(player.facing), dz=Math.cos(player.facing);
   const hs=Math.hypot(player.vel.x,player.vel.z), sp=Math.max(5,hs*1.15);
@@ -2557,7 +2558,7 @@ tap(camChip,()=>{ const M=player.mg;
 hold(ui('tJump'),()=>{ touchHold.up=true; jump(); },()=>{ touchHold.up=false; });
 hold(ui('tDive'),()=>{ touchHold.down=true; startDive(); },()=>{ touchHold.down=false; });
 
-function jump(){ if(player.mg) return; if(hook.mode>=2){ bowRelease(); return; } if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see')){ stopPlay(); return; } if(player.grounded && !player.dive && !player.swim && !player.car && !player.ac && !player.pg){ player.vy=7.2; player.grounded=false; audio.jump(); } }
+function jump(){ if(player.mg || (typeof SP!=='undefined' && SP.on)) return; if(hook.mode>=2){ bowRelease(); return; } if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see')){ stopPlay(); return; } if(player.grounded && !player.dive && !player.swim && !player.car && !player.ac && !player.pg){ player.vy=7.2; player.grounded=false; audio.jump(); } }
 
 addEventListener('keydown',e=>{
   if(state!=='play'){ return; }
@@ -3060,6 +3061,7 @@ function renderHotbar(){
 function useSlot(i){
   if(state!=='play' || player.car || player.pg || player.mg) return;
   if(!invEl.hidden){ selectedSlot=i; holding=false; applyHeld(); renderHotbar(); renderInv(); return; }   // con el inventario abierto solo se elige el espacio
+  if(typeof SP!=='undefined' && SP.on && hotbar[i]==='bow' && !(i===selectedSlot && holding)){ flashNote('El arco no funciona en el espacio: aquí no hay de dónde engancharse'); return; }
   if(i===selectedSlot && holding) holding=false;
   else { selectedSlot=i; holding=!!hotbar[i]; }
   applyHeld(); renderHotbar();
@@ -3373,6 +3375,8 @@ ui('mapZoomOut').onclick=()=>zoomAt(MAP_PX/2,MAP_PX/2,1/1.6);
 ui('mapCenter').onclick=centerOnMe;
 if(!isTouch) ui('mapTip').textContent='Arrastra para mover · rueda para acercar';
 function teleportTo(p){
+  if(typeof SP!=='undefined' && SP.on) exitSpace(true);
+  if(player.rk){ player.rk=null; plush.visible=true; islandRocket.door.rotation.y=0; }
   if(player.ac){ player.ac=null; forceFirst(false); updateTouchMode(); }
   if(player.pg){ player.pg=null; updateTouchMode(); }
   if(player.mg) stopMini();
@@ -7399,7 +7403,7 @@ function rocketCamera(dt){ const rk=player.rk; if(!rk || (rk.ph!=='seat' && rk.p
 // ---- entrar y salir del espacio ----
 function enterSpace(mode,o={}){ const was=SP.on; SP.on=true; fade(true,10); spaceScene.add(plush); if(player.mg) stopMini(); if(AR.me.a>=0) arLeave();
   camera.far=90000; camera.updateProjectionMatrix(); player.rk=null; SP.arrived=''; SP.anim=null; holding=false; try{ applyHeld(); renderHotbar(); }catch(e){}
-  SP.seat=null; if(mode!=='ride' && !o.crew) SP.crew=null;
+  SP.seat=null; SP.dive=null; player.diveAngle=0; if(mode!=='ride' && !o.crew) SP.crew=null;
   if(mode==='fly'){ SP.mode='fly'; SP.pos.set(0,HOME.R+380,0); SP.q.setFromUnitVectors(new THREE.Vector3(0,1,0),MOON.c.clone().sub(SP.pos).normalize()); SP.speed=40; SP.planet=null; }
   else if(mode==='ride'){ if(SP.planet) planetHi(SP.planet,false); SP.mode='ride'; SP.crewT=performance.now(); SP.crew=o.pilot; SP.planet=null; SP.rocketAt=null; SP.speed=0; const r=arRemote(o.pilot); if(r && r.sp) SP.pos.set(r.sp[1],r.sp[2],r.sp[3]); else SP.pos.set(0,HOME.R+380,0);
     const nm=r&&r.name||'tu amigo'; bigText('Viajas con '+nm,1600); }
@@ -7409,7 +7413,7 @@ function enterSpace(mode,o={}){ const was=SP.on; SP.on=true; fade(true,10); spac
     if(o.noRocket) SP.rocketAt=null; else { const rd=d.clone().addScaledVector(_r.crossVectors(SP.camFwd,d).normalize(),9/P.R).normalize(); parkRocket(P,rd); }
     SP.arrived=P.key; bigText('Llegaste a '+P.name,1600); markVisited(P,d); }
   SP.lastYaw=yaw; myRocket.g.visible=SP.mode==='fly' || !!SP.rocketAt; spaceButtons(true); renderSpaceHud(true); setTimeout(()=>fade(false,900),60); try{ sendPresence(true); }catch(e){} }
-function exitSpace(quiet){ if(!SP.on) return; SP.on=false; SP.mode=''; SP.seat=null; SP.crew=null; scene.add(plush); myRocket.g.visible=false; spaceButtons(false);
+function exitSpace(quiet){ if(!SP.on) return; SP.on=false; SP.mode=''; SP.seat=null; SP.crew=null; SP.dive=null; player.diveAngle=0; player.dive=null; scene.add(plush); myRocket.g.visible=false; spaceButtons(false);
   if(SP.planet) planetHi(SP.planet,false); SP.planet=null; camera.far=settings.draw*1.05+15; camera.updateProjectionMatrix(); camera.up.set(0,1,0);
   const b=rkLocal(0,0,RK_LADDER_Z+1.5); player.pos.set(b.x,RK.h,b.z); player.vel.set(0,0,0); player.vy=0; player.grounded=true; player.facing=RK.yaw; yaw=RK.yaw+Math.PI; plush.visible=true; plush.quaternion.identity(); plush.rotation.order='YXZ';
   spaceScene.background.copy(_space); spaceScene.fog.near=1e8; spaceScene.fog.far=2e8; spStars.material.opacity=1; spNebula.forEach(s=>s.material.opacity=.8); spParts.visible=false; partKind='';
@@ -7491,6 +7495,9 @@ function spaceAnim(dt){ const a=SP.anim; a.t+=dt; const k=Math.min(1,a.t/a.dur),
   else if(a.kind==='off'){ const up=_u.copy(a.d); myRocket.g.position.copy(a.from).addScaledVector(up,a.t*a.t*12); myRocket.flames.visible=true; myRocket.flames.scale.setScalar(.8+Math.random()*.4);
     _f.set(0,1,0).applyQuaternion(myRocket.g.quaternion); SP.pos.copy(myRocket.g.position).addScaledVector(_f,11);
     if(k>=1){ SP.anim=null; SP.mode='fly'; SP.q.copy(myRocket.g.quaternion); SP.speed=60; SP.rocketAt=null; if(SP.planet){ /* se queda en alta mientras sigas cerca */ } SP.planet=null; spaceButtons(true); sendPresence(true); } } }
+// tirarse de panza también en los planetas
+function spaceDive(){ if(SP.mode!=='walk' || SP.seat || SP.anim || SP.dive) return; const sp=Math.max(5,SP.vel.length()*1.15);
+  SP.vel.copy(SP.face).multiplyScalar(sp); if(SP.hv<=.02) SP.vy=3.4; SP.dive={ph:'fall', t:0}; try{ audio.dive(); }catch(e){} }
 function walkUpdate(dt,t){ const P=SP.planet; if(!P){ SP.mode='fly'; return; }
   // marco local: arriba = desde el centro del planeta
   SP.up.copy(SP.pos).sub(P.c).normalize(); const up=SP.up;
@@ -7502,27 +7509,45 @@ function walkUpdate(dt,t){ const P=SP.planet; if(!P){ SP.mode='fly'; return; }
   _r.crossVectors(SP.camFwd,up).normalize();   // derecha de la cámara
   _d.set(0,0,0).addScaledVector(SP.camFwd,f).addScaledVector(_r,s); const dl=_d.length();
   const sp=(run?7.5:4.2)*mag; const target=dl>.01?_d.multiplyScalar(sp/dl):_d.set(0,0,0);
-  SP.vel.lerp(target,1-Math.exp(-dt*10)); SP.vel.addScaledVector(up,-SP.vel.dot(up));
-  if(SP.vel.lengthSq()>.04) SP.face.lerp(_f.copy(SP.vel).normalize(),1-Math.exp(-dt*12)).normalize();
+  const D=SP.dive;
+  if(D){ D.t+=dt;
+    if(D.ph==='fall'){ if(SP.hv<=0 && D.t>.12){ D.ph='slide'; D.t=0; try{ audio.flop(.7); }catch(e){} player.squash=.6; } }
+    else if(D.ph==='slide'){ SP.vel.multiplyScalar(Math.exp(-dt*2.4)); if(SP.vel.length()<.5 || D.t>1.4){ D.ph='lie'; D.t=0; } }
+    else if(D.ph==='lie'){ SP.vel.multiplyScalar(Math.exp(-dt*6)); if(D.t>.5 || (mag>.2 && D.t>.15) || keys.Space || touchHold.up){ D.ph='up'; D.t=0; } }
+    else if(D.ph==='up' && D.t>.35) SP.dive=null;
+    player.diveAngle+=((D.ph==='up'?0:DIVE_FLAT)-player.diveAngle)*Math.min(1,dt*(D.ph==='up'?9:7)); }
+  else { player.diveAngle+=(0-player.diveAngle)*Math.min(1,dt*9);
+    SP.vel.lerp(target,1-Math.exp(-dt*10)); }
+  SP.vel.addScaledVector(up,-SP.vel.dot(up));
+  if(camMode==='first' && !D) SP.face.copy(SP.camFwd);
+  else if(SP.vel.lengthSq()>.04 && !D) SP.face.lerp(_f.copy(SP.vel).normalize(),1-Math.exp(-dt*12)).normalize();
   SP.face.addScaledVector(up,-SP.face.dot(up)).normalize();
   // moverse sobre la superficie
   SP.pos.addScaledVector(SP.vel,dt); const d=_u.copy(SP.pos).sub(P.c).normalize(); const ground=surfR(P,d);
-  if((keys.Space||touchHold.up) && SP.hv<=.02 && SP.vy<=0){ SP.vy=8.2; try{ audio.jump(); }catch(e){} }
+  if((keys.Space||touchHold.up) && SP.hv<=.02 && SP.vy<=0 && !D){ SP.vy=8.2; try{ audio.jump(); }catch(e){} }
   SP.vy-=18*dt; SP.hv+=SP.vy*dt; if(SP.hv<=0){ if(SP.vy<-6) player.squash=1; SP.hv=0; SP.vy=0; }
   SP.pos.copy(P.c).addScaledVector(d,ground+SP.hv);
   SP.walkMv=Math.min(1,SP.vel.length()/4.2); SP.walk+=dt*(6+SP.walkMv*6)*(SP.walkMv>.05?1:0);
   renderSpaceHud(); }
 // pose y lugar del peluche en el espacio
 function spacePose(t,dt){ if(!SP.on) return; const P=SP.planet;
-  if(SP.mode==='walk' && P && !SP.anim && !SP.seat){ const air=SP.hv>.3, mv=SP.walkMv||0;
-    poseLimbs(plush,t,dt,Math.sin(SP.walk)*.7*mv,air,0,false,null,SP.walk,mv,false);
+  if(SP.mode==='walk' && P && !SP.anim && !SP.seat){ const air=SP.hv>.3, mv=SP.walkMv||0, da=player.diveAngle, dk=da/DIVE_FLAT;
+    poseLimbs(plush,t,dt,Math.sin(SP.walk)*.7*mv*(1-dk),air && !SP.dive,dk,t<player.waveUntil,null,SP.walk,mv,heldItem()==='map');
     if(SP.chomp>0){ const k=SP.chomp/.5; plush.userData.arms.forEach(a=>{ a.rotation.x=-1.4*k; }); }
     const bob=Math.abs(Math.sin(SP.walk))*.06*mv; plush.position.copy(SP.pos).addScaledVector(SP.up,bob);
     _r.crossVectors(SP.up,SP.face).normalize(); _m.makeBasis(_r,SP.up,SP.face); plush.quaternion.setFromRotationMatrix(_m);
-    const sq=player.squash*.18+(SP.chomp>0?.15*Math.sin(SP.chomp*30):0); plush.userData.body.scale.set(1+sq*.6,1-sq,.78*(1+sq*.6)); shapeHead(plush); plush.visible=true; }
+    if(da>.01){ plush.position.addScaledVector(SP.up,diveLift(da)); plush.rotateX(da); }
+    const sq=player.squash*.18+(SP.chomp>0?.15*Math.sin(SP.chomp*30):0); plush.userData.body.scale.set(1+sq*.6,1-sq,.78*(1+sq*.6)); shapeHead(plush);
+    try{ plush.userData.heldMap.visible=heldItem()==='map'; }catch(e){}
+    plush.visible=camMode!=='first'; }
   else plush.visible=false; }
-const _ct=new THREE.Vector3(), _cw=new THREE.Vector3();
+const _ct=new THREE.Vector3(), _cw=new THREE.Vector3(); let RK_TOP=0;
 function spaceCamera(dt){ if(!SP.on) return false;
+  if(SP.mode==='walk' && !SP.anim && camMode==='first' && !SP.seat){ const up=SP.up, da=player.diveAngle;
+    _ct.copy(SP.pos).addScaledVector(up,diveLift(da)+1.62*Math.cos(da)).addScaledVector(SP.face,Math.sin(da)*1.5);
+    if(camera.position.distanceTo(_ct)>30) camera.up.copy(up);
+    camera.position.copy(_ct); camera.up.lerp(up,1-Math.exp(-dt*10)).normalize();
+    const pc=THREE.MathUtils.clamp(pitch,-1.45,1.45); _cw.copy(_ct).addScaledVector(SP.camFwd,Math.cos(pc)).addScaledVector(up,Math.sin(pc)); camera.lookAt(_cw); return true; }
   if(SP.mode==='walk' && !SP.anim){ const up=SP.up, p=THREE.MathUtils.clamp(.32-pitch,-.1,1.25), dist=camDist;
     _ct.copy(SP.pos).addScaledVector(up,1.4); _cw.copy(_ct).addScaledVector(SP.camFwd,-Math.cos(p)*dist).addScaledVector(up,Math.sin(p)*dist);
     // que la cámara no se meta al planeta
@@ -7531,6 +7556,10 @@ function spaceCamera(dt){ if(!SP.on) return false;
     camera.up.lerp(up,1-Math.exp(-dt*8)).normalize(); camera.position.lerp(_cw,1-Math.exp(-dt*12)); camera.lookAt(_ct); return true; }
   // volando: detrás y un poco arriba del cohete
   const pr=SP.mode==='ride'?remoteRockets.get(arRemote(SP.crew)):null, g=pr&&pr.g.visible?pr.g:myRocket.g; _f.set(0,1,0).applyQuaternion(g.quaternion); _u.set(0,0,-1).applyQuaternion(g.quaternion);
+  if(camMode==='first' && !SP.anim){ // en la cabina: mirando por la punta del cohete
+    if(!RK_TOP) RK_TOP=new THREE.Box3().setFromObject(makeRocket().g).max.y;
+    _u.set(0,0,1).applyQuaternion(g.quaternion); _cw.copy(g.position).addScaledVector(_f,RK_TOP+.6);
+    camera.position.copy(_cw); camera.up.copy(_u); camera.lookAt(_ct.copy(_cw).addScaledVector(_f,100).addScaledVector(_u,-12)); return true; }
   const back=SP.anim?55:SP.mode==='ride'?50:42+SP.speed*.04; _cw.copy(g.position).addScaledVector(_f,-back+14).addScaledVector(_u,-12); if(camera.position.distanceTo(_cw)>400) camera.position.copy(_cw);
   camera.up.lerp(_u.negate(),1-Math.exp(-dt*3)).normalize(); camera.position.lerp(_cw,1-Math.exp(-dt*(SP.anim?3:6))); camera.lookAt(_ct.copy(g.position).addScaledVector(_f,16)); return true; }
 // botones de acción en el espacio
@@ -7610,7 +7639,9 @@ function updateSpaceRemotes(dt,t){
         if(P && Number.isFinite(s[12])){ const R=remoteRocketFor(r,true); R.g.visible=true; R.flames.visible=false; R.door.rotation.y=-1.6; placeOn(P,R.g,_d.set(s[12],s[13],s[14]).normalize(),0); } else if(rr) rr.g.visible=false;
         r.obj.visible=s[0]!==4; _u.set(s[7],s[8],s[9]).normalize(); _f.set(s[4],s[5],s[6]); _f.addScaledVector(_u,-_f.dot(_u)).normalize(); r.obj.position.copy(r.spPos);
         _r.crossVectors(_u,_f).normalize(); _m.makeBasis(_r,_u,_f); r.obj.quaternion.setFromRotationMatrix(_m);
-        const mv=s[11]||0; r.spWalk=(r.spWalk||0)+dt*(6+mv*6)*(mv>.05?1:0); poseLimbs(r.obj,t,dt,Math.sin(r.spWalk)*.7*mv,false,0,false,null,r.spWalk,mv,false); }
+        const mv=s[11]||0, da=Math.min(DIVE_FLAT,Math.max(0,r.diveTarget||0)); r.spDa=(r.spDa||0)+(da-(r.spDa||0))*Math.min(1,dt*8); const dk=r.spDa/DIVE_FLAT;
+        if(r.spDa>.01){ r.obj.position.addScaledVector(_u,diveLift(r.spDa)); r.obj.rotateX(r.spDa); }
+        r.spWalk=(r.spWalk||0)+dt*(6+mv*6)*(mv>.05?1:0); poseLimbs(r.obj,t,dt,Math.sin(r.spWalk)*.7*mv*(1-dk),false,dk,t<r.waveUntil,null,r.spWalk,mv,r.held==='map'); }
       r.label.visible=r.obj.visible; }
     else { if(r.obj.parent!==scene){ scene.add(r.obj); r.obj.quaternion.identity(); r.obj.rotation.order='YXZ'; }
       if(r.sp && !SP.on) r.obj.visible=false; else if(!r.rk) r.obj.visible=true;
