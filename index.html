@@ -855,7 +855,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='73';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='74';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -1305,6 +1305,7 @@ const PLAYER_H=2.0;   // alto del peluche (para pasar por debajo de puertas, ala
 const trunkMat = felt('#9a6b45','rgba(60,30,10,.2)');
 const leafMats = [felt('#6fae3e'), felt('#7cbf4a'), felt('#f0a9bb','rgba(150,40,70,.12)'), felt('#ffcf6b','rgba(150,90,0,.12)')];
 const rockMat = felt('#c9c4d6','rgba(60,50,80,.15)');
+const sphereLo = new THREE.SphereGeometry(1, 8, 6);   // para bolitas muy chiquitas
 const sphereG = new THREE.SphereGeometry(1, ...({min:[9,6], low:[12,9], mid:[16,12], high:[20,16]}[Q0]||[12,9]));   // menos caras en calidad baja (hojas, rocas, nubes…)
 const cylG = new THREE.CylinderGeometry(1,1,1,14);
 const _o=new THREE.Object3D();
@@ -1852,6 +1853,7 @@ function updateFish(t,force){
     }
   }
   if(any){ fishParts.body.instanceMatrix.needsUpdate=fishParts.tail.instanceMatrix.needsUpdate=fishParts.eye.instanceMatrix.needsUpdate=true; }
+  fishParts.body.visible=fishParts.tail.visible=fishParts.eye.visible=any;
 }
 updateFish(0,true);
 
@@ -2914,7 +2916,7 @@ function setLabel(r,name){
   r.label.material.map=labelTexture(name); r.label.material.needsUpdate=true;
 }
 function makeRemote(color,name){
-  const obj=makePlush(color);
+  const obj=makePlush(color); obj.userData.noBatch=true;
   const label=new THREE.Sprite(new THREE.SpriteMaterial({transparent:true, depthWrite:false}));
   label.scale.set(1.7,.425,1); label.position.y=2.42; obj.add(label);
   const b=blob.clone(); b.material=blob.material.clone(); scene.add(obj);   // sin círculo de sombra
@@ -3240,7 +3242,7 @@ const signMats=(()=>{ const c=document.createElement('canvas'); c.width=256; c.h
   for(let y=0;y<HP;y+=step) path.push([-RW,y]);
   const na=Math.round(Math.PI*RW/step); for(let k=0;k<=na;k++){ const t=Math.PI-k/na*Math.PI; path.push([Math.cos(t)*RW, HP+Math.sin(t)*RW]); }
   for(let y=HP-step;y>=0;y-=step) path.push([RW,y]);
-  const N=angs.length*path.length*2, bon=new THREE.InstancedMesh(sphereG, new THREE.MeshStandardMaterial({roughness:.35}), N), dots=new THREE.InstancedMesh(sphereG, new THREE.MeshStandardMaterial({color:0xfff8f0, roughness:.5}), N);
+  const N=angs.length*path.length*2, bon=new THREE.InstancedMesh(sphereLo, new THREE.MeshStandardMaterial({roughness:.35}), N), dots=new THREE.InstancedMesh(sphereLo, new THREE.MeshStandardMaterial({color:0xfff8f0, roughness:.5}), N);
   const BON=['#5b3220','#8a5530','#f6b6c4','#fff1e0','#5b3220','#ff9ec0'].map(h=>new THREE.Color(h).convertSRGBToLinear());
   const o=new THREE.Object3D(); let n=0;
   const swirlTex=(tint)=>{ const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d'), gr=g.createRadialGradient(64,64,4,64,64,64);
@@ -4722,6 +4724,11 @@ function bowRig(obj){
   return obj.userData.bowRig={bow, reel, nockArrow, arrow, rope, stretch:1};
 }
 function hideBowRig(rig,keepArm){ if(!rig) return; rig.bow.visible=rig.reel.visible=rig.nockArrow.visible=rig.arrow.visible=false; drawRope(rig.rope,null); const arm=rig.reel.parent; if(arm && !keepArm) arm.userData.joint.scale.y=1; }
+// esfera que envuelve todas las copias de un InstancedMesh quieto (three.js no la calcula y por eso los dibuja siempre)
+function instBounds(im){ const g=im.geometry.clone(); if(!g.boundingSphere) g.computeBoundingSphere(); const gr=g.boundingSphere.radius, gc=g.boundingSphere.center;
+  const m=new THREE.Matrix4(), p=new THREE.Vector3(), box=new THREE.Box3(), s=new THREE.Vector3(); let maxS=0;
+  for(let i=0;i<im.count;i++){ im.getMatrixAt(i,m); p.copy(gc).applyMatrix4(m); box.expandByPoint(p); s.setFromMatrixScale(m); maxS=Math.max(maxS,s.x,s.y,s.z); }
+  const sph=new THREE.Sphere(); box.getBoundingSphere(sph); sph.radius+=gr*maxS; g.boundingSphere=sph; im.geometry=g; im.frustumCulled=true; return im; }
 // Brazo de dos partes que alcanza un punto (en coordenadas del peluche). stretch: el antebrazo se estira si no llega.
 const bw_S=new THREE.Vector3(), bw_D=new THREE.Vector3(), bw_U=new THREE.Vector3(), bw_E=new THREE.Vector3(), bw_F=new THREE.Vector3(), bw_hint=new THREE.Vector3(), bw_qi=new THREE.Quaternion(), bw_down=new THREE.Vector3(0,-1,0);
 function reachArm(arm,target,hint,stretch){
@@ -5034,7 +5041,7 @@ function updateCritters(dt){
   for(const c of critters){
     const d=Math.hypot(c.home.x-cx, c.home.y-cz)-c.R;
     const on=d<far && state!=='menu';
-    if(!on){ if(c.vis){ c.vis=false; if(c.snake) c.im.visible=false; else c.g.visible=false; for(let k=0;k<2;k++){ eyeWhites.setMatrixAt(ei+k,_cz); eyePupils.setMatrixAt(ei+k,_cz); eyeDomes.setMatrixAt(ei+k,_cz); } c.first=true; } ei+=2; continue; }
+    if(!on){ if(c.vis){ c.vis=false; if(c.snake) c.im.visible=false; else c.g.visible=false; for(let k=0;k<2;k++){ eyeWhites.setMatrixAt(ei+k,_cz); eyePupils.setMatrixAt(ei+k,_cz); eyeDomes.setMatrixAt(ei+k,_cz); } c.first=true; } continue; }
     if(!c.vis){ c.vis=true; if(c.snake) c.im.visible=true; else c.g.visible=true; }
     // se aparta un poquito si el jugador se le acerca (solo en tu pantalla)
     const px=player.pos.x-c.pos.x, pz=player.pos.z-c.pos.z, pd=Math.hypot(px,pz);
@@ -5087,6 +5094,7 @@ function updateCritters(dt){
       _cl.compose(_cp.set(ex*sd,eyY,ez+er*.05),_cq.identity(),_cs.set(er*.97,er*.97,er*.5)); _cl.premultiply(head); eyeDomes.setMatrixAt(ei+s,_cl); }
     ei+=2;
   }
+  eyeWhites.count=eyePupils.count=eyeDomes.count=ei;
   eyeWhites.instanceMatrix.needsUpdate=true; eyePupils.instanceMatrix.needsUpdate=true; eyeDomes.instanceMatrix.needsUpdate=true;
 }
 
@@ -5909,7 +5917,7 @@ let fairBulbs=null;
     fairBulbs=new THREE.InstancedMesh(sphereG,new THREE.MeshStandardMaterial({color:0xffffff, roughness:.4, emissive:0xffffff, emissiveIntensity:.2}),N);
     const BC=['#ff5d6c','#ffe14d','#7ed957','#4fc3f7','#c77dff'].map(h=>new THREE.Color(h)); const o=new THREE.Object3D();
     pts.forEach((p,i)=>{ o.position.set(...p); o.scale.setScalar(.13); o.updateMatrix(); fairBulbs.setMatrixAt(i,o.matrix); fairBulbs.setColorAt(i,BC[i%5]); });
-    fairBulbs.frustumCulled=false; root.add(fairBulbs);
+    instBounds(fairBulbs); root.add(fairBulbs);
     const wire=new THREE.Group(); for(let i=0;i<N;i+=10){ const [x,z]=fairW(Math.cos(i/N*Math.PI*2)*(FAIR.R-2.5),Math.sin(i/N*Math.PI*2)*(FAIR.R-2.5)); fAdd(wire,fCyl,FM('#fbf3e4'),x,FY+2.4,z,.06,4.8,.06); obstacles.push({x,z,r:.15,top:FY+5,walk:false}); }
     mergeStatic(wire); root.add(wire); }
   // puestos de comida de adorno: algodón de azúcar y palomitas
@@ -6288,7 +6296,7 @@ function handLocal(o,side,x,y,z,hx,hy,hz,stretch){ const arm=ARM(o,side); if(!ar
       let idx=hitIdx, at=hitAt;
       if(!mine){ const r=toposWho(); mallet.visible=!!r; if(!r) return; idx=Math.min(8,Math.max(0,r.mg[2]|0)); at=r.mgActT||-9; }
       const age=performance.now()/1000-at; toposBody(null,dt,idx,age); malletStep(dt,idx,age,mx); },
-    cam(M){ return [bW(e,1.6,3.2,-.4), bW(e,-.1,.9,1.15)]; },   // de lado y arriba: el peluche no tapa la mesa
+    cam(M){ return [bW(e,1.3,2.55,-.25), bW(e,-.2,.75,1.1)]; },   // de lado y arriba: el peluche no tapa la mesa
     pose(M,o,t,dt){ toposArms(o,mLean); },
     rpose(r,t){ toposArms(r.obj,mLean); },
     _moles:moles,
@@ -6400,7 +6408,7 @@ function handLocal(o,side,x,y,z,hx,hy,hz,stretch){ const arm=ARM(o,side); if(!ar
   // luces en el aro
   const bulbs=new THREE.InstancedMesh(sphereG,new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xffffff, emissiveIntensity:.2, roughness:.4}),NG*4); const o=new THREE.Object3D(); const BC=['#ff5d6c','#ffe14d','#7ed957','#4fc3f7'].map(h=>new THREE.Color(h));
   for(let i=0;i<NG*4;i++){ const a=i/(NG*4)*Math.PI*2; o.position.set(Math.cos(a)*R,Math.sin(a)*R,.75); o.scale.setScalar(.16); o.updateMatrix(); bulbs.setMatrixAt(i,o.matrix); bulbs.setColorAt(i,BC[i%4]); }
-  bulbs.frustumCulled=false; wheel.add(bulbs); const bulbMat=bulbs.material;
+  instBounds(bulbs); wheel.add(bulbs); const bulbMat=bulbs.material;
   // patas
   [-1,1].forEach(sz=>[-1,1].forEach(sx=>fBar(g,FM('#4f86c6','shiny'),[sx*5.5,0,sz*1.8],[0,HUB,sz*.7],.22)));
   fAdd(g,fBox,FM('#b88a5a'),0,.2,-2.6,4,.4,2.2);   // andén para subir
@@ -6497,7 +6505,7 @@ const PLAT_COL=['#ff7aa2','#ffc23d','#6fd15a','#4fb0ff','#a77bff'];
     const m=new THREE.InstancedMesh(gf,new THREE.MeshStandardMaterial({roughness:.75}),N*N); m.receiveShadow=true; m.castShadow=f===PLAT.F-1;
     for(let j=0;j<N;j++) for(let i=0;i<N;i++){ arW(A,(j-(N-1)/2)*T,(i-(N-1)/2)*T,platTop(f)-.2,o.position); o.rotation.set(0,yaw,0); o.scale.set(1,1,1); o.updateMatrix(); m.setMatrixAt(j*N+i,o.matrix);
       c.set(PLAT_COL[f]); if((i+j)%2) c.multiplyScalar(.9); m.setColorAt(j*N+i,c); }
-    m.instanceMatrix.needsUpdate=true; m.instanceColor.needsUpdate=true; scene.add(m); PLAT.meshes.push(m); }
+    m.frustumCulled=true; m.instanceMatrix.needsUpdate=true; m.instanceColor.needsUpdate=true; scene.add(m); PLAT.meshes.push(m); }
   // cuatro bastones de caramelo en las esquinas y letrero en la playa
   const caneM=new THREE.MeshStandardMaterial({map:(()=>{ const cc=document.createElement('canvas'); cc.width=32; cc.height=128; const q=cc.getContext('2d'); q.fillStyle='#fffaf3'; q.fillRect(0,0,32,128); q.fillStyle='#e0303a'; for(let y=-32;y<160;y+=32){ q.beginPath(); q.moveTo(0,y); q.lineTo(32,y-16); q.lineTo(32,y-4); q.lineTo(0,y+12); q.fill(); } const t=new THREE.CanvasTexture(cc); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1,12); return t; })(), roughness:.35});
   const H=platTop(PLAT.F-1)+3-SEA_Y, half=(N/2)*T+.4;
@@ -7767,6 +7775,74 @@ ui('saveLoad').onclick=async()=>{ const v=ui('saveIn').value.trim(); if(!v){ ui(
 ui('saveCloudNow').onclick=async()=>{ await cloudSave(true); ui('saveMsg').textContent=cloud.state==='on'?'Guardado en la nube.':'No se pudo guardar ahora.'; };
 ui('saveCloudJoin').onclick=async()=>{ if(!cloud.remote) return; const m=mergeSaves(saveSnapshot(),cloud.remote); cloud.offer=false; applySave(m); await cloudSave(true); reloadWith(m,'Progreso unido: '+sumText(saveSummary(m))); };
 
+// ---------- Juntar objetos quietos: muchos objetos iguales se dibujan de una sola vez (se ven idénticos) ----------
+// Cada medio segundo revisa los objetos de la isla. Los que llevan un rato sin moverse, sin cambiar de material ni
+// de visibilidad, se juntan por material (y por zona de 40 m, para que lo que no se ve no se dibuje).
+// Lo que se mueve en bloque (la rueda de la fortuna, el carrusel) se junta dentro de su grupo y gira con él.
+// Si algo cambia después (un topo que sale, una puerta que se abre…) su grupo se deshace al instante.
+const BATCH={recs:new Map(), batches:new Set(), t:0, last:-1, lastBuild:0, on:true, CELL:40};
+const _btmq=new THREE.Matrix4(), _btnq=new THREE.Matrix3(), _btvq=new THREE.Vector3();
+function batchSkip(o){ return o===plush || o===skyRoot || o.userData.noBatch; }
+function batchCandidate(o){ if(!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || Array.isArray(o.material) || !o.material) return false;
+  const m=o.material, g=o.geometry; if(!g || !g.isBufferGeometry || g.morphAttributes && Object.keys(g.morphAttributes).length) return false;
+  if(m.transparent || m.alphaTest>0 || o.frustumCulled===false || o.onBeforeRender!==THREE.Object3D.prototype.onBeforeRender) return false;
+  for(const k in g.attributes){ const a=g.attributes[k]; if(a.isInterleavedBufferAttribute || !(a.array instanceof Float32Array)) return false; }
+  if(!g.attributes.position || !g.attributes.normal) return false;
+  return true; }
+function effVisible(o){ for(let p=o;p;p=p.parent){ if(!p.visible) return false; if(p===scene) return true; } return false; }
+function batchSig(o){ const g=o.geometry; return Object.keys(g.attributes).sort().map(k=>k+g.attributes[k].itemSize).join(',')+(g.index?'i':'n'); }
+const batchNear=(a,e)=>{ for(let i=0;i<16;i++) if(Math.abs(a[i]-e[i])>(i>=12?2e-3:5e-4)) return false; return true; };   // cambios diminutos (algo que casi terminó de acomodarse) no cuentan
+const geoVer=g=>g.attributes.position.version+(g.index?g.index.version:0);
+function recSet(r,o){ r.m.set(o.matrixWorld.elements); r.lm.set(o.matrix.elements); r.mat=o.material; r.geo=o.geometry; r.ver=geoVer(o.geometry); r.vis=effVisible(o); r.own=o.visible; r.par=o.parent; r.cs=o.castShadow; r.rs=o.receiveShadow; r.ro=o.renderOrder; }
+function dissolve(b){ if(!BATCH.batches.has(b)) return; BATCH.batches.delete(b); if(b.mesh.parent) b.mesh.parent.remove(b.mesh); b.mesh.geometry.dispose();
+  for(const o of b.src){ o.layers.enable(0); const r=BATCH.recs.get(o); if(r && r.batch===b) r.batch=null; } }
+function mergeInto(list,local){ const g0=list[0].geometry, names=Object.keys(g0.attributes); let nv=0, ni=0;
+  for(const o of list){ const g=o.geometry; nv+=g.attributes.position.count; ni+=g.index?g.index.count:g.attributes.position.count; }
+  const out={}; for(const k of names) out[k]=new Float32Array(nv*g0.attributes[k].itemSize); const idx=nv>65535?new Uint32Array(ni):new Uint16Array(ni);
+  let vo=0, io=0;
+  for(const o of list){ const g=o.geometry, n=g.attributes.position.count, M=local?o.matrix:o.matrixWorld; _btnq.getNormalMatrix(M); const flip=M.determinant()<0;
+    for(const k of names){ const a=g.attributes[k], s=a.itemSize, src=a.array, dst=out[k];
+      if(k==='position'){ for(let i=0;i<n;i++){ _btvq.fromArray(src,i*3).applyMatrix4(M); _btvq.toArray(dst,(vo+i)*3); } }
+      else if(k==='normal'){ for(let i=0;i<n;i++){ _btvq.fromArray(src,i*3).applyMatrix3(_btnq).normalize(); _btvq.toArray(dst,(vo+i)*3); } }
+      else dst.set(src.subarray(0,n*s),vo*s); }
+    if(g.index){ const ia=g.index.array, c=g.index.count; for(let i=0;i<c;i+=3){ idx[io+i]=ia[i]+vo; idx[io+i+1]=ia[flip?i+2:i+1]+vo; idx[io+i+2]=ia[flip?i+1:i+2]+vo; } io+=c; }
+    else { for(let i=0;i<n;i+=3){ idx[io+i]=vo+i; idx[io+i+1]=vo+(flip?i+2:i+1); idx[io+i+2]=vo+(flip?i+1:i+2); } io+=n; }
+    vo+=n; }
+  const g=new THREE.BufferGeometry(); for(const k of names) g.setAttribute(k,new THREE.BufferAttribute(out[k],g0.attributes[k].itemSize)); g.setIndex(new THREE.BufferAttribute(idx,1)); g.computeBoundingSphere(); return g; }
+function batchTick(){ if(!BATCH.on || SP.on) return; const T=BATCH.t=performance.now()/1000; if(T-BATCH.last<.5) return; BATCH.last=T;
+  const seen=new Set();
+  // 1) revisar todo lo de la isla
+  const walk=o=>{ if(batchSkip(o)) return; if(o.isMesh){ seen.add(o);
+      let r=BATCH.recs.get(o);
+      if(!r){ r=batchCandidate(o)?{m:new Float32Array(16), lm:new Float32Array(16), ws:T, ls:T, batch:null, moves:0, lmoves:0}:{bad:true}; if(!r.bad) recSet(r,o); BATCH.recs.set(o,r); }
+      else if(!r.bad){ const e=o.matrixWorld.elements, same=r.mat===o.material && r.geo===o.geometry && r.ver===geoVer(o.geometry) && r.cs===o.castShadow && r.rs===o.receiveShadow && r.ro===o.renderOrder && r.par===o.parent;
+        const wOK=same && batchNear(r.m,e) && r.vis===effVisible(o), lOK=same && batchNear(r.lm,o.matrix.elements) && r.own===o.visible;
+        if(!wOK){ r.ws=T; r.moves++; if(r.batch && !r.batch.local) dissolve(r.batch); }
+        if(!lOK){ r.ls=T; r.lmoves++; if(r.batch && r.batch.local) dissolve(r.batch); }
+        if(!wOK || !lOK) recSet(r,o);
+        if(r.lmoves>6){ r.bad=true; if(r.batch) dissolve(r.batch); } } }
+    for(const c of o.children) walk(c); };
+  walk(scene);
+  for(const [o,r] of BATCH.recs) if(!seen.has(o)){ if(r.batch) dissolve(r.batch); BATCH.recs.delete(o); }   // ya no está en la escena
+  // 2) juntar los que llevan quietos un rato (máximo una vez por segundo)
+  if(T-BATCH.lastBuild<1) return; BATCH.lastBuild=T;
+  const groups=new Map();
+  for(const [o,r] of BATCH.recs){ if(r.bad || r.batch) continue; let key, local=false;
+    const base=o.material.uuid+'|'+o.castShadow+'|'+o.receiveShadow+'|'+o.renderOrder+'|'+batchSig(o);
+    if(r.moves<=3 && T-r.ws>=3 && r.vis){ const e=o.matrixWorld.elements; key='W|'+base+'|'+Math.floor(e[12]/BATCH.CELL)+','+Math.floor(e[14]/BATCH.CELL); }
+    else if(r.moves>3 && T-r.ls>=3 && o.visible && o.parent && o.parent!==scene){ key='L|'+o.parent.uuid+'|'+base; local=true; }   // se mueve con su grupo: se junta dentro de él
+    else continue;
+    let l=groups.get(key); if(!l) groups.set(key,l={list:[],local,par:o.parent}); l.list.push(o); }
+  for(const [key,G] of groups){
+    let old=null; for(const b of BATCH.batches) if(b.key===key){ old=b; break; }
+    const all=old?[...old.src,...G.list]:G.list; if(all.length<3) continue;
+    let verts=0; for(const o of all) verts+=o.geometry.attributes.position.count; if(verts>200000) continue;
+    if(old) dissolve(old);
+    const mesh=new THREE.Mesh(mergeInto(all,G.local),all[0].material); mesh.castShadow=all[0].castShadow; mesh.receiveShadow=all[0].receiveShadow; mesh.renderOrder=all[0].renderOrder;
+    mesh.matrixAutoUpdate=false; mesh.userData.noBatch=true; (G.local?G.par:scene).add(mesh); mesh.updateMatrixWorld(true);
+    const b={key, mesh, src:all, local:G.local}; BATCH.batches.add(b);
+    for(const o of all){ o.layers.disable(0); BATCH.recs.get(o).batch=b; } } }
+
 // presencia: en qué minijuego estoy (y datos del hockey)
 function mgPresence(){ const M=player.mg; if(!M) return {mg:null, hk:null}; const i=MINIS.indexOf(M.g); return {mg:[i, M.act|0, M.actX|0], hk:M.g.presence?M.g.presence(M):null}; }
 renderCoins();
@@ -7839,6 +7915,7 @@ function update(dt,t){
   updatePlayground(dt);
   updatePortals(dt);
   updateCritters(dt);
+  try{ batchTick(); }catch(e){ BATCH.on=false; console.warn('batch',e); }
   updateMinis(dt);
   arenaUpdate(dt);
   if(state==='play'){ rocketUpdate(dt); if(SP.on) spaceUpdate(dt,t); }
