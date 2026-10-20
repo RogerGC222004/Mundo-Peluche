@@ -855,7 +855,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='77';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='78';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -907,8 +907,37 @@ function feltSheen(m){
     sh.fragmentShader='uniform float rimK;\n'+sh.fragmentShader.replace('#include <tonemapping_fragment>',
       '{ float fr=1.0-clamp(dot(normalize(normal),normalize(vViewPosition)),0.0,1.0); gl_FragColor.rgb+=fr*fr*fr*rimK*(diffuseColor.rgb*0.7+0.3); }\n#include <tonemapping_fragment>'); };
   m.customProgramCacheKey=()=>'feltSheen'; return m; }
-const felt = (hex, speck='rgba(0,0,0,0.10)', rep=1) =>
-  feltSheen(new THREE.MeshStandardMaterial({color:0xffffff, map:feltTexture(hex, speck, 256, 5000, rep), roughness:1, metalness:0}));
+// Fieltro de colores: en lugar de una textura distinta por color, todos comparten el mismo dibujo de pelusa y el color se
+// mezcla en la tarjeta de video con la misma cuenta que hacía el dibujo (se ve igual). Así los objetos del mismo tipo de
+// fieltro se pueden dibujar juntos aunque sean de colores distintos.
+const FELT_PQ=new Map();
+function feltPQ(alpha,rep){ const key=alpha+'|'+rep; let t=FELT_PQ.get(key); if(t) return t;
+  const size=256, N=5000, strokes=[]; for(let i=0;i<N;i++){ const x=Math.random()*size, y=Math.random()*size, a=Math.random()*Math.PI, l=1+Math.random()*3; strokes.push([x,y,x+Math.cos(a)*l,y+Math.sin(a)*l,Math.random()<.5]); }
+  // tres pasadas con el mismo dibujo: cuánto queda del color base, cuánto pone la pelusa oscura y cuánto la clara
+  const pass=(base,spk,wht)=>{ const c=document.createElement('canvas'); c.width=c.height=size; const g=c.getContext('2d'); g.fillStyle=base; g.fillRect(0,0,size,size); g.lineWidth=.6;
+    for(const [x,y,x2,y2,sp] of strokes){ g.strokeStyle=sp?spk:wht; g.beginPath(); g.moveTo(x,y); g.lineTo(x2,y2); g.stroke(); } return g.getImageData(0,0,size,size).data; };
+  const P=pass('#fff',`rgba(0,0,0,${alpha})`,'rgba(0,0,0,0.10)'), K=pass('#000',`rgba(255,255,255,${alpha})`,'rgba(0,0,0,0.10)'), W=pass('#000',`rgba(0,0,0,${alpha})`,'rgba(255,255,255,0.10)');
+  const c=document.createElement('canvas'); c.width=c.height=size; const g=c.getContext('2d'), im=g.createImageData(size,size), d=im.data;
+  for(let i=0;i<d.length;i+=4){ d[i]=P[i]; d[i+1]=K[i]; d[i+2]=W[i]; d[i+3]=255; } g.putImageData(im,0,0);
+  t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(rep,rep); t.anisotropy=4; FELT_PQ.set(key,t); return t; }
+function parseSpeck(s){ const m=/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+))?\s*\)/.exec(s||''); if(!m) return {c:[0,0,0], a:'0.1'};
+  return {c:[+m[1]/255,+m[2]/255,+m[3]/255], a:String(m[4]===undefined?1:+m[4])}; }
+function felt(hex, speck='rgba(0,0,0,0.10)', rep=1){ const sp=parseSpeck(speck);
+  const m=new THREE.MeshStandardMaterial({color:new THREE.Color(hex), map:feltPQ(sp.a,rep), roughness:1, metalness:0});
+  m.userData.feltPQ=true; m.userData.feltSpk=sp.c; const spkU={value:new THREE.Vector3(...sp.c)};
+  m.onBeforeCompile=sh=>{ sh.uniforms.rimK=FELT_RIM; sh.uniforms.feltSpk=spkU;
+    sh.vertexShader='#ifdef FELT_VA\nattribute vec3 feltSpk; varying vec3 vFeltSpk;\n#endif\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n#ifdef FELT_VA\nvFeltSpk=feltSpk;\n#endif');
+    sh.fragmentShader='uniform float rimK;\n#ifdef FELT_VA\nvarying vec3 vFeltSpk;\n#else\nuniform vec3 feltSpk;\n#endif\n'+sh.fragmentShader
+      .replace('#include <map_fragment>',`{ vec4 fx=texture2D(map,vUv);
+        #ifdef FELT_VA
+          vec3 fb=diffuseColor.rgb*vColor; vec3 fs=vFeltSpk;
+        #else
+          vec3 fb=diffuseColor.rgb; vec3 fs=feltSpk;
+        #endif
+        diffuseColor.rgb=sRGBToLinear(vec4(fb*fx.r+fs*fx.g+vec3(fx.b),1.0)).rgb; }`)
+      .replace('#include <color_fragment>','')
+      .replace('#include <tonemapping_fragment>','{ float fr=1.0-clamp(dot(normalize(normal),normalize(vViewPosition)),0.0,1.0); gl_FragColor.rgb+=fr*fr*fr*rimK*(diffuseColor.rgb*0.7+0.3); }\n#include <tonemapping_fragment>'); };
+  m.customProgramCacheKey=()=>'feltPQ'; return m; }
 
 // ---------- Mapa fijo de la isla ----------
 // La isla es siempre la misma para todos: el relieve está definido por las fórmulas de abajo
@@ -7816,13 +7845,14 @@ ui('saveCloudJoin').onclick=async()=>{ if(!cloud.remote) return; const m=mergeSa
 let lodT=0; const _lodV=new THREE.Vector3();
 function lodTick(){ const now=performance.now(); if(now-lodT<330 || SP.on) return; lodT=now; const cp=camera.position;
   for(const L of INST_LOD){ const bs=L.hi.boundingSphere; const far=bs.center.distanceTo(cp)-bs.radius>55; const g=far?L.lo:L.hi; if(L.m.geometry!==g) L.m.geometry=g; }
-  for(const L of TERRAIN_LOD){ const far=L.c.distanceTo(cp)-L.r>45; const g=far?L.lo:L.hi; if(L.m.geometry!==g) L.m.geometry=g; } }
+  for(const L of TERRAIN_LOD){ const far=L.c.distanceTo(cp)-L.r>45; const g=far?L.lo:L.hi; if(L.m.geometry!==g) L.m.geometry=g; }
+  if(typeof BATCH!=='undefined') for(const b of BATCH.batches) if(b.hideD){ const bs=b.mesh.geometry.boundingSphere; const v=bs.center.distanceTo(cp)-bs.radius<b.hideD; if(b.mesh.visible!==v) b.mesh.visible=v; } }
 // ---------- Juntar objetos quietos: muchos objetos iguales se dibujan de una sola vez (se ven idénticos) ----------
 // Cada medio segundo revisa los objetos de la isla. Los que llevan un rato sin moverse, sin cambiar de material ni
 // de visibilidad, se juntan por material (y por zona de 40 m, para que lo que no se ve no se dibuje).
 // Lo que se mueve en bloque (la rueda de la fortuna, el carrusel) se junta dentro de su grupo y gira con él.
 // Si algo cambia después (un topo que sale, una puerta que se abre…) su grupo se deshace al instante.
-const BATCH={recs:new Map(), batches:new Set(), t:0, last:-1, lastBuild:0, on:true, CELL:40};
+const BATCH={recs:new Map(), batches:new Set(), t:0, last:-1, lastBuild:0, on:true, CELL:40, TINY:.12, TINYK:600};
 const _btmq=new THREE.Matrix4(), _btnq=new THREE.Matrix3(), _btvq=new THREE.Vector3();
 function batchSkip(o){ return o===plush || o===skyRoot || o.userData.noBatch; }
 function batchCandidate(o){ if(!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || Array.isArray(o.material) || !o.material) return false;
@@ -7831,33 +7861,50 @@ function batchCandidate(o){ if(!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh
   for(const k in g.attributes){ const a=g.attributes[k]; if(a.isInterleavedBufferAttribute || !(a.array instanceof Float32Array)) return false; }
   if(!g.attributes.position || !g.attributes.normal) return false;
   return true; }
+// Materiales que solo cambian de color: el color se guarda en cada pieza y todos se dibujan con un material común (se ve idéntico).
+// Si un material cambia de color o brillo mientras se juega (luces que parpadean…), se marca "inquieto" y se deja con su propio material.
+const BMAT={info:new Map(), shared:new Map(), tick:0};
+const MAPS=['map','normalMap','roughnessMap','metalnessMap','emissiveMap','aoMap','alphaMap','bumpMap','envMap','lightMap','displacementMap'];
+function matInfo(m){ let I=BMAT.info.get(m); if(I && I.t===BMAT.tick) return I;
+  let props=null;
+  const isFelt=m.userData.feltPQ && m.customProgramCacheKey && m.customProgramCacheKey()==='feltPQ' && m.map && !MAPS.some(k=>k!=='map' && m[k]);
+  if(m.type==='MeshStandardMaterial' && !m.vertexColors && (isFelt || m.onBeforeCompile===THREE.Material.prototype.onBeforeCompile && !MAPS.some(k=>m[k])) && !(m.defines && Object.keys(m.defines).some(k=>k!=='STANDARD')))
+    props=[isFelt?'F'+m.map.uuid:'S',m.roughness,m.metalness,m.emissive.getHex(),m.emissiveIntensity,m.flatShading,m.side,m.opacity,m.wireframe,m.fog,m.depthWrite,m.depthTest,m.colorWrite,m.toneMapped,m.envMapIntensity,m.polygonOffset,m.polygonOffsetFactor,m.polygonOffsetUnits,m.visible].join(',');
+  const raw=props?props+'#'+m.color.getHex()+(isFelt?'#'+m.userData.feltSpk.join(','):''):'';
+  if(!I){ I={raw, props, vol:false}; BMAT.info.set(m,I); }
+  else if(I.raw!==raw){ I.vol=true; I.raw=raw; }
+  I.t=BMAT.tick; I.felt=!!isFelt; I.key=(props && !I.vol)?'C|'+props:'M|'+m.uuid; I.chk=I.key+'#'+raw; return I; }
+function sharedMat(m,props){ let s=BMAT.shared.get(props); if(!s){ s=m.clone(); s.color.setRGB(1,1,1); s.vertexColors=true; s.userData={batchShared:true}; if(m.userData.feltPQ){ s.onBeforeCompile=m.onBeforeCompile; s.customProgramCacheKey=m.customProgramCacheKey; s.defines={STANDARD:'', FELT_VA:''}; } BMAT.shared.set(props,s); } return s; }
 function effVisible(o){ for(let p=o;p;p=p.parent){ if(!p.visible) return false; if(p===scene) return true; } return false; }
 function batchSig(o){ const g=o.geometry; return Object.keys(g.attributes).sort().map(k=>k+g.attributes[k].itemSize).join(',')+(g.index?'i':'n'); }
 const batchNear=(a,e)=>{ for(let i=0;i<16;i++) if(Math.abs(a[i]-e[i])>(i>=12?2e-3:5e-4)) return false; return true; };   // cambios diminutos (algo que casi terminó de acomodarse) no cuentan
 const geoVer=g=>g.attributes.position.version+(g.index?g.index.version:0);
-function recSet(r,o){ r.m.set(o.matrixWorld.elements); r.lm.set(o.matrix.elements); r.mat=o.material; r.geo=o.geometry; r.ver=geoVer(o.geometry); r.vis=effVisible(o); r.own=o.visible; r.par=o.parent; r.cs=o.castShadow; r.rs=o.receiveShadow; r.ro=o.renderOrder; }
+function recSet(r,o){ r.m.set(o.matrixWorld.elements); r.lm.set(o.matrix.elements); r.mat=o.material; r.geo=o.geometry; r.ver=geoVer(o.geometry); r.vis=effVisible(o); r.own=o.visible; r.par=o.parent; r.cs=o.castShadow; r.rs=o.receiveShadow; r.ro=o.renderOrder; r.mk=matInfo(o.material).chk; }
 function dissolve(b){ if(!BATCH.batches.has(b)) return; BATCH.batches.delete(b); if(b.mesh.parent) b.mesh.parent.remove(b.mesh); b.mesh.geometry.dispose();
   for(const o of b.src){ o.layers.enable(0); const r=BATCH.recs.get(o); if(r && r.batch===b) r.batch=null; } }
-function mergeInto(list,local){ const g0=list[0].geometry, names=Object.keys(g0.attributes); let nv=0, ni=0;
+function mergeInto(list,local,colored){ const g0=list[0].geometry, names=Object.keys(g0.attributes).filter(k=>!colored||k!=='color'&&k!=='feltSpk'); let nv=0, ni=0;
   for(const o of list){ const g=o.geometry; nv+=g.attributes.position.count; ni+=g.index?g.index.count:g.attributes.position.count; }
   const out={}; for(const k of names) out[k]=new Float32Array(nv*g0.attributes[k].itemSize); const idx=nv>65535?new Uint32Array(ni):new Uint16Array(ni);
+  const col=colored?new Float32Array(nv*3):null, fsp=colored&&list[0].material.userData.feltPQ?new Float32Array(nv*3):null;
   let vo=0, io=0;
   for(const o of list){ const g=o.geometry, n=g.attributes.position.count, M=local?o.matrix:o.matrixWorld; _btnq.getNormalMatrix(M); const flip=M.determinant()<0;
     for(const k of names){ const a=g.attributes[k], s=a.itemSize, src=a.array, dst=out[k];
       if(k==='position'){ for(let i=0;i<n;i++){ _btvq.fromArray(src,i*3).applyMatrix4(M); _btvq.toArray(dst,(vo+i)*3); } }
       else if(k==='normal'){ for(let i=0;i<n;i++){ _btvq.fromArray(src,i*3).applyMatrix3(_btnq).normalize(); _btvq.toArray(dst,(vo+i)*3); } }
       else dst.set(src.subarray(0,n*s),vo*s); }
+    if(col){ const c=o.material.color; for(let i=0;i<n;i++){ col[(vo+i)*3]=c.r; col[(vo+i)*3+1]=c.g; col[(vo+i)*3+2]=c.b; } }
+    if(fsp){ const c=o.material.userData.feltSpk; for(let i=0;i<n;i++){ fsp[(vo+i)*3]=c[0]; fsp[(vo+i)*3+1]=c[1]; fsp[(vo+i)*3+2]=c[2]; } }
     if(g.index){ const ia=g.index.array, c=g.index.count; for(let i=0;i<c;i+=3){ idx[io+i]=ia[i]+vo; idx[io+i+1]=ia[flip?i+2:i+1]+vo; idx[io+i+2]=ia[flip?i+1:i+2]+vo; } io+=c; }
     else { for(let i=0;i<n;i+=3){ idx[io+i]=vo+i; idx[io+i+1]=vo+(flip?i+2:i+1); idx[io+i+2]=vo+(flip?i+1:i+2); } io+=n; }
     vo+=n; }
-  const g=new THREE.BufferGeometry(); for(const k of names) g.setAttribute(k,new THREE.BufferAttribute(out[k],g0.attributes[k].itemSize)); g.setIndex(new THREE.BufferAttribute(idx,1)); g.computeBoundingSphere(); return g; }
-function batchTick(){ if(!BATCH.on || SP.on) return; const T=BATCH.t=performance.now()/1000; if(T-BATCH.last<.5) return; BATCH.last=T;
+  const g=new THREE.BufferGeometry(); for(const k of names) g.setAttribute(k,new THREE.BufferAttribute(out[k],g0.attributes[k].itemSize)); if(col) g.setAttribute('color',new THREE.BufferAttribute(col,3)); if(fsp) g.setAttribute('feltSpk',new THREE.BufferAttribute(fsp,3)); g.setIndex(new THREE.BufferAttribute(idx,1)); g.computeBoundingSphere(); return g; }
+function batchTick(){ if(!BATCH.on || SP.on) return; const T=BATCH.t=performance.now()/1000; if(T-BATCH.last<.5) return; BATCH.last=T; BMAT.tick++;
   const seen=new Set();
   // 1) revisar todo lo de la isla
   const walk=o=>{ if(batchSkip(o)) return; if(o.isMesh){ seen.add(o);
       let r=BATCH.recs.get(o);
       if(!r){ r=batchCandidate(o)?{m:new Float32Array(16), lm:new Float32Array(16), ws:T, ls:T, batch:null, moves:0, lmoves:0}:{bad:true}; if(!r.bad) recSet(r,o); BATCH.recs.set(o,r); }
-      else if(!r.bad){ const e=o.matrixWorld.elements, same=r.mat===o.material && r.geo===o.geometry && r.ver===geoVer(o.geometry) && r.cs===o.castShadow && r.rs===o.receiveShadow && r.ro===o.renderOrder && r.par===o.parent;
+      else if(!r.bad){ const e=o.matrixWorld.elements, same=r.mat===o.material && r.geo===o.geometry && r.ver===geoVer(o.geometry) && r.cs===o.castShadow && r.rs===o.receiveShadow && r.ro===o.renderOrder && r.par===o.parent && r.mk===matInfo(o.material).chk;
         const wOK=same && batchNear(r.m,e) && r.vis===effVisible(o), lOK=same && batchNear(r.lm,o.matrix.elements) && r.own===o.visible;
         if(!wOK){ r.ws=T; r.moves++; if(r.batch && !r.batch.local) dissolve(r.batch); }
         if(!lOK){ r.ls=T; r.lmoves++; if(r.batch && r.batch.local) dissolve(r.batch); }
@@ -7870,20 +7917,23 @@ function batchTick(){ if(!BATCH.on || SP.on) return; const T=BATCH.t=performance
   if(T-BATCH.lastBuild<1) return; BATCH.lastBuild=T;
   const groups=new Map();
   for(const [o,r] of BATCH.recs){ if(r.bad || r.batch) continue; let key, local=false;
-    const base=o.material.uuid+'|'+o.castShadow+'|'+o.receiveShadow+'|'+o.renderOrder+'|'+batchSig(o);
+    const MI=matInfo(o.material), colored=MI.key[0]==='C' && !o.geometry.attributes.color && !o.geometry.attributes.feltSpk;
+    const base=(colored?MI.key:'M|'+o.material.uuid)+'|'+o.castShadow+'|'+o.receiveShadow+'|'+o.renderOrder+'|'+batchSig(o);
     if(r.moves<=3 && T-r.ws>=3 && r.vis){ const g=o.geometry; if(!g.boundingSphere) g.computeBoundingSphere(); const sc=o.matrixWorld.getMaxScaleOnAxis(); if(g.boundingSphere.radius*sc>25){ r.bad=true; r.why='big'; continue; }   // lo grande se queda solo (así se sigue saltando cuando no se ve)
-      _btvq.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld); key='W|'+base+'|'+Math.floor(_btvq.x/BATCH.CELL)+','+Math.floor(_btvq.z/BATCH.CELL); }
+      const rad=g.boundingSphere.radius*sc, tiny=rad<BATCH.TINY;   // piezas diminutas van aparte: de lejos (menos de un par de píxeles) no se dibujan
+      _btvq.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld); key='W|'+base+'|'+Math.floor(_btvq.x/BATCH.CELL)+','+Math.floor(_btvq.z/BATCH.CELL)+(tiny?'|t':''); }
     else if(r.moves>3 && T-r.ls>=3 && o.visible && o.parent && o.parent!==scene){ key='L|'+o.parent.uuid+'|'+base; local=true; }   // se mueve con su grupo: se junta dentro de él
     else continue;
-    let l=groups.get(key); if(!l) groups.set(key,l={list:[],local,par:o.parent}); l.list.push(o); }
+    let l=groups.get(key); if(!l) groups.set(key,l={list:[],local,par:o.parent,colored,props:MI.props}); l.list.push(o); }
   for(const [key,G] of groups){
     let old=null; for(const b of BATCH.batches) if(b.key===key){ old=b; break; }
     const all=old?[...old.src,...G.list]:G.list; if(all.length<3) continue;
     let verts=0; for(const o of all) verts+=o.geometry.attributes.position.count; if(verts>200000) continue;
     if(old) dissolve(old);
-    const mesh=new THREE.Mesh(mergeInto(all,G.local),all[0].material); mesh.castShadow=all[0].castShadow; mesh.receiveShadow=all[0].receiveShadow; mesh.renderOrder=all[0].renderOrder;
+    const mesh=new THREE.Mesh(mergeInto(all,G.local,G.colored),G.colored?sharedMat(all[0].material,G.props):all[0].material); mesh.castShadow=all[0].castShadow; mesh.receiveShadow=all[0].receiveShadow; mesh.renderOrder=all[0].renderOrder;
     mesh.matrixAutoUpdate=false; mesh.userData.noBatch=true; (G.local?G.par:scene).add(mesh); mesh.updateMatrixWorld(true);
     const b={key, mesh, src:all, local:G.local}; BATCH.batches.add(b);
+    if(key.endsWith('|t')){ let rm=0; for(const o of all){ const g=o.geometry; rm=Math.max(rm,g.boundingSphere.radius*o.matrixWorld.getMaxScaleOnAxis()); } b.hideD=Math.max(30,rm*BATCH.TINYK); }
     for(const o of all){ o.layers.disable(0); BATCH.recs.get(o).batch=b; } } }
 
 // ======================================================================================
