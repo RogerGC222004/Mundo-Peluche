@@ -855,7 +855,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='74';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='75';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -994,6 +994,7 @@ const waterLevelAt=(x,z)=>inLakeWater(x,z)?WATER_Y:SEA_Y;
 
 // Suelo: una sola manta de fieltro con más detalle en la isla y menos en el mar profundo.
 // El color de cada punto lo da el lugar: pasto, arena de playa, fondo del lago o fondo marino.
+let GROUND_MAT=null;
 (function ground(){
   const size=512, c=document.createElement('canvas'); c.width=c.height=size;
   const g=c.getContext('2d');
@@ -1036,7 +1037,7 @@ const waterLevelAt=(x,z)=>inLakeWater(x,z)?WATER_Y:SEA_Y;
   geo.computeVertexNormals();
   // El terreno se parte en cuadros que comparten los mismos puntos: así solo se dibujan los que están frente a la cámara
   // (lo de atrás, los lados y lo que queda más lejos que la distancia de visión se salta solo).
-  const mat=new THREE.MeshStandardMaterial({map:t, vertexColors:true, roughness:1});
+  const mat=new THREE.MeshStandardMaterial({map:t, vertexColors:true, roughness:1}); GROUND_MAT=mat;
   const T=8, W1=SEG+1, step=Math.ceil(SEG/T);
   for(let ty=0;ty<SEG;ty+=step) for(let tx=0;tx<SEG;tx+=step){
     const idx=[];
@@ -1143,6 +1144,10 @@ function makeWaterMat(o){
         col=mix(col,uSky,clamp(fr*.55,0.0,.5));
         float sp=pow(max(dot(n,normalize(uSunD+v)),0.0),160.0);
         col+=uSunC*sp*1.6;
+        #if WATER_DETAIL
+        { vec2 cell=floor(p*1.6+vec2(uT*.45,-uT*.3)); float rnd=fract(sin(dot(cell,vec2(12.9898,78.233)))*43758.5453);   // brillitos que titilan
+          float gl=step(.985,rnd)*pow(max(dot(n,normalize(uSunD+v)),0.0),14.0)*step(.3,depth); col+=uSunC*gl*1.3; }
+        #endif
         float foam=(1.0-smoothstep(0.0,.28+.12*sin(uT*1.6+p.x*.07+p.y*.05),depth))*step(-.4,depth);
         foam+=smoothstep(.82,1.0,sw)*shore*.75;
         foam+=clamp(rf*6.0,0.0,1.0)*.7;
@@ -1184,7 +1189,7 @@ function waterTouch(st,x,y,z,speed,dt){
   const inW = ground<lvl-.05 && y<surf+.05 && y>surf-2.4;
   const vy=st.py===undefined?0:(y-st.py)/Math.max(dt,1e-3); st.py=y;
   if(inW && !st.inW) waterRipple(x,z,.08+Math.min(.27,Math.max(0,-vy)*.03+speed*.012));
-  else if(inW && speed>.4){ st.t=(st.t||0)-dt; if(st.t<=0){ st.t=.32; waterRipple(x,z,.05+Math.min(.07,speed*.012)); } }
+  else if(inW && speed>.4){ st.t=(st.t||0)-dt; if(st.t<=0){ st.t=.32; waterRipple(x,z,.05+Math.min(.07,speed*.012)); if(speed>4.5 && Math.hypot(x-camera.position.x,z-camera.position.z)<40) splashBurst(x,waterSurfaceY(x,z),z,.12); } }
   st.inW=inW;
 }
 const myWaterSt={};
@@ -1709,10 +1714,10 @@ const decals=(()=>{
     scene.add(m); return P; }
   const feet=pool(footTex,280), smear=pool(smearTex,160);
   const _m=new THREE.Matrix4(), _q=new THREE.Quaternion(), _e=new THREE.Euler(0,0,0,'YXZ'), _p=new THREE.Vector3(), _s=new THREE.Vector3(), _c=new THREE.Color();
-  const DENT=new THREE.Color(0x4a2410).convertSRGBToLinear(), CHOC=new THREE.Color(0x2a1408).convertSRGBToLinear();   // colores reales (la salida corrige a sRGB)
+  const DENT=new THREE.Color(0x4a2410).convertSRGBToLinear(), CHOC=new THREE.Color(0x2a1408).convertSRGBToLinear(), SANDP=new THREE.Color(0xb39565).convertSRGBToLinear();   // colores reales (la salida corrige a sRGB)
   function setI(P,i,k){ const d=P.d, o=i*6; _p.set(d[o],d[o+1],d[o+2]); _e.set(-Math.PI/2,d[o+3],0); _q.setFromEuler(_e); _s.set(d[o+4]*k,d[o+5]*k,1); _m.compose(_p,_q,_s); P.m.setMatrixAt(i,_m); }
   function add(P,x,y,z,yaw,sx,sz,dent,now){ const i=P.next; P.next=(i+1)%P.N; const d=P.d, o=i*6; d[o]=x; d[o+1]=y; d[o+2]=z; d[o+3]=yaw; d[o+4]=sx; d[o+5]=sz;
-    P.born[i]=now; P.live[i]=1; P.m.setColorAt(i,_c.copy(dent?DENT:CHOC)); setI(P,i,1); P.m.instanceMatrix.needsUpdate=true; P.m.instanceColor.needsUpdate=true; }
+    P.born[i]=now; P.live[i]=1; P.m.setColorAt(i,_c.copy(dent===2?SANDP:dent?DENT:CHOC)); setI(P,i,1); P.m.instanceMatrix.needsUpdate=true; P.m.instanceColor.needsUpdate=true; }
   function update(now){ [feet,smear].forEach(P=>{ let ch=false;
     for(let i=0;i<P.N;i++){ if(!P.live[i]) continue; const age=now-P.born[i];
       if(age>=PRINT_TIME){ P.live[i]=0; setI(P,i,0); ch=true; } else if(age>PRINT_TIME-PRINT_FADE){ setI(P,i,(PRINT_TIME-age)/PRINT_FADE); ch=true; } }
@@ -1721,6 +1726,9 @@ const decals=(()=>{
 })();
 // altura para una huella: encima del glaseado de la plaza, del pasto o de lo que se esté pisando
 function decalY(x,z,y){ const g=groundAt(x,z,y), t=terrainH(x,z); return g + (Math.abs(g-t)<.05 ? (Math.hypot(x,z)<CAKE.R ? .125 : .09) : .035); }
+// ¿arena? la playa (orilla de la isla) y el arenero del parque
+function onSandAt(x,z,y){ const t=terrainH(x,z); if(Math.abs(y-t)>.45 || y<SEA_Y-.25) return false; if(inLake(x,z,1)) return false;
+  return coastC(x,z)>.885 || (typeof PG!=='undefined' && Math.hypot(x-PG.x,z-PG.z)<PG.R-.5); }
 function newStain(){ return {feet:-1e9, front:-1e9, sx:1e9, sz:1e9, ph:0}; }
 // x,y,z: posición; gY: altura del suelo; grounded: pisando; flat: tirado de panza; stepped: dio un paso (side: 0/1)
 function stainStep(o,now,x,y,z,gY,grounded,flat,facing,stepped,side){
@@ -1729,9 +1737,11 @@ function stainStep(o,now,x,y,z,gY,grounded,flat,facing,stepped,side){
   if(flat && onCake) o.front=now;
   const feetS=now-o.feet<STAIN_TIME, frontS=now-o.front<STAIN_TIME;
   const fx=Math.sin(facing), fz=Math.cos(facing);
-  if(stepped && touching && !flat && (onCake || feetS)){
+  const sand=touching && !onCake && onSandAt(x,z,y);
+  if(stepped && touching && !flat && (onCake || feetS || sand)){
     const sd=side?1:-1, px=x+fz*.17*sd+fx*.05, pz=z-fx*.17*sd+fz*.05;
-    decals.foot(px, decalY(px,pz,y+.3), pz, facing+Math.PI, onCake, now); }
+    decals.foot(px, decalY(px,pz,y+.3), pz, facing+Math.PI, onCake?true:(sand && !feetS)?2:false, now); }
+  if(flat && sand && !frontS){ const cx=x+fx*.55, cz=z+fz*.55; if(Math.hypot(cx-o.sx,cz-o.sz)>.45){ o.sx=cx; o.sz=cz; decals.smear(cx, decalY(cx,cz,y+.3)+.005, cz, facing+Math.PI, 2, now); } }
   if(flat && touching && (onCake || frontS)){
     const cx=x+fx*.55, cz=z+fz*.55;
     if(Math.hypot(cx-o.sx,cz-o.sz)>.45){ o.sx=cx; o.sz=cz; decals.smear(cx, decalY(cx,cz,y+.3)+.005, cz, facing+Math.PI, onCake, now); } }
@@ -1744,12 +1754,13 @@ const myStain=newStain();
 
 const DECOR=[]; const _dec0=scene.children.length;
 // Flores
+const FLOWER_MATS={petal:new THREE.MeshStandardMaterial({roughness:1}), stem:new THREE.MeshStandardMaterial({color:0x4f8a2a,roughness:1})};
 (function flowers(){
   const FL=MAP.flowers.filter(([x,z])=>Math.hypot(x-START.x,z-START.z)>START.r+.6);   // nada de flores sobre el botón
   const cols=[0xffffff,0xffd2dc,0xffe27a,0xc8b6ff];
-  const petal=instanced(new THREE.SphereGeometry(.16,Q0==='high'||Q0==='mid'?8:5,Q0==='high'||Q0==='mid'?6:4), new THREE.MeshStandardMaterial({roughness:1}), FL, (o,[x,z])=>{ o.position.set(x,terrainH(x,z)+.36,z); o.scale.set(1,.55,1); }, {shadow:false});
+  const petal=instanced(new THREE.SphereGeometry(.16,Q0==='high'||Q0==='mid'?8:5,Q0==='high'||Q0==='mid'?6:4), FLOWER_MATS.petal, FL, (o,[x,z])=>{ o.position.set(x,terrainH(x,z)+.36,z); o.scale.set(1,.55,1); }, {shadow:false});
   const col=new THREE.Color(); FL.forEach(([,,c],i)=>petal.setColorAt(i,col.setHex(cols[c])));
-  instanced(new THREE.CylinderGeometry(.025,.025,.35,5), new THREE.MeshStandardMaterial({color:0x4f8a2a,roughness:1}), FL, (o,[x,z])=>o.position.set(x,terrainH(x,z)+.17,z), {shadow:false});
+  instanced(new THREE.CylinderGeometry(.025,.025,.35,5), FLOWER_MATS.stem, FL, (o,[x,z])=>o.position.set(x,terrainH(x,z)+.17,z), {shadow:false});
 })();
 
 // ---------- Bajo el mar ----------
@@ -2006,7 +2017,7 @@ function updateSky(dt){
   const day=sm(-.12,.18,sunDir.y), dusk=Math.exp(-Math.pow(sunDir.y/.14,2))*(1-W.cov*.8);
   sky.dayK=day;
   // Color del cielo
-  skyNow.copy(C.night).lerp(C.day,day).lerp(C.dusk,dusk*.55);
+  skyNow.copy(C.night).lerp(C.day,day).lerp(C.dusk,dusk*.72);
   _c2.copy(C.grayNight).lerp(_c1.copy(C.grayDay).lerp(C.grayStorm,W.storm),day);
   skyNow.lerp(_c2, Math.min(1,W.cov*.85+W.fog*.4));
   // Destello del rayo
@@ -2017,10 +2028,12 @@ function updateSky(dt){
   // Luces
   hemi.color.copy(C.hemiSkyNight).lerp(C.hemiSkyDay,day);
   hemi.groundColor.copy(C.hemiGndNight).lerp(C.hemiGndDay,day);
+  hemi.color.lerp(_c1.set(0xffc79c),dusk*.5);   // atardecer dorado
   hemi.intensity=(.22+.53*day)*(1-.2*W.cov) + fl*1.4;
   const sunUp=sm(-.04,.2,sunDir.y), moonUp=sm(-.04,.2,moonDir.y);
   const useSun=sunDir.y>-.02, dir=useSun?sunDir:moonDir;
-  sun.intensity=useSun ? .85*sunUp*(1-.7*W.cov) : .24*moonUp*(1-.6*W.cov);
+  sun.intensity=useSun ? .85*sunUp*(1-.7*W.cov)*(1+dusk*.3) : .24*moonUp*(1-.6*W.cov);
+  sky.dusk=dusk;
   if(useSun) sun.color.copy(C.sunLow).lerp(C.sunNoon, sm(.05,.35,sunDir.y)); else sun.color.copy(C.moon);
   const fp=player.pos;
   sun.position.set(fp.x+dir.x*60, fp.y+dir.y*60, fp.z+dir.z*60); sun.target.position.copy(fp);
@@ -7829,7 +7842,8 @@ function batchTick(){ if(!BATCH.on || SP.on) return; const T=BATCH.t=performance
   const groups=new Map();
   for(const [o,r] of BATCH.recs){ if(r.bad || r.batch) continue; let key, local=false;
     const base=o.material.uuid+'|'+o.castShadow+'|'+o.receiveShadow+'|'+o.renderOrder+'|'+batchSig(o);
-    if(r.moves<=3 && T-r.ws>=3 && r.vis){ const e=o.matrixWorld.elements; key='W|'+base+'|'+Math.floor(e[12]/BATCH.CELL)+','+Math.floor(e[14]/BATCH.CELL); }
+    if(r.moves<=3 && T-r.ws>=3 && r.vis){ const g=o.geometry; if(!g.boundingSphere) g.computeBoundingSphere(); const sc=o.matrixWorld.getMaxScaleOnAxis(); if(g.boundingSphere.radius*sc>25){ r.bad=true; r.why='big'; continue; }   // lo grande se queda solo (así se sigue saltando cuando no se ve)
+      _btvq.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld); key='W|'+base+'|'+Math.floor(_btvq.x/BATCH.CELL)+','+Math.floor(_btvq.z/BATCH.CELL); }
     else if(r.moves>3 && T-r.ls>=3 && o.visible && o.parent && o.parent!==scene){ key='L|'+o.parent.uuid+'|'+base; local=true; }   // se mueve con su grupo: se junta dentro de él
     else continue;
     let l=groups.get(key); if(!l) groups.set(key,l={list:[],local,par:o.parent}); l.list.push(o); }
@@ -7842,6 +7856,179 @@ function batchTick(){ if(!BATCH.on || SP.on) return; const T=BATCH.t=performance
     mesh.matrixAutoUpdate=false; mesh.userData.noBatch=true; (G.local?G.par:scene).add(mesh); mesh.updateMatrixWorld(true);
     const b={key, mesh, src:all, local:G.local}; BATCH.batches.add(b);
     for(const o of all){ o.layers.disable(0); BATCH.recs.get(o).batch=b; } } }
+
+// ======================================================================================
+// ---------- Ambiente vivo: viento, sombras de nubes, pétalos y luciérnagas, polvito, pájaros, peces y mariposas ----------
+// Todo pasa cerca de ti (así casi no le cuesta al celular) y sale de la hora y el clima que ya ven todos.
+// ======================================================================================
+const WIND={t:{value:0}, k:{value:.3}};
+// mecerse con el viento: se agrega al material (sin quitar el brillito del fieltro)
+function windify(m,amp,weight){ const prev=m.onBeforeCompile, prevKey=m.customProgramCacheKey?m.customProgramCacheKey():'';
+  m.onBeforeCompile=(sh,r)=>{ if(prev) prev.call(m,sh,r); sh.uniforms.uWindT=WIND.t; sh.uniforms.uWindK=WIND.k;
+    sh.vertexShader='uniform float uWindT; uniform float uWindK;\n'+sh.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
+      #ifdef USE_INSTANCING
+        vec2 wp0=vec2(instanceMatrix[3][0],instanceMatrix[3][2]);
+      #else
+        vec2 wp0=vec2(modelMatrix[3][0],modelMatrix[3][2]);
+      #endif
+      float wph=uWindT*1.7+wp0.x*.21+wp0.y*.17; float wsw=(sin(wph)+.4*sin(wph*2.3+1.3))*uWindK*float(${amp.toFixed(3)})*(${weight});
+      transformed.x+=wsw; transformed.z+=wsw*.5*cos(wph*.7);`); };
+  m.customProgramCacheKey=()=>prevKey+'|wind'+amp+weight; m.needsUpdate=true; return m; }
+windify(FLOWER_MATS.petal,.09,'1.0');
+windify(FLOWER_MATS.stem,.09,'clamp((position.y+.175)/.35,0.0,1.0)');
+leafMats.forEach(m=>windify(m,.06,'clamp(position.y*.5+.5,0.0,1.0)'));
+// sombras de nubes que pasan por el suelo
+const CLOUDSH={k:{value:0}, off:{value:new THREE.Vector2()}, thr:{value:.6}};
+if(GROUND_MAT){ const m=GROUND_MAT;
+  m.onBeforeCompile=sh=>{ sh.uniforms.uCloudK=CLOUDSH.k; sh.uniforms.uCloudOff=CLOUDSH.off; sh.uniforms.uCloudThr=CLOUDSH.thr;
+    sh.vertexShader='varying vec2 vCloudP;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vCloudP=(modelMatrix*vec4(transformed,1.0)).xz;');
+    sh.fragmentShader=`uniform float uCloudK; uniform vec2 uCloudOff; uniform float uCloudThr; varying vec2 vCloudP;
+      float cHash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+      float cNoise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(cHash(i),cHash(i+vec2(1,0)),f.x),mix(cHash(i+vec2(0,1)),cHash(i+vec2(1,1)),f.x),f.y); }
+      `+sh.fragmentShader.replace('#include <tonemapping_fragment>',`{ vec2 q=vCloudP*.018+uCloudOff; float n=cNoise(q)*.65+cNoise(q*2.3+3.1)*.35;
+        gl_FragColor.rgb*=1.0-uCloudK*smoothstep(uCloudThr,uCloudThr+.14,n); }
+      #include <tonemapping_fragment>`); };
+  m.customProgramCacheKey=()=>'groundClouds'; m.needsUpdate=true; }
+
+// ---------- partículas suaves (pétalos de día, luciérnagas de noche, polvito) ----------
+function softPoints(N,blend){ const g=new THREE.BufferGeometry(), pos=new Float32Array(N*3), col=new Float32Array(N*3), siz=new Float32Array(N), al=new Float32Array(N);
+  g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setAttribute('color',new THREE.BufferAttribute(col,3)); g.setAttribute('size',new THREE.BufferAttribute(siz,1)); g.setAttribute('alpha',new THREE.BufferAttribute(al,1));
+  const m=new THREE.ShaderMaterial({uniforms:{uPx:{value:300}}, transparent:true, depthWrite:false, blending:blend||THREE.NormalBlending, vertexColors:true,
+    vertexShader:'attribute float size; attribute float alpha; varying vec3 vC; varying float vA; uniform float uPx; void main(){ vC=color; vA=alpha; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_PointSize=size*uPx/max(.5,-mv.z); gl_Position=projectionMatrix*mv; }',
+    fragmentShader:'varying vec3 vC; varying float vA; void main(){ vec2 d=gl_PointCoord-.5; float r=length(d); if(r>.5) discard; gl_FragColor=vec4(vC, vA*smoothstep(.5,.15,r)); }'});
+  const p=new THREE.Points(g,m); p.frustumCulled=false; p.userData.noBatch=true; scene.add(p);
+  return {p, g, pos, col, siz, al, N, m}; }
+const _amb={t:0};
+// pétalos y hojitas (de día)
+const PET=softPoints(70); PET.v=new Float32Array(PET.N*4);
+{ const C=['#ffd2dc','#ffffff','#ffe27a','#c8b6ff','#8ac052','#f0a9bb'].map(h=>new THREE.Color(h).convertSRGBToLinear());
+  for(let i=0;i<PET.N;i++){ const c=C[i%C.length]; PET.col.set([c.r,c.g,c.b],i*3); PET.siz[i]=.17+Math.random()*.09; PET.pos[i*3+1]=-999; PET.v[i*4+3]=Math.random()*6.3; } }
+// luciérnagas (de noche)
+const FLY=softPoints(55,THREE.AdditiveBlending); FLY.v=new Float32Array(FLY.N*4);
+for(let i=0;i<FLY.N;i++){ FLY.col.set([.9,1,.4],i*3); FLY.siz[i]=.3; FLY.pos[i*3+1]=-999; FLY.v[i*4+3]=Math.random()*6.3; }
+// polvito al correr y al caer
+const DUST=softPoints(90); DUST.v=new Float32Array(DUST.N*4); DUST.next=0;
+for(let i=0;i<DUST.N;i++) DUST.pos[i*3+1]=-999;
+const _dc=new THREE.Color();
+function dustBurst(x,y,z,n,sp,col,size){ const c=_dc.set(col).convertSRGBToLinear();
+  for(let q=0;q<n;q++){ const i=DUST.next; DUST.next=(i+1)%DUST.N; const a=Math.random()*6.283, s=sp*(.4+Math.random()*.8);
+    DUST.pos[i*3]=x+Math.cos(a)*.15; DUST.pos[i*3+1]=y+.08+Math.random()*.1; DUST.pos[i*3+2]=z+Math.sin(a)*.15;
+    DUST.v[i*4]=Math.cos(a)*s; DUST.v[i*4+1]=.4+Math.random()*.8*sp; DUST.v[i*4+2]=Math.sin(a)*s; DUST.v[i*4+3]=1;
+    DUST.col.set([c.r,c.g,c.b],i*3); DUST.siz[i]=(size||.35)*(.7+Math.random()*.6); DUST.al[i]=.45; } }
+function groundDustCol(x,z,y){ return onSandAt(x,z,y)?'#f6ead0':(Math.hypot(x,z)<CAKE.R?'#e0bc94':'#eeeadb'); }
+function fxLand(x,y,z,impact,wet){ if(Math.hypot(x-camera.position.x,z-camera.position.z)>60) return;
+  if(wet){ if(impact>5) splashBurst(x,waterSurfaceY(x,z),z,Math.min(.35,impact*.025)); return; }
+  if(impact<5) return; const big=impact>11; dustBurst(x,y,z,big?22:9,big?2.6:1.4,groundDustCol(x,z,y),big?.55:.38); }
+
+// ---------- pájaros: bandadas en V que pasan volando (de día) ----------
+const BIRD_N=14;
+const birdBody=new THREE.InstancedMesh(new THREE.SphereGeometry(1,6,4), new THREE.MeshStandardMaterial({color:0x3a3f52, roughness:1}), BIRD_N);
+const wingGeo=(()=>{ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute([0,0,-.18, 0,0,.22, .95,0,-.05],3)); g.computeVertexNormals(); return g; })();
+const mirrorGeo=g=>{ const m=g.clone(); m.scale(-1,1,1); const ix=m.index; if(ix){ const a=ix.array; for(let i=0;i<a.length;i+=3){ const t=a[i+1]; a[i+1]=a[i+2]; a[i+2]=t; } } else { const p=m.attributes.position, uv=m.attributes.uv; for(let i=0;i<p.count;i+=3){ for(const at of [p,uv,m.attributes.normal]){ if(!at) continue; const s=at.itemSize; for(let c=0;c<s;c++){ const t=at.array[(i+1)*s+c]; at.array[(i+1)*s+c]=at.array[(i+2)*s+c]; at.array[(i+2)*s+c]=t; } } } } m.computeVertexNormals(); return m; };
+const birdWing=new THREE.InstancedMesh(wingGeo, new THREE.MeshStandardMaterial({color:0x3a3f52, roughness:1, side:THREE.DoubleSide}), BIRD_N);
+const birdWingL=new THREE.InstancedMesh(mirrorGeo(wingGeo), birdWing.material, BIRD_N);
+[birdBody,birdWing,birdWingL].forEach(m=>{ m.frustumCulled=false; m.userData.noBatch=true; m.count=0; scene.add(m); });
+const flocks=[0,1].map(i=>({c:new THREE.Vector3(), r:60+i*25, a:Math.random()*6.3, w:(i?-1:1)*.06, h:32+i*8, n:i?6:8, ph:Math.random()*10, on:false}));
+const _bq=new THREE.Quaternion(), _bp=new THREE.Vector3(), _bs=new THREE.Vector3(), _bmx=new THREE.Matrix4(), _bmw=new THREE.Matrix4(), _be=new THREE.Euler();
+// ---------- peces que brincan fuera del agua ----------
+const jumpFish=[0,1,2].map(()=>{ const g=new THREE.Group(); const b=new THREE.Mesh(sphereG,felt(['#ffb347','#7fc8f8','#f78fb3'][Math.floor(Math.random()*3)])); b.scale.set(.32,.2,.12); g.add(b);
+  const tl=new THREE.Mesh(new THREE.ConeGeometry(.13,.22,4),b.material); tl.rotation.z=Math.PI/2; tl.position.x=-.38; g.add(tl);
+  const e=new THREE.Mesh(sphereLo,new THREE.MeshStandardMaterial({color:0x111111})); e.scale.setScalar(.035); e.position.set(.2,.05,.1); g.add(e);
+  g.visible=false; g.userData.noBatch=true; scene.add(g); return {g, t:-1, from:new THREE.Vector3(), dir:new THREE.Vector2(), dur:1, wy:0}; });
+let fishNext=3;
+function findWaterNear(px,pz,out){ for(let k=0;k<24;k++){ const a=Math.random()*6.283, d=9+Math.random()*24, x=px+Math.cos(a)*d, z=pz+Math.sin(a)*d;
+    const lake=inLakeWater(x,z); if(!lake && coastC(x,z)<1.03) continue; const wy=waterSurfaceY(x,z); if(terrainH(x,z)>wy-.7) continue; out.set(x,wy,z); return true; } return false; }
+// ---------- mariposas alrededor de las flores (de día) ----------
+const BF_N=8;
+const bfTex=(()=>{ const c=document.createElement('canvas'); c.width=64; c.height=64; const g=c.getContext('2d');
+  g.fillStyle='#fff'; g.beginPath(); g.ellipse(26,22,22,18,-.3,0,7); g.fill(); g.beginPath(); g.ellipse(22,46,14,12,.4,0,7); g.fill();
+  g.fillStyle='rgba(0,0,0,.25)'; g.beginPath(); g.arc(24,22,6,0,7); g.fill(); const t=new THREE.CanvasTexture(c); return t; })();
+const bfGeo=(()=>{ const g=new THREE.PlaneGeometry(.42,.42); g.translate(.21,0,0); g.rotateX(-Math.PI/2); return g; })();
+const bfWing=new THREE.InstancedMesh(bfGeo, new THREE.MeshStandardMaterial({map:bfTex, alphaTest:.4, side:THREE.DoubleSide, roughness:.8}), BF_N);
+const bfWingL=new THREE.InstancedMesh(mirrorGeo(bfGeo), bfWing.material, BF_N);
+[bfWing,bfWingL].forEach(m=>{ m.frustumCulled=false; m.userData.noBatch=true; m.count=0; scene.add(m); });
+const BF_COL=['#ff8fc0','#ffd166','#7fc8f8','#c77dff','#ff9a3c','#ffffff'].map(h=>new THREE.Color(h));
+[bfWing,bfWingL].forEach(m=>{ m.count=BF_N; for(let i=0;i<BF_N;i++) m.setColorAt(i,BF_COL[i%BF_COL.length]); m.count=0; });   // (los colores se crean con el total, no con 0)
+const butterflies=Array.from({length:BF_N},(_,i)=>({home:new THREE.Vector3(1e9,0,1e9), p:new THREE.Vector3(), ph:Math.random()*10, sp:.8+Math.random()*.6, k:i}));
+let bfFind=0;
+function flowerNear(px,pz){ let best=null, bd=1e9; const F=MAP.flowers;
+  for(let i=0;i<F.length;i+=1+((Math.random()*3)|0)){ const [x,z]=F[i]; const d=(x-px)*(x-px)+(z-pz)*(z-pz); if(d<bd && d>9){ bd=d; best=F[i]; } if(bd<200) break; }
+  return best && bd<35*35 ? best : null; }
+
+// ---------- cada cuadro ----------
+let runDustT=0;
+function ambientUpdate(dt,t){ if(SP.on) { PET.p.visible=FLY.p.visible=DUST.p.visible=false; birdBody.visible=birdWing.visible=birdWingL.visible=bfWing.visible=bfWingL.visible=false; return; }
+  const W=weatherNow, day=sky.dayK||0, cam=camera.position, px=player.pos.x, pz=player.pos.z, py=player.pos.y, under=typeof underwaterView!=='undefined' && underwaterView;
+  _amb.t+=dt;
+  // viento
+  WIND.t.value+=dt*(1+W.wind*2.5); WIND.k.value+=((.25+W.wind*1.4)-WIND.k.value)*Math.min(1,dt);
+  // sombras de nubes: se mueven con el viento; más con nublado, nada de noche
+  CLOUDSH.off.value.x+=dt*(.02+W.wind*.06); CLOUDSH.off.value.y+=dt*(.008+W.wind*.02);
+  CLOUDSH.thr.value=THREE.MathUtils.lerp(.55,.38,W.cov); CLOUDSH.k.value=day*THREE.MathUtils.clamp(.28+W.cov*.2,0,.45)*(1-W.fog*.8)*(1-W.storm*.5);
+  const pr=renderer.getPixelRatio(); PET.m.uniforms.uPx.value=FLY.m.uniforms.uPx.value=DUST.m.uniforms.uPx.value=renderer.domElement.height/ (2*Math.tan(camera.fov*Math.PI/360));
+  // pétalos de día (si no llueve)
+  const petK=under?0:day*(1-Math.min(1,W.rain+W.snow))*(1-W.fog*.6);
+  PET.p.visible=petK>.05;
+  if(PET.p.visible){ const B=16;
+    for(let i=0;i<PET.N;i++){ const o=i*3, v=PET.v, ph=v[i*4+3]+=dt*(1.2+i%5*.2);
+      if(PET.pos[o+1]<-900 || PET.pos[o+1]<terrainH(PET.pos[o],PET.pos[o+2]) || Math.abs(PET.pos[o]-px)>B || Math.abs(PET.pos[o+2]-pz)>B){
+        PET.pos[o]=px+(Math.random()*2-1)*B; PET.pos[o+2]=pz+(Math.random()*2-1)*B; PET.pos[o+1]=py+3+Math.random()*7; }
+      PET.pos[o]+=(W.wind*2.2+.35+Math.sin(ph)*.5)*dt; PET.pos[o+1]-=(.45+.15*Math.sin(ph*1.3))*dt; PET.pos[o+2]+=(W.wind*.8+Math.cos(ph*.8)*.4)*dt;
+      PET.al[i]=.85*petK*(i<PET.N*(.35+.65*W.wind/.8)?1:0); }
+    PET.g.attributes.position.needsUpdate=PET.g.attributes.alpha.needsUpdate=true; }
+  // luciérnagas de noche (sin lluvia), cerca del pasto
+  const flyK=under?0:(1-THREE.MathUtils.smoothstep(day,.15,.45))*(1-Math.min(1,W.rain+W.snow+W.storm))*(1-W.fog*.5);
+  FLY.p.visible=flyK>.05;
+  if(FLY.p.visible){ const B=20;
+    for(let i=0;i<FLY.N;i++){ const o=i*3, v=FLY.v; v[i*4+3]+=dt;
+      if(FLY.pos[o+1]<-900 || Math.abs(FLY.pos[o]-px)>B || Math.abs(FLY.pos[o+2]-pz)>B){ FLY.pos[o]=px+(Math.random()*2-1)*B; FLY.pos[o+2]=pz+(Math.random()*2-1)*B;
+        const gh=terrainH(FLY.pos[o],FLY.pos[o+2]); FLY.pos[o+1]=Math.max(gh,waterLevelAt(FLY.pos[o],FLY.pos[o+2]))+.5+Math.random()*2; v[i*4]=Math.random()*2-1; v[i*4+2]=Math.random()*2-1; }
+      const ph=v[i*4+3]; v[i*4]+=(Math.random()-.5)*dt*2; v[i*4+2]+=(Math.random()-.5)*dt*2; const L=Math.hypot(v[i*4],v[i*4+2])||1; v[i*4]/=L; v[i*4+2]/=L;
+      FLY.pos[o]+=v[i*4]*.6*dt; FLY.pos[o+2]+=v[i*4+2]*.6*dt; FLY.pos[o+1]+=Math.sin(ph*1.7+i)*.25*dt;
+      FLY.al[i]=flyK*Math.max(0,Math.sin(ph*(1.3+(i%4)*.3)+i*1.7))**3; }
+    FLY.g.attributes.position.needsUpdate=FLY.g.attributes.alpha.needsUpdate=true; }
+  // polvito: al correr en el suelo deja nubecitas atrás
+  if(state==='play' && player.grounded && !player.swim && !player.inWater && !player.car && !player.ac && !player.pg && !player.mg){ const hs=Math.hypot(player.vel.x,player.vel.z);
+    if(hs>6.2 || (player.dive && hs>2.5)){ runDustT-=dt; if(runDustT<=0){ runDustT=player.dive?.08:.16; dustBurst(px-player.vel.x*.06,py,pz-player.vel.z*.06,player.dive?3:2,.5,groundDustCol(px,pz,py),.32); } } }
+  // los demás también levantan polvito al correr
+  for(const r of mp.remotes.values()){ if(!r.obj.visible || r.air || r.swim || (r.moving||0)<.95) continue; r.dustT=(r.dustT||0)-dt; if(r.dustT>0) continue; r.dustT=.2;
+    const q=r.obj.position; if(Math.hypot(q.x-cam.x,q.z-cam.z)<45) dustBurst(q.x,q.y,q.z,2,.5,groundDustCol(q.x,q.z,q.y),.3); }
+  { let any=false; for(let i=0;i<DUST.N;i++){ if(DUST.al[i]<=0) continue; any=true; const o=i*3, v=DUST.v;
+      DUST.pos[o]+=v[i*4]*dt; DUST.pos[o+1]+=v[i*4+1]*dt; DUST.pos[o+2]+=v[i*4+2]*dt; v[i*4]*=Math.exp(-dt*3); v[i*4+2]*=Math.exp(-dt*3); v[i*4+1]*=Math.exp(-dt*2);
+      DUST.siz[i]+=dt*.45; DUST.al[i]=Math.max(0,DUST.al[i]-dt*.6); if(DUST.al[i]<=0) DUST.pos[o+1]=-999; }
+    DUST.p.visible=any; if(any) DUST.g.attributes.position.needsUpdate=DUST.g.attributes.alpha.needsUpdate=DUST.g.attributes.size.needsUpdate=true; }
+  // pájaros (de día, sin tormenta)
+  const birdK=day>.35 && W.storm<.3 && W.rain<.5 && !under; let bi=0;
+  if(birdK){ for(const F of flocks){
+      if(!F.on || F.c.distanceTo(_bp.set(px,0,pz))>220){ F.on=true; F.c.set(px+(Math.random()-.5)*160,0,pz+(Math.random()-.5)*160); }
+      F.a+=F.w*dt; F.ph+=dt; const hx=F.c.x+Math.cos(F.a)*F.r, hz=F.c.z+Math.sin(F.a)*F.r, hy=Math.max(F.h,terrainH(hx,hz)+20), dir=Math.atan2(-Math.sin(F.a)*Math.sign(F.w),Math.cos(F.a)*Math.sign(F.w));
+      const fx=Math.sin(dir), fz=Math.cos(dir);
+      for(let k=0;k<F.n && bi<BIRD_N;k++,bi++){ const row=Math.ceil(k/2), side=k%2?1:-1, bx=hx-fx*row*1.6+fz*side*row*1.3, bz=hz-fz*row*1.6-fx*side*row*1.3, by=hy+Math.sin(F.ph*.7+k)*.4;
+        _be.set(0,dir,0); _bq.setFromEuler(_be); _bmx.compose(_bp.set(bx,by,bz),_bq,_bs.set(.14,.14,.34)); birdBody.setMatrixAt(bi,_bmx);
+        const flap=Math.sin(F.ph*9+k*.9)*.7;
+        for(const s of [-1,1]){ _be.set(0,dir,s*flap,'YXZ'); _bq.setFromEuler(_be); _bmw.compose(_bp.set(bx,by,bz),_bq,_bs.set(.75,1,.75)); (s>0?birdWing:birdWingL).setMatrixAt(bi,_bmw); }
+      } } }
+  birdBody.count=birdWing.count=birdWingL.count=bi; birdBody.visible=birdWing.visible=birdWingL.visible=bi>0; if(bi){ birdBody.instanceMatrix.needsUpdate=birdWing.instanceMatrix.needsUpdate=birdWingL.instanceMatrix.needsUpdate=true; }
+  // peces que brincan (cerca del agua)
+  fishNext-=dt;
+  if(fishNext<=0 && !under && state!=='menu'){ fishNext=3+Math.random()*6; const F=jumpFish.find(f=>f.t<0);
+    if(F && findWaterNear(px,pz,F.from)){ const a=Math.random()*6.283; F.dir.set(Math.cos(a),Math.sin(a)); F.t=0; F.dur=.8+Math.random()*.4; F.g.visible=true; waterRipple(F.from.x,F.from.z,.16); try{ audio.splash(.25); }catch(e){} } }
+  for(const F of jumpFish){ if(F.t<0) continue; F.t+=dt; const k=F.t/F.dur;
+    if(k>=1){ F.t=-1; F.g.visible=false; const ex=F.from.x+F.dir.x*2.2, ez=F.from.z+F.dir.y*2.2; waterRipple(ex,ez,.14); continue; }
+    const x=F.from.x+F.dir.x*2.2*k, z=F.from.z+F.dir.y*2.2*k, y=F.from.y-.2+Math.sin(k*Math.PI)*1.3;
+    F.g.position.set(x,y,z); F.g.rotation.set(0,Math.atan2(-F.dir.y,F.dir.x),Math.cos(k*Math.PI)*1.1); F.g.children[1].rotation.y=Math.sin(F.t*30)*.5; }
+  // mariposas de día alrededor de las flores
+  const bfK=day>.3 && W.rain<.3 && W.storm<.2 && !under; let wi=0;
+  if(bfK){ bfFind-=dt;
+    for(const b of butterflies){
+      if(b.home.x>1e8 || Math.hypot(b.home.x-px,b.home.z-pz)>38){ if(bfFind>0) continue; bfFind=.25; const f=flowerNear(px+(Math.random()-.5)*30,pz+(Math.random()-.5)*30); if(!f) continue;
+        b.home.set(f[0],terrainH(f[0],f[1])+.5,f[1]); b.p.copy(b.home); }
+      b.ph+=dt*b.sp; const tx=b.home.x+Math.sin(b.ph*.9+b.k)*1.4, tz=b.home.z+Math.cos(b.ph*.7+b.k*2)*1.4, ty=b.home.y+.4+Math.sin(b.ph*1.9)*.35;
+      const ox=b.p.x, oz=b.p.z; b.p.x+=(tx-b.p.x)*Math.min(1,dt*1.5); b.p.y+=(ty-b.p.y)*Math.min(1,dt*2); b.p.z+=(tz-b.p.z)*Math.min(1,dt*1.5);
+      const dir=Math.atan2(b.p.x-ox,b.p.z-oz), flap=.25+Math.abs(Math.sin(_amb.t*16+b.k))*1.1;
+      for(const s of [-1,1]){ _be.set(0,dir,s*flap,'YXZ'); _bq.setFromEuler(_be); _bmw.compose(b.p,_bq,_bs.set(1,1,1)); (s>0?bfWing:bfWingL).setMatrixAt(wi,_bmw); } wi++; } }
+  bfWing.count=bfWingL.count=wi; bfWing.visible=bfWingL.visible=wi>0; if(wi) bfWing.instanceMatrix.needsUpdate=bfWingL.instanceMatrix.needsUpdate=true;
+}
 
 // presencia: en qué minijuego estoy (y datos del hockey)
 function mgPresence(){ const M=player.mg; if(!M) return {mg:null, hk:null}; const i=MINIS.indexOf(M.g); return {mg:[i, M.act|0, M.actX|0], hk:M.g.presence?M.g.presence(M):null}; }
@@ -7916,6 +8103,7 @@ function update(dt,t){
   updatePortals(dt);
   updateCritters(dt);
   try{ batchTick(); }catch(e){ BATCH.on=false; console.warn('batch',e); }
+  try{ ambientUpdate(dt,t); }catch(e){ console.warn('ambiente',e); }
   updateMinis(dt);
   arenaUpdate(dt);
   if(state==='play'){ rocketUpdate(dt); if(SP.on) spaceUpdate(dt,t); }
@@ -8015,13 +8203,13 @@ function update(dt,t){
           const impact=-player.vy;
           if(!player.grounded){
             if(dv && dv.phase==='fall' && dv.t>.12){
-              dv.phase='slide'; dv.t=0; player.squash=1;
+              dv.phase='slide'; dv.t=0; player.squash=1; try{ fxLand(player.pos.x+dv.dx*.6,g,player.pos.z+dv.dz*.6,Math.max(6,impact),player.inWater); }catch(e){}
               if(player.inWater) audio.splash(1.2); else audio.flop(Math.max(.6,impact/8));
               player.pos.y=g; player.vy=2.6; player.grounded=false;
               const hs=Math.hypot(player.vel.x,player.vel.z), sp=Math.max(hs*.85,3.6)*(player.inWater?.6:1);
               player.vel.x=dv.dx*sp; player.vel.z=dv.dz*sp; if(!player.inWater) audio.slide();
             } else {
-              if(!dv){ if(player.vy<-4) player.squash=1; if(player.inWater) audio.splash(Math.min(1,impact/9)); else audio.land(impact/11); }
+              if(!dv){ if(player.vy<-4) player.squash=1; if(player.inWater) audio.splash(Math.min(1,impact/9)); else audio.land(impact/11); try{ fxLand(player.pos.x,g,player.pos.z,impact,player.inWater); }catch(e){} }
               else if(dv.phase==='slide' && impact>1.5) player.squash=.5;
               player.pos.y=g; player.vy=0; player.grounded=true;
             }
