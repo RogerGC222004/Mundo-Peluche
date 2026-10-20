@@ -855,7 +855,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='78';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='79';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -3368,7 +3368,7 @@ function zoomAt(sx,sy,f){
   const [mx,my]=fromScreen(sx,sy);
   mapView.z=Math.min(MAP_ZMAX, Math.max(1, mapView.z*f));
   mapView.cx=mx-(sx-MAP_PX/2)/mapView.z; mapView.cy=my-(sy-MAP_PX/2)/mapView.z;
-  clampView(); drawMap(true);
+  clampView(); requestMapDraw();
 }
 function centerOnMe(){
   const [mx,my]=toMap(player.pos.x,player.pos.z);
@@ -3376,6 +3376,23 @@ function centerOnMe(){
 }
 
 let mapHover=null, mapLast=0;
+// Lo fijo del mapa (relieve, caminos, árboles) se pinta en una imagen guardada un poco más grande que la vista.
+// Mientras arrastras o pellizcas solo se mueve/estira esa imagen (rapidísimo); al soltar se vuelve a pintar nítida.
+// Y se dibuja como mucho una vez por cuadro, aunque el dedo mande muchos movimientos.
+const MC_S=Math.round(MAP_PX*1.5), mapCache=document.createElement('canvas'); mapCache.width=mapCache.height=MC_S;
+const mcc=mapCache.getContext('2d'), mcView={z:0, cx:0, cy:0};
+let mapRaf=0, mapWheelT=0, mapSharpT=0;
+function requestMapDraw(){ if(!mapRaf) mapRaf=requestAnimationFrame(()=>{ mapRaf=0; drawMap(true); }); }
+function mapGesturing(){ return mapPtrs.size>0 || performance.now()-mapWheelT<180; }
+function renderMapCache(){ const z=mapView.z;
+  mcc.setTransform(1,0,0,1,0,0); mcc.fillStyle='#3d7aa8'; mcc.fillRect(0,0,MC_S,MC_S);
+  mcc.setTransform(z,0,0,z, MC_S/2-mapView.cx*z, MC_S/2-mapView.cy*z);
+  mcc.imageSmoothingEnabled=true; mcc.drawImage(mapTerrain,0,0,MAP_PX,MAP_PX); drawMapDetails(mcc,z); mcc.setTransform(1,0,0,1,0,0);
+  mcView.z=z; mcView.cx=mapView.cx; mcView.cy=mapView.cy; }
+function mapCacheOK(sharp){ if(!mcView.z) return false; const r=mapView.z/mcView.z;
+  if(sharp ? Math.abs(r-1)>1e-4 : (r<.67 || r>2.2)) return false;
+  const hv=MAP_PX/2/mapView.z, hc=MC_S/2/mcView.z;
+  return Math.abs(mapView.cx-mcView.cx)+hv<=hc+.5 && Math.abs(mapView.cy-mcView.cy)+hv<=hc+.5; }
 let mk=1;   // tamaño de íconos y letras: más grandes si el mapa se ve chico en pantalla
 function pill(text,x,y,bg,fg){
   mctx.font=`800 ${Math.round(15*mk)}px Nunito, sans-serif`; const w=mctx.measureText(text).width+14*mk, hh=20*mk;
@@ -3387,14 +3404,20 @@ function drawMap(force){
   const now=performance.now(); if(!force && now-mapLast<66) return; mapLast=now;
   mk=Math.min(2.4, Math.max(1, MAP_PX/(mapCv.clientWidth||MAP_PX)*.75));
   const z=mapView.z;
-  // capa del mundo, con el zoom y desplazamiento aplicados
+  // capa del mundo: la imagen guardada, movida y estirada a la vista actual
+  const gest=mapGesturing();
+  if(!mapCacheOK(!gest)) renderMapCache();
+  if(gest){ clearTimeout(mapSharpT); mapSharpT=setTimeout(requestMapDraw,200); }   // al terminar el gesto, una pasada nítida
+  const k=z/mcView.z;
   mctx.setTransform(1,0,0,1,0,0); mctx.fillStyle='#3d7aa8'; mctx.fillRect(0,0,MAP_PX,MAP_PX);
-  mctx.setTransform(z,0,0,z, MAP_PX/2-mapView.cx*z, MAP_PX/2-mapView.cy*z);
-  mctx.imageSmoothingEnabled=true; mctx.drawImage(mapTerrain,0,0,MAP_PX,MAP_PX);
-  drawMapDetails(mctx,z);
-  mctx.fillStyle='rgba(255,170,80,.9)';
-  schools.forEach(s=>s.list.forEach((k,i)=>{ if(i%2) return; const [px,py]=toMap(k.x,k.z); mctx.beginPath(); mctx.arc(px,py,1.8,0,7); mctx.fill(); }));
+  mctx.imageSmoothingEnabled=true;
+  let ox=MAP_PX/2+(mcView.cx-mapView.cx)*z-MC_S/2*k, oy=MAP_PX/2+(mcView.cy-mapView.cy)*z-MC_S/2*k;
+  if(k===1){ ox=Math.round(ox); oy=Math.round(oy); }   // sin estirar: copia exacta, píxel por píxel (lo más rápido)
+  mctx.setTransform(k,0,0,k,ox,oy); mctx.drawImage(mapCache,0,0);
   mctx.setTransform(1,0,0,1,0,0);
+  // peces (se mueven, así que van aparte; solo los que se ven)
+  mctx.fillStyle='rgba(255,170,80,.9)'; const fr=1.8*z;
+  schools.forEach(s=>s.list.forEach((q,i)=>{ if(i%2) return; const [px,py]=toScreen(...toMap(q.x,q.z)); if(px<-fr||py<-fr||px>MAP_PX+fr||py>MAP_PX+fr) return; mctx.beginPath(); mctx.arc(px,py,fr,0,7); mctx.fill(); }));
   // íconos en tamaño fijo de pantalla
   TELEPORTS.forEach(p=>{
     const [px,py]=toScreen(...toMap(p.x,p.z)), hov=mapHover===p, r=(hov?14:11)*mk;
@@ -3425,7 +3448,8 @@ function drawMap(force){
   // marco cosido
   mctx.strokeStyle='rgba(120,90,50,.7)'; mctx.lineWidth=3; mctx.setLineDash([10,7]); mctx.strokeRect(8,8,MAP_PX-16,MAP_PX-16); mctx.setLineDash([]);
 }
-function mapPoint(e){ const r=mapCv.getBoundingClientRect(); return [(e.clientX-r.left)/r.width*MAP_PX, (e.clientY-r.top)/r.height*MAP_PX]; }
+let mapRect=null;   // durante un gesto se reusa (medirlo en cada movimiento obliga al navegador a recalcular la página)
+function mapPoint(e){ const r=(mapPtrs.size && mapRect) || (mapRect=mapCv.getBoundingClientRect()); return [(e.clientX-r.left)/r.width*MAP_PX, (e.clientY-r.top)/r.height*MAP_PX]; }
 function placeAt(sx,sy,touch){
   const reach=(touch?32:22)*mk; let best=null, bd=reach;
   for(const p of TELEPORTS){ const [px,py]=toScreen(...toMap(p.x,p.z)), d=Math.hypot(sx-px,sy-py); if(d<bd){ bd=d; best=p; } }
@@ -3443,20 +3467,20 @@ mapCv.addEventListener('pointerdown',e=>{
 mapCv.addEventListener('pointermove',e=>{
   const [sx,sy]=mapPoint(e);
   if(!mapPtrs.has(e.pointerId)){   // ratón sin presionar: resaltar lugares
-    const p=placeAt(sx,sy,false); if(p!==mapHover){ mapHover=p; drawMap(true); } mapCv.style.cursor=p?'pointer':''; return;
+    const p=placeAt(sx,sy,false); if(p!==mapHover){ mapHover=p; requestMapDraw(); } mapCv.style.cursor=p?'pointer':''; return;
   }
   const prev=mapPtrs.get(e.pointerId);
   if(mapPtrs.size===1){
     const dx=sx-prev.x, dy=sy-prev.y;
     if(mapGesture && Math.hypot(sx-mapGesture.sx, sy-mapGesture.sy)>8) mapGesture.moved=true;
-    if(mapGesture && mapGesture.moved){ mapView.cx-=dx/mapView.z; mapView.cy-=dy/mapView.z; clampView(); drawMap(true); }
+    if(mapGesture && mapGesture.moved){ mapView.cx-=dx/mapView.z; mapView.cy-=dy/mapView.z; clampView(); requestMapDraw(); }
   } else if(mapPtrs.size===2){
     const [a,b]=[...mapPtrs.values()];
     const other = a===prev ? b : a;
     const d0=Math.hypot(prev.x-other.x, prev.y-other.y), d1=Math.hypot(sx-other.x, sy-other.y);
     const m0=[(prev.x+other.x)/2,(prev.y+other.y)/2], m1=[(sx+other.x)/2,(sy+other.y)/2];
     mapView.cx-=(m1[0]-m0[0])/mapView.z; mapView.cy-=(m1[1]-m0[1])/mapView.z;
-    if(d0>4) zoomAt(m1[0], m1[1], d1/d0); else { clampView(); drawMap(true); }
+    if(d0>4) zoomAt(m1[0], m1[1], d1/d0); else { clampView(); requestMapDraw(); }
   }
   mapPtrs.set(e.pointerId,{x:sx,y:sy});
 });
@@ -3464,14 +3488,14 @@ function endMapPointer(e){
   if(!mapPtrs.has(e.pointerId)) return;
   mapPtrs.delete(e.pointerId);
   if(mapPtrs.size===0){
-    mapCv.classList.remove('dragging');
+    mapCv.classList.remove('dragging'); requestMapDraw();
     const g=mapGesture; mapGesture=null;
     if(g && !g.moved && performance.now()-g.t<600){ const p=placeAt(g.sx,g.sy,g.touch); if(p) teleportTo(p); }
   }
 }
 ['pointerup','pointercancel'].forEach(ev=>mapCv.addEventListener(ev,endMapPointer));
 mapCv.addEventListener('pointerleave',()=>{ if(mapHover && !mapPtrs.size){ mapHover=null; drawMap(true); } });
-mapCv.addEventListener('wheel',e=>{ e.preventDefault(); const [sx,sy]=mapPoint(e); zoomAt(sx,sy,Math.exp(-e.deltaY*.0015)); },{passive:false});
+mapCv.addEventListener('wheel',e=>{ e.preventDefault(); const [sx,sy]=mapPoint(e); mapWheelT=performance.now(); zoomAt(sx,sy,Math.exp(-e.deltaY*.0015)); },{passive:false});
 ui('mapZoomIn').onclick=()=>zoomAt(MAP_PX/2,MAP_PX/2,1.6);
 ui('mapZoomOut').onclick=()=>zoomAt(MAP_PX/2,MAP_PX/2,1/1.6);
 ui('mapCenter').onclick=centerOnMe;
