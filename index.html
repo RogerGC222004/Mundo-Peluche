@@ -855,7 +855,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='76';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='77';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -994,7 +994,7 @@ const waterLevelAt=(x,z)=>inLakeWater(x,z)?WATER_Y:SEA_Y;
 
 // Suelo: una sola manta de fieltro con más detalle en la isla y menos en el mar profundo.
 // El color de cada punto lo da el lugar: pasto, arena de playa, fondo del lago o fondo marino.
-let GROUND_MAT=null;
+let GROUND_MAT=null; const TERRAIN_LOD=[];
 (function ground(){
   const size=512, c=document.createElement('canvas'); c.width=c.height=size;
   const g=c.getContext('2d');
@@ -1052,6 +1052,18 @@ let GROUND_MAT=null;
       if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; if(z<z0)z0=z; if(z>z1)z1=z; }
     g.boundingSphere=new THREE.Sphere(new THREE.Vector3((x0+x1)/2,(y0+y1)/2,(z0+z1)/2), Math.hypot(x1-x0,y1-y0,z1-z0)/2+.5);
     const m=new THREE.Mesh(g, mat); m.receiveShadow=true; m.matrixAutoUpdate=false; scene.add(m);
+    // versión sencilla para cuando el cuadro queda lejos: celdas de 2×2 con 2 triángulos (en vez de 8);
+    // las celdas de la orilla del cuadro conservan todos sus puntos, así no se abren rendijas con los vecinos
+    const xe=Math.min(SEG,tx+step), ye=Math.min(SEG,ty+step);
+    if((xe-tx)%2===0 && (ye-ty)%2===0){ const li=[], V=(ix,iy)=>ix+W1*iy;
+      for(let iy=ty;iy<ye;iy+=2) for(let ix=tx;ix<xe;ix+=2){
+        const L=ix===tx, R=ix+2===xe, B=iy===ty, T=iy+2===ye;
+        if(!L&&!R&&!B&&!T){ const a=V(ix,iy), b=V(ix,iy+2), c=V(ix+2,iy+2), d=V(ix+2,iy); li.push(a,b,d, b,c,d); continue; }
+        // abanico desde el centro, con los puntos de en medio solo en los lados que tocan la orilla
+        const ring=[V(ix,iy)]; if(L) ring.push(V(ix,iy+1)); ring.push(V(ix,iy+2)); if(T) ring.push(V(ix+1,iy+2)); ring.push(V(ix+2,iy+2)); if(R) ring.push(V(ix+2,iy+1)); ring.push(V(ix+2,iy)); if(B) ring.push(V(ix+1,iy));
+        const ctr=V(ix+1,iy+1); for(let k=0;k<ring.length;k++) li.push(ctr,ring[k],ring[(k+1)%ring.length]); }
+      const gl=new THREE.BufferGeometry(); for(const k of ['position','normal','uv','color']) gl.setAttribute(k, geo.attributes[k]); gl.setIndex(li); gl.boundingSphere=g.boundingSphere;
+      TERRAIN_LOD.push({m, hi:g, lo:gl, c:g.boundingSphere.center, r:g.boundingSphere.radius}); }
   }
 })();
 
@@ -1312,7 +1324,8 @@ const leafMats = [felt('#6fae3e'), felt('#7cbf4a'), felt('#f0a9bb','rgba(150,40,
 const rockMat = felt('#c9c4d6','rgba(60,50,80,.15)');
 const sphereLo = new THREE.SphereGeometry(1, 8, 6);   // para bolitas muy chiquitas
 const sphereG = new THREE.SphereGeometry(1, ...({min:[9,6], low:[12,9], mid:[16,12], high:[20,16]}[Q0]||[12,9]));   // menos caras en calidad baja (hojas, rocas, nubes…)
-const cylG = new THREE.CylinderGeometry(1,1,1,14);
+const cylG = new THREE.CylinderGeometry(1,1,1,14), cylLo=new THREE.CylinderGeometry(1,1,1,7);
+const INST_LOD=[];   // grupos de árboles/rocas que cambian a la versión sencilla cuando quedan lejos
 const _o=new THREE.Object3D();
 // Muchas copias de lo mismo (árboles, flores, corales…) repartidas en zonas de 90 m.
 // Cada zona sabe dónde está, así solo se dibujan (y hacen sombra) las zonas que se ven.
@@ -1333,6 +1346,8 @@ function instanced(geo, mat, items, set, opts={}){
     let r=0; list.forEach(e=>{ r=Math.max(r, e.p.distanceTo(c)+gr*e.s); });
     g.boundingSphere=new THREE.Sphere(c, r+.5);
     const m=new THREE.InstancedMesh(g,mat,list.length); list.forEach((e,i)=>m.setMatrixAt(i,e.m));
+    const loSrc=geo===sphereG?sphereLo:geo===cylG?cylLo:null;   // de lejos: la misma figura con menos caras
+    if(loSrc){ const gl=loSrc.clone(); gl.boundingSphere=g.boundingSphere; INST_LOD.push({m, hi:g, lo:gl}); }
     m.frustumCulled=true;   // la esfera de arriba envuelve todo el grupo: si no se ve, no se dibuja (three.js lo apaga por defecto en grupos)
     m.castShadow=opts.shadow!==false; m.receiveShadow=true; scene.add(m); meshes.set(key,m);
   });
@@ -6477,7 +6492,8 @@ function handLocal(o,side,x,y,z,hx,hy,hz,stretch){ const arm=ARM(o,side); if(!ar
     [-1,1].forEach(sd=>{ fAdd(h,sphereG,FM('#3a2a22'),sd*.1,.66,.88,.03,.03,.03); fAdd(h,fCyl,c,sd*.13,-.32,.32,.05,.4,.05,.5); fAdd(h,fCyl,c,sd*.13,-.32,-.35,.05,.4,.05,-.5); });
     fAdd(h,fCyl,FM('#8a6a50'),0,.55,.32,.03,.22,.03,-.5); fAdd(h,sphereG,FM('#8a6a50'),0,.15,-.62,.06,.25,.06,.8);
     horses.push({h,a}); }
-  for(let i=0;i<24;i++){ const a=i/24*Math.PI*2; fAdd(spin,sphereG,new THREE.MeshStandardMaterial({color:['#ff5d6c','#ffe14d','#7ed957','#4fc3f7'][i%4], emissive:0xffffff, emissiveIntensity:.2}),Math.cos(a)*4.9,4.45,Math.sin(a)*4.9,.12,.12,.12); }
+  const CL=['#ff5d6c','#ffe14d','#7ed957','#4fc3f7'].map(c=>new THREE.MeshStandardMaterial({color:c, emissive:0xffffff, emissiveIntensity:.2}));
+  for(let i=0;i<24;i++){ const a=i/24*Math.PI*2; fAdd(spin,sphereG,CL[i%4],Math.cos(a)*4.9,4.45,Math.sin(a)*4.9,.12,.12,.12); }
   blockAt(e,0,0,.6,6);
   { const p0=bW(e,0,0,0); obstacles.push({x:p0.x,z:p0.z,r:3.3,top:FY+.4,walk:true}); for(let k=0;k<16;k++){ const a=k/16*Math.PI*2, p=bW(e,Math.cos(a)*3.75,0,Math.sin(a)*3.75); obstacles.push({x:p.x,z:p.z,r:1.3,top:FY+.4,walk:true}); } }
   const horseObs=[0,1,2,3,4,5,6,7].map(()=>{ const o={x:0,z:0,r:.42,top:FY+2.0,walk:false}; DYN_OBS.push(o); return o; });
@@ -7796,6 +7812,11 @@ ui('saveLoad').onclick=async()=>{ const v=ui('saveIn').value.trim(); if(!v){ ui(
 ui('saveCloudNow').onclick=async()=>{ await cloudSave(true); ui('saveMsg').textContent=cloud.state==='on'?'Guardado en la nube.':'No se pudo guardar ahora.'; };
 ui('saveCloudJoin').onclick=async()=>{ if(!cloud.remote) return; const m=mergeSaves(saveSnapshot(),cloud.remote); cloud.offer=false; applySave(m); await cloudSave(true); reloadWith(m,'Progreso unido: '+sumText(saveSummary(m))); };
 
+// ---------- Detalle según la distancia: lo lejano se dibuja con menos caras (de lejos no se nota) ----------
+let lodT=0; const _lodV=new THREE.Vector3();
+function lodTick(){ const now=performance.now(); if(now-lodT<330 || SP.on) return; lodT=now; const cp=camera.position;
+  for(const L of INST_LOD){ const bs=L.hi.boundingSphere; const far=bs.center.distanceTo(cp)-bs.radius>55; const g=far?L.lo:L.hi; if(L.m.geometry!==g) L.m.geometry=g; }
+  for(const L of TERRAIN_LOD){ const far=L.c.distanceTo(cp)-L.r>45; const g=far?L.lo:L.hi; if(L.m.geometry!==g) L.m.geometry=g; } }
 // ---------- Juntar objetos quietos: muchos objetos iguales se dibujan de una sola vez (se ven idénticos) ----------
 // Cada medio segundo revisa los objetos de la isla. Los que llevan un rato sin moverse, sin cambiar de material ni
 // de visibilidad, se juntan por material (y por zona de 40 m, para que lo que no se ve no se dibuje).
@@ -8111,6 +8132,7 @@ function update(dt,t){
   updatePortals(dt);
   updateCritters(dt);
   try{ batchTick(); }catch(e){ BATCH.on=false; console.warn('batch',e); }
+  try{ lodTick(); }catch(e){ console.warn('lod',e); }
   try{ ambientUpdate(dt,t); }catch(e){ console.warn('ambiente',e); }
   updateMinis(dt);
   arenaUpdate(dt);
