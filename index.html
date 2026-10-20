@@ -116,6 +116,17 @@ body.not-play .mg-hud, body.not-play .mg-ctl, body.not-play .mg-result{display:n
 .map-flags{padding:4px 6px 2px;font-size:12px;font-weight:800;color:#5a4426;}
 .map-flags b{display:block;margin-bottom:4px;}
 #mapFlagList{display:flex;gap:6px;flex-wrap:wrap;}
+.save-card{max-width:min(520px,94vw);max-height:calc(100vh - 24px);overflow:auto;display:flex;flex-direction:column;gap:10px;align-items:stretch;}
+.save-card h2{margin:0;}
+.save-sum{margin:0;font-weight:800;color:#5a4426;}
+.save-box{background:#fbf3df;border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;}
+.save-box h3{margin:0;font-size:16px;}
+.save-box p{margin:0;font-size:13px;font-weight:600;line-height:1.35;}
+.save-box textarea{width:100%;font:600 12px/1.3 ui-monospace,monospace;border:2px solid #c9b48a;border-radius:10px;padding:6px 8px;resize:vertical;background:#fff;color:#3a2e1c;word-break:break-all;}
+.save-row{display:flex;gap:8px;flex-wrap:wrap;}
+.save-msg{margin:0;min-height:1.2em;font-weight:800;color:#3f7a2e;}
+.save-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#e5534b;margin-left:4px;vertical-align:middle;}
+
 .map-card.book-card{width:min(700px,94vw);max-height:calc(100vh - 140px);background:#fbf1e2;outline-color:#a58fd0;}
 .book-head h2{flex:1;text-align:center;}
 .book-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;overflow:auto;padding:4px 2px 6px;min-height:120px;}
@@ -428,6 +439,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       <button class="btn primary" id="playBtn">Jugar</button>
       <button class="btn" id="mpBtn">Multijugador</button>
       <button class="btn" id="shopBtn">Personalizar</button>
+      <button class="btn" id="saveBtn">Mi progreso <i class="save-dot" id="menuSaveDot" hidden></i></button>
       <button class="btn" id="optionsBtn">Opciones</button>
       <button class="btn" id="controlsBtn">Controles</button>
     </div>
@@ -474,6 +486,32 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     </dl>
     <p style="margin:0 0 16px;font-size:14px;font-weight:700">En el celular: joystick a la izquierda, desliza a la derecha para mirar.</p>
     <button class="btn" id="closeControls">Volver</button>
+  </div>
+</div>
+
+<div class="overlay" id="saveOv" hidden style="background:rgba(207,231,242,.7)">
+  <div class="card save-card" role="dialog" aria-labelledby="saveTitle">
+    <h2 id="saveTitle">Mi progreso</h2>
+    <p class="save-sum" id="saveSum"></p>
+    <section class="save-box" id="saveCloud" hidden>
+      <h3>☁️ En la nube</h3>
+      <p id="saveCloudTxt"></p>
+      <div class="save-row"><button class="btn primary" id="saveCloudJoin" hidden>Unir con este dispositivo</button><button class="btn" id="saveCloudNow">Guardar ahora</button></div>
+    </section>
+    <section class="save-box">
+      <h3>🔑 Tu código</h3>
+      <p>Cópialo y guárdalo (en tus notas o mándatelo). En otro celular o computadora, pégalo abajo para recuperar todo.</p>
+      <textarea id="saveCode" readonly rows="3" spellcheck="false" aria-label="Tu código de progreso"></textarea>
+      <div class="save-row"><button class="btn primary" id="saveCopy">Copiar código</button></div>
+    </section>
+    <section class="save-box">
+      <h3>📥 Cargar un código</h3>
+      <p>Se une con lo que ya tienes: no pierdes nada.</p>
+      <textarea id="saveIn" rows="2" spellcheck="false" placeholder="Pega aquí tu código (empieza con MP1-)" aria-label="Pegar código de progreso"></textarea>
+      <div class="save-row"><button class="btn primary" id="saveLoad">Cargar</button></div>
+    </section>
+    <p class="save-msg" id="saveMsg" role="status"></p>
+    <button class="btn" id="saveClose">Volver al menú</button>
   </div>
 </div>
 
@@ -817,7 +855,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='71';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='72';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -7652,6 +7690,82 @@ function updateSpaceRemotes(dt,t){
   for(const [r,rr] of remoteRockets) if(![...mp.remotes.values()].includes(r)){ rr.g.parent&&rr.g.parent.remove(rr.g); remoteRockets.delete(r); } }
 // el cohete de la isla: pantalla de diagnóstico del mapa y del menú
 ui('spExit').onclick=()=>{ fade(true,500); setTimeout(()=>exitSpace(false),520); };
+// ---------- Mi progreso: guardado en la nube (tu cuenta de Claude) y código para pasarlo a otro dispositivo ----------
+// Se guarda todo lo que vas ganando: monedas, ropa, banderas, planetas, especies, tu nombre/color, mejor vuelta y opciones.
+// Al cargar se UNE con lo que ya tienes (nunca se pierde nada): monedas = las más altas, ropa/planetas/especies = todas.
+const SAVE_KEYS=['Monedas','Ropa','Banderas','Especies','Planetas','Jugador','MejorVuelta','Opciones'];
+function saveSnapshot(){ const o={v:1}; for(const k of SAVE_KEYS){ try{ const v=localStorage.getItem('mundoPeluche'+k); if(v!=null) o[k]=v; }catch(e){} } return o; }
+const jparse=(s,d)=>{ try{ const v=JSON.parse(s); return v==null?d:v; }catch(e){ return d; } };
+function saveSummary(o){ const own=(jparse(o.Ropa,{}).own||[]).length, pl=Object.keys(jparse(o.Planetas,{})).length, sp=(jparse(o.Especies,[])||[]).length;
+  return {coins:Math.max(0,parseInt(o.Monedas||'0',10)||0), own, pl, sp}; }
+const plur=(n,w)=>n+' '+w+(n===1?'':(/[aeiou]$/.test(w)?'s':'es')); const sumText=s=>[plur(s.coins,'moneda'),plur(s.own,'prenda'),plur(s.pl,'planeta'),plur(s.sp,'especie')].join(' · ');
+// une dos guardados (a = el de este dispositivo, b = el que llega)
+function mergeSaves(a,b){ const o={v:1};
+  o.Monedas=String(Math.max(parseInt(a.Monedas||'0',10)||0, parseInt(b.Monedas||'0',10)||0));
+  const ra=jparse(a.Ropa,{own:[],eq:{}}), rb=jparse(b.Ropa,{own:[],eq:{}});
+  const own=[...new Set([...(ra.own||[]),...(rb.own||[])])].filter(id=>SHOP_BY[id]); const eq=(ra.own||[]).length||Object.keys(ra.eq||{}).length?(ra.eq||{}):(rb.eq||{});
+  o.Ropa=JSON.stringify({own, eq});
+  const fa=jparse(a.Banderas,[]), fb=jparse(b.Banderas,[]), fk=f=>f.w+':'+(f.w==='isla'?[f.x,f.z]:[f.dx,f.dy,f.dz]).map(v=>Math.round((+v||0)*100)).join(',');
+  const fl=[...(Array.isArray(fa)?fa:[])]; const seen=new Set(fl.map(fk)); for(const f of (Array.isArray(fb)?fb:[])) if(f && typeof f.n==='string' && !seen.has(fk(f))){ fl.push(f); seen.add(fk(f)); }
+  o.Banderas=JSON.stringify(fl.slice(-12));
+  o.Especies=JSON.stringify([...new Set([...jparse(a.Especies,[]),...jparse(b.Especies,[])])].filter(x=>typeof x==='string').slice(-3000));
+  o.Planetas=JSON.stringify({...jparse(b.Planetas,{}),...jparse(a.Planetas,{})});
+  const ja=jparse(a.Jugador,null); o.Jugador=ja&&ja.name?a.Jugador:(b.Jugador||a.Jugador); if(!o.Jugador) delete o.Jugador;
+  const la=+a.MejorVuelta||0, lb=+b.MejorVuelta||0, lap=la&&lb?Math.min(la,lb):(la||lb); if(lap) o.MejorVuelta=String(lap);
+  if(a.Opciones||b.Opciones) o.Opciones=a.Opciones||b.Opciones;
+  return o; }
+function applySave(o){ for(const k of SAVE_KEYS){ try{ if(o[k]!=null) localStorage.setItem('mundoPeluche'+k,o[k]); }catch(e){} } }
+// código: comprimido y en letras seguras para copiar y pegar
+const b64u=bytes=>{ let s=''; for(let i=0;i<bytes.length;i+=0x8000) s+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000)); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
+const unb64u=str=>{ const s=atob(str.replace(/-/g,'+').replace(/_/g,'/')); const b=new Uint8Array(s.length); for(let i=0;i<s.length;i++) b[i]=s.charCodeAt(i); return b; };
+async function pipeBytes(bytes,stream){ const r=new Blob([bytes]).stream().pipeThrough(stream); return new Uint8Array(await new Response(r).arrayBuffer()); }
+async function encodeSave(o){ const raw=new TextEncoder().encode(JSON.stringify(o));
+  if(typeof CompressionStream==='function'){ try{ return 'MP1-'+b64u(await pipeBytes(raw,new CompressionStream('deflate-raw'))); }catch(e){} }
+  return 'MP0-'+b64u(raw); }
+async function decodeSave(code){ code=String(code||'').replace(/\s+/g,''); const m=/^MP([01])-([A-Za-z0-9_-]+)$/.exec(code); if(!m) throw new Error('formato');
+  let bytes=unb64u(m[2]); if(m[1]==='1'){ if(typeof DecompressionStream!=='function') throw new Error('navegador'); bytes=await pipeBytes(bytes,new DecompressionStream('deflate-raw')); }
+  const o=JSON.parse(new TextDecoder().decode(bytes)); if(!o || typeof o!=='object' || o.v!==1) throw new Error('formato');
+  for(const k of Object.keys(o)) if(k!=='v' && (!SAVE_KEYS.includes(k) || typeof o[k]!=='string' || o[k].length>400000)) delete o[k];
+  return o; }
+// ---- nube: un documento privado por persona (solo tú lo ves) ----
+const cloud={db:null, ref:null, last:'', busy:false, remote:null, state:'off'};
+(async()=>{ try{ if(!(window.claude && typeof window.claude.use==='function')) return;
+    const [db,user]=await Promise.all([claude.use('db'),claude.use('user')]); if(!db||!user) return; const id=await user.id(); if(!id) return;
+    cloud.db=db; cloud.ref=db.collection('data/users/'+id).doc('progreso'); cloud.state='on';
+    const snap=await cloud.ref.get(); const d=snap.exists?snap.data():null;
+    if(d && typeof d.code==='string'){ const o=await decodeSave(d.code); cloud.remote=o; cloud.last=d.code;
+      // ¿la nube tiene algo que este dispositivo no? entonces ofrece unirlo
+      const here=JSON.stringify(saveSnapshot()), merged=JSON.stringify(mergeSaves(saveSnapshot(),o));
+      if(merged!==JSON.stringify(mergeSaves(saveSnapshot(),{v:1}))) cloud.offer=true; }
+    else await cloudSave();
+    renderSaveUI(); }
+  catch(e){ cloud.state='err'; renderSaveUI(); } })();
+async function cloudSave(force){ if(!cloud.ref || cloud.busy) return; const code=await encodeSave(saveSnapshot()); if(!force && code===cloud.last) return;
+  cloud.busy=true; try{ await cloud.ref.set({code, t:Date.now()}); cloud.last=code; cloud.savedAt=Date.now(); cloud.state='on'; }catch(e){ cloud.state='err'; } cloud.busy=false; renderSaveUI(); }
+// guarda solo cuando algo cambió (revisa cada 20 s y al salir de la pestaña)
+setInterval(()=>{ if(cloud.ref && !cloud.offer) cloudSave(); },20000);
+document.addEventListener('visibilitychange',()=>{ if(document.hidden && cloud.ref && !cloud.offer) cloudSave(); });
+function reloadWith(o,msg){ applySave(o); try{ sessionStorage.setItem('mundoPelucheAviso',msg); }catch(e){} location.reload(); }
+try{ const m=sessionStorage.getItem('mundoPelucheAviso'); if(m){ sessionStorage.removeItem('mundoPelucheAviso'); setTimeout(()=>flashNote(m),800); } }catch(e){}
+// ---- pantalla "Mi progreso" ----
+function renderSaveUI(){ const box=ui('saveOv'); if(!box) return; ui('saveSum').textContent=sumText(saveSummary(saveSnapshot()));
+  const c=ui('saveCloudTxt'), on=cloud.state==='on'||cloud.state==='err'&&cloud.ref;
+  ui('saveCloud').hidden=!cloud.ref;
+  if(cloud.ref){ c.textContent = cloud.offer ? 'En tu cuenta hay progreso de otro dispositivo: '+sumText(saveSummary(cloud.remote))+'.' :
+      cloud.state==='err' ? 'No se pudo guardar en la nube ahora. Se vuelve a intentar solo.' :
+      'Se guarda solo en tu cuenta de Claude'+(cloud.savedAt?' · último guardado '+new Date(cloud.savedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}):'')+'.';
+    ui('saveCloudJoin').hidden=!cloud.offer; ui('saveCloudNow').hidden=!!cloud.offer; }
+  ui('menuSaveDot').hidden=!cloud.offer; }
+ui('saveBtn').onclick=async()=>{ ui('saveOv').hidden=false; renderSaveUI(); ui('saveCode').value='Creando tu código…'; ui('saveCode').value=await encodeSave(saveSnapshot()); ui('saveMsg').textContent=''; };
+ui('saveClose').onclick=()=>{ ui('saveOv').hidden=true; };
+ui('saveCopy').onclick=async()=>{ const t=ui('saveCode'); try{ await navigator.clipboard.writeText(t.value); ui('saveMsg').textContent='¡Código copiado! Pégalo en el otro dispositivo en "Mi progreso".'; }
+  catch(e){ t.focus(); t.select(); ui('saveMsg').textContent='Selecciona el código y cópialo.'; } };
+ui('saveLoad').onclick=async()=>{ const v=ui('saveIn').value.trim(); if(!v){ ui('saveMsg').textContent='Pega primero un código.'; return; }
+  try{ const o=await decodeSave(v); const m=mergeSaves(saveSnapshot(),o); ui('saveMsg').textContent='¡Listo! Uniendo tu progreso…'; if(cloud.ref){ applySave(m); await cloudSave(true); } reloadWith(m,'Progreso cargado: '+sumText(saveSummary(m))); }
+  catch(e){ ui('saveMsg').textContent=e.message==='navegador'?'Este navegador no puede abrir ese código. Prueba con otro navegador.':'Ese código no es válido. Revisa que esté completo.'; } };
+ui('saveCloudNow').onclick=async()=>{ await cloudSave(true); ui('saveMsg').textContent=cloud.state==='on'?'Guardado en la nube.':'No se pudo guardar ahora.'; };
+ui('saveCloudJoin').onclick=async()=>{ if(!cloud.remote) return; const m=mergeSaves(saveSnapshot(),cloud.remote); cloud.offer=false; applySave(m); await cloudSave(true); reloadWith(m,'Progreso unido: '+sumText(saveSummary(m))); };
+
 // presencia: en qué minijuego estoy (y datos del hockey)
 function mgPresence(){ const M=player.mg; if(!M) return {mg:null, hk:null}; const i=MINIS.indexOf(M.g); return {mg:[i, M.act|0, M.actX|0], hk:M.g.presence?M.g.presence(M):null}; }
 renderCoins();
