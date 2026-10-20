@@ -855,7 +855,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='75';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='76';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -2170,7 +2170,9 @@ function makePlush(colorIdx){
   root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
   root.rotation.order='YXZ';   // girar (Y) y luego inclinarse hacia adelante (X)
   root.userData={body,arms,legs,eyes,stains,colorIdx:colorIdx|0};
-  return root;
+   // los detallitos (ojos, botones, costuras) no hacen sombra: a ese tamaño no se ve y cuesta dibujarlos dos veces
+   root.updateMatrixWorld(true); root.traverse(o=>{ if(!o.isMesh || !o.castShadow) return; const g=o.geometry; if(!g.boundingSphere) g.computeBoundingSphere(); if(g.boundingSphere.radius*o.matrixWorld.getMaxScaleOnAxis()<.09) o.castShadow=false; });
+   return root;
 }
 // Perfil del jugador (apodo y color), guardado en este navegador
 let profile={name:'', color:0};
@@ -2527,6 +2529,8 @@ function applySettings(){
   if(!settings.autoRes) resScale=1;
   renderer.setPixelRatio(Math.min(devicePixelRatio, pr)*resScale);
   sun.shadow.mapSize.set(settings.quality==='low'?1024:2048, settings.quality==='low'?1024:2048);
+  { const st=settings.quality==='low' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;   // en Baja: orilla de sombra más simple (casi igual, menos trabajo para la tarjeta)
+    if(renderer.shadowMap.type!==st){ renderer.shadowMap.type=st; try{ scene.traverse(o=>{ if(o.material) (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.needsUpdate=true); }); }catch(e){} } }
   if(sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map=null; }
   const minQ=settings.quality==='min';
   sun.castShadow=settings.shadows && !minQ;          // en Mínima no hay sombras de verdad (quedan los circulitos bajo los peluches)
@@ -3293,7 +3297,8 @@ const signMats=(()=>{ const c=document.createElement('canvas'); c.width=256; c.h
     [[-RW,0],[RW,0],[sx,0]].forEach(([x])=>{ obstacles.push({x:cx+tx*0+(-tz*0)+ (Math.cos(g.rotation.y)*x), z:cz-(Math.sin(g.rotation.y)*x), r:.32, top:H+4, bot:H-.3, walk:false}); });
     portals.push({a, cx, cz, nx, nz, tx:Math.cos(g.rotation.y), tz:-Math.sin(g.rotation.y), dest:d, tex});
   });
-  bon.count=dots.count=n; bon.instanceMatrix.needsUpdate=true; bon.castShadow=true; bon.frustumCulled=dots.frustumCulled=false; scene.add(bon, dots);
+  bon.count=dots.count=n; bon.instanceMatrix.needsUpdate=true; bon.castShadow=false;   // bolitas diminutas: su sombra no se nota
+  bon.frustumCulled=dots.frustumCulled=false; scene.add(bon, dots);
 })();
 let portalCool=0;
 function updatePortals(dt){
@@ -3683,7 +3688,10 @@ const carHasPeople=c=>[0,1,2,3,4].some(s=>seatOccupant(c.i,s));
 function updateCarVisual(c,dt){
   const [fx,fz]=carFwd(c), [lx,lz]=carLeft(c);
   const g=(x,z)=>carGround(x,z,c.trackI).y;
-  const hf=g(c.x+fx*2.1,c.z+fz*2.1), hb=g(c.x-fx*2.1,c.z-fz*2.1), hl=g(c.x+lx*1.5,c.z+lz*1.5), hr=g(c.x-lx*1.5,c.z-lz*1.5);
+  // el suelo bajo las 4 esquinas solo se vuelve a calcular si el coche se movió (los estacionados no gastan nada)
+  const gk=c.x.toFixed(3)+','+c.z.toFixed(3)+','+c.h.toFixed(3);
+  if(c._gk!==gk){ c._gk=gk; c._gh=[g(c.x+fx*2.1,c.z+fz*2.1), g(c.x-fx*2.1,c.z-fz*2.1), g(c.x+lx*1.5,c.z+lz*1.5), g(c.x-lx*1.5,c.z-lz*1.5)]; }
+  const [hf,hb,hl,hr]=c._gh;
   const y=(hf+hb+hl+hr)/4, pitch=Math.atan2(hf-hb,4.2), roll=Math.atan2(hl-hr,3.0);
   const k=Math.min(1,dt*10); c.y+=(y-c.y)*k; c.pitch+=(pitch-c.pitch)*k; c.roll+=(roll-c.roll)*k;
   c.root.position.set(c.x,c.y,c.z); c.root.rotation.set(-c.pitch, c.h, c.roll);
@@ -7900,7 +7908,7 @@ function softPoints(N,blend){ const g=new THREE.BufferGeometry(), pos=new Float3
   return {p, g, pos, col, siz, al, N, m}; }
 const _amb={t:0};
 // pétalos y hojitas (de día)
-const PET=softPoints(70); PET.v=new Float32Array(PET.N*4);
+const PET=softPoints(70); PET.v=new Float32Array(PET.N*4); PET.gy=new Float32Array(PET.N);
 { const C=['#ffd2dc','#ffffff','#ffe27a','#c8b6ff','#8ac052','#f0a9bb'].map(h=>new THREE.Color(h).convertSRGBToLinear());
   for(let i=0;i<PET.N;i++){ const c=C[i%C.length]; PET.col.set([c.r,c.g,c.b],i*3); PET.siz[i]=.17+Math.random()*.09; PET.pos[i*3+1]=-999; PET.v[i*4+3]=Math.random()*6.3; } }
 // luciérnagas (de noche)
@@ -7971,8 +7979,8 @@ function ambientUpdate(dt,t){ if(SP.on) { PET.p.visible=FLY.p.visible=DUST.p.vis
   PET.p.visible=petK>.05;
   if(PET.p.visible){ const B=16;
     for(let i=0;i<PET.N;i++){ const o=i*3, v=PET.v, ph=v[i*4+3]+=dt*(1.2+i%5*.2);
-      if(PET.pos[o+1]<-900 || PET.pos[o+1]<terrainH(PET.pos[o],PET.pos[o+2]) || Math.abs(PET.pos[o]-px)>B || Math.abs(PET.pos[o+2]-pz)>B){
-        PET.pos[o]=px+(Math.random()*2-1)*B; PET.pos[o+2]=pz+(Math.random()*2-1)*B; PET.pos[o+1]=py+3+Math.random()*7; }
+      if(PET.pos[o+1]<-900 || PET.pos[o+1]<PET.gy[i] || Math.abs(PET.pos[o]-px)>B || Math.abs(PET.pos[o+2]-pz)>B){
+        PET.pos[o]=px+(Math.random()*2-1)*B; PET.pos[o+2]=pz+(Math.random()*2-1)*B; PET.pos[o+1]=py+3+Math.random()*7; PET.gy[i]=Math.max(terrainH(PET.pos[o],PET.pos[o+2]),waterLevelAt(PET.pos[o],PET.pos[o+2])); }
       PET.pos[o]+=(W.wind*2.2+.35+Math.sin(ph)*.5)*dt; PET.pos[o+1]-=(.45+.15*Math.sin(ph*1.3))*dt; PET.pos[o+2]+=(W.wind*.8+Math.cos(ph*.8)*.4)*dt;
       PET.al[i]=.85*petK*(i<PET.N*(.35+.65*W.wind/.8)?1:0); }
     PET.g.attributes.position.needsUpdate=PET.g.attributes.alpha.needsUpdate=true; }
