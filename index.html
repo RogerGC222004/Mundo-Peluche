@@ -111,6 +111,10 @@ body.not-play .mg-hud, body.not-play .mg-ctl, body.not-play .mg-result{display:n
 @keyframes hotpulse{to{background:#ffc49a;}}
 .ar-big{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);font-family:var(--display);font-weight:800;font-size:clamp(40px,10vw,96px);color:#fff;-webkit-text-stroke:3px var(--thread);paint-order:stroke fill;text-shadow:0 6px 0 rgba(0,0,0,.18);pointer-events:none;white-space:nowrap;z-index:6;}
 .ar-big.pop{animation:arpop .5s ease-out;}
+/* textos largos (nombres de planetas): más chicos, en varias líneas y siempre dentro de la pantalla */
+.ar-big.long{white-space:normal;width:max-content;max-width:min(90vw,820px);text-align:center;line-height:1.08;font-size:clamp(24px,5.6vw,58px);-webkit-text-stroke-width:2.5px;text-wrap:balance;overflow-wrap:anywhere;top:30%;}
+.ar-big .sub{display:block;font-size:.5em;-webkit-text-stroke-width:2px;margin-bottom:.12em;}
+@media (orientation:landscape) and (max-height:500px){ .ar-big.long{font-size:clamp(22px,4.6vw,44px);top:28%;} }
 @keyframes arpop{from{transform:translate(-50%,-50%) scale(1.6);opacity:0;}to{transform:translate(-50%,-50%) scale(1);opacity:1;}}
 .sp-fade{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:7;}
 .map-flags{padding:4px 6px 2px;font-size:12px;font-weight:800;color:#5a4426;}
@@ -855,7 +859,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='79';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='80';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -6764,7 +6768,7 @@ const arBall=()=>AR.me.a===2 && AR.me.st===2 && AR.G[2].ph>=1 && AR.G[2].ph<=3;
 const arFrozen=()=>AR.me.st===2 && AR.me.a>=0 && (AR.G[AR.me.a].ph===1 || AR.G[AR.me.a].ph===2);
 // texto grande en el centro
 let bigT=0;
-function bigText(s,ms=900){ const el=ui('arBig'); el.textContent=s; el.hidden=false; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); clearTimeout(bigT); bigT=setTimeout(()=>el.hidden=true,ms); }
+function bigText(s,ms=900,sub){ const el=ui('arBig'); if(sub){ const sp=document.createElement('span'); sp.className='sub'; sp.textContent=sub; el.replaceChildren(sp,document.createTextNode(s)); } else el.textContent=s; el.classList.toggle('long',!!sub || s.length>12); el.hidden=false; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); clearTimeout(bigT); bigT=setTimeout(()=>el.hidden=true,ms); }
 function arResult(a,G){ const me=AR.me; if(me.awarded===G.gid) return; me.awarded=G.gid;
   const i=G.rk.indexOf(myUid), place=i<0?G.pl.length:(i<G.tie?0:i), N=G.pl.length;
   const coins=place===0?14+N*3:[0,10,7][place]||4;
@@ -7544,12 +7548,12 @@ function enterSpace(mode,o={}){ const was=SP.on; SP.on=true; fade(true,10); spac
   SP.seat=null; SP.dive=null; player.diveAngle=0; if(mode!=='ride' && !o.crew) SP.crew=null;
   if(mode==='fly'){ SP.mode='fly'; SP.pos.set(0,HOME.R+380,0); SP.q.setFromUnitVectors(new THREE.Vector3(0,1,0),MOON.c.clone().sub(SP.pos).normalize()); SP.speed=40; SP.planet=null; }
   else if(mode==='ride'){ if(SP.planet) planetHi(SP.planet,false); SP.mode='ride'; SP.crewT=performance.now(); SP.crew=o.pilot; SP.planet=null; SP.rocketAt=null; SP.speed=0; const r=arRemote(o.pilot); if(r && r.sp) SP.pos.set(r.sp[1],r.sp[2],r.sp[3]); else SP.pos.set(0,HOME.R+380,0);
-    const nm=r&&r.name||'tu amigo'; bigText('Viajas con '+nm,1600); }
+    const nm=r&&r.name||'tu amigo'; bigText(nm,1800,'Viajas con'); }
   else { const P=o.P; if(SP.planet && SP.planet!==P) planetHi(SP.planet,false); SP.mode='walk'; SP.planet=P; planetMesh(P); planetHi(P,true); const d=o.d.clone(); SP.pos.copy(P.c).addScaledVector(d,surfR(P,d)); SP.hv=0; SP.vy=0;
     SP.up.copy(d); SP.camFwd.copy(Math.abs(d.y)<.9?new THREE.Vector3(0,1,0):new THREE.Vector3(1,0,0)).addScaledVector(d,-1).normalize(); SP.camFwd.addScaledVector(d,-SP.camFwd.dot(d)).normalize(); SP.face.copy(SP.camFwd);
     // el cohete queda estacionado junto a ti (si llegaste de pasajero, el cohete es el del piloto)
     if(o.noRocket) SP.rocketAt=null; else { const rd=d.clone().addScaledVector(_r.crossVectors(SP.camFwd,d).normalize(),9/P.R).normalize(); parkRocket(P,rd); }
-    SP.arrived=P.key; bigText('Llegaste a '+P.name,1600); markVisited(P,d); }
+    SP.arrived=P.key; bigText(P.name,2000,'Llegaste a'); markVisited(P,d); }
   SP.lastYaw=yaw; myRocket.g.visible=SP.mode==='fly' || !!SP.rocketAt; spaceButtons(true); renderSpaceHud(true); try{ spVisible=nearbyPlanets(SP.pos,2); SP.near=null; SP.nearD=1e12; spaceAmbient(10); }catch(e){} setTimeout(()=>fade(false,900),60); try{ sendPresence(true); }catch(e){} }
 function exitSpace(quiet){ if(!SP.on) return; SP.on=false; SP.mode=''; SP.seat=null; SP.crew=null; SP.dive=null; player.diveAngle=0; player.dive=null; scene.add(plush); myRocket.g.visible=false; spaceButtons(false);
   if(SP.planet) planetHi(SP.planet,false); SP.planet=null; camera.far=settings.draw*1.05+15; camera.updateProjectionMatrix(); camera.up.set(0,1,0);
@@ -7590,7 +7594,7 @@ function flyUpdate(dt,best,bd){
   myRocket.g.position.copy(SP.pos).addScaledVector(_f,-11); myRocket.g.quaternion.copy(SP.q); myRocket.door.rotation.y=0;
   myRocket.flames.visible=SP.speed>30; const fl=.5+SP.speed/520+(thrust?.4:0)+Math.random()*.2; myRocket.flames.scale.set(fl,fl*(thrust?1.6:1),fl);
   // llegando a un planeta
-  if(best && !best.home && bd<best.R*2.5+150 && SP.arrived!==best.key){ SP.arrived=best.key; bigText('Llegando a '+best.name,2200); flashNote(best.name+': planeta '+sizeName(best.R)+' '+SHAPE_N[best.shape]+' de '+best.t.n+' · '+speciesOf(best).length+(speciesOf(best).length===1?' especie':' especies')+(best.edible?' · ¡se puede morder!':'')); }
+  if(best && !best.home && bd<best.R*2.5+150 && SP.arrived!==best.key){ SP.arrived=best.key; bigText(best.name,2400,'Llegando a'); flashNote(best.name+': planeta '+sizeName(best.R)+' '+SHAPE_N[best.shape]+' de '+best.t.n+' · '+speciesOf(best).length+(speciesOf(best).length===1?' especie':' especies')+(best.edible?' · ¡se puede morder!':'')); }
   if(best && bd>best.R*4+400 && SP.arrived===best.key) SP.arrived='';
   renderSpaceHud(); }
 // ---- viajar de pasajero: el cohete del piloto manda ----
