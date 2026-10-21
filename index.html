@@ -860,7 +860,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='82';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='83';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -7460,7 +7460,7 @@ function surfProp(S,R,k,s,wet){ const o=new THREE.Group(), M=SDM, pick=a=>a[(R()
 const SP_SHAPES=['frijol','bola','alto','aplanado','cubo','estrella','gusano','medusa','pajaro'];
 const SP_SHAPE_N={frijol:'frijolito', bola:'bolita', alto:'alto', aplanado:'aplanado', cubo:'cubito', estrella:'estrella', gusano:'gusano', medusa:'medusa flotante', pajaro:'pájaro'};
 const SP_MATS=['peluche','peluche','gomita','metal','brillante','peludo','piedra','cristal','malvavisco'];
-const SP_MAT_N={peluche:'de peluche', gomita:'de gomita', metal:'metálica', brillante:'que brilla', peludo:'peludita', piedra:'de piedra', cristal:'de cristal', malvavisco:'de malvavisco'};
+const SP_MAT_N={chocolate:'de chocolate', lava:'de lava y roca', dulce:'de caramelo duro', galleta:'de galleta', glaseado:'de glaseado', peluche:'de peluche', gomita:'de gomita', metal:'metálica', brillante:'que brilla', peludo:'peludita', piedra:'de piedra', cristal:'de cristal', malvavisco:'de malvavisco'};
 const SP_SUF=['ito','ín','olo','u','ón','i','ete','aco'];
 const hsl=(h,s,l)=>'#'+new THREE.Color().setHSL(h,s,l).getHexString();
 function speciesOf(P){ if(P.species) return P.species; if(P.home) return P.species=[];
@@ -7470,10 +7470,41 @@ function speciesOf(P){ if(P.species) return P.species; if(P.home) return P.speci
     const size = q<.25 ? .35+Q()*.25 : q<.6 ? .6+Q()*.4 : q<.85 ? 1+Q()*.8 : 1.8+Q()*1.8;
     const hue=Q(), main=hsl(hue,.55+Q()*.35,.55+Q()*.2), acc=hsl((hue+.4+Q()*.3)%1,.6,.6);
     let name=''; for(let s=0;s<2;s++) name+=SYL[(Q()*SYL.length)|0]; name=name[0].toUpperCase()+name.slice(1)+SP_SUF[(Q()*SP_SUF.length)|0];
-    const fly=shape==='medusa'||shape==='pajaro';
-    out.push({i, key:P.key+'#'+i, name, shape, mat, size, main, acc, eyes:1+((Q()*4)|0), legs:fly||shape==='gusano'?0:[2,4,6][(Q()*3)|0], extra:['orejas','antenas','cuernos','cola','cresta','nada'][(Q()*6)|0],
-      speed:(.6+Q()*1.4)/Math.sqrt(size), fly, count:size<.6?4:size<1?3:size<1.8?2:1}); }
+    // el nombre sale igual que siempre; forma, tamaño y detalles salen de otra semilla bien revuelta (antes las especies de un planeta salían casi iguales)
+    const H=rngOf(hash3(P.seed|0,i*7919+13,4242)+1); H(); const shp=SP_SHAPES[(H()*SP_SHAPES.length)|0], qq=H();
+    const sz = qq<.25 ? .35+H()*.25 : qq<.6 ? .6+H()*.4 : qq<.85 ? 1+H()*.8 : 1.8+H()*1.8;
+    const fly=shp==='medusa'||shp==='pajaro';
+    const th=critTheme(P,i,mat,main,acc);
+    out.push({i, key:P.key+'#'+i, name, shape:shp, mat:th[0], size:sz, main:th[1], acc:th[2], eyes:1+((H()*4)|0), legs:fly||shp==='gusano'?0:[2,4,6][(H()*3)|0], extra:['orejas','antenas','cuernos','cola','cresta','nada'][(H()*6)|0],
+      speed:(.6+H()*1.4)/Math.sqrt(sz), fly, count:sz<.6?4:sz<1?3:sz<1.8?2:1}); }
   return P.species=out; }
+// cada planeta hace criaturas de lo mismo que él: en el de chocolate, de chocolate (oscuro, de leche, blanco, rosa); en el de lava, de lava y roca…
+const CRIT_THEME={
+  pastel:[['glaseado','malvavisco','gomita'],['#ffb3cf','#c9e7ff','#fff1a6','#d6c2ff','#ffd0e4'],['#ff5d6c','#7ed957','#4fc3f7','#ffe14d']],
+  galleta:[['galleta','galleta','chocolate'],['#d6a15f','#c08a4a','#e0b070','#8a5530'],['#4a2412','#fff1d0','#ff9ec0']],
+  pan:[['galleta','malvavisco'],['#e2a95a','#d39448','#f0c070','#fff1d0'],['#8a5530','#fff6e0']],
+  sandia:[['peluche','gomita','dulce'],['#3f9b45','#ff4f6a','#ff7a8a','#7cc85a'],['#1d1d22','#ff4f6a','#3f9b45','#ffffff']],
+  queso:[['peluche','galleta'],['#ffd04d','#ffc13a','#ffe17a','#f2a93a'],['#c88a20','#fff1d0','#e5534b']],
+  helado:[['malvavisco','glaseado'],['#ffd0e4','#bff0dc','#fff4e0','#d6c2ff','#ffe58a'],['#e2a95a','#ff5d6c','#6b3a20']],
+  chocolate:[['chocolate'],['#3a1a0c','#5a2e16','#8a5530','#f3e6cf','#e58aa6'],['#f3e6cf','#3a1a0c','#ff9ec0','#e2a95a']],
+  gomita:[['gomita'],['#ff5d8f','#7ed957','#ffb43c','#4fc3f7','#c77dff'],['#ff5d8f','#7ed957','#ffb43c','#4fc3f7','#c77dff']],
+  algodon:[['peludo','malvavisco'],['#ffc4ec','#bfe3ff','#e6d0ff'],['#ffffff','#ff9ed8','#9fd0ff']],
+  malvavisco:[['malvavisco'],['#fff6fb','#ffe0f0','#e6f7ff','#fff1d0'],['#ffb3cf','#c08a4a','#9fd0ff']],
+  caramelo:[['dulce'],['#ff9a3c','#ff5d6c','#ffd166','#7ed957','#4fc3f7'],['#ffffff','#ff5d6c','#ffd166']],
+  bosque:[['peluche','peludo'],['#5fae4f','#8a6a3e','#7cc85a','#c9a06a'],['#ff9ec0','#ffe14d','#4a2f1a']],
+  desierto:[['piedra','peluche'],['#e8c98a','#c9a06a','#d98a5a'],['#5fa05a','#8a5530','#fff3d6']],
+  hielo:[['cristal','peludo'],['#d9f1ff','#bfe3ff','#ffffff','#9fd0ff'],['#4fc3f7','#ffffff','#7fb7d9']],
+  lava:[['lava','lava','piedra'],['#3a2420','#4a2016','#2a1612'],['#ff6a1a','#ffb43c','#ff4a10']],
+  oceano:[['gomita','peluche','brillante'],['#4fc3f7','#2fb5b0','#ff7f6e','#ffd166'],['#ffffff','#ff9ec0','#4f86c6']],
+  cristal:[['cristal','brillante'],['#a77bff','#7fd0ff','#ff9ec0'],['#ffffff','#c77dff','#7fd0ff']],
+  hongos:[['brillante','peluche'],['#4fb5a8','#7d6bff','#c77dff','#e5534b'],['#fbf3e4','#c8ffe0']],
+  nubes:[['malvavisco','peludo'],['#ffffff','#eef8ff','#fff0f8','#d6e4ff'],['#bfe3ff','#ffd6f0','#ffe58a']],
+  roca:[['piedra'],['#8b8f99','#a0928a','#7a7f8c'],['#5a5f6a','#c9c4d6','#e5534b']],
+  metal:[['metal'],['#b8c0cc','#c9a86a','#b87333','#8fa0b8'],['#ff5d6c','#4fc3f7','#ffd166']],
+  pantano:[['peludo','gomita','peluche'],['#5a7a40','#6a7a50','#4a6a3a','#8a9a5a'],['#c8ffe0','#b8a040','#4a2f1a']]};
+function critTheme(P,i,mat,main,acc){ const TH=CRIT_THEME[P.type]; if(!TH) return [mat,main,acc]; const T=rngOf(hash3(P.seed|0,i*104729+7,977)+3); T(); pick=a=>a[(T()*a.length)|0];
+  const jit=h=>{ const c=new THREE.Color(h), hs={}; c.getHSL(hs); return '#'+c.setHSL((hs.h+(T()-.5)*.04+1)%1, THREE.MathUtils.clamp(hs.s+(T()-.5)*.12,0,1), THREE.MathUtils.clamp(hs.l+(T()-.5)*.12,.05,.95)).getHexString(); };
+  const m=pick(TH[0]), a=jit(pick(TH[1])); let b=pick(TH[2]); if(b.toLowerCase()===a.toLowerCase()) b=pick(TH[2]); return [m,a,jit(b)]; }
 const sizeLabel=s=>s<.6?'diminuta':s<1?'pequeña':s<1.8?'mediana':'gigante';
 // materiales de las criaturas
 const critMatCache={};
@@ -7485,12 +7516,18 @@ function critMat(kind,col){ const k=kind+col; if(critMatCache[k]) return critMat
     case 'piedra': m=new THREE.MeshStandardMaterial({color:new THREE.Color(col).lerp(new THREE.Color('#8b8f99'),.6), roughness:1, flatShading:true}); break;
     case 'cristal': m=new THREE.MeshStandardMaterial({color:col, transparent:true, opacity:.62, roughness:.05, metalness:.2, envMap:toyEnv, flatShading:true}); break;
     case 'malvavisco': m=new THREE.MeshStandardMaterial({color:new THREE.Color(col).lerp(new THREE.Color('#ffffff'),.6), roughness:.95}); break;
+    case 'chocolate': m=new THREE.MeshStandardMaterial({color:new THREE.Color(col).convertSRGBToLinear(), roughness:.3, envMap:toyEnv, envMapIntensity:.45}); break;
+    case 'lava': m=new THREE.MeshStandardMaterial({color:new THREE.Color(col).convertSRGBToLinear(), roughness:.95, flatShading:true, emissive:'#ff4a10', emissiveIntensity:.32}); break;
+    case 'brasa': m=new THREE.MeshStandardMaterial({color:col, emissive:col, emissiveIntensity:.9, roughness:.4}); break;
+    case 'dulce': m=new THREE.MeshStandardMaterial({color:new THREE.Color(col).convertSRGBToLinear(), roughness:.1, envMap:toyEnv, envMapIntensity:.7}); break;
+    case 'galleta': m=felt(col,'rgba(70,35,10,.38)'); break;
+    case 'glaseado': m=new THREE.MeshStandardMaterial({color:new THREE.Color(col).convertSRGBToLinear(), roughness:.45}); break;
     default: m=felt(col); }
   return critMatCache[k]=m; }
 const eyeWhiteMat=new THREE.MeshStandardMaterial({color:'#ffffff', roughness:.25});
 const icoG=new THREE.IcosahedronGeometry(1,1), octG=new THREE.OctahedronGeometry(1,0), boxG=new THREE.BoxGeometry(1,1,1), coneG6=new THREE.ConeGeometry(1,1,6);
-function makeCritter(P,sp,n){ const o=new THREE.Group(), s=sp.size, mat=critMat(sp.mat,sp.main), am=critMat(sp.mat==='piedra'||sp.mat==='cristal'?'peluche':sp.mat,sp.acc);
-  const bodyG=sp.mat==='piedra'?icoG:sp.mat==='cristal'?octG:sphereG; const parts=[];
+function makeCritter(P,sp,n){ const o=new THREE.Group(), s=sp.size, mat=critMat(sp.mat,sp.main), am=critMat(sp.mat==='lava'?'brasa':sp.mat==='piedra'||sp.mat==='cristal'?'peluche':sp.mat,sp.acc);
+  const bodyG=sp.mat==='piedra'||sp.mat==='lava'?icoG:sp.mat==='cristal'?octG:sphereG; const parts=[];
   const cone=(r,h,m)=>{ const c=new THREE.Mesh(coneG6,m); c.scale.set(r,h,r); return c; };
   const body=new THREE.Mesh(sp.shape==='cubo'?boxG:bodyG,mat); o.add(body);
   let bh=.8, top=1.55, fz=.55;
@@ -7530,18 +7567,41 @@ function spawnCritters(P){ if(P.home) return; P.critters=[]; const list=speciesO
   for(const sp of list) P.critters.push(makeCritter(P,sp,0));
   for(let n=1;n<4;n++) for(const sp of list){ if(P.critters.length>=MAX) break; if(n<sp.count) P.critters.push(makeCritter(P,sp,n)); } }
 const _scm=new THREE.Matrix4(), _scx=new THREE.Vector3(), _scz=new THREE.Vector3(), _scw=new THREE.Vector3();
+// pone a la criatura bien parada: sigue la inclinación del suelo, nunca se mete en él y no se mete a los lagos
+const _kqQ=new THREE.Vector3(), _knQ=new THREE.Vector3(), _kfQ=new THREE.Vector3(), _krQ=new THREE.Vector3(), _kcQ=new THREE.Vector3(), _kt1Q=new THREE.Vector3(), _kt2Q=new THREE.Vector3();
+const _kptsQ=[new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3()];
+function critterPlace(P,c,hop,dt){ const d=c.d, sp=c.sp; if(!c.up) c.up=d.clone();
+  const near=!sp.fly && (!SP.on || SP.planet!==P || c.o.position.distanceToSquared(SP.pos)<170*170);
+  let g0=surfR(P,d);
+  if(P.isSurf && !sp.fly){ const lq=liquidR(P,d); if(lq>g0+.2){ g0=lq-.1*c.s; c.swim=1; } else c.swim=0; }
+  _kcQ.copy(P.c).addScaledVector(d,g0);
+  if(near && !c.swim){ const rr=Math.max(.35,c.s*.75)/P.R; _kt1Q.copy(c.hd); _kt2Q.crossVectors(d,c.hd);
+    [[_kt1Q,1],[_kt1Q,-1],[_kt2Q,1],[_kt2Q,-1]].forEach(([t,sg],k)=>{ _kqQ.copy(d).addScaledVector(t,sg*rr).normalize(); _kptsQ[k].copy(P.c).addScaledVector(_kqQ,surfR(P,_kqQ)); });
+    _kfQ.subVectors(_kptsQ[0],_kptsQ[1]); _krQ.subVectors(_kptsQ[2],_kptsQ[3]); _knQ.crossVectors(_kfQ,_krQ).normalize(); if(_knQ.dot(d)<0) _knQ.negate();
+    _knQ.lerp(d,.25).normalize(); }
+  else _knQ.copy(d);
+  if(!Number.isFinite(_knQ.x)) _knQ.copy(d);
+  c.up.lerp(_knQ,1-Math.exp(-dt*10)).normalize();
+  // lo que sobresalga del suelo bajo su cuerpo lo levanta (en lomas y bordes)
+  let lift=0; if(near && !c.swim) for(const q of _kptsQ){ const e=_kqQ.subVectors(q,_kcQ).dot(c.up); if(e>lift) lift=e; }
+  c.lift=(c.lift||0)+((lift)-(c.lift||0))*Math.min(1,dt*12);
+  c.o.position.copy(_kcQ).addScaledVector(c.up,c.lift+hop+(sp.fly?0:.02));
+  // base derecha (sin espejo): adelante = hacia donde camina, arriba = el suelo
+  _kfQ.copy(c.hd).addScaledVector(c.up,-c.hd.dot(c.up)); if(_kfQ.lengthSq()<1e-8) _kfQ.set(1,0,0).addScaledVector(c.up,-c.up.x); _kfQ.normalize();
+  _krQ.crossVectors(c.up,_kfQ).normalize(); _scm.makeBasis(_krQ,c.up,_kfQ); c.o.quaternion.setFromRotationMatrix(_scm); }
 function updateCrittersSpace(P,dt,t){ if(!P.critters) return; const here=SP.mode==='walk' && SP.planet===P;
   if(here) _scw.copy(SP.pos).sub(P.c).normalize();
   for(const c of P.critters){ c.t+=dt; const sp=c.sp; if(Math.random()<dt*.3) c.turn=(Math.random()-.5)*2;
-    c.hd.applyAxisAngle(c.d,c.turn*dt); const step=sp.speed*dt/P.R; c.d.addScaledVector(c.hd,step).normalize(); c.hd.addScaledVector(c.d,-c.hd.dot(c.d)).normalize();
+    c.hd.applyAxisAngle(c.d,c.turn*dt); const step=sp.speed*dt/P.R;
+    if(P.isSurf && !sp.fly && !c.swim){ _scz.copy(c.d).addScaledVector(c.hd,2.5*c.s/P.R+2/P.R).normalize(); if(liquidR(P,_scz)>surfR(P,_scz)+.1){ c.hd.negate(); c.turn=(Math.random()-.5)*2; } }   // hay lago enfrente: da la vuelta
+    c.d.addScaledVector(c.hd,step).normalize(); c.hd.addScaledVector(c.d,-c.hd.dot(c.d)).normalize();
     if(here){ const dd=c.d.dot(_scw);
       // en planetas grandes, las que quedan muy lejos reaparecen cerca (detrás de ti) para que siempre encuentres criaturas
       if(P.R>70 && dd<Math.cos(Math.min(Math.PI,200/P.R))){ const a=(70+Math.random()*90)/P.R; _scz.set(Math.random()-.5,Math.random()-.5,Math.random()-.5); _scz.addScaledVector(_scw,-_scz.dot(_scw)).normalize();
         if(_scz.dot(SP.camFwd)>0) _scz.addScaledVector(SP.camFwd,-2*_scz.dot(SP.camFwd)).normalize(); c.d.copy(_scw).multiplyScalar(Math.cos(a)).addScaledVector(_scz,Math.sin(a)).normalize(); c.hd.copy(_scw).addScaledVector(c.d,-_scw.dot(c.d)).normalize(); }
       // si estás cerca, se acercan con curiosidad
       else if(dd>Math.cos(Math.min(Math.PI,30/P.R)) && dd<.99995){ _scz.copy(_scw).addScaledVector(c.d,-dd).normalize(); c.hd.lerp(_scz,dt*.6).normalize(); } }
-    const hop=sp.fly ? (1.4+Math.sin(c.t*1.3)*.5)*c.s : Math.abs(Math.sin(c.t*sp.speed*4))*.25*c.s; placeOn(P,c.o,c.d,hop);
-    _scx.crossVectors(c.d,c.hd).normalize(); _scm.makeBasis(_scx.negate(),c.d,c.hd); c.o.quaternion.setFromRotationMatrix(_scm);
+    const hop=sp.fly ? (1.4+Math.sin(c.t*1.3)*.5)*c.s : Math.abs(Math.sin(c.t*sp.speed*4))*.25*c.s; critterPlace(P,c,hop,dt);
     c.feet.forEach((f,k)=>f.position.y=.1*c.s+Math.max(0,Math.sin(c.t*sp.speed*8+k*Math.PI))*.12*c.s);
     for(const p of c.parts){ if(p.wing){ p.m.rotation.z=p.wing*Math.sin(c.t*10)*.6; } else if(p.tent){ p.m.rotation.x=Math.sin(c.t*3+p.k)*.4; } else { p.m.position.x=Math.sin(c.t*sp.speed*5-p.k*.9)*.25*c.s; } }
     const jx=Math.sin(c.t*sp.speed*8)*1.2, jy=-Math.abs(Math.cos(c.t*sp.speed*8))*1.5;
@@ -7683,6 +7743,7 @@ function drawSpecies(cv,sp,seen){ const S=cv.width, g=cv.getContext('2d'); g.cle
   // sombrita en el suelo
   g.fillStyle='rgba(60,40,20,.18)'; g.beginPath(); g.ellipse(X(0),Y(0),u*.9,u*.16,0,0,7); g.fill();
   if(!sil && sp.mat==='brillante'){ g.shadowColor=sp.main; g.shadowBlur=S*.12; }
+  if(!sil && sp.mat==='lava'){ g.shadowColor='#ff6a1a'; g.shadowBlur=S*.1; }
   if(!sil && (sp.mat==='gomita'||sp.mat==='cristal')) g.globalAlpha=.82;
   let bh=.8, rx=.75, ry=.85, top=1.55;
   switch(sp.shape){ case 'bola': rx=ry=.8; break; case 'alto': rx=.6; ry=1.3; bh=1.3; top=2.6; break; case 'aplanado': rx=1.1; ry=.45; bh=.5; top=.95; break;
