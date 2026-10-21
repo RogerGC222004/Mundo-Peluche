@@ -616,6 +616,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <div class="opt-group">
       <h3>Interfaz</h3>
       <div class="opt"><label for="optBob">Balanceo al caminar<small>Movimiento de la cámara en 1ª persona</small></label><button class="switch" id="optBob" role="switch" aria-checked="true" aria-label="Balanceo al caminar"></button></div>
+      <div class="opt"><label for="optMyName">Ver mi nombre<small>Tu nombre encima de tu peluche, como lo ven los demás</small></label><button class="switch" id="optMyName" role="switch" aria-checked="false" aria-label="Ver mi nombre"></button></div>
       <div class="opt"><label for="optFps">Mostrar FPS</label><button class="switch" id="optFps" role="switch" aria-checked="false" aria-label="Mostrar FPS"></button></div>
       <div class="opt"><label for="optAutoFull">Empezar en pantalla completa<small>Y en horizontal en el celular, al tocar la pantalla</small></label><button class="switch" id="optAutoFull" role="switch" aria-checked="true" aria-label="Empezar en pantalla completa"></button></div>
       <div class="opt"><label for="optHints">Mostrar ayudas en pantalla</label><button class="switch" id="optHints" role="switch" aria-checked="true" aria-label="Mostrar ayudas"></button></div>
@@ -859,7 +860,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='80';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='81';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -2530,7 +2531,7 @@ addEventListener('keydown',e=>{ if(e.code==='KeyM' && !e.repeat && !(e.target in
 
 // ---------- Opciones ----------
 const DEFAULTS={fov:65, quality:'low', shadows:true, draw:190, sens:1, invert:false, startCam:'third', alwaysRun:false, bob:true, fps:false, hints:true,
-  master:80, music:60, sfx:80, muted:false, autoRes:true, fpsCap:'free', weather:true, layout:{}, qDef:1, autoFull:true};
+  master:80, music:60, sfx:80, muted:false, autoRes:true, fpsCap:'free', weather:true, layout:{}, qDef:1, autoFull:true, myName:false};
 let settings={...DEFAULTS};
 let resScale=1;   // escala de resolución automática (1 = completa)
 try{ const s=JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'null'); if(s){ settings={...DEFAULTS,...s}; if(!s.qDef){ settings.quality='low'; settings.qDef=1; } } }catch(e){}   // gráficos en bajo por defecto (una sola vez para quien ya jugaba)
@@ -2602,7 +2603,7 @@ function syncOptionsUI(){
   ui('optDraw').value=settings.draw; ui('optDrawOut').textContent=settings.draw+' m';
   ui('optSens').value=settings.sens; ui('optSensOut').textContent=settings.sens.toFixed(1)+'×';
   [['optMaster','master'],['optMusic','music'],['optSfx','sfx']].forEach(([id,k])=>{ ui(id).value=settings[k]; ui(id+'Out').textContent=settings[k]+'%'; });
-  [['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optHints','hints'],['optWeather','weather'],['optAutoFull','autoFull']]
+  [['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optHints','hints'],['optWeather','weather'],['optAutoFull','autoFull'],['optMyName','myName']]
     .forEach(([id,k])=>ui(id).setAttribute('aria-checked', String(settings[k])));
   [['optQuality','quality'],['optStartCam','startCam'],['optFpsCap','fpsCap']].forEach(([id,k])=>
     ui(id).querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.v===settings[k]))));
@@ -2610,7 +2611,7 @@ function syncOptionsUI(){
 function set(k,v){ settings[k]=v; saveSettings(); applySettings(); }
 
 ui('optFull').onclick=toggleFullscreen;
-[['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optHints','hints'],['optWeather','weather'],['optAutoFull','autoFull']]
+[['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optHints','hints'],['optWeather','weather'],['optAutoFull','autoFull'],['optMyName','myName']]
   .forEach(([id,k])=>ui(id).onclick=()=>set(k,!settings[k]));
 let sfxPreview=0;
 [['optMaster','master'],['optMusic','music'],['optSfx','sfx']].forEach(([id,k])=>ui(id).oninput=e=>{
@@ -2980,6 +2981,16 @@ function setLabel(r,name){
   if(r.label.material.map) r.label.material.map.dispose();
   r.label.material.map=labelTexture(name); r.label.material.needsUpdate=true;
 }
+// Mi nombre encima de mi peluche (opción "Ver mi nombre"): el mismo letrero que ven los demás
+const myLabel={spr:null, name:null};
+function myLabelUpdate(){
+  const on=settings.myName && state==='play' && camMode==='third' && shopEl.hidden;
+  if(!on){ if(myLabel.spr) myLabel.spr.visible=false; return; }
+  if(!myLabel.spr){ myLabel.spr=new THREE.Sprite(new THREE.SpriteMaterial({transparent:true, depthWrite:false})); myLabel.spr.scale.set(1.7,.425,1); }
+  const S=myLabel.spr; if(S.parent!==plush) plush.add(S);
+  const nm=cleanName(profile.name)||'Peluche'; if(nm!==myLabel.name){ myLabel.name=nm; if(S.material.map) S.material.map.dispose(); S.material.map=labelTexture(nm); S.material.needsUpdate=true; }
+  const a=player.diveAngle||0, H=2.42-1.5*Math.sin(a)/Math.sin(DIVE_FLAT), F=.85*Math.sin(a);   // siempre arriba, aunque estés acostado
+  S.position.set(0, H*Math.cos(a)+F*Math.sin(a), -H*Math.sin(a)+F*Math.cos(a)); S.visible=true; }
 function makeRemote(color,name){
   const obj=makePlush(color); obj.userData.noBatch=true;
   const label=new THREE.Sprite(new THREE.SpriteMaterial({transparent:true, depthWrite:false}));
@@ -8194,7 +8205,7 @@ function setUnderwaterView(on){ if(on===underwaterView) return; underwaterView=o
 
 let camAim=0;
 const _camT=new THREE.Vector3(), _camO=new THREE.Vector3(), _camW=new THREE.Vector3();
-function update(dt,t){
+function update(dt,t){ myLabelUpdate();
   const {body}=plush.userData;
   let moving=0;
   updateCars(dt);
