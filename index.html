@@ -860,7 +860,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='83';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='84';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -8647,10 +8647,13 @@ function update(dt,t){ myLabelUpdate();
       dv.t+=dt;
       if(dv.phase==='fall'){
         dv.angle = DIVE_FLAT*Math.min(1, Math.pow(dv.t/.32, 1.7));
+        // seguro: si ya está en el suelo y no pasó a deslizarse (cayó muy pronto, en subida o en un borde), que se deslice ya
+        if(player.grounded && dv.t>.2){ dv.phase='slide'; dv.t=0; player.squash=.6; try{ audio.flop(.6); audio.slide(); }catch(e){} }
+        else if(dv.t>2.5){ dv.phase='slide'; dv.t=0; }
       } else if(dv.phase==='slide'){
         const fr=Math.exp(-dt*3.2); player.vel.x*=fr; player.vel.z*=fr;
         dv.angle = DIVE_FLAT - .16*Math.exp(-7*dv.t)*Math.abs(Math.sin(dv.t*18));
-        if(dv.t>.85 && player.grounded && Math.hypot(player.vel.x,player.vel.z)<.5){ dv.phase='up'; dv.t=0; player.vel.set(0,0,0); player.vy=2.2; player.grounded=false; audio.getup(); }
+        if((dv.t>.85 && player.grounded && Math.hypot(player.vel.x,player.vel.z)<.5) || dv.t>2.6){ dv.phase='up'; dv.t=0; player.vel.set(0,0,0); player.vy=2.2; player.grounded=false; audio.getup(); }
       } else {
         const k=Math.min(1,dv.t/.38); dv.angle = DIVE_FLAT*(1-(1-Math.pow(1-k,3)));
         if(k>=1){ player.dive=null; dv.angle=0; }
