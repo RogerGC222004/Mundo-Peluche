@@ -860,7 +860,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='85';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='86';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -870,6 +870,18 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
 
+// Cada cuadro three.js vuelve a calcular la posición de TODOS los objetos (miles), aunque no se hayan movido.
+// Aquí solo se recalcula si cambió su posición, giro o tamaño; lo quieto se salta (en teléfonos lentos es de lo que más pesa).
+{ const OP=THREE.Object3D.prototype;
+  OP.updateMatrixWorld=function(force){
+    if(this.matrixAutoUpdate){ const p=this.position, q=this.quaternion, s=this.scale; let c=this._mc;
+      if(!(c && c[0]===p.x && c[1]===p.y && c[2]===p.z && c[3]===q.x && c[4]===q.y && c[5]===q.z && c[6]===q.w && c[7]===s.x && c[8]===s.y && c[9]===s.z)){
+        if(!c) c=this._mc=new Float64Array(10); c[0]=p.x; c[1]=p.y; c[2]=p.z; c[3]=q.x; c[4]=q.y; c[5]=q.z; c[6]=q.w; c[7]=s.x; c[8]=s.y; c[9]=s.z;
+        this.matrix.compose(p,q,s); this.matrixWorldNeedsUpdate=true; } }
+    if(this.matrixWorldNeedsUpdate || force){ if(this.parent===null) this.matrixWorld.copy(this.matrix); else this.matrixWorld.multiplyMatrices(this.parent.matrixWorld,this.matrix); this.matrixWorldNeedsUpdate=false; force=true; }
+    const ch=this.children; for(let i=0,l=ch.length;i<l;i++) ch[i].updateMatrixWorld(force); };
+  // si alguien pide la matriz a mano, se calcula siempre (y se olvida lo guardado)
+  const um=OP.updateMatrix; OP.updateMatrix=function(){ um.call(this); this._mc=null; }; }
 const scene = new THREE.Scene();
 const SKY = 0xcfe7f2;
 scene.background = new THREE.Color(SKY);
@@ -5137,14 +5149,17 @@ function stepPupils(c,dt){
   for(const e of c.eyes){ e.v.x+=ax*dt*3.2; e.v.y+=ay*dt*3.2; e.v.multiplyScalar(Math.exp(-dt*2.2)); e.p.addScaledVector(e.v,dt);
     const L=e.p.length(); if(L>1){ e.p.multiplyScalar(1/L); const vn=e.v.x*e.p.x+e.v.y*e.p.y; if(vn>0){ e.v.x-=1.45*vn*e.p.x; e.v.y-=1.45*vn*e.p.y; } } }
 }
-const CRITTER_FAR=95;
+const CRITTER_FAR=95; const _cfr=new THREE.Frustum(), _cfm=new THREE.Matrix4(), _cfs=new THREE.Sphere();
 function updateCritters(dt){
   if(!critters.length) return;
   const t=(Date.now()/1000)%100000, cx=camera.position.x, cz=camera.position.z, far=Math.min(CRITTER_FAR, settings.draw+10);
-  let ei=0;
+  let ei=0; _cfr.setFromProjectionMatrix(_cfm.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
   for(const c of critters){
     const d=Math.hypot(c.home.x-cx, c.home.y-cz)-c.R;
     const on=d<far && state!=='menu';
+    // fuera de la cámara: no se calcula (al volver a verse retoma su paseo); cerca de ti siempre, por si lo empujas
+    if(on && c.vis && d>6){ _cfs.center.set(c.home.x,c.pos.y,c.home.y); _cfs.radius=c.R+2.5; if(!_cfr.intersectsSphere(_cfs)){ c.off=true; ei+=2; continue; } }
+    if(c.off){ c.off=false; c.first=true; }
     if(!on){ if(c.vis){ c.vis=false; if(c.snake) c.im.visible=false; else c.g.visible=false; for(let k=0;k<2;k++){ eyeWhites.setMatrixAt(ei+k,_cz); eyePupils.setMatrixAt(ei+k,_cz); eyeDomes.setMatrixAt(ei+k,_cz); } c.first=true; } continue; }
     if(!c.vis){ c.vis=true; if(c.snake) c.im.visible=true; else c.g.visible=true; }
     // se aparta un poquito si el jugador se le acerca (solo en tu pantalla)
@@ -8317,20 +8332,20 @@ function mergeInto(list,local,colored){ const g0=list[0].geometry, names=Object.
     vo+=n; }
   const g=new THREE.BufferGeometry(); for(const k of names) g.setAttribute(k,new THREE.BufferAttribute(out[k],g0.attributes[k].itemSize)); if(col) g.setAttribute('color',new THREE.BufferAttribute(col,3)); if(fsp) g.setAttribute('feltSpk',new THREE.BufferAttribute(fsp,3)); g.setIndex(new THREE.BufferAttribute(idx,1)); g.computeBoundingSphere(); return g; }
 function batchTick(){ if(!BATCH.on || SP.on) return; const T=BATCH.t=performance.now()/1000; if(T-BATCH.last<.5) return; BATCH.last=T; BMAT.tick++;
-  const seen=new Set();
-  // 1) revisar todo lo de la isla
-  const walk=o=>{ if(batchSkip(o)) return; if(o.isMesh){ seen.add(o);
+  // 1) revisar todo lo de la isla (la visibilidad se va pasando de padre a hijo: no hay que subir por cada objeto)
+  const walk=(o,pv)=>{ if(batchSkip(o)) return; const vis=pv && o.visible; if(o.isMesh){
       let r=BATCH.recs.get(o);
       if(!r){ r=batchCandidate(o)?{m:new Float32Array(16), lm:new Float32Array(16), ws:T, ls:T, batch:null, moves:0, lmoves:0}:{bad:true}; if(!r.bad) recSet(r,o); BATCH.recs.set(o,r); }
-      else if(!r.bad){ const e=o.matrixWorld.elements, same=r.mat===o.material && r.geo===o.geometry && r.ver===geoVer(o.geometry) && r.cs===o.castShadow && r.rs===o.receiveShadow && r.ro===o.renderOrder && r.par===o.parent && r.mk===matInfo(o.material).chk;
-        const wOK=same && batchNear(r.m,e) && r.vis===effVisible(o), lOK=same && batchNear(r.lm,o.matrix.elements) && r.own===o.visible;
+      r.st=T;
+      if(!r.bad){ const e=o.matrixWorld.elements, same=r.mat===o.material && r.geo===o.geometry && r.ver===geoVer(o.geometry) && r.cs===o.castShadow && r.rs===o.receiveShadow && r.ro===o.renderOrder && r.par===o.parent && r.mk===matInfo(o.material).chk;
+        const wOK=same && batchNear(r.m,e) && r.vis===vis, lOK=same && batchNear(r.lm,o.matrix.elements) && r.own===o.visible;
         if(!wOK){ r.ws=T; r.moves++; if(r.batch && !r.batch.local) dissolve(r.batch); }
         if(!lOK){ r.ls=T; r.lmoves++; if(r.batch && r.batch.local) dissolve(r.batch); }
         if(!wOK || !lOK) recSet(r,o);
         if(r.lmoves>6){ r.bad=true; if(r.batch) dissolve(r.batch); } } }
-    for(const c of o.children) walk(c); };
-  walk(scene);
-  for(const [o,r] of BATCH.recs) if(!seen.has(o)){ if(r.batch) dissolve(r.batch); BATCH.recs.delete(o); }   // ya no está en la escena
+    const ch=o.children; for(let i=0;i<ch.length;i++) walk(ch[i],vis); };
+  walk(scene,true);
+  for(const [o,r] of BATCH.recs) if(r.st!==T){ if(r.batch) dissolve(r.batch); BATCH.recs.delete(o); }   // ya no está en la escena
   // 2) juntar los que llevan quietos un rato (máximo una vez por segundo)
   if(T-BATCH.lastBuild<1) return; BATCH.lastBuild=T;
   const groups=new Map();
