@@ -894,7 +894,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='94';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='95';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -3017,7 +3017,7 @@ function sendPresence(force){
     sd: aircraft.map(a=>[a.stairs, a.door, a.sdT]),
     id: myUid, bw: bowPresence(), ...mgPresence(), ou: outfitList(wardrobe.eq), ...arenaPresence(), ...spacePresence(),
     pl: player.pg ? [PG_KINDS.indexOf(player.pg.k), player.pg.i, r2(player.pg.v||0)] : null,
-    pu: myPush.i>=0 ? [myPush.i, myPush.t] : null,
+    pu: myPush.i>=0 ? [myPush.i, myPush.t] : null, cu: cucoPresence(),
     ai: player.ac && player.acPose ? (A=>[A.i, A.mode==='seated'||A.mode==='sitting'?A.seat:-1, r2(player.acPose.l[0]), r2(player.acPose.l[1]), r2(player.acPose.l[2]), r2(player.acPose.f||0), r2(player.acPose.sit||0), r2(player.acPose.walk?(player.acPose.mv||1):0), r2(player.acPose.armsUp||0), player.acPose.air?1:0])(player.ac) : null
   };
   const key=presFit(payload);
@@ -3078,7 +3078,7 @@ function removeRemote(k){
 }
 const clampN=(v,a,b,d)=>Number.isFinite(v)?Math.min(b,Math.max(a,v)):d;
 function onPeers({peers}){
-  const seen=new Set(), drivenNow=new Set(), flownNow=new Set();
+  const seen=new Set(), drivenNow=new Set(), flownNow=new Set(), cuDrv={v:false};
   for(const p of peers){
     if(p.sameTab || p.kind==='agent') continue;
     const pr=p.presence||{}, pos=pr.p;
@@ -3123,8 +3123,9 @@ function onPeers({peers}){
       if(e[1]>c.lightT){ c.lights=e[0]===1; c.lightT=e[1]; }
     });
     // aviones y helicópteros: quién pilota, dónde quedaron, escaleras y puertas, y quién va a bordo
-    { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<(PG_KINDS[pl[0]]==='bench'?BENCHES.length:3) ? pl : null;
+    { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<(PG_KINDS[pl[0]]==='bench'?BENCHES.length:PG_KINDS[pl[0]]==='cuco'?5:3) ? pl : null;
       if(pr.pu) pgCheckPush(r,pr.pu); }
+    parseCuco(r,pr,cuDrv);   // Cuco: dónde está y si lo guía esta persona
     const ai=pr.ai;
     r.ai = Array.isArray(ai) && ai.length===10 && ai.every(Number.isFinite) && aircraft[ai[0]] && Math.abs(ai[2])<20 && Math.abs(ai[4])<20 ? ai : null;
     const ap=pr.ap;
@@ -3146,6 +3147,7 @@ function onPeers({peers}){
       if(e[1]>c.doorT){ const was=c.doorMask; c.doorMask=e[0]&15; c.doorT=e[1]; if(was!==c.doorMask && Math.hypot(c.x-player.pos.x,c.z-player.pos.z)<40) audio.door(c.doorMask>was); }
     });
   }
+  if(!cuDrv.v) CU.drv=null;
   cars.forEach(c=>{ if(!drivenNow.has(c.i) && c.remote){ c.remote=null; c.t=now1(); } });
   aircraft.forEach(a=>{ if(!flownNow.has(a.i) && a.remote){ a.remote=null; a.sim=true; } });
   const nowG=performance.now();
@@ -3522,6 +3524,15 @@ function drawMap(force){
     mctx.fillStyle='rgba(255,255,255,.75)'; mctx.fillRect(w*.08,-hgt*.3,w*.18,hgt*.6);
     mctx.restore();
   });
+  { // Cuco, la tortuga
+    const [px,py]=toScreen(...toMap(CU.x,CU.z)), ang=Math.atan2(-Math.cos(CU.h),-Math.sin(CU.h)), sz=Math.max(11, CU.B/(2*MAP_E)*MAP_PX*mapView.z);
+    mctx.save(); mctx.translate(px,py); mctx.rotate(ang); mctx.scale(mk,mk); mctx.strokeStyle='#2c3a1a'; mctx.lineWidth=2/mk;
+    mctx.fillStyle='#3b4a28'; [[.55,.62],[.55,-.62],[-.55,.62],[-.55,-.62]].forEach(([a,b])=>{ mctx.beginPath(); mctx.arc(a*sz,b*sz,sz*.24,0,7); mctx.fill(); mctx.stroke(); });
+    mctx.beginPath(); mctx.arc(sz*1.12,0,sz*.3,0,7); mctx.fill(); mctx.stroke();
+    mctx.fillStyle='#d9402b'; mctx.beginPath(); mctx.arc(sz*1.05,sz*.16,sz*.09,0,7); mctx.arc(sz*1.05,-sz*.16,sz*.09,0,7); mctx.fill();
+    mctx.fillStyle='#4f6b2c'; mctx.beginPath(); mctx.ellipse(0,0,sz*.95,sz*.72,0,0,7); mctx.fill(); mctx.stroke();
+    mctx.strokeStyle='#e0b43c'; mctx.beginPath(); mctx.ellipse(0,0,sz*.62,sz*.42,0,0,7); mctx.stroke();
+    mctx.restore(); pill('Cuco', px, py+sz*mk+12*mk, 'rgba(251,248,239,.92)', '#2c3a1a'); }
   mp.remotes.forEach(r=>{
     const [px,py]=clampEdge(toScreen(...toMap(r.pos.x,r.pos.z)));
     mctx.fillStyle=PLUSH_COLORS[r.color].hex; mctx.strokeStyle='#2c3a1a'; mctx.lineWidth=2.5; mctx.beginPath(); mctx.arc(px,py,7*mk,0,7); mctx.fill(); mctx.stroke();
@@ -4115,7 +4126,7 @@ function updateCarHud(){
 // Botones táctiles: a pie (saltar, tirarse…) o en coche (acelerar, frenar)
 function updateTouchMode(){
   const inCar=!!player.car, pilot=typeof iPilot==='function' && iPilot(), aboard=!!player.ac, seatedAir=aboard && player.ac.mode==='seated';
-  ui('tbtnsFoot').hidden=inCar || seatedAir;
+  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && player.pg.k==='cuco');
   ui('tcar').hidden=!((inCar && player.car.kind==='seated') || pilot);
   const drv=(inCar && player.car.seat===0) || pilot;
   ui('tGas').hidden=!drv; ui('tBrake').hidden=!drv; ui('tLights').hidden=!(inCar && player.car.seat===0);
@@ -4719,7 +4730,7 @@ const pgParts={swing:[], rider:[], see:null};
 let myPush={i:-1,t:0}; player.pushUntil=0;
 function pgOccupied(k,i){ if(player.pg && player.pg.k===k && player.pg.i===i) return 'me';
   for(const r of mp.remotes.values()) if(r.pl && r.pl[0]===PG_KINDS.indexOf(k) && r.pl[1]===i) return r; return null; }
-const PG_KINDS=['swing','slide','bars','ride','see','bench'];
+const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco'];
 function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars') return;
   holding=false; applyHeld(); renderHotbar();
   player.pg={k,i,t0:performance.now()/1000, from:[player.pos.x,player.pos.y,player.pos.z]};
@@ -4728,6 +4739,7 @@ function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars') return
   if(k==='ride') flashNote(isTouch?'Mueve el joystick para mecerte':'Mantén W o S para mecerte');
   setActions(null,null); updateTouchMode(); try{ sendPresence(true); }catch(e){} }
 function stopPlay(){ const P=player.pg; if(!P) return; const pose=player.pgPose;
+  if(P.k==='cuco'){ cucoGetOff(P); player.pg=null; player.vy=0; player.vel.set(0,0,0); audio.getup(); updateTouchMode(); try{ sendPresence(true); }catch(e){} return; }
   let out;
   if(P.k==='swing'){ const e=PG_EQ.swings; out=eqToWorld(e,e.seats[P.i],0,.9); pgState.swing[P.i].w*=.5; }
   else if(P.k==='ride'){ const e=PG_EQ.riders[P.i]; out=eqToWorld(e,.9,0,0); }
@@ -4740,6 +4752,7 @@ const pgIn=()=>{ let f=0; if(keys.KeyW||keys.ArrowUp) f+=1; if(keys.KeyS||keys.A
 // Pose de un peluche en cada juego (la misma para mí y para los demás). Devuelve pos en el mundo, giro y postura.
 const rotX=(y,z,a)=>[y*Math.cos(a)-z*Math.sin(a), y*Math.sin(a)+z*Math.cos(a)];
 function playPose(k,i,v,dt){
+  if(k==='cuco') return cucoSeatPose(i);
   if(k==='bench'){ const b=BENCHES[i]; if(!b) return null; const c=Math.cos(b.yaw), s=Math.sin(b.yaw); return {pos:[b.x-s*.12, b.y-.415, b.z-c*.12], yaw:b.yaw, sit:1}; }
   if(k==='swing'){ const e=PG_EQ.swings, [ry,rz]=rotX(-e.L-.415,-.06,-v);
     return {pos:eqToWorld(e,e.seats[i],e.pivot+ry,rz), yaw:e.yaw, tilt:-v, sit:1, holdUp:1}; }
@@ -4764,6 +4777,7 @@ function playPose(k,i,v,dt){
 function pgDuration(k){ return k==='slide'?3.85 : k==='bars'?(1.65+PG_EQ.bars.len/.46*.42) : 0; }
 function updateMyPlay(dt){
   const P=player.pg, el=performance.now()/1000-P.t0, inp=pgIn();
+  if(P.k==='cuco') return cucoRide(P,el);
   if(P.k==='swing'){ const S=pgState.swing[P.i];
     S.w += (-(9.8/PG_EQ.swings.L)*Math.sin(S.a) - .12*S.w)*dt;
     if(inp>.1){ if(Math.abs(S.w)<.08 && Math.abs(S.a)<.05) S.w+=.6*inp; else S.w+=Math.sign(S.w)*1.25*inp*dt; }
@@ -4814,6 +4828,8 @@ function pgPoseLimbs(obj,pose,t,dt,walkPh){
 function placePlay(obj,pose){ obj.position.set(pose.pos[0],pose.pos[1],pose.pos[2]); obj.rotation.order='YXZ'; obj.rotation.set(pose.tilt||0,pose.yaw,pose.swing||0); }
 // acciones del parque
 function pgActions(){
+  if(player.pg && player.pg.k==='cuco') return [{label:'Bajarse de Cuco', disabled:!player.pg.seated, run:stopPlay}, player.pg.i!==0 && player.pg.seated && !pgOccupied('cuco',0) ? {label:'Guiar a Cuco', run:cucoTakeLead} : null];
+  if(!player.pg && !player.car && !player.ac && !player.dive && cucoNear()){ const s=cucoFreeSeat(); return [s<0 ? {label:'Cuco está lleno', disabled:true, run:()=>{}} : {label:'Subirse a Cuco', run:cucoBoard}, null]; }
   if(player.pg){ const k=player.pg.k; if(k==='slide'||k==='bars') return [null,null];
     return [{label: k==='swing'?'Bajarse del columpio': k==='ride'?'Bajarse': k==='bench'?'Levantarse':'Bajarse del sube y baja', run:stopPlay}, null]; }
   if(player.car || player.ac || player.swim || player.dive) return [null,null];
@@ -4841,6 +4857,204 @@ function updateRemoteInPlay(r,dt,t){
   pgPoseLimbs(r.obj,pose,t,dt,r.walk); r.label.position.set(0,2.42,0); r.blob.visible=false;
   return true;
 }
+
+// ---------- Cuco: tortuga de orejas rojas gigante (camina en tierra y nada en el agua; caben 5 encima) ----------
+// Mide como 3 coches de largo, de ancho y de alto. Quien se sube primero la guía; los demás van sentados en el caparazón.
+const CU=(()=>{ const a=5.5; let rc=480; for(let r=250;r<1300;r++){ if(terrainH(Math.cos(a)*r,Math.sin(a)*r)<SEA_Y){ rc=r; break; } }
+  const r=rc-16, x=Math.cos(a)*r, z=Math.sin(a)*r;
+  return {x, z, h:Math.atan2(-Math.cos(a),-Math.sin(a)), y:terrainH(x,z), v:0, w:0, t:0, pitch:0, roll:0, walk:0, swim:0, wet:false,
+    A:5.0, B:7.0, BASE:2.3, H:4.0, R:5.6, net:null, drv:null, look:new THREE.Vector2(), blinkT:3, blink:0, g:null, parts:null, obs:null}; })();
+const CU_SEATS=[[0,2.5],[-2.05,.35],[2.05,.35],[-1.45,-2.25],[1.45,-2.25]];
+const cuShellY=(x,z)=>CU.BASE+CU.H*Math.sqrt(Math.max(0,1-(x/CU.A)**2-(z/CU.B)**2));
+(function buildCuco(){
+  const g=new THREE.Group(); g.userData.noBatch=true;
+  const tex=(w,h,draw)=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d'); draw(x,w,h);
+    // pelusita de peluche encima de todo
+    const im=x.getImageData(0,0,w,h), d=im.data; for(let i=0;i<d.length;i+=4){ const n=(Math.random()-.5)*22; d[i]+=n; d[i+1]+=n; d[i+2]+=n; } x.putImageData(im,0,0);
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; return t; };
+  const mat=(map,extra)=>new THREE.MeshStandardMaterial(Object.assign({map, roughness:.92, metalness:0}, extra||{}));
+  // caparazón: escudos (placas) con costuras oscuras y rayitas amarillas, orilla con borde amarillo
+  const shellTex=tex(512,512,(x,w,h)=>{
+    x.fillStyle='#46562c'; x.fillRect(0,0,w,h);
+    const P=(u,v)=>[u*w,v*h];
+    // rayas amarillas onduladas dentro de cada placa
+    const rnd=(()=>{ let s=7; return ()=>((s=(s*16807)%2147483647)/2147483647); })();
+    x.lineCap='round';
+    for(let k=0;k<90;k++){ const cx=.12+rnd()*.76, cy=.12+rnd()*.76; if(Math.hypot(cx-.5,cy-.5)>.43) continue;
+      x.strokeStyle=rnd()<.5?'rgba(205,196,90,.85)':'rgba(170,168,74,.8)'; x.lineWidth=1.6+rnd()*1.8; x.beginPath(); const L=.05+rnd()*.07, an=rnd()*6.28;
+      x.moveTo(...P(cx,cy)); x.quadraticCurveTo(...P(cx+Math.cos(an)*L*.5+(rnd()-.5)*.04, cy+Math.sin(an)*L*.5+(rnd()-.5)*.04), ...P(cx+Math.cos(an)*L, cy+Math.sin(an)*L)); x.stroke(); }
+    // costuras entre placas (líneas oscuras): fila del centro, costados y orilla
+    x.strokeStyle='#26331a'; x.lineWidth=7; x.lineJoin='round';
+    const ring=(r)=>{ x.beginPath(); x.ellipse(w/2,h/2,r*w,r*h,0,0,6.283); x.stroke(); };
+    ring(.40); ring(.485);
+    // fila del centro (vertebrales): 5 placas a lo largo
+    const vz=[.14,.29,.43,.57,.71,.86];
+    x.beginPath(); vz.forEach(v=>{ const half=.085; x.moveTo(...P(.5-half,v)); x.lineTo(...P(.5+half,v)); }); x.stroke();
+    x.beginPath(); for(let i=0;i<vz.length;i++){ const v=vz[i], hw=.085+.015*Math.sin(i); x.lineTo(...P(.5-hw,v)); } x.stroke();
+    x.beginPath(); for(let i=0;i<vz.length;i++){ const v=vz[i], hw=.085+.015*Math.sin(i); x.lineTo(...P(.5+hw,v)); } x.stroke();
+    // costales: líneas del centro hacia la orilla
+    x.beginPath(); [.25,.42,.58,.75].forEach(v=>{ [[.415,.12],[.585,.88]].forEach(([u0,u1])=>{ x.moveTo(...P(u0,v)); const dx=u1-.5, dv=v-.5; x.lineTo(...P(.5+dx*.86, .5+dv*1.02)); }); }); x.stroke();
+    // marginales: rayitas cortas en la orilla
+    x.lineWidth=5; x.beginPath(); for(let k=0;k<26;k++){ const an=k/26*6.283; x.moveTo(w/2+Math.cos(an)*.40*w, h/2+Math.sin(an)*.40*h); x.lineTo(w/2+Math.cos(an)*.5*w, h/2+Math.sin(an)*.5*h); } x.stroke();
+    // borde amarillo de la orilla
+    x.strokeStyle='#e0b43c'; x.lineWidth=9; ring(.497);
+    // costuras de peluche (puntadas claras) a lo largo de las placas del centro
+    x.setLineDash([9,8]); x.strokeStyle='rgba(235,225,170,.55)'; x.lineWidth=2.5; ring(.385); ring(.47); x.setLineDash([]);
+  });
+  const shellMat=mat(shellTex);
+  const dome=new THREE.SphereGeometry(1,44,18,0,Math.PI*2,0,Math.PI/2);
+  { const p=dome.attributes.position, uv=dome.attributes.uv; for(let i=0;i<p.count;i++){ const px=p.getX(i), pz=p.getZ(i), py=p.getY(i), rr=Math.hypot(px,pz);
+      // proyección desde arriba, estirando la orilla para que se vean las placas de los lados
+      const s=rr>1e-4 ? (Math.acos(Math.min(1,py))/(Math.PI/2))*.5/rr : 0; uv.setXY(i,.5+px*s,.5-pz*s); } }
+  const shell=new THREE.Mesh(dome,shellMat); shell.scale.set(CU.A,CU.H,CU.B); shell.position.y=CU.BASE; shell.castShadow=true; shell.receiveShadow=true; g.add(shell);
+  // orilla del caparazón (un poquito volada) y panza amarilla
+  const rimMat=new THREE.MeshStandardMaterial({color:0x3c4a26, roughness:.95});
+  const rim=new THREE.Mesh(new THREE.CylinderGeometry(1,1,.42,44,1), rimMat); rim.scale.set(CU.A+.18,1,CU.B+.18); rim.position.y=CU.BASE-.05; rim.castShadow=true; g.add(rim);
+  const rimLine=new THREE.Mesh(new THREE.CylinderGeometry(1,1,.12,44,1,true), new THREE.MeshStandardMaterial({color:0xe7b43e, roughness:.9, side:THREE.DoubleSide})); rimLine.scale.set(CU.A+.2,1,CU.B+.2); rimLine.position.y=CU.BASE-.28; g.add(rimLine);
+  const belly=new THREE.Mesh(new THREE.SphereGeometry(1,28,8,0,Math.PI*2,Math.PI/2,Math.PI/2), new THREE.MeshStandardMaterial({color:0xe2c25e, roughness:.95})); belly.scale.set(CU.A*.94,.75,CU.B*.94); belly.position.y=CU.BASE-.2; g.add(belly);
+  // piel: verde oscuro con rayas amarillas (a lo largo)
+  const skinTex=(red)=>tex(256,256,(x,w,h)=>{ x.fillStyle='#3a4927'; x.fillRect(0,0,w,h);
+    for(let k=0;k<26;k++){ const u=(k+.5)/26, lw=k%3===0?2.6:1.6; x.strokeStyle=k%3===0?'rgba(222,212,96,.95)':'rgba(190,196,84,.8)'; x.lineWidth=lw; x.beginPath();
+      for(let v=0;v<=1.001;v+=.04){ const xx=(u+.008*Math.sin(v*11+k*1.7))*w; if(v===0) x.moveTo(xx,v*h); else x.lineTo(xx,v*h); } x.stroke(); }
+    if(red){ // la mancha roja detrás del ojo (sus "orejas rojas") y la sonrisa
+      [[.915],[.585]].forEach(([u])=>{ x.fillStyle='#d9402b'; x.beginPath(); x.ellipse(u*w,(1-.46)*h,.06*w,.15*h,0,0,6.283); x.fill(); x.fillStyle='rgba(255,130,100,.35)'; x.beginPath(); x.ellipse(u*w,(1-.48)*h,.025*w,.07*h,0,0,6.283); x.fill(); });
+      x.strokeStyle='#1c2412'; x.lineWidth=4; x.lineCap='round';
+      [[.17,-1],[.33,1]].forEach(([u,sd])=>{ x.beginPath(); x.moveTo((u+sd*.06)*w,(1-.97)*h); x.quadraticCurveTo((u+sd*.02)*w,(1-.86)*h,(u-sd*.035)*w,(1-.74)*h); x.stroke(); });
+    } });
+  const skinMat=mat(skinTex(false)), headMat=mat(skinTex(true));
+  // cuello y cabeza: el cuello gira para mirarte; la cabeza se inclina
+  const neckP=new THREE.Group(); neckP.position.set(0,3.0,CU.B-1.2); g.add(neckP);
+  const neckG=new THREE.CylinderGeometry(1.05,1.25,3.6,20,1,true); neckG.rotateX(Math.PI/2); neckG.translate(0,0,1.5);
+  const neck=new THREE.Mesh(neckG,skinMat); neck.rotation.x=-.32; neck.castShadow=true; neckP.add(neck);
+  const headP=new THREE.Group(); headP.position.set(0,1.15,3.2); neckP.add(headP);
+  const headG=new THREE.SphereGeometry(1,28,18); headG.rotateX(Math.PI/2);
+  const head=new THREE.Mesh(headG,headMat); head.scale.set(1.45,1.3,2.05); head.position.set(0,.15,.9); head.castShadow=true; headP.add(head);
+  // ojos amables: cafés con aro amarillo y brillito; párpados que parpadean
+  const eyeM=new THREE.MeshStandardMaterial({color:0x2a1a0e, roughness:.35}), ringM=new THREE.MeshStandardMaterial({color:0xd9c64a, roughness:.6}), shineM=new THREE.MeshBasicMaterial({color:0xffffff});
+  const lids=[];
+  [-1,1].forEach(sd=>{ const e=new THREE.Group(); e.position.set(sd*1.12,.62,1.45); e.rotation.y=sd*.95; headP.add(e);
+    const ball=new THREE.Mesh(new THREE.SphereGeometry(.42,16,12),eyeM); e.add(ball);
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(.33,.07,6,20),ringM); ring.position.z=.27; e.add(ring);
+    const sh=new THREE.Mesh(new THREE.SphereGeometry(.1,8,6),shineM); sh.position.set(.12*sd,.15,.38); e.add(sh);
+    lids.push(e); });
+  // patas con garritas y colita
+  const legs=[], clawM=new THREE.MeshStandardMaterial({color:0xd9cfa6, roughness:.8});
+  [[-1,1],[1,1],[-1,-1],[1,-1]].forEach(([sx,sz],k)=>{ const p=new THREE.Group(); p.position.set(sx*(CU.A-1.3),1.95,sz*(CU.B-2.7)); g.add(p);
+    // patas cortas y gorditas, abiertas hacia los lados (como las de una tortuga)
+    const lg=new THREE.CylinderGeometry(1.05,.95,2.3,14); lg.translate(0,-1.0,0); const leg=new THREE.Mesh(lg,skinMat); leg.castShadow=true; leg.rotation.order='ZXY'; leg.rotation.z=sx*.62; leg.rotation.x=sz*.28; p.add(leg);
+    const foot=new THREE.Mesh(new THREE.SphereGeometry(1,14,8),skinMat); foot.scale.set(1.35,.5,1.6); foot.position.set(sx*1.25,-1.8,sz*.55); foot.castShadow=true; p.add(foot);
+    for(let c=-1;c<=1;c++){ const cl=new THREE.Mesh(new THREE.ConeGeometry(.16,.55,6),clawM); cl.rotation.x=Math.PI/2; cl.position.set(sx*1.25+c*.45,-1.95,sz*.55+1.55); p.add(cl); }
+    legs.push({p, sx, sz, ph:k===0||k===3?0:Math.PI}); });
+  const tail=new THREE.Mesh(new THREE.ConeGeometry(.55,2.2,10),skinMat); tail.rotation.x=-Math.PI/2-.35; tail.position.set(0,2.0,-CU.B-.6); g.add(tail);
+  scene.add(g); CU.g=g; CU.parts={neckP,headP,lids,legs,shell,tail};
+  // sólida: dos círculos a lo largo del caparazón
+  CU.obs={x:CU.x, z:CU.z, r:5.2, top:CU.y+CU.BASE+CU.H, walk:false}; CU.obs2={x:CU.x, z:CU.z, r:5.2, top:CU.y+CU.BASE+CU.H, walk:false}; DYN_OBS.push(CU.obs, CU.obs2);
+})();
+// ¿quién guía? (yo, alguien de la sala o nadie)
+const iRideCuco=()=>player.pg && player.pg.k==='cuco';
+const iDriveCuco=()=>iRideCuco() && player.pg.i===0 && player.pg.seated;
+function cuGround(x,z){ const t=terrainH(x,z), wl=inLakeWater(x,z)?WATER_Y:SEA_Y; return {t, wl, y:Math.max(t, wl-2.55)}; }
+function cucoPlace(dt){
+  const C=CU, ch=Math.cos(C.h), sh=Math.sin(C.h);
+  const at=(lx,lz)=>cuGround(C.x+lx*ch+lz*sh, C.z-lx*sh+lz*ch).y;
+  const G=cuGround(C.x,C.z), wet=G.y>G.t+.6;
+  const yf=at(0,5.5), yb=at(0,-5.5), yl=at(-4,0), yr=at(4,0);
+  const ty=Math.max(G.y,(yf+yb)/2-.3) + (wet ? .18*Math.sin(performance.now()/1000*1.3) : 0);
+  const k=1-Math.exp(-dt*4);
+  C.y += (ty-C.y)*k;
+  C.pitch += (Math.atan2(yb-yf,11)-C.pitch)*k; C.roll += (Math.atan2(yl-yr,8)*.8-C.roll)*k;
+  if(wet!==C.wet){ if(Math.hypot(C.x-player.pos.x,C.z-player.pos.z)<60) audio.splash(1.1); C.wet=wet; }
+  C.swim += ((wet?1:0)-C.swim)*Math.min(1,dt*2);
+  const g=C.g; g.position.set(C.x,C.y,C.z); g.rotation.order='YXZ'; g.rotation.set(C.pitch,C.h,C.roll); g.updateMatrix(); g.updateMatrixWorld(true);
+  const fs=Math.sin(C.h)*3, fc=Math.cos(C.h)*3; C.obs.x=C.x+fs; C.obs.z=C.z+fc; C.obs2.x=C.x-fs; C.obs2.z=C.z-fc; C.obs.top=C.obs2.top=C.y+C.BASE+C.H;
+}
+function cucoDrive(dt){
+  let f=0,s=0; if(keys.KeyW||keys.ArrowUp) f+=1; if(keys.KeyS||keys.ArrowDown) f-=1; if(keys.KeyD||keys.ArrowRight) s+=1; if(keys.KeyA||keys.ArrowLeft) s-=1;
+  f-=stick.y; s+=stick.x; f=THREE.MathUtils.clamp(f,-1,1); s=THREE.MathUtils.clamp(s,-1,1);
+  const run=(keys.ShiftLeft||keys.ShiftRight) || Math.hypot(stick.x,stick.y)>.95;
+  const C=CU, top=(C.wet?6.5:5.2)*(run?1.45:1);
+  const want=f>0 ? f*top : f*top*.45;
+  C.v += (want-C.v)*(1-Math.exp(-dt*(Math.abs(want)>Math.abs(C.v)?1.1:2.2)));
+  const wT=-s*(.75+.25*Math.min(1,Math.abs(C.v)/4));
+  C.w += (wT-C.w)*(1-Math.exp(-dt*3));
+  C.h += C.w*dt;
+  let nx=C.x+Math.sin(C.h)*C.v*dt, nz=C.z+Math.cos(C.h)*C.v*dt;
+  // no se va mar adentro sin fin
+  const lim=coastR(nx,nz)+170, rr=Math.hypot(nx,nz); if(rr>lim){ nx*=lim/rr; nz*=lim/rr; C.v*=.9; }
+  // árboles, rocas, casas… lo sólido la detiene (la tortuga es grande: solo lo que sobresale)
+  for(let pass=0;pass<2;pass++) for(const o of obsNear(nx,nz)){ if(o===C.obs || o===C.obs2 || o.top<C.y+1.2) continue; const ox=nx-o.x, oz=nz-o.z, d=Math.hypot(ox,oz), min=o.r+C.R*.82;
+    if(d<min && d>1e-4){ nx=o.x+ox/d*min; nz=o.z+oz/d*min; C.v*=.96; } }
+  for(const c of cars){ const ox=nx-c.x, oz=nz-c.z, d=Math.hypot(ox,oz), min=C.R+2.6; if(d<min && d>1e-4){ nx=c.x+ox/d*min; nz=c.z+oz/d*min; C.v*=.9; } }
+  C.x=nx; C.z=nz; C.t=now1();
+}
+function cucoUpdate(dt,t){
+  const C=CU; C.prevH=C.h;
+  if(iDriveCuco()) cucoDrive(dt);
+  else if(C.drv){ // lo guía alguien de la sala: seguir lo que manda
+    const d=C.drv, age=Math.min(.5,(performance.now()-d.at)/1000), tx=d.x+Math.sin(d.h)*d.v*age, tz=d.z+Math.cos(d.h)*d.v*age;
+    if(Math.hypot(tx-C.x,tz-C.z)>40){ C.x=tx; C.z=tz; C.h=d.h; }
+    const k=1-Math.exp(-dt*6); C.x+=(tx-C.x)*k; C.z+=(tz-C.z)*k; C.h=lerpAng(C.h,d.h,k); C.v=d.v; }
+  else { C.v*=Math.exp(-dt*3); C.w*=Math.exp(-dt*3);
+    if(C.net){ const k=1-Math.exp(-dt*2); if(Math.hypot(C.net.x-C.x,C.net.z-C.z)>60){ C.x=C.net.x; C.z=C.net.z; C.h=C.net.h; } C.x+=(C.net.x-C.x)*k; C.z+=(C.net.z-C.z)*k; C.h=lerpAng(C.h,C.net.h,k); } }
+  // solo se anima si está cerca (ahorra en teléfonos)
+  const near=Math.hypot(C.x-camera.position.x,C.z-camera.position.z)<220;
+  cucoPlace(dt);
+  if(!near) return;
+  const P=C.parts, mv=Math.min(1,Math.abs(C.v)/4);
+  // patas: caminar en tierra, remar en el agua
+  C.walk += dt*(1.6+mv*3.4)*(mv>.04?1:0);
+  P.legs.forEach(L=>{ const ph=C.walk+L.ph, sw=Math.sin(ph);
+    const land=sw*.38*mv, paddle=C.swim*(.9+Math.sin(ph)*.6);
+    L.p.rotation.x=land*(1-C.swim) - paddle*L.sz*.55;
+    L.p.rotation.z=L.sx*(C.swim*.75 + Math.max(0,Math.cos(ph))*.12*mv);
+    L.p.position.y=1.95+Math.max(0,Math.cos(ph))*.25*mv*(1-C.swim); });
+  P.tail.rotation.z=Math.sin(t*1.3)*.15;
+  P.shell.scale.y=C.H*(1+Math.sin(t*1.1)*.006);
+  // mirar: a ti (o a quien esté cerca) con calma; si va caminando, al frente
+  let tx=null, ty=0, tz=0, best=32;
+  const consider=(x,y,z)=>{ const d=Math.hypot(x-C.x,z-C.z); if(d<best && d>3){ best=d; tx=x; ty=y; tz=z; } };
+  if(state==='play' && !iRideCuco()) consider(player.pos.x,player.pos.y+1.4,player.pos.z);
+  if(tx===null) for(const r of mp.remotes.values()) if(!(r.pl && PG_KINDS[r.pl[0]]==='cuco')) consider(r.pos.x,r.pos.y+1.4,r.pos.z);
+  let wy=0, wp=0;
+  if(tx!==null && mv<.3){ const hx=C.x+Math.sin(C.h)*(C.B+3), hz=C.z+Math.cos(C.h)*(C.B+3), hy=C.y+5;
+    let a=Math.atan2(tx-hx,tz-hz)-C.h; a=Math.atan2(Math.sin(a),Math.cos(a)); wy=THREE.MathUtils.clamp(a,-1.05,1.05);
+    wp=THREE.MathUtils.clamp(-Math.atan2(ty-hy,Math.max(2,Math.hypot(tx-hx,tz-hz))),-.5,.45); }
+  else wy=Math.sin(t*.23)*.25*(1-mv);
+  const k=1-Math.exp(-dt*1.6); C.look.x+=(wy-C.look.x)*k; C.look.y+=(wp-C.look.y)*k;
+  P.neckP.rotation.y=C.look.x*.6; P.headP.rotation.y=C.look.x*.4; P.headP.rotation.x=C.look.y+Math.sin(t*.9)*.03; P.neckP.rotation.x=-C.swim*.12;
+  // parpadeo lento
+  C.blinkT-=dt; if(C.blinkT<0){ C.blink=1; C.blinkT=2.5+Math.random()*4; }
+  C.blink=Math.max(0,C.blink-dt*4.5); const lid=1-.88*Math.sin(Math.min(1,C.blink)*Math.PI);   // el ojo se cierra y se abre
+  P.lids.forEach(e=>e.scale.y=lid);
+}
+// pose de quien va sentado en el caparazón (la misma para mí y para los demás)
+function cucoSeatPose(i){ const S=CU_SEATS[i]; if(!S) return null; const v=new THREE.Vector3(S[0], cuShellY(S[0],S[1])-.415+.12, S[1]); CU.g.localToWorld(v);
+  return {pos:[v.x,v.y,v.z], yaw:CU.h, tilt:CU.pitch, swing:CU.roll, sit:1, grip:i===0?1:0}; }
+function cucoFreeSeat(){ for(let i=0;i<5;i++) if(!pgOccupied('cuco',i)) return i; return -1; }
+function cucoNear(){ const lx=player.pos.x-CU.x, lz=player.pos.z-CU.z, ch=Math.cos(CU.h), sh=Math.sin(CU.h); const x=lx*ch-lz*sh, z=lx*sh+lz*ch;
+  return (x/(CU.A+3.2))**2+(z/(CU.B+3.2))**2<1 && Math.abs(player.pos.y-CU.y)<4; }
+function cucoBoard(){ const s=cucoFreeSeat(); if(s<0) return; player.swim=false; player.inWater=false; startPlay('cuco',s); audio.jump();
+  if(s===0) flashNote(isTouch?'Guías a Cuco: mueve el joystick para avanzar y girar':'Guías a Cuco: W/S para avanzar, A/D para girar'); else flashNote('Vas sentado en el caparazón de Cuco'); }
+function cucoTakeLead(){ if(!iRideCuco() || pgOccupied('cuco',0)) return; player.pg.i=0; player.pg.seated=true; flashNote(isTouch?'Ahora guías a Cuco con el joystick':'Ahora guías a Cuco: W/S y A/D'); try{ sendPresence(true); }catch(e){} }
+function cucoRide(P,el){
+  const seat=cucoSeatPose(P.i); if(!seat) return null;
+  if(el<.75 && P.from){ const k=easeIO(el/.75), f=P.from; // brinco hasta el caparazón
+    return {pos:[f[0]+(seat.pos[0]-f[0])*k, f[1]+(seat.pos[1]-f[1])*k+Math.sin(k*Math.PI)*3, f[2]+(seat.pos[2]-f[2])*k], yaw:CU.h, air:true, armsUp:.6*Math.sin(k*Math.PI)}; }
+  if(!P.seated){ P.seated=true; audio.sit(); try{ sendPresence(true); }catch(e){} }
+  P.v=1; return seat;
+}
+function cucoGetOff(P){ const S=CU_SEATS[P.i]||[0,0], sd=S[0]<0?-1:1, v=new THREE.Vector3(sd*(CU.A+2.2),0,S[1]); CU.g.localToWorld(v);
+  const t=terrainH(v.x,v.z), wl=waterLevelAt(v.x,v.z);
+  if(t<wl-1.6 && !inLakeWater(v.x,v.z)){ player.pos.set(v.x,wl-.6,v.z); player.swim=true; player.grounded=false; audio.splash(.8); }
+  else { player.pos.set(v.x, groundAt(v.x,v.z,Math.max(t,CU.y)+.5), v.z); player.grounded=true; }
+  player.facing=CU.h+sd*Math.PI/2; }
+// presencia: dónde está Cuco (y si lo guío yo); se queda con el dato más nuevo
+function cucoPresence(){ return [Math.round(CU.x*10)/10, Math.round(CU.z*10)/10, Math.round(CU.h*100)/100, CU.t, iDriveCuco()?1:0, iDriveCuco()?r2(CU.v):0]; }
+function parseCuco(r,pr,drvNow){ const c=pr.cu; if(!Array.isArray(c) || c.length!==6 || !c.every(Number.isFinite)) return;
+  if(iDriveCuco()) return;
+  const x=clampN(c[0],-5000,5000,CU.x), z=clampN(c[1],-5000,5000,CU.z);
+  if(c[4]===1 && r.pl && PG_KINDS[r.pl[0]]==='cuco' && r.pl[1]===0){ CU.drv={x,z,h:c[2],v:clampN(c[5],-15,15,0),at:performance.now()}; CU.net={x,z,h:c[2]}; CU.t=Math.max(CU.t,c[3]); drvNow.v=true; return; }
+  if(c[3]>CU.t+.05){ CU.t=c[3]; CU.net={x,z,h:c[2]}; } }
 
 // ---------- Arco con flecha de ventosa y carrete de cuerda ----------
 // La flecha (palito con punta roja) se pega a lo que toque. Luego puedes ir hacia allá (el brazo del carrete se estira
@@ -8706,6 +8920,7 @@ function update(dt,t){ myLabelUpdate();
   if(state==='play' && player.ac) acPose=updateMyAircraft(dt);
   player.acPose=acPose;
   let pgPose=null;
+  cucoUpdate(dt,t);
   if(state==='play' && player.pg) pgPose=updateMyPlay(dt);
   const bowMoving = state==='play' && updateMyBow(dt);
   updatePlayground(dt);
@@ -8956,6 +9171,17 @@ function update(dt,t){ myLabelUpdate();
       const want=_camW.copy(target).add(off); const fy=terrainH(want.x,want.z)+.8; if(want.y<fy) want.y=fy;
       camera.position.lerp(want, 1-Math.exp(-dt*10)); camera.lookAt(target);
     }
+  } else if(camMode==='third' && pgPose && iRideCuco()){
+    // arriba de Cuco: la cámara se aleja para ver a la tortuga y gira con ella
+    plush.visible=true;
+    yaw += CU.h-(CU.prevH??CU.h);
+    if(iDriveCuco() && Math.abs(CU.v)>2 && performance.now()-lastLookT>1500) yaw=lerpAng(yaw, CU.h+Math.PI, 1-Math.exp(-dt*2));
+    const p=THREE.MathUtils.clamp(.32 - pitch, -.05, 1.35), dist=Math.max(camDist*1.6,19);
+    const target=_camT.set(CU.x, CU.y+7.2, CU.z);
+    const off=_camO.set(Math.sin(yaw)*Math.cos(p), Math.sin(p), Math.cos(yaw)*Math.cos(p)).multiplyScalar(dist);
+    const want=_camW.copy(target).add(off); const fy=Math.max(terrainH(want.x,want.z),SEA_Y)+.8; if(want.y<fy) want.y=fy;
+    if(camera.position.distanceTo(want)>60) camera.position.copy(want);
+    camera.position.lerp(want, 1-Math.exp(-dt*8)); camera.lookAt(target);
   } else if(camMode==='first'){
     plush.visible=false;
     if(player.swim){
