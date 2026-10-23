@@ -861,10 +861,15 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='88';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='89';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
+// en el modo ultra ligero todo usa una luz más sencilla (se calcula por esquina y no por pixel): menos trabajo para el teléfono
+if(ULTRA){ const STDK=['roughness','metalness','envMapIntensity','flatShading','roughnessMap','metalnessMap','normalMap','normalScale','bumpMap','bumpScale','displacementMap','displacementScale','displacementBias'];
+  class LiteStd extends THREE.MeshLambertMaterial{ constructor(p={}){ const q={...p}, ex={}; for(const k of STDK) if(k in q){ ex[k]=q[k]; delete q[k]; } super(q); this.roughness=1; this.metalness=0; this.envMapIntensity=1; Object.assign(this,ex); this.isLite=true; if(this.envMap) this.reflectivity=.2+this.metalness*.5; }
+    copy(src){ super.copy(src); for(const k of STDK) if(src[k]!==undefined) this[k]=src[k]; this.isLite=true; return this; } }
+  THREE.MeshStandardMaterial=LiteStd; }
 const Q0 = ULTRA ? 'min' : (EARLY_OPTS.quality || 'low'), MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
 const renderer = new THREE.WebGLRenderer({canvas, antialias:!MIN_Q, powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -874,7 +879,7 @@ renderer.outputEncoding = THREE.sRGBEncoding;
 
 // Cada cuadro three.js vuelve a calcular la posición de TODOS los objetos (miles), aunque no se hayan movido.
 // Aquí solo se recalcula si cambió su posición, giro o tamaño; lo quieto se salta (en teléfonos lentos es de lo que más pesa).
-{ const OP=THREE.Object3D.prototype;
+{ const OP=THREE.Object3D.prototype; OP._umwOrig=OP.updateMatrixWorld;
   OP.updateMatrixWorld=function(force){
     if(this.matrixAutoUpdate){ const p=this.position, q=this.quaternion, s=this.scale; let c=this._mc;
       if(!(c && c[0]===p.x && c[1]===p.y && c[2]===p.z && c[3]===q.x && c[4]===q.y && c[5]===q.z && c[6]===q.w && c[7]===s.x && c[8]===s.y && c[9]===s.z)){
@@ -924,7 +929,7 @@ const FELT_RIM={value:.22};
 function feltSheen(m){
   m.onBeforeCompile=sh=>{ sh.uniforms.rimK=FELT_RIM;
     sh.fragmentShader='uniform float rimK;\n'+sh.fragmentShader.replace('#include <tonemapping_fragment>',
-      '{ float fr=1.0-clamp(dot(normalize(normal),normalize(vViewPosition)),0.0,1.0); gl_FragColor.rgb+=fr*fr*fr*rimK*(diffuseColor.rgb*0.7+0.3); }\n#include <tonemapping_fragment>'); };
+      (ULTRA?'#include <tonemapping_fragment>':'{ float fr=1.0-clamp(dot(normalize(normal),normalize(vViewPosition)),0.0,1.0); gl_FragColor.rgb+=fr*fr*fr*rimK*(diffuseColor.rgb*0.7+0.3); }\n#include <tonemapping_fragment>')); };
   m.customProgramCacheKey=()=>'feltSheen'; return m; }
 // Fieltro de colores: en lugar de una textura distinta por color, todos comparten el mismo dibujo de pelusa y el color se
 // mezcla en la tarjeta de video con la misma cuenta que hacía el dibujo (se ve igual). Así los objetos del mismo tipo de
@@ -957,7 +962,7 @@ function felt(hex, speck='rgba(0,0,0,0.10)', rep=1){ const sp=parseSpeck(speck);
         #endif
         diffuseColor.rgb=sRGBToLinear(vec4(fb*fx.r+fs*fx.g+vec3(fx.b),1.0)).rgb; }`)
       .replace('#include <color_fragment>','')
-      .replace('#include <tonemapping_fragment>','{ float fr=1.0-clamp(dot(normalize(normal),normalize(vViewPosition)),0.0,1.0); gl_FragColor.rgb+=fr*fr*fr*rimK*(diffuseColor.rgb*0.7+0.3); }\n#include <tonemapping_fragment>'); };
+      .replace('#include <tonemapping_fragment>',(ULTRA?'#include <tonemapping_fragment>':'{ float fr=1.0-clamp(dot(normalize(normal),normalize(vViewPosition)),0.0,1.0); gl_FragColor.rgb+=fr*fr*fr*rimK*(diffuseColor.rgb*0.7+0.3); }\n#include <tonemapping_fragment>')); };
   m.customProgramCacheKey=()=>'feltPQ'; return m; }
 
 // ---------- Mapa fijo de la isla ----------
@@ -3016,7 +3021,7 @@ function myLabelUpdate(){
   const a=player.diveAngle||0, H=2.42-1.5*Math.sin(a)/Math.sin(DIVE_FLAT), F=.85*Math.sin(a);   // siempre arriba, aunque estés acostado
   S.position.set(0, H*Math.cos(a)+F*Math.sin(a), -H*Math.sin(a)+F*Math.cos(a)); S.visible=true; }
 function makeRemote(color,name){
-  const obj=makePlush(color); obj.userData.noBatch=true;
+  const obj=makePlush(color); obj.userData.isPlushRoot=true;
   const label=new THREE.Sprite(new THREE.SpriteMaterial({transparent:true, depthWrite:false}));
   label.scale.set(1.7,.425,1); label.position.y=2.42; obj.add(label);
   const b=blob.clone(); b.material=blob.material.clone(); scene.add(obj);   // sin círculo de sombra
@@ -4019,7 +4024,8 @@ function updateCars(dt){
       const k=1-Math.exp(-dt*6); c.x+=(c.net.x-c.x)*k; c.z+=(c.net.z-c.z)*k; c.h=lerpAng(c.h,c.net.h,k);
     }
     if(!(c.i===drive) && !c.remote) c.braking=false;
-    wetReturn(c,dt,c.i===drive || !!c.remote || carHasPeople(c) || (player.car&&player.car.i===c.i), ()=>{ c.x=c.home.x; c.z=c.home.z; c.h=c.home.h; c.v=0; c.doorMask=0; c.doorT=now1(); });
+    const idle=c.i!==drive && !c.remote && !c.sim && !c.v && !(player.car&&player.car.i===c.i);
+    if(!idle || (CRIT_FR+c.i)%20===0) wetReturn(c,idle?dt*20:dt,c.i===drive || !!c.remote || carHasPeople(c) || (player.car&&player.car.i===c.i), ()=>{ c.x=c.home.x; c.z=c.home.z; c.h=c.home.h; c.v=0; c.doorMask=0; c.doorT=now1(); });
     updateCarVisual(c,dt);
     updateCarLights(c);
   }
@@ -5162,8 +5168,9 @@ function stepPupils(c,dt){
     const L=e.p.length(); if(L>1){ e.p.multiplyScalar(1/L); const vn=e.v.x*e.p.x+e.v.y*e.p.y; if(vn>0){ e.v.x-=1.45*vn*e.p.x; e.v.y-=1.45*vn*e.p.y; } } }
 }
 const CRITTER_FAR=ULTRA?45:95; const _cfr=new THREE.Frustum(), _cfm=new THREE.Matrix4(), _cfs=new THREE.Sphere();
+let CRIT_FR=0;
 function updateCritters(dt){
-  if(!critters.length) return;
+  if(!critters.length) return; CRIT_FR++;
   const t=(Date.now()/1000)%100000, cx=camera.position.x, cz=camera.position.z, far=Math.min(CRITTER_FAR, settings.draw+10);
   let ei=0; _cfr.setFromProjectionMatrix(_cfm.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
   for(const c of critters){
@@ -5184,7 +5191,7 @@ function updateCritters(dt){
     p.x+=c.shy.x; p.z+=c.shy.y;
     const gy=critterGround(c,p.x,p.z);
     // velocidad y aceleración (suavizadas) para mover los ojos y orientar al animalito
-    if(c.first){ c.pos.set(p.x,gy,p.z); c.vel.set(0,0,0); c.acc.set(0,0,0); c.first=false; }
+    if(c.first){ c.pos.set(p.x,gy,p.z); c.vel.set(0,0,0); c.acc.set(0,0,0); c.first=false; if(c.segY) c.segY.fill(NaN); }
     _cv.set((p.x-c.pos.x)/Math.max(dt,1e-3), 0, (p.z-c.pos.z)/Math.max(dt,1e-3));
     const spd=Math.hypot(_cv.x,_cv.z);
     c.phase=(c.phase||0)+dt*(4+spd*5);
@@ -5207,7 +5214,9 @@ function updateCritters(dt){
       const u0=c.sp*t*c.w, du=.085/(c.R*1.1);   // separación entre segmentos (pegaditos)
       for(let i=0;i<c.N;i++){ const ui=u0-i*du; snakePath(c,ui,_cs); const a=snakePath(c,ui+.002,_cv); const tx=a.x-_cs.x, tz=a.z-_cs.z, tl=Math.hypot(tx,tz)||1;
         const wig=Math.sin(t*4-i*.35)*.16*Math.min(1,i/5); const x=_cs.x+(-tz/tl)*wig+c.shy.x, z=_cs.z+(tx/tl)*wig+c.shy.y;
-        const r=i===0?.2:.15*(1-Math.pow(i/c.N,1.6)*.75), lift=i===0?.06:0; const yy=terrainH(x,z)+.08+r*.7+lift;
+        const r=i===0?.2:.15*(1-Math.pow(i/c.N,1.6)*.75), lift=i===0?.06:0;
+        if(!c.segY) c.segY=new Float32Array(c.N).fill(NaN); if(i===0 || (CRIT_FR+i)%3===0 || c.segY[i]!==c.segY[i]) c.segY[i]=terrainH(x,z);   // la altura del suelo bajo cada bolita: una de cada tres por cuadro (el suelo cambia suave)
+        const yy=c.segY[i]+.08+r*.7+lift;
         _ce.set(0,Math.atan2(tx,tz),0); _cq.setFromEuler(_ce);
         _cm.compose(_cp.set(x,yy,z),_cq,_cs.set(r*(i===0?1.15:1),r*(i===0?.95:.75),r*(i===0?1.3:1.25))); c.im.setMatrixAt(i,_cm);
         if(i===0){ c.pos.set(x,yy,z); } }
@@ -5763,7 +5772,7 @@ function buildItem(o,it,list){
   }
 }
 // pone (o quita) todo lo de un atuendo en un peluche
-function applyOutfit(o,eq){ const u=o.userData; (u.cloth||[]).forEach(m=>m.parent&&m.parent.remove(m)); u.cloth=[]; u.outfit=eq||{};
+function applyOutfit(o,eq){ batchDropUnder(o); const u=o.userData; (u.cloth||[]).forEach(m=>m.parent&&m.parent.remove(m)); u.cloth=[]; u.outfit=eq||{};
   for(const k of ['top','hat','gloves','socks','shoes','glasses']){ const it=SHOP_BY[u.outfit[k]]; if(it) try{ buildItem(o,it,u.cloth); }catch(e){} }
   recolor(o, u.colorIdx|0); }
 applyOutfit(plush, wardrobe.eq);
@@ -5862,7 +5871,7 @@ function renderStudio(dt){
   ui('stIn').onclick=()=>studioZoom(.8); ui('stOut').onclick=()=>studioZoom(1.25);
   ui('stReset').onclick=()=>{ stView.yaw=0; stView.pitch=.12; stView.dist=4.6; stView.auto=false; };
   ui('stNight').onclick=()=>setStudioNight(!stView.night); }
-function openShop(){ shopTry=null; menuEl.hidden=true; shopEl.hidden=false; studio.add(plush); stView.auto=true; stView.dist=4.6; stView.pitch=.12; renderShop(); }
+function openShop(){ shopTry=null; batchDropUnder(plush); menuEl.hidden=true; shopEl.hidden=false; studio.add(plush); stView.auto=true; stView.dist=4.6; stView.pitch=.12; renderShop(); }
 function closeShop(){ shopTry=null; applyOutfit(plush, wardrobe.eq); shopEl.hidden=true; scene.add(plush); if(state==='menu') menuEl.hidden=false; }
 ui('shopBtn').onclick=openShop; ui('shopBack').onclick=closeShop; ui('shopBack2').onclick=closeShop;
 addEventListener('keydown',e=>{ if(e.code==='Escape' && !shopEl.hidden){ e.preventDefault(); closeShop(); } });
@@ -5978,11 +5987,14 @@ addEventListener('keydown',e=>{ const M=player.mg; if(!M || state!=='play' || e.
 addEventListener('keyup',e=>{ const M=player.mg; mgKeys[e.code]=false; if(!M) return; const k=M.g.keys && M.g.keys[e.code]; if(k) mgInput(k,false); },true);
 function updateMinis(dt){
   updateCoinFx(dt);
-  for(const d of MINIS) d.idle && d.idle(dt, player.mg && player.mg.g===d);
+  // juegos de la feria: si la feria queda lejísimos (fuera de la vista) no se animan
+  const farFair=!player.mg && Math.hypot(camera.position.x-FAIR.x,camera.position.z-FAIR.z)>FAIR.R+settings.draw+25;
+  if(!farFair) for(const d of MINIS) d.idle && d.idle(dt, player.mg && player.mg.g===d);
   const night=1-(sky.dayK??1), k=Math.max(0,(night-.25)/.75); fairGlow.forEach(m=>m.emissiveIntensity=k*.9); fairBulbs.material.emissiveIntensity=.15+k*1.6;
   const M=player.mg; const hide=!!M;
-  for(const id of ['hotbar','actions']){ const el=document.getElementById(id); if(el) el.style.visibility=hide?'hidden':''; }
-  { const f=document.getElementById('tbtnsFoot'), s=document.getElementById('stick'); if(f) f.style.visibility=hide?'hidden':''; if(s) s.style.visibility=hide && !(M&&M.g.stick)?'hidden':''; }
+  const hk=hide+'|'+!!(M&&M.g.stick); if(hk!==updateMinis.hk){ updateMinis.hk=hk;   // solo tocar la página cuando cambia (escribirle cada cuadro también cuesta)
+    for(const id of ['hotbar','actions']){ const el=document.getElementById(id); if(el) el.style.visibility=hide?'hidden':''; }
+    { const f=document.getElementById('tbtnsFoot'), s=document.getElementById('stick'); if(f) f.style.visibility=hide?'hidden':''; if(s) s.style.visibility=hide && !(M&&M.g.stick)?'hidden':''; } }
   if(!M) return;
   if(state!=='play') return;
   M.t=performance.now()/1000-M.t0;
@@ -5993,7 +6005,7 @@ function updateMinis(dt){
 // Vista de los minijuegos: en la mayoría, 1ª persona (se ve desde los ojos del peluche, con sus manos);
 // el botón de cámara cambia entre 1ª y 3ª persona mientras juegas.
 const mgView=M=>M.g.fp ? (M.view||'first') : 'third';
-function fpBody(o,on,arms){ const u=o.userData; if(u.fpOn===on && u.fpArms===!!arms) return; u.fpOn=on; u.fpArms=!!arms;
+function fpBody(o,on,arms){ const u=o.userData; if(u.fpOn===on && u.fpArms===!!arms) return; u.fpOn=on; u.fpArms=!!arms; batchDropUnder(o);
   u.body.visible=!on; u.eyes.forEach(e=>e.visible=!on); u.legs.forEach(l=>l.visible=!on); u.arms.forEach(a=>a.visible=!on||!!arms); }
 const _mgEye=new THREE.Vector3(), _mgL=new THREE.Vector3();
 // punto del mundo → coordenadas del peluche (para que las manos alcancen cosas)
@@ -8299,7 +8311,17 @@ function lodTick(){ const now=performance.now(); if(now-lodT<330 || SP.on) retur
 // Si algo cambia después (un topo que sale, una puerta que se abre…) su grupo se deshace al instante.
 const BATCH={recs:new Map(), batches:new Set(), t:0, last:-1, lastBuild:0, on:true, CELL:40, TINY:.12, TINYK:600};
 const _btmq=new THREE.Matrix4(), _btnq=new THREE.Matrix3(), _btvq=new THREE.Vector3();
-function batchSkip(o){ return o===plush || o===skyRoot || o.userData.noBatch; }
+function batchSkip(o){ return o===skyRoot || o.userData.noBatch; }
+var BATCH_READY=true;
+// al cambiar de ropa, de cámara o de cosa en la mano: se deshacen al instante los grupos de ese peluche
+function batchDropUnder(o){ if(!BATCH_READY) return; for(const b of [...BATCH.batches]){ if(!b.local) continue; for(let p=b.mesh.parent;p;p=p.parent) if(p===o){ dissolve(b); break; } } }
+// cajas con varias telas (letreros…): se parten en una pieza por tela para poder juntarlas con las demás
+function splitMulti(o){ o.userData.split=true; const g=o.geometry; if(!g.boundingSphere) g.computeBoundingSphere();
+  for(const gr of g.groups){ const m=o.material[gr.materialIndex]; if(!m) continue; const sg=new THREE.BufferGeometry(); for(const k in g.attributes) sg.setAttribute(k,g.attributes[k]);
+    const cnt=Math.min(gr.count,(g.index?g.index.count:g.attributes.position.count)-gr.start); if(cnt<=0) continue;
+    if(g.index) sg.setIndex(new THREE.BufferAttribute(g.index.array.slice(gr.start,gr.start+cnt),1)); else { const ix=new Uint32Array(cnt); for(let i=0;i<cnt;i++) ix[i]=gr.start+i; sg.setIndex(new THREE.BufferAttribute(ix,1)); }
+    sg.boundingSphere=g.boundingSphere; const q=new THREE.Mesh(sg,m); q.castShadow=o.castShadow; q.receiveShadow=o.receiveShadow; q.renderOrder=o.renderOrder; q.userData.splitPart=true; o.add(q); }
+  o.layers.disable(0); }
 function batchCandidate(o){ if(!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || Array.isArray(o.material) || !o.material) return false;
   const m=o.material, g=o.geometry; if(!g || !g.isBufferGeometry || g.morphAttributes && Object.keys(g.morphAttributes).length) return false;
   if(m.transparent || m.alphaTest>0 || o.frustumCulled===false || o.onBeforeRender!==THREE.Object3D.prototype.onBeforeRender) return false;
@@ -8313,12 +8335,18 @@ const MAPS=['map','normalMap','roughnessMap','metalnessMap','emissiveMap','aoMap
 function matInfo(m){ let I=BMAT.info.get(m); if(I && I.t===BMAT.tick) return I;
   let props=null;
   const isFelt=m.userData.feltPQ && m.customProgramCacheKey && m.customProgramCacheKey()==='feltPQ' && m.map && !MAPS.some(k=>k!=='map' && m[k]);
-  if(m.type==='MeshStandardMaterial' && !m.vertexColors && (isFelt || m.onBeforeCompile===THREE.Material.prototype.onBeforeCompile && !MAPS.some(k=>m[k])) && !(m.defines && Object.keys(m.defines).some(k=>k!=='STANDARD')))
+  if((m.type==='MeshStandardMaterial'||m.isLite) && !m.vertexColors && (isFelt || m.onBeforeCompile===THREE.Material.prototype.onBeforeCompile && !MAPS.some(k=>m[k])) && !(m.defines && Object.keys(m.defines).some(k=>k!=='STANDARD')))
     props=[isFelt?'F'+m.map.uuid:'S',m.roughness,m.metalness,m.emissive.getHex(),m.emissiveIntensity,m.flatShading,m.side,m.opacity,m.wireframe,m.fog,m.depthWrite,m.depthTest,m.colorWrite,m.toneMapped,m.envMapIntensity,m.polygonOffset,m.polygonOffsetFactor,m.polygonOffsetUnits,m.visible].join(',');
-  const raw=props?props+'#'+m.color.getHex()+(isFelt?'#'+m.userData.feltSpk.join(','):''):'';
+  let isTex=false;
+  if(!props && (m.type==='MeshStandardMaterial'||m.isLite) && m.map && m.map.image && !m.vertexColors && m.onBeforeCompile===THREE.Material.prototype.onBeforeCompile && !MAPS.some(k=>k!=='map' && m[k]) && m.map.rotation===0 && m.map.matrixAutoUpdate!==false && !(m.defines && Object.keys(m.defines).some(k=>k!=='STANDARD'))){
+    const t=m.map; isTex=true;
+    props=['X',imgId(t.image),t.encoding,t.wrapS,t.wrapT,t.magFilter,t.minFilter,t.anisotropy,t.flipY,m.color.getHex(),m.roughness,m.metalness,m.emissive.getHex(),m.emissiveIntensity,m.flatShading,m.side,m.opacity,m.fog,m.depthWrite,m.depthTest,m.toneMapped,m.envMap?m.envMap.uuid:'',m.envMapIntensity,m.polygonOffset,m.visible].join(','); }
+  const raw=props?props+'#'+m.color.getHex()+(isFelt?'#'+m.userData.feltSpk.join(','):'')+(isTex?'#'+[m.map.repeat.x,m.map.repeat.y,m.map.offset.x,m.map.offset.y,m.map.center.x,m.map.center.y].join(','):''):'';
   if(!I){ I={raw, props, vol:false}; BMAT.info.set(m,I); }
   else if(I.raw!==raw){ I.vol=true; I.raw=raw; }
-  I.t=BMAT.tick; I.felt=!!isFelt; I.key=(props && !I.vol)?'C|'+props:'M|'+m.uuid; I.chk=I.key+'#'+raw; return I; }
+  I.t=BMAT.tick; I.felt=!!isFelt; I.key=(props && !I.vol)?(isTex?'X|':'C|')+props:'M|'+m.uuid; I.chk=I.key+'#'+raw; return I; }
+const _imgIds=new WeakMap(); let _imgN=0; const imgId=im=>{ let k=_imgIds.get(im); if(!k){ k=++_imgN; _imgIds.set(im,k); } return k; };
+function sharedTexMat(m,props){ let s=BMAT.shared.get(props); if(!s){ s=m.clone(); const t=m.map.clone(); t.repeat.set(1,1); t.offset.set(0,0); t.center.set(0,0); t.needsUpdate=true; s.map=t; s.userData={batchShared:true}; BMAT.shared.set(props,s); } return s; }
 function sharedMat(m,props){ let s=BMAT.shared.get(props); if(!s){ s=m.clone(); s.color.setRGB(1,1,1); s.vertexColors=true; s.userData={batchShared:true}; if(m.userData.feltPQ){ s.onBeforeCompile=m.onBeforeCompile; s.customProgramCacheKey=m.customProgramCacheKey; s.defines={STANDARD:'', FELT_VA:''}; } BMAT.shared.set(props,s); } return s; }
 function effVisible(o){ for(let p=o;p;p=p.parent){ if(!p.visible) return false; if(p===scene) return true; } return false; }
 function batchSig(o){ const g=o.geometry; return Object.keys(g.attributes).sort().map(k=>k+g.attributes[k].itemSize).join(',')+(g.index?'i':'n'); }
@@ -8327,7 +8355,7 @@ const geoVer=g=>g.attributes.position.version+(g.index?g.index.version:0);
 function recSet(r,o){ r.m.set(o.matrixWorld.elements); r.lm.set(o.matrix.elements); r.mat=o.material; r.geo=o.geometry; r.ver=geoVer(o.geometry); r.vis=effVisible(o); r.own=o.visible; r.par=o.parent; r.cs=o.castShadow; r.rs=o.receiveShadow; r.ro=o.renderOrder; r.mk=matInfo(o.material).chk; }
 function dissolve(b){ if(!BATCH.batches.has(b)) return; BATCH.batches.delete(b); if(b.mesh.parent) b.mesh.parent.remove(b.mesh); b.mesh.geometry.dispose();
   for(const o of b.src){ o.layers.enable(0); const r=BATCH.recs.get(o); if(r && r.batch===b) r.batch=null; } }
-function mergeInto(list,local,colored){ const g0=list[0].geometry, names=Object.keys(g0.attributes).filter(k=>!colored||k!=='color'&&k!=='feltSpk'); let nv=0, ni=0;
+function mergeInto(list,local,colored,uvBake){ const g0=list[0].geometry, names=Object.keys(g0.attributes).filter(k=>!colored||k!=='color'&&k!=='feltSpk'); let nv=0, ni=0;
   for(const o of list){ const g=o.geometry; nv+=g.attributes.position.count; ni+=g.index?g.index.count:g.attributes.position.count; }
   const out={}; for(const k of names) out[k]=new Float32Array(nv*g0.attributes[k].itemSize); const idx=nv>65535?new Uint32Array(ni):new Uint16Array(ni);
   const col=colored?new Float32Array(nv*3):null, fsp=colored&&list[0].material.userData.feltPQ?new Float32Array(nv*3):null;
@@ -8336,6 +8364,8 @@ function mergeInto(list,local,colored){ const g0=list[0].geometry, names=Object.
     for(const k of names){ const a=g.attributes[k], s=a.itemSize, src=a.array, dst=out[k];
       if(k==='position'){ for(let i=0;i<n;i++){ _btvq.fromArray(src,i*3).applyMatrix4(M); _btvq.toArray(dst,(vo+i)*3); } }
       else if(k==='normal'){ for(let i=0;i<n;i++){ _btvq.fromArray(src,i*3).applyMatrix3(_btnq).normalize(); _btvq.toArray(dst,(vo+i)*3); } }
+      else if(k==='uv' && uvBake){ const t=o.material.map, rx=t.repeat.x, ry=t.repeat.y, cx=t.center.x, cy=t.center.y, ox=t.offset.x, oy=t.offset.y;
+        for(let i=0;i<n;i++){ dst[(vo+i)*2]=rx*(src[i*2]-cx)+cx+ox; dst[(vo+i)*2+1]=ry*(src[i*2+1]-cy)+cy+oy; } }
       else dst.set(src.subarray(0,n*s),vo*s); }
     if(col){ const c=o.material.color; for(let i=0;i<n;i++){ col[(vo+i)*3]=c.r; col[(vo+i)*3+1]=c.g; col[(vo+i)*3+2]=c.b; } }
     if(fsp){ const c=o.material.userData.feltSpk; for(let i=0;i<n;i++){ fsp[(vo+i)*3]=c[0]; fsp[(vo+i)*3+1]=c[1]; fsp[(vo+i)*3+2]=c[2]; } }
@@ -8343,16 +8373,20 @@ function mergeInto(list,local,colored){ const g0=list[0].geometry, names=Object.
     else { for(let i=0;i<n;i+=3){ idx[io+i]=vo+i; idx[io+i+1]=vo+(flip?i+2:i+1); idx[io+i+2]=vo+(flip?i+1:i+2); } io+=n; }
     vo+=n; }
   const g=new THREE.BufferGeometry(); for(const k of names) g.setAttribute(k,new THREE.BufferAttribute(out[k],g0.attributes[k].itemSize)); if(col) g.setAttribute('color',new THREE.BufferAttribute(col,3)); if(fsp) g.setAttribute('feltSpk',new THREE.BufferAttribute(fsp,3)); g.setIndex(new THREE.BufferAttribute(idx,1)); g.computeBoundingSphere(); return g; }
-function batchTick(){ if(!BATCH.on || SP.on) return; const now=BATCH.t=performance.now()/1000;
+function batchTick(){ if(!BATCH.on) return;
+  if(SP.on){ if(BATCH.local>0){ for(const b of [...BATCH.batches]) if(b.local) dissolve(b); BATCH.local=0; BATCH.cyc=null; } return; } const now=BATCH.t=performance.now()/1000;
   // 1) revisar todo lo de la isla, repartido en varios cuadros (así no da un tirón cada medio segundo)
-  if(!BATCH.cyc){ if(now-BATCH.last<.5) return; BATCH.last=now; BMAT.tick++; const L=[], V=[];
-    const col=(o,pv)=>{ if(batchSkip(o)) return; const vis=pv && o.visible; if(o.isMesh){ L.push(o); V.push(vis); } const ch=o.children; for(let i=0;i<ch.length;i++) col(ch[i],vis); };
-    col(scene,true); BATCH.cyc={L, V, i:0, T:now}; return; }
-  const C=BATCH.cyc, T=C.T, end=Math.min(C.L.length, C.i+Math.max(250,Math.ceil(C.L.length/6)));
+  if(!BATCH.cyc){ if(now-BATCH.last<.5) return; BATCH.last=now; BMAT.tick++; const L=[], V=[], D=[];
+    const col=(o,pv,dy)=>{ if(batchSkip(o)) return; const vis=pv && o.visible, dyn=dy || o===plush || !!o.userData.isPlushRoot;
+      if(o.isMesh){ if(Array.isArray(o.material) && !o.userData.split && o.geometry && o.geometry.groups && o.geometry.groups.length) splitMulti(o); L.push(o); V.push(vis); D.push(dyn); }
+      const ch=o.children; for(let i=0;i<ch.length;i++) col(ch[i],vis,dyn); };
+    col(scene,true,false); BATCH.cyc={L, V, D, i:0, T:now}; BATCH.pn=now; return; }
+  const C=BATCH.cyc, T=C.T, rdt=Math.max(0,now-(BATCH.pn||now)); BATCH.pn=now;   // si el equipo va lento (cuadros largos), se revisa más por cuadro para no tardar segundos
+  const end=Math.min(C.L.length, C.i+Math.max(250,Math.ceil(C.L.length*Math.max(1/6,rdt/.2))));
   for(; C.i<end; C.i++){ const o=C.L[C.i], vis=C.V[C.i];
       let r=BATCH.recs.get(o);
       if(!r){ r=batchCandidate(o)?{m:new Float32Array(16), lm:new Float32Array(16), ws:T, ls:T, batch:null, moves:0, lmoves:0}:{bad:true}; if(!r.bad) recSet(r,o); BATCH.recs.set(o,r); }
-      r.st=T;
+      r.st=T; r.dyn=C.D[C.i];
       if(!r.bad){ const e=o.matrixWorld.elements, same=r.mat===o.material && r.geo===o.geometry && r.ver===geoVer(o.geometry) && r.cs===o.castShadow && r.rs===o.receiveShadow && r.ro===o.renderOrder && r.par===o.parent && r.mk===matInfo(o.material).chk;
         const wOK=same && batchNear(r.m,e) && r.vis===vis, lOK=same && batchNear(r.lm,o.matrix.elements) && r.own===o.visible;
         if(!wOK){ r.ws=T; r.moves++; if(r.batch && !r.batch.local) dissolve(r.batch); }
@@ -8366,22 +8400,23 @@ function batchTick(){ if(!BATCH.on || SP.on) return; const now=BATCH.t=performan
   if(T-BATCH.lastBuild<1) return; BATCH.lastBuild=T;
   const groups=new Map();
   for(const [o,r] of BATCH.recs){ if(r.bad || r.batch) continue; let key, local=false;
-    const MI=matInfo(o.material), colored=MI.key[0]==='C' && !o.geometry.attributes.color && !o.geometry.attributes.feltSpk;
-    const base=(colored?MI.key:'M|'+o.material.uuid)+'|'+o.castShadow+'|'+o.receiveShadow+'|'+o.renderOrder+'|'+batchSig(o);
-    if(r.moves<=3 && T-r.ws>=3 && r.vis){ const g=o.geometry; if(!g.boundingSphere) g.computeBoundingSphere(); const sc=o.matrixWorld.getMaxScaleOnAxis(); if(g.boundingSphere.radius*sc>25){ r.bad=true; r.why='big'; continue; }   // lo grande se queda solo (así se sigue saltando cuando no se ve)
+    const MI=matInfo(o.material), colored=MI.key[0]==='C' && !o.geometry.attributes.color && !o.geometry.attributes.feltSpk, tex=MI.key[0]==='X' && !!o.geometry.attributes.uv;
+    const base=(colored||tex?MI.key:'M|'+o.material.uuid)+'|'+o.castShadow+'|'+o.receiveShadow+'|'+o.renderOrder+'|'+batchSig(o);
+    if(r.dyn){ if(T-r.ls>=3 && o.visible && o.parent && o.parent!==scene){ key='L|'+o.parent.uuid+'|'+base; local=true; } else continue; }   // partes de un peluche: solo dentro de su grupo
+    else if(r.moves<=3 && T-r.ws>=3 && r.vis){ const g=o.geometry; if(!g.boundingSphere) g.computeBoundingSphere(); const sc=o.matrixWorld.getMaxScaleOnAxis(); if(g.boundingSphere.radius*sc>25){ r.bad=true; r.why='big'; continue; }   // lo grande se queda solo (así se sigue saltando cuando no se ve)
       const rad=g.boundingSphere.radius*sc, tiny=rad<BATCH.TINY;   // piezas diminutas van aparte: de lejos (menos de un par de píxeles) no se dibujan
-      _btvq.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld); key='W|'+base+'|'+Math.floor(_btvq.x/BATCH.CELL)+','+Math.floor(_btvq.z/BATCH.CELL)+(tiny?'|t':''); }
+      _btvq.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld); key='W|'+base+'|'+Math.floor((_btvq.x+BATCH.CELL*.37)/BATCH.CELL)+','+Math.floor((_btvq.z+BATCH.CELL*.37)/BATCH.CELL)+(tiny?'|t':''); }   // la cuadrícula no corta justo en el centro de la isla (el castillo)
     else if(r.moves>3 && T-r.ls>=3 && o.visible && o.parent && o.parent!==scene){ key='L|'+o.parent.uuid+'|'+base; local=true; }   // se mueve con su grupo: se junta dentro de él
     else continue;
-    let l=groups.get(key); if(!l) groups.set(key,l={list:[],local,par:o.parent,colored,props:MI.props}); l.list.push(o); }
+    let l=groups.get(key); if(!l) groups.set(key,l={list:[],local,par:o.parent,colored,tex,props:MI.props}); l.list.push(o); }
   for(const [key,G] of groups){
     let old=null; for(const b of BATCH.batches) if(b.key===key){ old=b; break; }
     const all=old?[...old.src,...G.list]:G.list; if(all.length<3) continue;
     let verts=0; for(const o of all) verts+=o.geometry.attributes.position.count; if(verts>200000) continue;
     if(old) dissolve(old);
-    const mesh=new THREE.Mesh(mergeInto(all,G.local,G.colored),G.colored?sharedMat(all[0].material,G.props):all[0].material); mesh.castShadow=all[0].castShadow; mesh.receiveShadow=all[0].receiveShadow; mesh.renderOrder=all[0].renderOrder;
+    const mesh=new THREE.Mesh(mergeInto(all,G.local,G.colored,G.tex),G.colored?sharedMat(all[0].material,G.props):G.tex?sharedTexMat(all[0].material,G.props):all[0].material); mesh.castShadow=all[0].castShadow; mesh.receiveShadow=all[0].receiveShadow; mesh.renderOrder=all[0].renderOrder;
     mesh.matrixAutoUpdate=false; mesh.userData.noBatch=true; (G.local?G.par:scene).add(mesh); mesh.updateMatrixWorld(true);
-    const b={key, mesh, src:all, local:G.local}; BATCH.batches.add(b);
+    const b={key, mesh, src:all, local:G.local}; BATCH.batches.add(b); if(G.local) BATCH.local=(BATCH.local||0)+1;
     if(key.endsWith('|t')){ let rm=0; for(const o of all){ const g=o.geometry; rm=Math.max(rm,g.boundingSphere.radius*o.matrixWorld.getMaxScaleOnAxis()); } b.hideD=Math.max(30,rm*BATCH.TINYK); }
     for(const o of all){ o.layers.disable(0); BATCH.recs.get(o).batch=b; } } }
 
@@ -8931,6 +8966,26 @@ function autoResolution(raw){
   if(Math.abs(next-resScale)>.01){ resScale=next; const pr={min:.5, low:.75, mid:1.25, high:2}[settings.quality]||.75; renderer.setPixelRatio(Math.min(devicePixelRatio,pr)*resScale); resize(); }
   resWin=[]; resLast=now;
 }
+// Zonas enteras (feria, aeropuerto, coches, castillo…) que no se ven: se apagan solo mientras se dibuja.
+// Así three.js ni siquiera revisa sus cientos de piezas. Después del dibujo se vuelven a prender (la lógica del juego no lo nota).
+const AREA={list:[], t:-1e9, off:[], fr:new THREE.Frustum(), m:new THREE.Matrix4(), s:new THREE.Sphere(), b:new THREE.Box3(), v:new THREE.Vector3()};
+function areaBounds(g){ const B=AREA.b.makeEmpty(), v=AREA.v; let n=0;
+  g.traverse(o=>{ if(!(o.isMesh||o.isSprite||o.isPoints)) return; n++; const gs=o.geometry&&o.geometry.boundingSphere; if(o.isMesh && !gs && o.geometry) o.geometry.computeBoundingSphere(); const bs=o.geometry&&o.geometry.boundingSphere;
+    if(bs && !o.isInstancedMesh){ v.copy(bs.center).applyMatrix4(o.matrixWorld); const r=bs.radius*o.matrixWorld.getMaxScaleOnAxis(); B.expandByPoint(v.set(v.x-r,v.y-r,v.z-r)); B.expandByPoint(v.set(v.x+2*r,v.y+2*r,v.z+2*r)); }
+    else { v.setFromMatrixPosition(o.matrixWorld); B.expandByPoint(v.set(v.x-3,v.y-3,v.z-3)); B.expandByPoint(v.set(v.x+6,v.y+6,v.z+6)); } });
+  if(!n || B.isEmpty()) return null; const sp=new THREE.Sphere(); B.getBoundingSphere(sp); return sp; }
+function areaCullBegin(){ const now=performance.now();
+  if(now-AREA.t>600){ AREA.t=now; AREA.list.length=0; scene.updateMatrixWorld();
+    for(const c of scene.children){ if(c===plush || c.isMesh || c.isLight || c.isCamera || !c.visible || !c.children.length) continue; const sp=areaBounds(c); if(!sp || sp.radius>=400) continue;
+      const pc=c.userData._areaC; if(pc && pc.distanceTo(sp.center)>1.5) c.userData._areaDyn=true; c.userData._areaC=sp.center.clone(); AREA.list.push([c,sp]); } }
+  const cam=camera, cp=cam.position, shadows=renderer.shadowMap.enabled && settings.shadows, far=cam.far;
+  AREA.fr.setFromProjectionMatrix(AREA.m.multiplyMatrices(cam.projectionMatrix,cam.matrixWorldInverse));
+  for(const it of AREA.list){ const c=it[0]; if(!c.visible || c.parent!==scene) continue; if(c.userData._areaDyn){ const n=areaBounds(c); if(n) it[1]=n; }   // lo que se mueve (coches, aviones, otros jugadores): cada cuadro
+    const sp=it[1], S=AREA.s; S.center.copy(sp.center); S.radius=sp.radius+20;   // margen: algunas cosas se mueven (coches, aviones)
+    const d=cp.distanceTo(S.center)-S.radius; let out=d>far; if(!out && !shadows && d>8) out=!AREA.fr.intersectsSphere(S);
+    if(out){ c.visible=false; AREA.off.push(c); } } }
+function areaCullEnd(){ for(const c of AREA.off) c.visible=true; AREA.off.length=0; }
+{ const rr=renderer.render.bind(renderer); renderer.render=(sc,cam)=>{ if(sc===scene && cam===camera){ areaCullBegin(); try{ rr(sc,cam); } finally{ areaCullEnd(); } } else rr(sc,cam); }; }
 function frame(){
   requestAnimationFrame(frame);
   if(settings.fpsCap==='30'){ const n=performance.now(); if(n-capLast<29) return; capLast=n-Math.min(10,Math.max(0,n-capLast-33.3)); }   // ritmo parejo de 30 (por tiempo: si el equipo no llega a 60, ya no baja a 15)
