@@ -860,7 +860,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='86';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='87';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -8331,9 +8331,13 @@ function mergeInto(list,local,colored){ const g0=list[0].geometry, names=Object.
     else { for(let i=0;i<n;i+=3){ idx[io+i]=vo+i; idx[io+i+1]=vo+(flip?i+2:i+1); idx[io+i+2]=vo+(flip?i+1:i+2); } io+=n; }
     vo+=n; }
   const g=new THREE.BufferGeometry(); for(const k of names) g.setAttribute(k,new THREE.BufferAttribute(out[k],g0.attributes[k].itemSize)); if(col) g.setAttribute('color',new THREE.BufferAttribute(col,3)); if(fsp) g.setAttribute('feltSpk',new THREE.BufferAttribute(fsp,3)); g.setIndex(new THREE.BufferAttribute(idx,1)); g.computeBoundingSphere(); return g; }
-function batchTick(){ if(!BATCH.on || SP.on) return; const T=BATCH.t=performance.now()/1000; if(T-BATCH.last<.5) return; BATCH.last=T; BMAT.tick++;
-  // 1) revisar todo lo de la isla (la visibilidad se va pasando de padre a hijo: no hay que subir por cada objeto)
-  const walk=(o,pv)=>{ if(batchSkip(o)) return; const vis=pv && o.visible; if(o.isMesh){
+function batchTick(){ if(!BATCH.on || SP.on) return; const now=BATCH.t=performance.now()/1000;
+  // 1) revisar todo lo de la isla, repartido en varios cuadros (así no da un tirón cada medio segundo)
+  if(!BATCH.cyc){ if(now-BATCH.last<.5) return; BATCH.last=now; BMAT.tick++; const L=[], V=[];
+    const col=(o,pv)=>{ if(batchSkip(o)) return; const vis=pv && o.visible; if(o.isMesh){ L.push(o); V.push(vis); } const ch=o.children; for(let i=0;i<ch.length;i++) col(ch[i],vis); };
+    col(scene,true); BATCH.cyc={L, V, i:0, T:now}; return; }
+  const C=BATCH.cyc, T=C.T, end=Math.min(C.L.length, C.i+Math.max(250,Math.ceil(C.L.length/6)));
+  for(; C.i<end; C.i++){ const o=C.L[C.i], vis=C.V[C.i];
       let r=BATCH.recs.get(o);
       if(!r){ r=batchCandidate(o)?{m:new Float32Array(16), lm:new Float32Array(16), ws:T, ls:T, batch:null, moves:0, lmoves:0}:{bad:true}; if(!r.bad) recSet(r,o); BATCH.recs.set(o,r); }
       r.st=T;
@@ -8343,8 +8347,8 @@ function batchTick(){ if(!BATCH.on || SP.on) return; const T=BATCH.t=performance
         if(!lOK){ r.ls=T; r.lmoves++; if(r.batch && r.batch.local) dissolve(r.batch); }
         if(!wOK || !lOK) recSet(r,o);
         if(r.lmoves>6){ r.bad=true; if(r.batch) dissolve(r.batch); } } }
-    const ch=o.children; for(let i=0;i<ch.length;i++) walk(ch[i],vis); };
-  walk(scene,true);
+  if(C.i<C.L.length) return;
+  BATCH.cyc=null;
   for(const [o,r] of BATCH.recs) if(r.st!==T){ if(r.batch) dissolve(r.batch); BATCH.recs.delete(o); }   // ya no está en la escena
   // 2) juntar los que llevan quietos un rato (máximo una vez por segundo)
   if(T-BATCH.lastBuild<1) return; BATCH.lastBuild=T;
@@ -8902,7 +8906,7 @@ function update(dt,t){ myLabelUpdate();
 }
 
 let fpsFrames=0, fpsTime=0, fpsLogic=0, fpsDraw=0, fpsCalls=0, fpsTris=0; const fpsEl=ui('fps');
-let capSkip=false, resWin=[], resLast=0, resGood=0;
+let capLast=0, resWin=[], resLast=0, resGood=0;
 function autoResolution(raw){
   if(!settings.autoRes) return;
   resWin.push(raw);
@@ -8917,7 +8921,7 @@ function autoResolution(raw){
 }
 function frame(){
   requestAnimationFrame(frame);
-  if(settings.fpsCap==='30'){ capSkip=!capSkip; if(capSkip) return; }   // dibujar uno sí y uno no: ritmo parejo de 30
+  if(settings.fpsCap==='30'){ const n=performance.now(); if(n-capLast<29) return; capLast=n-Math.min(10,Math.max(0,n-capLast-33.3)); }   // ritmo parejo de 30 (por tiempo: si el equipo no llega a 60, ya no baja a 15)
   const raw=clock.getDelta(), dt=Math.min(raw,.05), t=clock.elapsedTime;
   const pf=settings.fps, p0=pf?performance.now():0;
   if(state!=='pause') update(dt,t);
