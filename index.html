@@ -861,7 +861,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='89';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='90';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -2936,9 +2936,9 @@ async function joinRoom(code, pub){
     if(!room){ mpMsg(UNAVAILABLE, true); return; }
     await leaveRoom();
     const r=await room.join(code);   // todos en el vestíbulo; cada quien anuncia su código
-    mp.room=r; mp.code=code; mp.pub=!!pub; mp.connected=r.connected();
+    mp.room=r; mp.code=code; mp.pub=!!pub; mp.connected=r.connected(); mp.discAt=mp.connected?0:performance.now(); setTimeout(updateRoomUI,3100);
     mp.unsubs.push(r.onPeers(onPeers, ()=>roomEnded()));
-    mp.unsubs.push(r.onConnection(c=>{ mp.connected=c; if(c) sendPresence(true); updateRoomUI(); }, ()=>{}));
+    mp.unsubs.push(r.onConnection(c=>{ mp.connected=c; if(c){ mp.discAt=0; sendPresence(true); } else { mp.discAt=performance.now(); setTimeout(updateRoomUI,3100); } updateRoomUI(); }, ()=>{}));
     player.pos.set(...startSpot());
     sendPresence(true);
     mpEl.hidden=true; updateRoomUI(); startGame();
@@ -2966,7 +2966,7 @@ function roomEnded(){ leaveRoom(); flashNote('Se perdió la conexión con la sal
 function sendPresence(force){
   if(!mp.room) return;
   const now=performance.now();
-  if(!force && now-mp.lastSent<66) return;
+  if(!force && now-mp.lastSent<(iDrive()||iPilot()||player.mg||AR.me.a>=0||(SP.on&&SP.mode==='fly')?66:100)) return;
   const playing=state==='play';
   const payload={
     n: cleanName(profile.name)||'Peluche', c: profile.color,
@@ -2987,12 +2987,20 @@ function sendPresence(force){
     pu: myPush.i>=0 ? [myPush.i, myPush.t] : null,
     ai: player.ac && player.acPose ? (A=>[A.i, A.mode==='seated'||A.mode==='sitting'?A.seat:-1, r2(player.acPose.l[0]), r2(player.acPose.l[1]), r2(player.acPose.l[2]), r2(player.acPose.f||0), r2(player.acPose.sit||0), r2(player.acPose.walk?(player.acPose.mv||1):0), r2(player.acPose.armsUp||0), player.acPose.air?1:0])(player.ac) : null
   };
-  const key=JSON.stringify(payload);
+  const key=presFit(payload);
   if(key===mp.lastPayload) return;
   mp.lastSent=now; mp.lastPayload=key;
   mp.room.presence(payload).then(()=>{ if(mp.lastErr){ mp.lastErr=''; updateRoomUI(); } })
     .catch(e=>{ mp.lastErr=(e&&e.code)||'error'; mp.lastPayload=''; updateRoomUI(); });   // se reintenta en el siguiente envío
 }
+
+// La presencia de cada jugador no puede pasar de 4 KiB (si pasa, la plataforma la rechaza o corta la conexión
+// y los demás te ven aparecer y desaparecer). Si se pasa, se recorta lo que menos importa primero.
+const PRES_MAX=3500, presTE=new TextEncoder();
+const PRES_TRIM=[['pv',a=>a.slice(-6)],['bt',a=>a.slice(-8)],['rt',a=>[a[0],...a.slice(-60)]],['fl',a=>a.slice(-3)],['pv',()=>null],['bt',()=>null],['ou',()=>null],['ag',()=>null]];
+function presFit(pl){ let key=JSON.stringify(pl);
+  for(const [f,cut] of PRES_TRIM){ if(presTE.encode(key).length<=PRES_MAX) break; if(pl[f]==null) continue; pl[f]=cut(pl[f]); key=JSON.stringify(pl); }
+  mp.presBytes=presTE.encode(key).length; return key; }
 
 // Etiqueta con el apodo sobre cada peluche remoto
 function labelTexture(name){
@@ -3046,7 +3054,7 @@ function onPeers({peers}){
     const color=Number.isInteger(pr.c)&&pr.c>=0&&pr.c<PLUSH_COLORS.length ? pr.c : 0;
     const name=cleanName(pr.n)||'Peluche';
     seen.add(p.peer);
-    let r=mp.remotes.get(p.peer);
+    let r=mp.remotes.get(p.peer); if(r) r.goneAt=0;
     if(!r){ r=makeRemote(color,name); r.pos.set(x,y,z); mp.remotes.set(p.peer,r); audio.join(); }
     if(r.color!==color){ recolor(r.obj,color); r.color=color; }
     { const ou=parseOutfit(pr.ou), k=JSON.stringify(ou); if(k!==r.ouKey){ r.ouKey=k; applyOutfit(r.obj,ou); } }   // su ropa y accesorios
@@ -3107,11 +3115,14 @@ function onPeers({peers}){
   }
   cars.forEach(c=>{ if(!drivenNow.has(c.i) && c.remote){ c.remote=null; c.t=now1(); } });
   aircraft.forEach(a=>{ if(!flownNow.has(a.i) && a.remote){ a.remote=null; a.sim=true; } });
-  for(const k of [...mp.remotes.keys()]) if(!seen.has(k)){ removeRemote(k); audio.leave(); }
+  const nowG=performance.now();
+  for(const [k,r] of mp.remotes) if(!seen.has(k) && !r.goneAt) r.goneAt=nowG;   // se quita después de unos segundos si no vuelve
   updateRoomUI();
 }
+const REMOTE_GRACE=6000;
 function updateRemotes(dt,t){
-  const k=1-Math.exp(-dt*12);
+  const k=1-Math.exp(-dt*12), nowG=performance.now();
+  for(const [key,r] of mp.remotes) if(r.goneAt && nowG-r.goneAt>REMOTE_GRACE && mp.connected){ removeRemote(key); audio.leave(); updateRoomUI(); }
   for(const r of mp.remotes.values()){
     if((!r.bw || r.held!=='bow') && r.obj.userData.bowRig) hideBowRig(r.obj.userData.bowRig);
     if(r.ai && updateRemoteInAir(r,dt,t)) continue;
@@ -3158,12 +3169,13 @@ function updateRoomUI(){
   const tag = mp.pub ? (innerWidth<520 ? 'Pública' : 'Sala pública') : (innerWidth<520 ? mp.code : 'Sala '+mp.code);
   ui('roomLabel').textContent = innerWidth<520 ? `${tag} · ${n}` : `${tag} · ${n} ${n===1?'jugador':'jugadores'}`;
   ui('roomChip').title = mp.pub ? `Sala pública · ${n} ${n===1?'jugador':'jugadores'}. El código está en la pausa.` : `Sala ${mp.code} · ${n} ${n===1?'jugador':'jugadores'}. Toca para copiar el código.`;
-  ui('roomDot').classList.toggle('on', mp.connected);
+  const okConn = mp.connected || (mp.discAt && performance.now()-mp.discAt<3000);
+  ui('roomDot').classList.toggle('on', !!okConn); ui('roomDot').title = okConn ? 'Conectado' : 'Sin conexión con la sala (reconectando…)';
   centerText(ui('leaveRoomBtn'), 'Salir de la sala '+mp.code);
   // diagnóstico: conexión, cuántas pestañas ve la sala (contándote) y último error
   let total='?', all='?'; try{ total=mp.room.peers().filter(p=>p.kind!=='agent').length; all=mp.room.lobby.peers().filter(p=>p.kind!=='agent').length; }catch(e){}
   const d=ui('roomDiag'); d.hidden=false;
-  const txt=`${mp.pub?'Sala pública':'Sala privada'} · Código ${mp.code} · Versión ${GAME_VERSION} · Conexión: ${mp.connected?'sí':'no'} · Con el juego abierto: ${all} · En tu sala: ${total} · Se ven: ${mp.remotes.size+1}${mp.lastErr?' · Error: '+mp.lastErr:''}`;
+  const txt=`${mp.pub?'Sala pública':'Sala privada'} · Código ${mp.code} · Versión ${GAME_VERSION} · Conexión: ${mp.connected?'sí':'no'} · Datos ${mp.presBytes||0} B · Con el juego abierto: ${all} · En tu sala: ${total} · Se ven: ${mp.remotes.size+1}${mp.lastErr?' · Error: '+mp.lastErr:''}`;
   if(d.textContent!==txt) d.textContent=txt;
 }
 function wave(){
@@ -6742,7 +6754,7 @@ function arenaPresence(){ const me=AR.me, la=AR.lead.indexOf(true);
   if(me.a<0) return {az:null, ag: la>=0 && AR.G[la].ph>0 ? agOf(la) : null, rt:null};   // aunque ya salí, sigo avisando cómo acabó la partida que llevaba
   const az=[me.a, me.st]; if(me.a===2 && me.st===2) az.push(r2(BOLA.v.x), r2(BOLA.v.y), BOLA.dashT>0?1:0); if(me.a===1 && me.req) az.push(me.req[0], me.req[1]);
   const ag=AR.lead[me.a] ? agOf(me.a) : la>=0 && AR.G[la].ph>0 ? agOf(la) : null;
-  return {az, ag, rt: me.a===0 && PLAT.mine.length ? [PLAT.gid, ...PLAT.mine.slice(-1500)] : null}; }
+  return {az, ag, rt: me.a===0 && PLAT.mine.length ? [PLAT.gid, ...PLAT.mine.slice(-200)] : null}; }
 const clean12=s=>typeof s==='string'?s.slice(0,24):'';
 function parseArena(r,pr){
   const az=pr.az; r.az = Array.isArray(az) && Number.isInteger(az[0]) && az[0]>=0 && az[0]<ARN && Number.isInteger(az[1]) ? az.slice(0,6) : null;
@@ -6750,7 +6762,7 @@ function parseArena(r,pr){
     r.ag={a:ag.a, ph:ag.ph|0, ms:+ag.ms||0, gid:clean12(ag.gid), pl:(Array.isArray(ag.pl)?ag.pl:[]).slice(0,16).map(clean12), el:(Array.isArray(ag.el)?ag.el:[]).slice(0,16).map(clean12),
       h:ag.h?clean12(ag.h):null, hms:+ag.hms||0, pause:ag.pause?1:0, rk:(Array.isArray(ag.rk)?ag.rk:[]).slice(0,16).map(clean12), tie:ag.tie|0, sd:ag.sd|0, prev:ag.prev?clean12(ag.prev):null, at:performance.now()}; } else r.ag=null;
   // baldosas que quitó ese jugador en esta partida
-  if(Array.isArray(pr.rt) && pr.rt[0]===PLAT.gid && PLAT.gid){ const seen=PLAT.seen.get(r)||1; for(let i=seen;i<pr.rt.length;i++){ const k=pr.rt[i]; if(Number.isInteger(k) && k>=0 && k<PLAT.removed.length) platRemove(k); } PLAT.seen.set(r,pr.rt.length); }
+  if(Array.isArray(pr.rt) && pr.rt[0]===PLAT.gid && PLAT.gid){ for(let i=1;i<pr.rt.length;i++){ const k=pr.rt[i]; if(Number.isInteger(k) && k>=0 && k<PLAT.removed.length) platRemove(k); } }
 }
 // quién manda en cada minijuego: el id más chico entre los de la fila o los que juegan
 function arLeader(a){ const G=AR.G[a]; let best=null;
@@ -8180,9 +8192,10 @@ function spacePresence(){ const out={sp:null, bt:null, rk:null, fl:null, pv:null
     out.sp=[md, Math.round(p.x*10)/10, Math.round(p.y*10)/10, Math.round(p.z*10)/10, r2(f.x), r2(f.y), r2(f.z), r2(u.x), r2(u.y), r2(u.z), SP.planet?SP.planet.key:'', r2(SP.walkMv||0)];
     if(pas) out.sp.push(SP.crew||(SP.seat&&SP.seat.pilot)||'');
     else if((md===2||md===4) && SP.rocketAt && SP.planet && SP.rocketAt.P===SP.planet){ const d=SP.rocketAt.d; out.sp.push(r2(d.x*100)/100, r2(d.y*100)/100, r2(d.z*100)/100); } }
-  if(knownBites.size) out.bt=[...knownBites.values()];
+  if(knownBites.size){ const all=[...knownBites.values()], N=all.length;   // por turnos: las 8 más nuevas + 16 que van rotando cada 2 s (los demás las van juntando)
+    if(N<=24) out.bt=all; else { const rest=N-8, st=(Math.floor(performance.now()/2000)*16)%rest, w=[]; for(let i=0;i<16 && i<rest;i++) w.push(all[(st+i)%rest]); out.bt=w.concat(all.slice(-8)); } }
   const fl=flags.filter(f=>f.w!=='isla').map(f=>[f.w,f.dx,f.dy,f.dz,f.c]); if(fl.length) out.fl=fl;
-  const pv=Object.keys(visitedPl).slice(-30).map(k=>{ const P=planetByKey(k), v=visitedPl[k]; return P&&Array.isArray(v)?[k,v[0],v[1],v[2],seenMask(P)]:null; }).filter(Boolean); if(pv.length) out.pv=pv;
+  const pv=Object.keys(visitedPl).slice(-16).map(k=>{ const P=planetByKey(k), v=visitedPl[k]; return P&&Array.isArray(v)?[k,v[0],v[1],v[2],seenMask(P)]:null; }).filter(Boolean); if(pv.length) out.pv=pv;
   return out; }
 function parseSpace(r,pr){ const s=pr.sp; r.sp = Array.isArray(s) && s.length>=11 && s.slice(1,10).every(Number.isFinite) ? s : null;
   r.rk = Array.isArray(pr.rk) && (pr.rk.length===2||pr.rk.length===3) && pr.rk.every(Number.isFinite) ? pr.rk : null;
@@ -8976,7 +8989,7 @@ function areaBounds(g){ const B=AREA.b.makeEmpty(), v=AREA.v; let n=0;
   if(!n || B.isEmpty()) return null; const sp=new THREE.Sphere(); B.getBoundingSphere(sp); return sp; }
 function areaCullBegin(){ const now=performance.now();
   if(now-AREA.t>600){ AREA.t=now; AREA.list.length=0; scene.updateMatrixWorld();
-    for(const c of scene.children){ if(c===plush || c.isMesh || c.isLight || c.isCamera || !c.visible || !c.children.length) continue; const sp=areaBounds(c); if(!sp || sp.radius>=400) continue;
+    for(const c of scene.children){ if(c===plush || c.userData.isPlushRoot || c.isMesh || c.isLight || c.isCamera || !c.visible || !c.children.length) continue; const sp=areaBounds(c); if(!sp || sp.radius>=400) continue;
       const pc=c.userData._areaC; if(pc && pc.distanceTo(sp.center)>1.5) c.userData._areaDyn=true; c.userData._areaC=sp.center.clone(); AREA.list.push([c,sp]); } }
   const cam=camera, cp=cam.position, shadows=renderer.shadowMap.enabled && settings.shadows, far=cam.far;
   AREA.fr.setFromProjectionMatrix(AREA.m.multiplyMatrices(cam.projectionMatrix,cam.matrixWorldInverse));
