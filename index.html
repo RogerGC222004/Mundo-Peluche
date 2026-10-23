@@ -617,7 +617,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       <h3>Interfaz</h3>
       <div class="opt"><label for="optBob">Balanceo al caminar<small>Movimiento de la cámara en 1ª persona</small></label><button class="switch" id="optBob" role="switch" aria-checked="true" aria-label="Balanceo al caminar"></button></div>
       <div class="opt"><label for="optMyName">Ver mi nombre<small>Tu nombre encima de tu peluche, como lo ven los demás</small></label><button class="switch" id="optMyName" role="switch" aria-checked="false" aria-label="Ver mi nombre"></button></div>
-      <div class="opt"><label for="optFps">Mostrar FPS</label><button class="switch" id="optFps" role="switch" aria-checked="false" aria-label="Mostrar FPS"></button></div>
+      <div class="opt"><label for="optFps">Mostrar FPS<small id="gpuName"></small></label><button class="switch" id="optFps" role="switch" aria-checked="false" aria-label="Mostrar FPS"></button></div>
       <div class="opt"><label for="optAutoFull">Empezar en pantalla completa<small>Y en horizontal en el celular, al tocar la pantalla</small></label><button class="switch" id="optAutoFull" role="switch" aria-checked="true" aria-label="Empezar en pantalla completa"></button></div>
       <div class="opt"><label for="optHints">Mostrar ayudas en pantalla</label><button class="switch" id="optHints" role="switch" aria-checked="true" aria-label="Mostrar ayudas"></button></div>
     </div>
@@ -860,7 +860,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='84';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='85';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
@@ -8886,7 +8886,7 @@ function update(dt,t){ myLabelUpdate();
 
 }
 
-let fpsFrames=0, fpsTime=0; const fpsEl=ui('fps');
+let fpsFrames=0, fpsTime=0, fpsLogic=0, fpsDraw=0, fpsCalls=0, fpsTris=0; const fpsEl=ui('fps');
 let capSkip=false, resWin=[], resLast=0, resGood=0;
 function autoResolution(raw){
   if(!settings.autoRes) return;
@@ -8904,6 +8904,7 @@ function frame(){
   requestAnimationFrame(frame);
   if(settings.fpsCap==='30'){ capSkip=!capSkip; if(capSkip) return; }   // dibujar uno sí y uno no: ritmo parejo de 30
   const raw=clock.getDelta(), dt=Math.min(raw,.05), t=clock.elapsedTime;
+  const pf=settings.fps, p0=pf?performance.now():0;
   if(state!=='pause') update(dt,t);
   updateSky(dt);
   updateRemotes(dt,t);
@@ -8911,12 +8912,16 @@ function frame(){
   updateOutfitGlow();
   if(state==='play') sendPresence(false);
   if(mp.room && performance.now()-mp.heartbeat>4000){ mp.heartbeat=performance.now(); mp.lastPayload=''; sendPresence(true); updateRoomUI(); }   // latido
+  const p1=pf?performance.now():0;
   if(shopOpen()) renderStudio(dt); else renderer.render(SP.on&&state!=='menu'?spaceScene:scene,camera);
+  if(pf){ const p2=performance.now(); fpsLogic+=p1-p0; fpsDraw+=p2-p1; fpsCalls+=renderer.info.render.calls; fpsTris+=renderer.info.render.triangles; }
   fpsFrames++; fpsTime+=raw;
-  if(fpsTime>=.5){ if(settings.fps){ const t2=Math.round(fpsFrames/fpsTime)+' FPS'+(resScale<.99?` · ${Math.round(resScale*100)}%`:''); if(fpsEl.textContent!==t2) fpsEl.textContent=t2; } fpsFrames=0; fpsTime=0; }
+  // con "Mostrar FPS": cuánto tarda la lógica del juego y cuánto preparar el dibujo (para saber qué frena en cada equipo)
+  if(fpsTime>=.5){ if(settings.fps){ const n=fpsFrames, t2=Math.round(n/fpsTime)+' FPS'+(resScale<.99?` · ${Math.round(resScale*100)}%`:'')+` · lógica ${(fpsLogic/n).toFixed(0)} · dibujo ${(fpsDraw/n).toFixed(0)} ms · ${Math.round(fpsCalls/n)} dib · ${Math.round(fpsTris/n/1000)}k ▲`; if(fpsEl.textContent!==t2) fpsEl.textContent=t2; } fpsFrames=0; fpsTime=0; fpsLogic=fpsDraw=fpsCalls=fpsTris=0; }
   if(state==='play') autoResolution(raw);
 }
 show('menu'); setCam(settings.startCam); applySettings(); applySettings.ready=true;
+try{ const gl=renderer.getContext(), ext=gl.getExtension('WEBGL_debug_renderer_info'); const nm=ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER); ui('gpuName').textContent='Tu equipo: '+String(nm).slice(0,60)+' · núcleos: '+(navigator.hardwareConcurrency||'?'); }catch(e){}
 ui('verMenu').textContent='Versión '+GAME_VERSION; ui('verMp').textContent='Tu versión del juego: '+GAME_VERSION;
 centerAllText();
 // Repetir cuando termine de cargar la tipografía y cuando cambie el tamaño de pantalla
