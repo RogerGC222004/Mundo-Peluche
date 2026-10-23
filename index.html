@@ -587,6 +587,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       <div class="opt"><label for="optFov">Campo de visión</label><div class="ctrl"><input type="range" id="optFov" min="50" max="100" step="1"><output id="optFovOut"></output></div></div>
       <div class="opt"><label>Calidad gráfica<small>Baja va mejor en equipos lentos</small></label>
         <div class="seg" id="optQuality"><button data-v="min">Mínima</button><button data-v="low">Baja</button><button data-v="mid">Media</button><button data-v="high">Alta</button></div></div>
+      <div class="opt"><label for="optUltra">Modo ultra ligero<small>Para teléfonos lentos: más sencillo y sin adornos que se mueven de fondo. Al cambiarlo el juego se vuelve a abrir.</small></label><button class="switch" id="optUltra" role="switch" aria-checked="false" aria-label="Modo ultra ligero"></button></div>
       <div class="opt"><label for="optAutoRes">Resolución automática<small>Baja un poco la nitidez si hace falta para ir fluido</small></label><button class="switch" id="optAutoRes" role="switch" aria-checked="true" aria-label="Resolución automática"></button></div>
       <div class="opt"><label>Límite de FPS<small>30 da un ritmo parejo en equipos lentos</small></label>
         <div class="seg" id="optFpsCap"><button data-v="free">Libre</button><button data-v="30">30</button></div></div>
@@ -860,10 +861,11 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='87';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='88';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
-const Q0 = EARLY_OPTS.quality || 'low', MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
+const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
+const Q0 = ULTRA ? 'min' : (EARLY_OPTS.quality || 'low'), MIN_Q = Q0==='min';   // calidad con la que se abrió el juego   // calidad "Mínima" al abrir: menos detalle en lo que se arma al cargar
 const renderer = new THREE.WebGLRenderer({canvas, antialias:!MIN_Q, powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
@@ -948,6 +950,8 @@ function felt(hex, speck='rgba(0,0,0,0.10)', rep=1){ const sp=parseSpeck(speck);
       .replace('#include <map_fragment>',`{ vec4 fx=texture2D(map,vUv);
         #ifdef FELT_VA
           vec3 fb=diffuseColor.rgb*vColor; vec3 fs=vFeltSpk;
+        #elif defined(USE_COLOR)
+          vec3 fb=diffuseColor.rgb*vColor; vec3 fs=feltSpk;
         #else
           vec3 fb=diffuseColor.rgb; vec3 fs=feltSpk;
         #endif
@@ -1051,7 +1055,7 @@ let GROUND_MAT=null; const TERRAIN_LOD=[];
   [8,248,264,504].forEach(p=>{g.beginPath();g.moveTo(p,0);g.lineTo(p,size);g.stroke();g.beginPath();g.moveTo(0,p);g.lineTo(size,p);g.stroke();});
   const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.encoding=THREE.sRGBEncoding; t.anisotropy=8;
 
-  const SEG={min:200, low:300, mid:380, high:420}[Q0]||300, warp=u=>520*u+980*Math.pow(u,5);   // ±1500 m, puntos más juntos en la isla
+  const SEG=ULTRA?160:({min:200, low:300, mid:380, high:420}[Q0]||300), warp=u=>520*u+980*Math.pow(u,5);   // ±1500 m, puntos más juntos en la isla
   const geo=new THREE.PlaneGeometry(2,2,SEG,SEG); geo.rotateX(-Math.PI/2);
   const pos=geo.attributes.position, uv=geo.attributes.uv, n=pos.count;
   const col=new Float32Array(n*3);
@@ -1084,7 +1088,7 @@ let GROUND_MAT=null; const TERRAIN_LOD=[];
   // El terreno se parte en cuadros que comparten los mismos puntos: así solo se dibujan los que están frente a la cámara
   // (lo de atrás, los lados y lo que queda más lejos que la distancia de visión se salta solo).
   const mat=new THREE.MeshStandardMaterial({map:t, vertexColors:true, roughness:1}); GROUND_MAT=mat;
-  const T=8, W1=SEG+1, step=Math.ceil(SEG/T);
+  const T=ULTRA?4:8, W1=SEG+1, step=Math.ceil(SEG/T);
   for(let ty=0;ty<SEG;ty+=step) for(let tx=0;tx<SEG;tx+=step){
     const idx=[];
     for(let iy=ty;iy<Math.min(SEG,ty+step);iy++) for(let ix=tx;ix<Math.min(SEG,tx+step);ix++){
@@ -1375,7 +1379,7 @@ const INST_LOD=[];   // grupos de árboles/rocas que cambian a la versión senci
 const _o=new THREE.Object3D();
 // Muchas copias de lo mismo (árboles, flores, corales…) repartidas en zonas de 90 m.
 // Cada zona sabe dónde está, así solo se dibujan (y hacen sombra) las zonas que se ven.
-const CHUNK={min:170, low:130}[Q0]||90;   // en calidad baja, grupos más grandes = menos dibujos por cuadro
+const CHUNK=ULTRA?280:({min:170, low:130}[Q0]||90);   // en calidad baja, grupos más grandes = menos dibujos por cuadro
 function instanced(geo, mat, items, set, opts={}){
   const buckets=new Map(), where=new Array(items.length);
   items.forEach((it,i)=>{
@@ -1490,7 +1494,12 @@ function carGround(x,z,hint){
 (function trees(){
   const LEAVES=[[0,3.2,0,1.5],[.9,2.7,.3,1.05],[-.8,2.8,-.2,1.1],[.1,4.1,.1,1.0]];
   instanced(cylG, trunkMat, MAP.trees, (o,[x,z,s,,rot])=>{ const y=terrainH(x,z)-.15; o.position.set(x,y+1.2*s,z); o.scale.set(.35*s,2.4*s,.35*s); o.rotation.y=rot; });
-  for(let k=0;k<4;k++){
+  if(ULTRA){ // modo ultra ligero: todas las hojas en un solo dibujo, cada bolita con su color
+    const list=[]; MAP.trees.forEach(t=>LEAVES.forEach(l=>list.push([t,l]))), cols=['#6fae3e','#7cbf4a','#f0a9bb','#ffcf6b'].map(h=>new THREE.Color(h));
+    const L=instanced(sphereLo, felt('#ffffff'), list, (o,[[x,z,s,,rot],[px,py,pz,r]])=>{ const y=terrainH(x,z)-.15, c=Math.cos(rot), sn=Math.sin(rot);
+      o.position.set(x+(px*c+pz*sn)*s, y+py*s, z+(-px*sn+pz*c)*s); o.scale.setScalar(r*s); });
+    list.forEach(([t],i)=>L.setColorAt(i,cols[t[3]]||cols[0])); L.meshes.forEach(m=>{ if(m.instanceColor) m.instanceColor.needsUpdate=true; }); }
+  else for(let k=0;k<4;k++){
     const list=[]; MAP.trees.forEach(t=>{ if(t[3]===k) LEAVES.forEach(l=>list.push([t,l])); });
     instanced(sphereG, leafMats[k], list, (o,[[x,z,s,,rot],[px,py,pz,r]])=>{
       const y=terrainH(x,z)-.15, c=Math.cos(rot), sn=Math.sin(rot);
@@ -1819,9 +1828,9 @@ const FLOWER_MATS={petal:new THREE.MeshStandardMaterial({roughness:1}), stem:new
 (function flowers(){
   const FL=MAP.flowers.filter(([x,z])=>Math.hypot(x-START.x,z-START.z)>START.r+.6);   // nada de flores sobre el botón
   const cols=[0xffffff,0xffd2dc,0xffe27a,0xc8b6ff];
-  const petal=instanced(new THREE.SphereGeometry(.16,Q0==='high'||Q0==='mid'?8:5,Q0==='high'||Q0==='mid'?6:4), FLOWER_MATS.petal, FL, (o,[x,z])=>{ o.position.set(x,terrainH(x,z)+.36,z); o.scale.set(1,.55,1); }, {shadow:false});
+  const petal=instanced(new THREE.SphereGeometry(.16,Q0==='high'||Q0==='mid'?8:5,Q0==='high'||Q0==='mid'?6:4), FLOWER_MATS.petal, FL, (o,[x,z])=>{ o.position.set(x,terrainH(x,z)+(ULTRA?.1:.36),z); o.scale.set(1,.55,1); }, {shadow:false});
   const col=new THREE.Color(); FL.forEach(([,,c],i)=>petal.setColorAt(i,col.setHex(cols[c])));
-  instanced(new THREE.CylinderGeometry(.025,.025,.35,5), FLOWER_MATS.stem, FL, (o,[x,z])=>o.position.set(x,terrainH(x,z)+.17,z), {shadow:false});
+  if(!ULTRA) instanced(new THREE.CylinderGeometry(.025,.025,.35,5), FLOWER_MATS.stem, FL, (o,[x,z])=>o.position.set(x,terrainH(x,z)+.17,z), {shadow:false});
 })();
 
 // ---------- Bajo el mar ----------
@@ -2543,7 +2552,7 @@ addEventListener('keydown',e=>{ if(e.code==='KeyM' && !e.repeat && !(e.target in
 
 // ---------- Opciones ----------
 const DEFAULTS={fov:65, quality:'low', shadows:true, draw:190, sens:1, invert:false, startCam:'third', alwaysRun:false, bob:true, fps:false, hints:true,
-  master:80, music:60, sfx:80, muted:false, autoRes:true, fpsCap:'free', weather:true, layout:{}, qDef:1, autoFull:true, myName:false};
+  master:80, music:60, sfx:80, muted:false, autoRes:true, fpsCap:'free', weather:true, layout:{}, qDef:1, autoFull:true, myName:false, ultra:false};
 let settings={...DEFAULTS};
 let resScale=1;   // escala de resolución automática (1 = completa)
 try{ const s=JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'null'); if(s){ settings={...DEFAULTS,...s}; if(!s.qDef){ settings.quality='low'; settings.qDef=1; } } }catch(e){}   // gráficos en bajo por defecto (una sola vez para quien ya jugaba)
@@ -2636,7 +2645,10 @@ ui('optSens').oninput=e=>set('sens',+e.target.value);
 [['optQuality','quality'],['optStartCam','startCam'],['optFpsCap','fpsCap']].forEach(([id,k])=>
   ui(id).querySelectorAll('button').forEach(b=>b.onclick=()=>set(k,b.dataset.v)));
 ui('resetOptions').onclick=()=>{ settings={...DEFAULTS}; saveSettings(); applySettings(); };
-function openOptions(){ optionsEl.hidden=false; syncOptionsUI(); optionsEl.scrollTop=0; ui('closeOptions').focus({preventScroll:true}); }
+ui('optUltra').onclick=()=>{ const on=!ULTRA; settings.ultra=on;
+  if(on){ settings.quality='min'; settings.shadows=false; settings.weather=false; settings.fpsCap='30'; settings.autoRes=true; settings.draw=Math.min(settings.draw,80); }
+  saveSettings(); ui('optUltra').setAttribute('aria-checked',String(on)); try{ sessionStorage.setItem('mundoPelucheAviso',on?'Modo ultra ligero activado':'Modo ultra ligero desactivado'); }catch(e){} setTimeout(()=>location.reload(),250); };
+function openOptions(){ optionsEl.hidden=false; syncOptionsUI(); ui('optUltra').setAttribute('aria-checked',String(ULTRA)); optionsEl.scrollTop=0; ui('closeOptions').focus({preventScroll:true}); }
 ui('optionsBtn').onclick=openOptions;
 ui('pauseOptionsBtn').onclick=openOptions;
 ui('closeOptions').onclick=()=>{ optionsEl.hidden=true; };
@@ -5134,7 +5146,7 @@ const critters=[];
 const eyeWhites=new THREE.InstancedMesh(sphereG, new THREE.MeshStandardMaterial({color:0xf4f4f2, roughness:.45, metalness:0}), critters.length*2);
 const eyePupils=new THREE.InstancedMesh(sphereG, new THREE.MeshStandardMaterial({color:0x0c0c0c, roughness:.5}), critters.length*2);
 const eyeDomes=new THREE.InstancedMesh(sphereG, new THREE.MeshStandardMaterial({color:0xffffff, roughness:.04, metalness:.1, transparent:true, opacity:.22, depthWrite:false}), critters.length*2);
-eyeWhites.frustumCulled=eyePupils.frustumCulled=eyeDomes.frustumCulled=false; eyeDomes.renderOrder=3; scene.add(eyeWhites, eyePupils, eyeDomes);
+eyeWhites.frustumCulled=eyePupils.frustumCulled=eyeDomes.frustumCulled=false; eyeDomes.renderOrder=3; scene.add(eyeWhites, eyePupils, eyeDomes); if(ULTRA) eyeDomes.visible=false;
 { const z=new THREE.Matrix4().makeScale(0,0,0); for(let i=0;i<critters.length*2;i++){ eyeWhites.setMatrixAt(i,z); eyePupils.setMatrixAt(i,z); eyeDomes.setMatrixAt(i,z); } }
 const _cm=new THREE.Matrix4(), _cl=new THREE.Matrix4(), _cq=new THREE.Quaternion(), _cp=new THREE.Vector3(), _cs=new THREE.Vector3(), _cv=new THREE.Vector3(), _ce=new THREE.Euler(), _cz=new THREE.Matrix4().makeScale(0,0,0);
 // camino de paseo: avanza con pausas (u' = vel·(1+sin) llega a 0 de vez en cuando)
@@ -5149,7 +5161,7 @@ function stepPupils(c,dt){
   for(const e of c.eyes){ e.v.x+=ax*dt*3.2; e.v.y+=ay*dt*3.2; e.v.multiplyScalar(Math.exp(-dt*2.2)); e.p.addScaledVector(e.v,dt);
     const L=e.p.length(); if(L>1){ e.p.multiplyScalar(1/L); const vn=e.v.x*e.p.x+e.v.y*e.p.y; if(vn>0){ e.v.x-=1.45*vn*e.p.x; e.v.y-=1.45*vn*e.p.y; } } }
 }
-const CRITTER_FAR=95; const _cfr=new THREE.Frustum(), _cfm=new THREE.Matrix4(), _cfs=new THREE.Sphere();
+const CRITTER_FAR=ULTRA?45:95; const _cfr=new THREE.Frustum(), _cfm=new THREE.Matrix4(), _cfs=new THREE.Sphere();
 function updateCritters(dt){
   if(!critters.length) return;
   const t=(Date.now()/1000)%100000, cx=camera.position.x, cz=camera.position.z, far=Math.min(CRITTER_FAR, settings.draw+10);
@@ -8473,7 +8485,7 @@ function flowerNear(px,pz){ let best=null, bd=1e9; const F=MAP.flowers;
 
 // ---------- cada cuadro ----------
 let runDustT=0;
-function ambientUpdate(dt,t){ if(SP.on) { PET.p.visible=FLY.p.visible=DUST.p.visible=false; birdBody.visible=birdWing.visible=birdWingL.visible=bfWing.visible=bfWingL.visible=false; return; }
+function ambientUpdate(dt,t){ if(SP.on || ULTRA) { if(ULTRA) try{ jumpFish.forEach(f=>f.g?f.g.visible=false:f.visible=false); }catch(e){} PET.p.visible=FLY.p.visible=DUST.p.visible=false; birdBody.visible=birdWing.visible=birdWingL.visible=bfWing.visible=bfWingL.visible=false; return; }
   const W=weatherNow, day=sky.dayK||0, cam=camera.position, px=player.pos.x, pz=player.pos.z, py=player.pos.y, under=typeof underwaterView!=='undefined' && underwaterView;
   _amb.t+=dt;
   // viento
