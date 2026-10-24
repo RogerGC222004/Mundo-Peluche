@@ -917,7 +917,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='100';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='101';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -7483,7 +7483,7 @@ function arStatus(a,uid){ if(uid===myUid) return AR.me.a===a ? AR.me.st : 0; con
 function arPos(uid){ if(uid===myUid) return player.pos; const r=arRemote(uid); return r ? r.pos : null; }
 
 // ---------------- 1) Plataformas flotantes: 5 pisos de 50×50 baldosas sobre el mar ----------------
-const PLAT={N:50, F:5, T:1.1, y0:SEA_Y+7, dy:7, removed:new Uint8Array(5*50*50), mine:[], warn:new Map(), gid:'', seen:new Map(), meshes:[], cur:-1, curT:0};
+const PLAT={orig:[], N:50, F:5, T:1.1, y0:SEA_Y+7, dy:7, removed:new Uint8Array(5*50*50), mine:[], warn:new Map(), gid:'', seen:new Map(), meshes:[], cur:-1, curT:0};
 const platTop=f=>PLAT.y0+f*PLAT.dy+.2;
 const platIdx=(f,i,j)=>f*PLAT.N*PLAT.N+j*PLAT.N+i;
 const PLAT_COL=['#ff7aa2','#ffc23d','#6fd15a','#4fb0ff','#a77bff'];
@@ -7492,15 +7492,17 @@ const PLAT_COL=['#ff7aa2','#ffc23d','#6fd15a','#4fb0ff','#a77bff'];
     const m=new THREE.InstancedMesh(gf,new THREE.MeshStandardMaterial({roughness:.75}),N*N); m.receiveShadow=true; m.castShadow=f===PLAT.F-1;
     for(let j=0;j<N;j++) for(let i=0;i<N;i++){ arW(A,(j-(N-1)/2)*T,(i-(N-1)/2)*T,platTop(f)-.2,o.position); o.rotation.set(0,yaw,0); o.scale.set(1,1,1); o.updateMatrix(); m.setMatrixAt(j*N+i,o.matrix);
       c.set(PLAT_COL[f]); if((i+j)%2) c.multiplyScalar(.9); m.setColorAt(j*N+i,c); }
-    m.frustumCulled=true; m.instanceMatrix.needsUpdate=true; m.instanceColor.needsUpdate=true; scene.add(m); PLAT.meshes.push(m); }
+    m.frustumCulled=true; m.instanceMatrix.needsUpdate=true; m.instanceColor.needsUpdate=true; scene.add(m); PLAT.meshes.push(m); PLAT.orig.push(m.instanceMatrix.array.slice()); }
   // cuatro bastones de caramelo en las esquinas y letrero en la playa
   const caneM=new THREE.MeshStandardMaterial({map:(()=>{ const cc=document.createElement('canvas'); cc.width=32; cc.height=128; const q=cc.getContext('2d'); q.fillStyle='#fffaf3'; q.fillRect(0,0,32,128); q.fillStyle='#e0303a'; for(let y=-32;y<160;y+=32){ q.beginPath(); q.moveTo(0,y); q.lineTo(32,y-16); q.lineTo(32,y-4); q.lineTo(0,y+12); q.fill(); } const t=new THREE.CanvasTexture(cc); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1,12); return t; })(), roughness:.35});
   const H=platTop(PLAT.F-1)+3-SEA_Y, half=(N/2)*T+.4;
   [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([a,b])=>{ const p=arW(A,a*half,b*half,SEA_Y+H/2); const m=new THREE.Mesh(new THREE.CylinderGeometry(.45,.45,H,12),caneM); m.position.copy(p); scene.add(m);
     const ball=new THREE.Mesh(sphereG,new THREE.MeshStandardMaterial({color:PLAT_COL[(a+1+b+1)%5], roughness:.3})); ball.scale.setScalar(.9); ball.position.set(p.x,SEA_Y+H+.6,p.z); scene.add(ball); });
 })();
-function platSetTile(k,alive){ const f=Math.floor(k/(PLAT.N*PLAT.N)), r=k%(PLAT.N*PLAT.N), m=PLAT.meshes[f], mt=new THREE.Matrix4();
-  m.getMatrixAt(r,mt); const p=new THREE.Vector3(), q=new THREE.Quaternion(), s=new THREE.Vector3(); mt.decompose(p,q,s); s.setScalar(alive?1:0); mt.compose(p,q,s); m.setMatrixAt(r,mt); m.instanceMatrix.needsUpdate=true; }
+// quitar/poner una baldosa: al ponerla se copia su lugar original (antes se sacaba de la matriz "aplastada" y la baldosa ya nunca regresaba)
+function platSetTile(k,alive){ const f=Math.floor(k/(PLAT.N*PLAT.N)), r=k%(PLAT.N*PLAT.N), m=PLAT.meshes[f], a=m.instanceMatrix.array, o=r*16;
+  if(alive) for(let i=0;i<16;i++) a[o+i]=PLAT.orig[f][o+i]; else for(let i=0;i<16;i++) a[o+i]=0;
+  m.instanceMatrix.needsUpdate=true; }
 function platReset(gid){ if(PLAT.gid===gid) return; PLAT.gid=gid; PLAT.mine=[]; if(PLAT.tick) PLAT.tick.clear(); PLAT.seen.clear(); PLAT.cur=-1; PLAT.curT=0;
   for(let k=0;k<PLAT.removed.length;k++) if(PLAT.removed[k]){ PLAT.removed[k]=0; platSetTile(k,true); } PLAT.warn.forEach((t,k)=>platTint(k,0)); PLAT.warn.clear(); }
 function platRemove(k){ if(PLAT.removed[k]) return; PLAT.removed[k]=1; platSetTile(k,false); try{ const A=AR_SPOTS[0], w=platTileWorld(k); splashBurst(w.x,w.y,w.z,.15); }catch(e){} }
