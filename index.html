@@ -917,7 +917,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='96';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='97';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -5219,6 +5219,7 @@ const pW=(lx,lz)=>[PIER.bx+lx*PIER.c+lz*PIER.s, PIER.bz-lx*PIER.s+lz*PIER.c];
 const pL=(x,z)=>{ const dx=x-PIER.bx, dz=z-PIER.bz; return [dx*PIER.c-dz*PIER.s, dx*PIER.s+dz*PIER.c]; };
 const pV=(lx,y,lz)=>{ const [x,z]=pW(lx,lz); return new THREE.Vector3(x,y,z); };
 PIER.y0=terrainH(...pW(0,PIER.Z0));
+TELEPORTS.push((([x,z])=>({id:'muelle', name:'Muelle', x, z, noPortal:true}))(pW(5,-36)));   // en el mapa: la playa junto al muelle
 function pierDeckY(lz){ const P=PIER; if(lz<P.ZR) return P.y0+.06+(P.Y-P.y0-.06)*Math.max(0,(lz-P.Z0)/(P.ZR-P.Z0)); return P.Y; }
 function pierOn(lx,lz){ const P=PIER; return (Math.abs(lx)<=P.W+.05 && lz>=P.Z0 && lz<=P.PZ0+.2) || (Math.abs(lx)<=P.PW && lz>=P.PZ0 && lz<=P.PZ1); }
 PIER_GROUND=function(x,z,y){ const [lx,lz]=pL(x,z); if(!pierOn(lx,lz)) return null; const h=pierDeckY(lz); return y>=h-.75 ? h : null; };
@@ -5466,7 +5467,7 @@ function updateMyFishing(dt){ const F=player.fish; if(!F) return; F.t+=dt; const
     if(k>=1) fishCaught(F); }
 }
 // ---------- puerta ----------
-function setDoor(open,quiet){ const D=PIER.door; if(D.open===open) return; D.open=open; D.from=D.a; D.to=open?-1.75:0; D.t0=performance.now()/1000; if(!quiet){ D.t=now1(); try{ sendPresence(true); }catch(e){} } audio.door(open); }
+function pierDoor(open,quiet){ const D=PIER.door; if(D.open===open) return; D.open=open; D.from=D.a; D.to=open?-1.75:0; D.t0=performance.now()/1000; if(!quiet){ D.t=now1(); try{ sendPresence(true); }catch(e){} } audio.door(open); }
 function nearDoor(){ const [lx,lz]=pL(player.pos.x,player.pos.z); return Math.abs(lx)<1.7 && Math.abs(lz-(PIER.HZ-PIER.HH))<2.3 && Math.abs(player.pos.y-PIER.Y)<1; }
 function nearTortu(){ const [lx,lz]=pL(player.pos.x,player.pos.z); return Math.abs(lx)<2.7 && lz>PIER.HZ+PIER.HH-3.6 && lz<PIER.HZ+PIER.HH-2.1 && Math.abs(player.pos.y-PIER.Y)<1; }
 function nearBucket(){ if(player.bucket>=0) return null; let best=null, bd=1.25; for(const b of PIER.buckets){ if(b.carried) continue; const d=Math.hypot(b.pos.x-player.pos.x,b.pos.z-player.pos.z); if(d<bd && Math.abs(b.pos.y-player.pos.y)<1.2){ bd=d; best=b; } } return best; }
@@ -5557,7 +5558,7 @@ function pierPose(t,dt){ if(state!=='play' && state!=='pause') return;
 function parsePier(r,pr){ const z=pr.pz; if(!Array.isArray(z) || z.length!==7 || !z.every(Number.isFinite)){ r.pz=null; return; }
   const was=r.pz; r.pz=[z[0]?1:0, Number.isInteger(z[1])&&FISH[z[1]]?z[1]:-1, Number.isInteger(z[2])&&z[2]>=0&&z[2]<PIER.rods.length?z[2]:-1, z[3]|0, z[4], z[5]?1:0, z[6]];
   if(was && z[4]!==was[4] && z[4]>0){ r.feedAt=performance.now()/1000; CU.feed={t:0, who:r}; }
-  if(z[6]>PIER.door.t+.05){ PIER.door.t=z[6]; const near=Math.hypot(r.pos.x-player.pos.x,r.pos.z-player.pos.z)<40; if(PIER.door.open!==!!z[5]) setDoor(!!z[5],true); if(!near){} } }
+  if(z[6]>PIER.door.t+.05){ PIER.door.t=z[6]; const near=Math.hypot(r.pos.x-player.pos.x,r.pos.z-player.pos.z)<40; if(PIER.door.open!==!!z[5]) pierDoor(!!z[5],true); if(!near){} } }
 function remotePierPose(r,t,dt){ const z=r.pz; r.pzHand=r.pzHand||{id:-2,m:null};
   if(!z){ if(r.pzBucket) r.pzBucket.visible=false; fishInHand(r.obj,-1,r.pzHand); return; }
   if(z[0] && !r.pzBucket){ const src=PIER.buckets[0].o, b=new THREE.Group(); src.children.forEach(c=>{ if(c.isMesh && c!==PIER.buckets[0].water && !PIER.buckets[0].slots.includes(c)) b.add(c.clone()); }); const arm=r.obj.userData.arms.find(a=>a.userData.side>0); arm.userData.joint.add(b); b.position.set(0,-ARM_LOW-.62,0); r.pzBucket=b; }
@@ -5578,7 +5579,7 @@ function pierActions(){
   const store = player.hand>=0 ? {label: myBucket(3.2)?'Guardar el pez':'Soltar el pez', run:storeFish} : null;
   if(player.hand>=0 && nearCucoHead()) return [{label:'Darle el pez a Cuco', run:feedCuco}, store];
   if(!pierOnNow()) return null;
-  if(nearDoor()) return [{label:PIER.door.open?'Cerrar la puerta':'Abrir la puerta', run:()=>setDoor(!PIER.door.open)}, store || (player.bucket>=0?{label:'Dejar el balde', run:dropBucket}:null)];
+  if(nearDoor()) return [{label:PIER.door.open?'Cerrar la puerta':'Abrir la puerta', run:()=>pierDoor(!PIER.door.open)}, store || (player.bucket>=0?{label:'Dejar el balde', run:dropBucket}:null)];
   if(nearTortu()) return [{label:'Hablar con Tortu', run:()=>openFishOv('shop')}, store];
   const nb=nearBucket(), nr=nearRod();
   const dB=nb?Math.hypot(nb.pos.x-player.pos.x,nb.pos.z-player.pos.z):99, dR=nr?Math.hypot(pW(...nr.stand)[0]-player.pos.x,pW(...nr.stand)[1]-player.pos.z):99;
