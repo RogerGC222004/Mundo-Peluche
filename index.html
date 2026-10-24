@@ -145,6 +145,21 @@ body.not-play .mg-hud, body.not-play .mg-ctl, body.not-play .mg-result{display:n
 
 .map-card.book-card{width:min(700px,94vw);max-height:calc(100vh - 140px);background:#fbf1e2;outline-color:#a58fd0;}
 .book-head h2{flex:1;text-align:center;}
+/* Tortu: vender peces y catálogo */
+.fish-open #hud,.fish-open .hotbar,.fish-open .actions,.fish-open #touch{display:none!important;}
+#fishOv{z-index:30;}
+.fish-card{margin:auto;width:min(720px,94vw);max-width:none;max-height:calc(100vh - 36px);display:flex;flex-direction:column;gap:8px;background:#eef8ff;outline-color:#6fb3d6;}
+.fish-head{display:flex;align-items:center;gap:10px;} .fish-head h2{flex:1;margin:0;} .fish-head .btn{font-size:18px;padding:7px 18px;}
+.fish-say{margin:0;font-weight:700;font-size:14.5px;color:#2c4a5a;line-height:1.35;}
+.fish-tabs,.fish-chips{display:flex;gap:8px;flex-wrap:wrap;} .fish-tabs .chip[aria-pressed="true"],.fish-chips .chip[aria-pressed="true"]{background:#6fb3d6;color:#fff;}
+.fish-body{overflow:auto;display:flex;flex-direction:column;gap:8px;padding:2px 2px 6px;min-height:80px;}
+.fish-row{display:flex;align-items:center;gap:10px;background:#fff;border-radius:12px;padding:6px 10px;box-shadow:0 3px 0 #c9dcea;}
+.fish-row canvas{width:66px;height:44px;flex:none;} .fish-tx{flex:1;display:flex;flex-direction:column;min-width:0;} .fish-tx b{font-family:var(--display);font-size:16px;color:#23415a;} .fish-tx small{font-size:12px;font-weight:700;opacity:.75;}
+.sbtn{font-family:var(--display);font-weight:800;font-size:14px;border:none;border-radius:10px;padding:7px 11px;background:#ffd36b;color:#5a4426;box-shadow:0 3px 0 #c9a24a;cursor:pointer;} .sbtn:disabled{opacity:.5;cursor:default;}
+.fish-all{align-self:flex-start;font-size:20px;padding:10px 22px;}
+.fish-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px;}
+.fish-it{background:#fff;border-radius:12px;padding:6px 4px 7px;display:flex;flex-direction:column;align-items:center;text-align:center;box-shadow:0 3px 0 #c9dcea;}
+.fish-it canvas{width:100%;max-width:96px;aspect-ratio:3/2;} .fish-it b{font-family:var(--display);font-size:13.5px;line-height:1.1;color:#23415a;} .fish-it small{font-size:11px;font-weight:700;opacity:.75;} .fish-it.unk{background:#e4eef6;}
 .book-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;overflow:auto;padding:4px 2px 6px;min-height:120px;}
 .book-pl{background:#fff8ec;border:none;border-radius:14px;padding:8px 6px 9px;cursor:pointer;box-shadow:0 3px 0 #d9c4a0;font-family:var(--display);color:#4a3a5c;display:flex;flex-direction:column;align-items:center;gap:1px;text-align:center;}
 .book-pl:hover,.book-pl:focus-visible{transform:translateY(-2px);box-shadow:0 5px 0 #d9c4a0;}
@@ -601,6 +616,14 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
   </div>
 </div>
 
+<div class="overlay" id="fishOv" hidden style="background:rgba(207,231,242,.5)">
+  <div class="card fish-card" role="dialog" aria-labelledby="fishTitle">
+    <div class="fish-head"><h2 id="fishTitle">Tortu</h2><button class="btn" id="fishClose">Cerrar</button></div>
+    <p class="fish-say" id="fishSay"></p>
+    <div class="fish-tabs" id="fishTabs"><button class="chip" data-tab="sell">Vender peces</button><button class="chip" data-tab="dex">Catálogo de peces</button></div>
+    <div class="fish-body" id="fishBody"></div>
+  </div>
+</div>
 <div class="overlay" id="inv" hidden style="background:rgba(207,231,242,.55)">
   <div class="card inv-card" role="dialog" aria-labelledby="invTitle">
     <h2 id="invTitle">Inventario</h2>
@@ -894,7 +917,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='95';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='96';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -1995,6 +2018,7 @@ function updateBubbles(dt, emitter){
 }
 
 // Altura del suelo donde está el jugador: terreno, o la cima de una roca/botón/cofre si está encima
+var PIER_GROUND=null;   // el muelle y la casita de Tortu (se define más abajo)
 function groundAt(x,z,y){
   let g=terrainH(x,z);
   // sobre el asfalto de la pista o del estacionamiento
@@ -2004,6 +2028,7 @@ function groundAt(x,z,y){
   if(typeof playgroundGround==='function'){ const pg=playgroundGround(x,z,y); if(pg!==null && pg>g) g=pg; }
   { const cf=cakeFloorGround(x,z,y); if(cf!==null && cf>g) g=cf; }
   { const ar=arenaGround(x,z,y); if(ar!==null && ar>g) g=ar; }
+  if(PIER_GROUND){ const pg=PIER_GROUND(x,z,y); if(pg!==null && pg>g) g=pg; }
   for(const o of obsNear(x,z)){
     if(!o.walk) continue;
     const dx=x-o.x, dz=z-o.z;
@@ -2312,7 +2337,7 @@ const DIVE_FLAT=1.48;                         // inclinación al quedar de panza
 const diveLift=a=>.36*Math.sin(a);            // sube el cuerpo para que la panza quede sobre el suelo
 function startDive(){
   if(typeof SP!=='undefined' && SP.on){ spaceDive(); return; }
-  if(state!=='play' || player.dive || player.swim || player.car || player.ac || player.pg || player.mg) return;
+  if(state!=='play' || player.dive || player.swim || player.car || player.ac || player.pg || player.mg || player.busy) return;
   const dx=Math.sin(player.facing), dz=Math.cos(player.facing);
   const hs=Math.hypot(player.vel.x,player.vel.z), sp=Math.max(5,hs*1.15);
   player.vel.set(dx*sp,0,dz*sp);
@@ -2412,7 +2437,7 @@ function show(next){
   if(next!=='play'){ for(const k in keys) keys[k]=false; stick.x=stick.y=0; }
   try{
     hotbarEl.hidden = next!=='play';
-    if(next!=='play'){ mapWrap.hidden=true; invEl.hidden=true; ui('bookWrap').hidden=true; } else applyHeld();
+    if(next!=='play'){ mapWrap.hidden=true; invEl.hidden=true; ui('bookWrap').hidden=true; ui('fishOv').hidden=true; document.body.classList.remove('fish-open'); } else applyHeld();
   }catch(e){}
   try{ sendPresence(true); }catch(e){}
   try{ audio.apply(); }catch(e){}
@@ -2726,7 +2751,7 @@ tap(camChip,()=>{ const M=player.mg;
 hold(ui('tJump'),()=>{ touchHold.up=true; jump(); },()=>{ touchHold.up=false; });
 hold(ui('tDive'),()=>{ touchHold.down=true; startDive(); },()=>{ touchHold.down=false; });
 
-function jump(){ if(player.mg || (typeof SP!=='undefined' && SP.on)) return; if(hook.mode>=2){ bowRelease(); return; } if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see')){ stopPlay(); return; } if(player.grounded && !player.dive && !player.swim && !player.car && !player.ac && !player.pg){ player.vy=7.2; player.grounded=false; audio.jump(); } }
+function jump(){ if(player.busy) return; if(player.mg || (typeof SP!=='undefined' && SP.on)) return; if(hook.mode>=2){ bowRelease(); return; } if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see')){ stopPlay(); return; } if(player.grounded && !player.dive && !player.swim && !player.car && !player.ac && !player.pg){ player.vy=7.2; player.grounded=false; audio.jump(); } }
 
 addEventListener('keydown',e=>{
   if(state!=='play'){ return; }
@@ -2734,7 +2759,7 @@ addEventListener('keydown',e=>{
   if(e.code==='Space'){ e.preventDefault(); jump(); }
   if(e.code==='KeyV' || e.code==='KeyC') setCam(camMode==='third'?'first':'third');
   if(e.code==='KeyQ' && !e.repeat) startDive();
-  if(e.code==='KeyP' || e.code==='Escape'){ if(e.code==='Escape' && (closeInv(false) || closeMap(false) || (window.__bookReady && closeBook(false)))) return; if(document.pointerLockElement) document.exitPointerLock(); show('pause'); }
+  if(e.code==='KeyP' || e.code==='Escape'){ if(e.code==='Escape' && (closeFishOv(false) || closeInv(false) || closeMap(false) || (window.__bookReady && closeBook(false)))) return; if(document.pointerLockElement) document.exitPointerLock(); show('pause'); }
   if(e.code.startsWith('Arrow')) e.preventDefault();
 });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
@@ -3017,7 +3042,7 @@ function sendPresence(force){
     sd: aircraft.map(a=>[a.stairs, a.door, a.sdT]),
     id: myUid, bw: bowPresence(), ...mgPresence(), ou: outfitList(wardrobe.eq), ...arenaPresence(), ...spacePresence(),
     pl: player.pg ? [PG_KINDS.indexOf(player.pg.k), player.pg.i, r2(player.pg.v||0)] : null,
-    pu: myPush.i>=0 ? [myPush.i, myPush.t] : null, cu: cucoPresence(),
+    pu: myPush.i>=0 ? [myPush.i, myPush.t] : null, cu: cucoPresence(), pz: pierPresence(),
     ai: player.ac && player.acPose ? (A=>[A.i, A.mode==='seated'||A.mode==='sitting'?A.seat:-1, r2(player.acPose.l[0]), r2(player.acPose.l[1]), r2(player.acPose.l[2]), r2(player.acPose.f||0), r2(player.acPose.sit||0), r2(player.acPose.walk?(player.acPose.mv||1):0), r2(player.acPose.armsUp||0), player.acPose.air?1:0])(player.ac) : null
   };
   const key=presFit(payload);
@@ -3125,7 +3150,7 @@ function onPeers({peers}){
     // aviones y helicópteros: quién pilota, dónde quedaron, escaleras y puertas, y quién va a bordo
     { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<(PG_KINDS[pl[0]]==='bench'?BENCHES.length:PG_KINDS[pl[0]]==='cuco'?5:3) ? pl : null;
       if(pr.pu) pgCheckPush(r,pr.pu); }
-    parseCuco(r,pr,cuDrv);   // Cuco: dónde está y si lo guía esta persona
+    parseCuco(r,pr,cuDrv); parsePier(r,pr);   // Cuco: dónde está y si lo guía esta persona
     const ai=pr.ai;
     r.ai = Array.isArray(ai) && ai.length===10 && ai.every(Number.isFinite) && aircraft[ai[0]] && Math.abs(ai[2])<20 && Math.abs(ai[4])<20 ? ai : null;
     const ap=pr.ap;
@@ -3189,6 +3214,7 @@ function updateRemotes(dt,t){
     if(r.bw && r.held==='bow') remoteBowPose(r);
     if(r.mg) remoteMgPose(r,t,dt);
     remoteArenaPose(r,t,dt);
+    remotePierPose(r,t,dt);
     const fwd=Math.sin(r.dive)*.85;
     { const bx=r.pos.x+Math.sin(r.obj.rotation.y)*fwd, bz=r.pos.z+Math.cos(r.obj.rotation.y)*fwd, by=terrainH(bx,bz);
       r.blob.position.set(bx, Math.max(by, Math.min(r.pos.y, by+3))+.06, bz); r.blob.visible = !r.swim && r.pos.y > waterLevelAt(r.pos.x,r.pos.z)-.05; }
@@ -3237,7 +3263,7 @@ const hotbar=['map','bow',null,null,null];
 let selectedSlot=0, holding=false;
 const heldItem=()=> holding ? hotbar[selectedSlot] : null;
 const hotbarEl=ui('hotbar'), invEl=ui('inv'), mapWrap=ui('mapWrap');
-const overlaysOpen=()=>!mapWrap.hidden || !invEl.hidden || !ui('bookWrap').hidden;
+const overlaysOpen=()=>!mapWrap.hidden || !invEl.hidden || !ui('bookWrap').hidden || !ui('fishOv').hidden;
 
 function renderHotbar(){
   hotbarEl.querySelectorAll('.slot[data-slot]').forEach(b=>{
@@ -3251,7 +3277,7 @@ function renderHotbar(){
 }
 // Usar el objeto de un espacio; si ya lo tienes en la mano, lo guardas
 function useSlot(i){
-  if(state!=='play' || player.car || player.pg || player.mg) return;
+  if(state!=='play' || player.car || player.pg || player.mg || player.busy) return;
   if(!invEl.hidden){ selectedSlot=i; holding=false; applyHeld(); renderHotbar(); renderInv(); return; }   // con el inventario abierto solo se elige el espacio
   if(typeof SP!=='undefined' && SP.on && hotbar[i]==='bow' && !(i===selectedSlot && holding)){ flashNote('El arco no funciona en el espacio: aquí no hay de dónde engancharse'); return; }
   if(i===selectedSlot && holding) holding=false;
@@ -3949,6 +3975,7 @@ function scanActions(){
   { const aa=arenaActions(); if(aa){ setActions(aa[0],aa[1]); return; } }
   if(heldItem()==='flag' && !player.car && !player.ac && !player.pg && !player.mg){ setActions({label:'Plantar bandera', run:plantFlag}, null); return; }
   { const ma=mgActions(); if(ma){ setActions(ma[0],ma[1]); return; } }
+  { const pa=pierActions(); if(pa){ setActions(pa[0],pa[1]); return; } }
   { const [x,y]=pgActions(); if(x||y||player.pg){ setActions(x,y); return; } }
   { const ba=bowActions(); if(ba){ setActions(ba[0],ba[1]); return; } }
   if(player.car){
@@ -3958,14 +3985,14 @@ function scanActions(){
     setActions({label: moving?'Frena para bajar':'Bajar', disabled:moving, run:exitCar}, null);
     return;
   }
-  if(player.swim || player.dive){ setActions(null,null); return; }
+  if(player.swim || player.dive){ const fb=pierFallback(); setActions(fb?fb[0]:null, fb?fb[1]:null); return; }
   // puerta más cercana
   let best=null, bd=2.6;
   for(const c of cars){
     if(Math.abs(c.v)>1.5 || Math.hypot(c.x-player.pos.x,c.z-player.pos.z)>9) continue;
     for(let d=0;d<4;d++){ const w=carLocalToWorld(c,...doorOutside(c,d)), dd=Math.hypot(w.x-player.pos.x,w.z-player.pos.z); if(dd<bd && Math.abs(w.y-player.pos.y)<2){ bd=dd; best={c,d}; } }
   }
-  if(!best){ setActions(null,null); return; }
+  if(!best){ const fb=pierFallback(); setActions(fb?fb[0]:null, fb?fb[1]:null); return; }
   const {c,d}=best, open=(c.doorMask>>d)&1, nm=c.T.name;
   if(!open){ setActions({label:'Abrir puerta', run:()=>setDoor(c,d,true)}, null); return; }
   const s=freeSeatForDoor(c.i,d);
@@ -4866,7 +4893,9 @@ const CU=(()=>{ const a=5.5; let rc=480; for(let r=250;r<1300;r++){ if(terrainH(
     A:5.0, B:7.0, BASE:2.3, H:4.0, R:5.6, net:null, drv:null, look:new THREE.Vector2(), blinkT:3, blink:0, g:null, parts:null, obs:null}; })();
 const CU_SEATS=[[0,2.5],[-2.05,.35],[2.05,.35],[-1.45,-2.25],[1.45,-2.25]];
 const cuShellY=(x,z)=>CU.BASE+CU.H*Math.sqrt(Math.max(0,1-(x/CU.A)**2-(z/CU.B)**2));
-(function buildCuco(){
+// el modelo de la tortuga (lo usan Cuco y el mini Cuco de la pecera); las texturas se hacen una sola vez
+const TURTLE_M={};
+function makeTurtle(){
   const g=new THREE.Group(); g.userData.noBatch=true;
   const tex=(w,h,draw)=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d'); draw(x,w,h);
     // pelusita de peluche encima de todo
@@ -4874,7 +4903,7 @@ const cuShellY=(x,z)=>CU.BASE+CU.H*Math.sqrt(Math.max(0,1-(x/CU.A)**2-(z/CU.B)**
     const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; return t; };
   const mat=(map,extra)=>new THREE.MeshStandardMaterial(Object.assign({map, roughness:.92, metalness:0}, extra||{}));
   // caparazón: escudos (placas) con costuras oscuras y rayitas amarillas, orilla con borde amarillo
-  const shellTex=tex(512,512,(x,w,h)=>{
+  const shellTex=TURTLE_M.shellTex||(TURTLE_M.shellTex=tex(512,512,(x,w,h)=>{
     x.fillStyle='#46562c'; x.fillRect(0,0,w,h);
     const P=(u,v)=>[u*w,v*h];
     // rayas amarillas onduladas dentro de cada placa
@@ -4900,8 +4929,8 @@ const cuShellY=(x,z)=>CU.BASE+CU.H*Math.sqrt(Math.max(0,1-(x/CU.A)**2-(z/CU.B)**
     x.strokeStyle='#e0b43c'; x.lineWidth=9; ring(.497);
     // costuras de peluche (puntadas claras) a lo largo de las placas del centro
     x.setLineDash([9,8]); x.strokeStyle='rgba(235,225,170,.55)'; x.lineWidth=2.5; ring(.385); ring(.47); x.setLineDash([]);
-  });
-  const shellMat=mat(shellTex);
+  }));
+  const shellMat=TURTLE_M.shell||(TURTLE_M.shell=mat(shellTex));
   const dome=new THREE.SphereGeometry(1,44,18,0,Math.PI*2,0,Math.PI/2);
   { const p=dome.attributes.position, uv=dome.attributes.uv; for(let i=0;i<p.count;i++){ const px=p.getX(i), pz=p.getZ(i), py=p.getY(i), rr=Math.hypot(px,pz);
       // proyección desde arriba, estirando la orilla para que se vean las placas de los lados
@@ -4921,7 +4950,7 @@ const cuShellY=(x,z)=>CU.BASE+CU.H*Math.sqrt(Math.max(0,1-(x/CU.A)**2-(z/CU.B)**
       x.strokeStyle='#1c2412'; x.lineWidth=4; x.lineCap='round';
       [[.17,-1],[.33,1]].forEach(([u,sd])=>{ x.beginPath(); x.moveTo((u+sd*.06)*w,(1-.97)*h); x.quadraticCurveTo((u+sd*.02)*w,(1-.86)*h,(u-sd*.035)*w,(1-.74)*h); x.stroke(); });
     } });
-  const skinMat=mat(skinTex(false)), headMat=mat(skinTex(true));
+  const skinMat=TURTLE_M.skin||(TURTLE_M.skin=mat(skinTex(false))), headMat=TURTLE_M.head||(TURTLE_M.head=mat(skinTex(true)));
   // cuello y cabeza: el cuello gira para mirarte; la cabeza se inclina
   const neckP=new THREE.Group(); neckP.position.set(0,3.0,CU.B-1.2); g.add(neckP);
   const neckG=new THREE.CylinderGeometry(1.05,1.25,3.6,20,1,true); neckG.rotateX(Math.PI/2); neckG.translate(0,0,1.5);
@@ -4946,10 +4975,11 @@ const cuShellY=(x,z)=>CU.BASE+CU.H*Math.sqrt(Math.max(0,1-(x/CU.A)**2-(z/CU.B)**
     for(let c=-1;c<=1;c++){ const cl=new THREE.Mesh(new THREE.ConeGeometry(.16,.55,6),clawM); cl.rotation.x=Math.PI/2; cl.position.set(sx*1.25+c*.45,-1.95,sz*.55+1.55); p.add(cl); }
     legs.push({p, sx, sz, ph:k===0||k===3?0:Math.PI}); });
   const tail=new THREE.Mesh(new THREE.ConeGeometry(.55,2.2,10),skinMat); tail.rotation.x=-Math.PI/2-.35; tail.position.set(0,2.0,-CU.B-.6); g.add(tail);
-  scene.add(g); CU.g=g; CU.parts={neckP,headP,lids,legs,shell,tail};
+  return {g, parts:{neckP,headP,lids,legs,shell,tail}};
+}
+{ const T=makeTurtle(); scene.add(T.g); CU.g=T.g; CU.parts=T.parts;
   // sólida: dos círculos a lo largo del caparazón
-  CU.obs={x:CU.x, z:CU.z, r:5.2, top:CU.y+CU.BASE+CU.H, walk:false}; CU.obs2={x:CU.x, z:CU.z, r:5.2, top:CU.y+CU.BASE+CU.H, walk:false}; DYN_OBS.push(CU.obs, CU.obs2);
-})();
+  CU.obs={x:CU.x, z:CU.z, r:5.2, top:CU.y+CU.BASE+CU.H, walk:false}; CU.obs2={x:CU.x, z:CU.z, r:5.2, top:CU.y+CU.BASE+CU.H, walk:false}; DYN_OBS.push(CU.obs, CU.obs2); }
 // ¿quién guía? (yo, alguien de la sala o nadie)
 const iRideCuco=()=>player.pg && player.pg.k==='cuco';
 const iDriveCuco=()=>iRideCuco() && player.pg.i===0 && player.pg.seated;
@@ -5026,6 +5056,7 @@ function cucoUpdate(dt,t){
   C.blinkT-=dt; if(C.blinkT<0){ C.blink=1; C.blinkT=2.5+Math.random()*4; }
   C.blink=Math.max(0,C.blink-dt*4.5); const lid=1-.88*Math.sin(Math.min(1,C.blink)*Math.PI);   // el ojo se cierra y se abre
   P.lids.forEach(e=>e.scale.y=lid);
+  cucoFeedAnim(dt,t);
 }
 // pose de quien va sentado en el caparazón (la misma para mí y para los demás)
 function cucoSeatPose(i){ const S=CU_SEATS[i]; if(!S) return null; const v=new THREE.Vector3(S[0], cuShellY(S[0],S[1])-.415+.12, S[1]); CU.g.localToWorld(v);
@@ -5055,6 +5086,553 @@ function parseCuco(r,pr,drvNow){ const c=pr.cu; if(!Array.isArray(c) || c.length
   const x=clampN(c[0],-5000,5000,CU.x), z=clampN(c[1],-5000,5000,CU.z);
   if(c[4]===1 && r.pl && PG_KINDS[r.pl[0]]==='cuco' && r.pl[1]===0){ CU.drv={x,z,h:c[2],v:clampN(c[5],-15,15,0),at:performance.now()}; CU.net={x,z,h:c[2]}; CU.t=Math.max(CU.t,c[3]); drvNow.v=true; return; }
   if(c[3]>CU.t+.05){ CU.t=c[3]; CU.net={x,z,h:c[2]}; } }
+
+// ---------- Peces y criaturas del mar (de peluche) ----------
+// [nombre, tamaño 0 pequeño · 1 mediano · 2 grande, forma, color, color de detalle, rareza 0 común · 1 poco común · 2 rara · 3 legendaria]
+// OJO: el orden es el número de cada pez (se guarda así): solo agregar al final.
+const FISH_RAW=[
+ ['Sardina',0,'fish','#9fb4c8','#e8eef4',0],['Anchoa',0,'fish','#a9bccb','#5d7180',0],['Pez payaso',0,'fish','#ff8a2a','#ffffff',1],['Pez cirujano azul',0,'fish','#2f6fe0','#ffd23a',1],
+ ['Guppy',0,'fish','#ff6fae','#7fd0ff',0],['Tetra neón',0,'fish','#2bd1ff','#ff3b3b',1],['Pez dorado',0,'fish','#ffb02e','#ffe08a',0],['Betta',0,'fish','#b02ee0','#ff4fa0',1],
+ ['Pez ángel',0,'fish','#f4e04a','#2c2c2c',1],['Pez mandarín',0,'fish','#2f8fff','#ff8a2a',2],['Damisela',0,'fish','#3fa0ff','#ffe34f',0],['Gobio',0,'fish','#c9b48a','#8a6d46',0],
+ ['Blenio',0,'fish','#8fae6a','#d9c27a',0],['Pez lagarto',0,'fish','#a28a5c','#e2d4a8',0],['Lábrido limpiador',0,'fish','#3b5bff','#1a1a1a',1],['Pez globo bebé',0,'puffer','#f4d27a','#8a6a2a',1],
+ ['Pez cofre amarillo',0,'fish','#ffe23a','#2b2b2b',2],['Caballito de mar',0,'horse','#ffb347','#ff7b3a',1],['Caballito pigmeo',0,'horse','#ff9ec4','#ffd0e2',2],['Camarón',0,'shrimp','#ff8a7a','#ffd2c8',0],
+ ['Camarón mantis',0,'shrimp','#2fd18a','#ff5a8a',2],['Cangrejito ermitaño',0,'crab','#ff6a3a','#f4d8a8',0],['Cangrejo violinista',0,'crab','#ffd23a','#3a8aff',1],['Estrella de mar',0,'star','#ff7a4a','#ffc08a',0],
+ ['Estrella azul',0,'star','#3a7aff','#9fd0ff',1],['Erizo de mar',0,'urchin','#5a2a7a','#a46ad0',0],['Medusa luna',0,'jelly','#d8e8ff','#b0c8ff',1],['Medusa rosa',0,'jelly','#ffb0d8','#ff6aa8',1],
+ ['Pulpito',0,'octo','#ff8a6a','#ffd0b0',1],['Calamar luciérnaga',0,'squid','#4ab0ff','#c8f0ff',2],['Almeja',0,'shell','#e8d8c0','#b09878',0],['Vieira',0,'shell','#ff9a7a','#ffd8c8',0],
+ ['Caracol marino',0,'shell','#c8a07a','#7a5a3a',0],['Babosa de mar',0,'eel','#8a3aff','#ffd23a',2],['Pez hacha',0,'fish','#c8d8e8','#7a8a9a',1],['Platija bebé',0,'flat','#b8a07a','#7a6040',0],
+ ['Pez loro bebé',0,'fish','#4fe0b0','#ff7ab0',1],['Pez piedra chiquito',0,'puffer','#8a7a6a','#5a4a3a',2],['Pez linterna',0,'fish','#2a2a4a','#7af0ff',2],['Anguila jardinera',0,'eel','#f4f0e0','#2a2a2a',1],
+ ['Pez sapo',0,'puffer','#c8a050','#7a5a20',1],
+ ['Pez loro',1,'fish','#3ad0a0','#ff6aa8',0],['Pargo rojo',1,'fish','#ff4a3a','#ffb0a0',0],['Lubina',1,'fish','#8aa0b0','#d8e0e8',0],['Robalo',1,'fish','#9aa89a','#2a2a2a',0],
+ ['Caballa',1,'fish','#3a7ab0','#d8e8f0',0],['Jurel',1,'fish','#8ab0c8','#e8e0a0',0],['Corvina',1,'fish','#c8b8a0','#8a7a60',0],['Trucha arcoíris',1,'fish','#8ab08a','#ff7ab0',1],
+ ['Salmón',1,'fish','#c8a8a0','#ff8a6a',1],['Dorado',1,'fish','#3ad08a','#ffe23a',1],['Pámpano',1,'fish','#d8d8c8','#ffd23a',1],['Pez león',1,'fish','#ff6a4a','#ffffff',2],
+ ['Pez trompeta',1,'eel','#ffd23a','#ff8a3a',1],['Barracuda',1,'eel','#a8b8c8','#2a3a4a',1],['Morena',1,'eel','#6a8a3a','#e8d83a',1],['Anguila',1,'eel','#5a5a3a','#a8a87a',0],
+ ['Pez globo',1,'puffer','#e8c86a','#6a5a2a',1],['Pez erizo',1,'puffer','#d8c8a0','#7a6a4a',1],['Lenguado',1,'flat','#a8906a','#5a4a3a',0],['Raya pintada',1,'ray','#6a7a9a','#e8e8ff',1],
+ ['Raya eléctrica',1,'ray','#c8a87a','#5a3a1a',2],['Pulpo',1,'octo','#e05a3a','#ffb08a',1],['Calamar',1,'squid','#f0d0d8','#c86a8a',0],['Sepia',1,'squid','#a88a6a','#f0e0c8',1],
+ ['Langosta',1,'lobster','#c83a2a','#ffb08a',1],['Cangrejo azul',1,'crab','#3a7ad0','#ff6a3a',0],['Cangrejo real',1,'crab','#c83a3a','#ffd0a0',2],['Bogavante',1,'lobster','#2a4a8a','#8ab0ff',2],
+ ['Medusa melena de león',1,'jelly','#ff9a3a','#ffd0a0',2],['Pez murciélago',1,'flat','#2a2a2a','#ffd23a',2],['Pez halcón',1,'fish','#ff6a6a','#ffffff',1],['Pez gallo',1,'fish','#e8e8f0','#5a8aff',2],
+ ['Pez volador',1,'fish','#3a8ad0','#bfe8ff',1],['Atún pequeño',1,'fish','#2a4a7a','#c8d8e8',0],['Mero',1,'fish','#8a6a4a','#c8a88a',0],['Pez napoleón',1,'fish','#2ab0a0','#7ad0ff',2],
+ ['Tiburón bebé',1,'shark','#8a9ab0','#e8eef4',1],['Pejerrey',1,'fish','#c8d0e0','#5a6a8a',0],['Pez unicornio',1,'fish','#8a9ab0','#3a5ab0',2],['Nautilo',1,'shell','#f4e8d8','#c86a3a',2],
+ ['Estrella corona de espinas',1,'star','#6a3ad0','#ff6a8a',2],['Pepino de mar',1,'eel','#6a3a2a','#c88a5a',0],
+ ['Atún rojo',2,'fish','#1a3a6a','#c8d8e8',1],['Pez espada',2,'sword','#3a5a8a','#c8d8e8',1],['Marlín azul',2,'sword','#2a5ad0','#9ad0ff',2],['Pez vela',2,'sword','#3a3a8a','#8ab0ff',2],
+ ['Mero gigante',2,'fish','#7a5a3a','#c8a070',1],['Pez luna',2,'mola','#c8c8d0','#8a8a9a',2],['Tiburón martillo',2,'shark','#8a9ab0','#e8e8f0',2],['Tiburón tigre',2,'shark','#9a8a6a','#5a4a3a',2],
+ ['Tiburón blanco',2,'shark','#8a9aa8','#ffffff',2],['Tiburón ballena',2,'shark','#3a5a7a','#f0f0ff',3],['Mantarraya gigante',2,'ray','#2a2a3a','#f0f0f0',1],['Raya águila',2,'ray','#3a3a5a','#ffffff',1],
+ ['Calamar gigante',2,'squid','#c84a4a','#ffb0a0',2],['Pulpo gigante',2,'octo','#a83a2a','#ff9a7a',2],['Delfín',2,'dolphin','#8ab0c8','#e8f0f8',1],['Orca',2,'dolphin','#1a1a1a','#ffffff',2],
+ ['Beluga',2,'dolphin','#f0f4f8','#c8d8e8',2],['Narval',2,'dolphin','#a8b0b8','#5a6070',3],['Ballena jorobada bebé',2,'whale','#4a5a7a','#d8e0e8',2],['Ballena azul bebé',2,'whale','#4a7ab0','#a8c8e8',3],
+ ['Manatí',2,'whale','#8a8a8a','#b0b0b0',1],['Foca',2,'dolphin','#8a7a6a','#d0c0a8',1],['Esturión',2,'fish','#6a6a5a','#c8c8b0',1],['Celacanto',2,'fish','#3a4a6a','#e8e8f0',3],
+ ['Pez remo',2,'eel','#d8d8e8','#ff4a4a',3],['Kraken de peluche',2,'octo','#6a2ab0','#ff6ad0',3],['Tiburón sierra',2,'shark','#a89a7a','#5a4a3a',2]
+];
+const FISH_PRICE=[[4,8,15,30],[20,35,60,110],[80,140,250,500]];
+const FISH=FISH_RAW.map(([n,s,k,c1,c2,r],id)=>({id, n, s, k, c:[c1,c2], r, p:FISH_PRICE[s][r]}));
+const FISH_SPACE=[1,2,5], FISH_SIZE_N=['pequeño','mediano','grande'], FISH_SIZE_P=['Pequeños','Medianos','Grandes'], FISH_RAR_N=['común','poco común','raro','legendario'];
+
+// Peces de peluche en 3D (para la mano, el balde y cuando salen del agua) y su dibujito para el catálogo
+const fishMatC=new Map(); const fishMat=hex=>{ let m=fishMatC.get(hex); if(!m){ m=felt(hex,'rgba(0,0,0,.12)'); fishMatC.set(hex,m); } return m; };
+const fishEyeM=new THREE.MeshStandardMaterial({color:0x1a1410, roughness:.3});
+const fishCone=new THREE.ConeGeometry(.5,1,10), fishCyl=new THREE.CylinderGeometry(.5,.5,1,8), fishFin=new THREE.ConeGeometry(.5,1,3);
+function fishMesh(id,len){
+  const F=FISH[id]||FISH[0], k=F.k, g=new THREE.Group(), A=fishMat(F.c[0]), B=fishMat(F.c[1]);
+  const S=(m,x,y,z,sx,sy,sz,par)=>{ const o=new THREE.Mesh(sphereG,m); o.position.set(x,y,z); o.scale.set(sx,sy,sz); (par||g).add(o); return o; };
+  const M=(geo,m,x,y,z,sx,sy,sz,rx,ry,rz)=>{ const o=new THREE.Mesh(geo,m); o.position.set(x,y,z); o.scale.set(sx,sy,sz); o.rotation.set(rx||0,ry||0,rz||0); g.add(o); return o; };
+  const eyes=(x,y,z)=>{ S(fishEyeM,x,y,z,.045,.05,.03); S(fishEyeM,-x,y,z,.045,.05,.03); };
+  if(k==='fish'||k==='shark'||k==='sword'||k==='mola'||k==='dolphin'||k==='whale'){
+    const tall=k==='mola'?.42:k==='whale'?.26:.22, wide=k==='whale'?.22:.15, L=k==='mola'?.3:k==='whale'?.5:.48;
+    S(A,0,0,0,wide,tall,L); S(B,0,-tall*.35,.04,wide*.85,tall*.6,L*.8);
+    if(k==='dolphin'||k==='whale'){ S(A,0,0,-L-.1,.32,.04,.12); }   // aleta de la cola acostada
+    else M(fishFin,B,0,0,-L-.08,.04,.32,.3,Math.PI/2,0,0);
+    if(k==='shark'||k==='dolphin') M(fishFin,A,0,tall+.08,-.02,.03,.24,.2,0,0,0);
+    else if(k!=='whale') M(fishFin,B,0,tall+.02,-.05,.02,.14,.22,0,0,0);
+    if(k==='sword') M(fishCone,B,0,.02,L+.32,.04,.6,.04,Math.PI/2,0,0);
+    if(k==='mola'){ M(fishFin,B,0,tall+.1,-.05,.03,.3,.14); M(fishFin,B,0,-tall-.1,-.05,.03,.3,.14,Math.PI,0,0); }
+    eyes(wide*.75, tall*.25, L*.68);
+  } else if(k==='puffer'){ S(A,0,0,0,.3,.28,.3); S(B,0,-.12,.04,.22,.14,.22);
+    for(let i=0;i<10;i++){ const a=i*2.4, y=Math.cos(i*1.3)*.2; M(fishCone,B,Math.cos(a)*.27,y,Math.sin(a)*.27,.05,.12,.05,Math.sin(a)*1.4,0,-Math.cos(a)*1.4); }
+    M(fishFin,B,0,0,-.33,.03,.18,.16,Math.PI/2,0,0); eyes(.17,.08,.22);
+  } else if(k==='flat'){ S(A,0,0,0,.42,.07,.32); S(B,0,.03,0,.3,.04,.22); M(fishFin,A,0,0,-.36,.03,.24,.18,Math.PI/2,0,0); S(fishEyeM,.07,.07,.16,.04,.05,.04); S(fishEyeM,-.04,.07,.2,.04,.05,.04);
+  } else if(k==='eel'){ for(let i=0;i<6;i++){ const z=.42-i*.17; S(i%2?B:A,Math.sin(i*1.1)*.05,0,z,.09-i*.008,.1-i*.008,.12); } eyes(.06,.04,.5);
+  } else if(k==='ray'){ S(A,0,0,0,.55,.06,.38); S(B,0,-.02,0,.4,.05,.28); M(fishCyl,A,0,0,-.55,.025,.5,.025,Math.PI/2,0,0); eyes(.1,.06,.25);
+  } else if(k==='crab'||k==='lobster'){ const lob=k==='lobster';
+    S(A,0,0,lob?-.05:0,.26,.13,lob?.4:.2); if(lob) for(let i=0;i<3;i++) S(B,0,.0,-.42-i*.12,.13-i*.02,.08,.08);
+    [-1,1].forEach(sd=>{ S(A,sd*.3,.04,lob?.4:.26,.1,.08,.12); S(B,sd*.22,.02,lob?.28:.16,.05,.05,.1);
+      for(let i=0;i<3;i++) M(fishCyl,A,sd*.3,-.05,(lob?.05:.05)-i*.1,.025,.22,.025,0,0,sd*1.1); });
+    eyes(.07,.15,lob?.32:.18);
+  } else if(k==='shrimp'){ for(let i=0;i<5;i++){ const a=i*.5; S(i%2?B:A,0,Math.sin(a)*.18-.05,Math.cos(a)*.22-.05,.09-i*.01,.09-i*.01,.08); } M(fishFin,B,0,-.03,-.32,.03,.16,.14,Math.PI/2,0,0); eyes(.05,.08,.26);
+  } else if(k==='star'){ S(B,0,0,0,.12,.06,.12); for(let i=0;i<5;i++){ const a=i/5*Math.PI*2; S(A,Math.sin(a)*.17,0,Math.cos(a)*.17,.075,.05,.18).rotation.y=a; } eyes(.04,.06,.08);
+  } else if(k==='urchin'){ S(A,0,0,0,.22,.2,.22); for(let i=0;i<14;i++){ const a=i*2.4, y=Math.cos(i*.9)*.15; M(fishCone,B,Math.cos(a)*.21,y,Math.sin(a)*.21,.04,.2,.04,Math.sin(a)*1.3,0,-Math.cos(a)*1.3); } eyes(.08,.06,.19);
+  } else if(k==='jelly'){ const d=S(A,0,.05,0,.3,.24,.3); for(let i=0;i<6;i++){ const a=i/6*Math.PI*2; M(fishCyl,B,Math.cos(a)*.18,-.2,Math.sin(a)*.18,.03,.4,.03); } eyes(.1,.08,.26);
+  } else if(k==='octo'){ S(A,0,.12,0,.26,.28,.26); for(let i=0;i<8;i++){ const a=i/8*Math.PI*2; M(fishCyl,i%2?B:A,Math.cos(a)*.17,-.15,Math.sin(a)*.17,.05,.3,.05,Math.sin(a)*.5,0,-Math.cos(a)*.5); } eyes(.1,.14,.22);
+  } else if(k==='squid'){ M(fishCone,A,0,0,-.12,.26,.55,.22,-Math.PI/2,0,0); S(B,0,0,.16,.14,.13,.12); for(let i=0;i<6;i++){ const a=i/6*Math.PI*2; M(fishCyl,A,Math.cos(a)*.07,Math.sin(a)*.07,.34,.03,.3,.03,Math.PI/2,0,0); } eyes(.1,.04,.2);
+  } else if(k==='shell'){ S(A,0,.02,0,.28,.12,.24); S(B,0,-.03,0,.27,.06,.23); for(let i=-2;i<=2;i++) M(fishCyl,B,i*.09,.08,0,.015,.01,.4,Math.PI/2,0,i*.12); eyes(.08,.08,.2);
+  } else if(k==='horse'){ S(A,0,.22,.05,.1,.1,.12); M(fishCyl,A,0,.24,.18,.04,.16,.04,Math.PI/2,0,0); S(A,0,.02,0,.12,.18,.12); S(B,0,-.18,-.04,.08,.1,.08); S(A,0,-.3,.02,.05,.07,.05); M(fishFin,B,0,.05,-.13,.02,.14,.12,Math.PI/2,0,0); eyes(.07,.26,.1);
+  }
+  mergeStatic(g);   // pocas piezas para dibujar (importante en teléfonos)
+  g.scale.setScalar(len); g.traverse(o=>{ if(o.isMesh){ o.castShadow=len>.5; } }); g.userData.noBatch=true; return g;
+}
+// dibujito del catálogo (si no lo has atrapado, solo la silueta)
+const fishIconC=new Map();
+function fishIcon(id,known){ const key=id+(known?'k':'u'); if(fishIconC.has(key)) return fishIconC.get(key);
+  const F=FISH[id], c=document.createElement('canvas'); c.width=120; c.height=80; const x=c.getContext('2d'), k=F.k;
+  const A=known?F.c[0]:'#3c4a5c', B=known?F.c[1]:'#55657a', O=known?'#2c3a1a':'#2a3342';
+  x.lineJoin='round'; x.lineCap='round'; x.lineWidth=3; x.strokeStyle=O;
+  const E=(cx,cy,rx,ry,col,rot)=>{ x.fillStyle=col; x.beginPath(); x.ellipse(cx,cy,rx,ry,rot||0,0,6.283); x.fill(); x.stroke(); };
+  const P=(pts,col)=>{ x.fillStyle=col; x.beginPath(); pts.forEach((p,i)=>i?x.lineTo(p[0],p[1]):x.moveTo(p[0],p[1])); x.closePath(); x.fill(); x.stroke(); };
+  const eye=(cx,cy,r)=>{ x.fillStyle='#fff'; x.beginPath(); x.arc(cx,cy,r,0,6.283); x.fill(); x.fillStyle='#1a1410'; x.beginPath(); x.arc(cx+r*.2,cy,r*.6,0,6.283); x.fill(); };
+  if(k==='fish'||k==='shark'||k==='sword'||k==='dolphin'||k==='whale'||k==='mola'){
+    const ry=k==='mola'?30:k==='whale'?22:18, rx=k==='mola'?26:k==='whale'?40:36;
+    if(k==='dolphin'||k==='whale') P([[60-rx+4,40],[10,26],[16,40],[10,54]],B); else P([[60-rx+6,40],[12,22],[20,40],[12,58]],B);
+    if(k==='shark'||k==='dolphin') P([[56,40-ry+2],[66,40-ry-14],[74,40-ry+4]],A); else if(k!=='whale') P([[50,40-ry+3],[60,40-ry-8],[72,40-ry+5]],B);
+    if(k==='mola'){ P([[56,12],[62,2],[70,14]],B); P([[56,68],[62,78],[70,66]],B); }
+    E(64,40,rx,ry,A); x.save(); x.beginPath(); x.ellipse(64,40,rx,ry,0,0,6.283); x.clip(); x.fillStyle=B; x.fillRect(0,48,120,40); x.restore(); x.beginPath(); x.ellipse(64,40,rx,ry,0,0,6.283); x.stroke();
+    if(k==='sword'){ x.lineWidth=4; x.beginPath(); x.moveTo(64+rx-2,38); x.lineTo(118,36); x.stroke(); x.lineWidth=3; }
+    eye(64+rx*.6,36,4.5);
+  } else if(k==='puffer'){ for(let i=0;i<14;i++){ const a=i/14*6.283; x.beginPath(); x.moveTo(60+Math.cos(a)*24,40+Math.sin(a)*24); x.lineTo(60+Math.cos(a)*33,40+Math.sin(a)*33); x.stroke(); } E(60,40,26,25,A); eye(72,34,5);
+  } else if(k==='flat'){ P([[22,40],[10,30],[10,50]],B); E(62,42,40,22,A); E(62,46,26,10,B); eye(76,34,4); eye(86,38,4);
+  } else if(k==='eel'){ x.lineWidth=16; x.strokeStyle=O; x.beginPath(); for(let i=0;i<=20;i++){ const xx=12+i*4.8, yy=40+Math.sin(i*.6)*12; i?x.lineTo(xx,yy):x.moveTo(xx,yy); } x.stroke(); x.lineWidth=11; x.strokeStyle=A; x.stroke(); x.lineWidth=3; x.strokeStyle=O; eye(104,40+Math.sin(12)*12-2,4);
+  } else if(k==='ray'){ x.lineWidth=4; x.beginPath(); x.moveTo(40,40); x.lineTo(6,44); x.stroke(); x.lineWidth=3; P([[30,40],[66,12],[104,40],[66,64]],A); E(66,42,16,10,B); eye(80,34,3.5); eye(80,46,3.5);
+  } else if(k==='crab'||k==='lobster'){ const lob=k==='lobster';
+    for(let i=0;i<3;i++){ x.beginPath(); x.moveTo(50+i*10,50); x.lineTo(40+i*10,70); x.stroke(); x.beginPath(); x.moveTo(50+i*10,30); x.lineTo(40+i*10,10); x.stroke(); }
+    if(lob) E(34,40,26,10,B); E(lob?62:60,40,lob?28:26,lob?14:18,A); E(96,24,12,8,A,-.4); E(96,56,12,8,A,.4); eye(78,34,4); eye(78,46,4);
+  } else if(k==='shrimp'){ for(let i=5;i>=0;i--){ const a=-1.2+i*.48; E(60+Math.cos(a)*24,46+Math.sin(a)*24,11,9,i%2?B:A); } eye(84,42,4);
+  } else if(k==='star'){ const pts=[]; for(let i=0;i<10;i++){ const r=i%2?13:34, a=-Math.PI/2+i*Math.PI/5; pts.push([60+Math.cos(a)*r,42+Math.sin(a)*r]); } P(pts,A); eye(55,40,4); eye(66,40,4);
+  } else if(k==='urchin'){ x.strokeStyle=B; x.lineWidth=3; for(let i=0;i<22;i++){ const a=i/22*6.283; x.beginPath(); x.moveTo(60+Math.cos(a)*18,42+Math.sin(a)*18); x.lineTo(60+Math.cos(a)*34,42+Math.sin(a)*34); x.stroke(); } x.strokeStyle=O; E(60,42,20,19,A); eye(54,38,4); eye(66,38,4);
+  } else if(k==='jelly'){ x.strokeStyle=B; x.lineWidth=4; for(let i=0;i<5;i++){ x.beginPath(); for(let j=0;j<=8;j++){ const xx=40+i*10+Math.sin(j*.9+i)*4, yy=42+j*4.5; j?x.lineTo(xx,yy):x.moveTo(xx,yy); } x.stroke(); } x.strokeStyle=O; x.lineWidth=3;
+    x.fillStyle=A; x.beginPath(); x.ellipse(60,42,28,24,0,Math.PI,0); x.closePath(); x.fill(); x.stroke(); eye(52,32,4); eye(68,32,4);
+  } else if(k==='octo'){ x.strokeStyle=O; x.lineWidth=9; for(let i=0;i<6;i++){ x.beginPath(); for(let j=0;j<=6;j++){ const xx=36+i*10+Math.sin(j*.8+i)*5, yy=44+j*5; j?x.lineTo(xx,yy):x.moveTo(xx,yy); } x.stroke(); } x.strokeStyle=B; x.lineWidth=5; x.stroke(); x.strokeStyle=O; x.lineWidth=3; E(60,34,26,22,A); eye(52,32,4.5); eye(68,32,4.5);
+  } else if(k==='squid'){ x.strokeStyle=O; x.lineWidth=6; for(let i=0;i<5;i++){ x.beginPath(); x.moveTo(78,34+i*3); x.quadraticCurveTo(96,30+i*5,114,30+i*6); x.stroke(); } x.lineWidth=3; P([[8,40],[44,20],[82,30],[82,50],[44,60]],A); E(78,40,10,12,B); eye(74,36,4);
+  } else if(k==='shell'){ x.fillStyle=A; x.beginPath(); x.moveTo(60,66); x.arc(60,58,40,Math.PI*1.12,Math.PI*1.88); x.closePath(); x.fill(); x.stroke(); x.strokeStyle=B; for(let i=-3;i<=3;i++){ x.beginPath(); x.moveTo(60,64); x.lineTo(60+i*11,26-Math.abs(i)*2); x.stroke(); } x.strokeStyle=O; eye(52,48,4); eye(68,48,4);
+  } else if(k==='horse'){ x.lineWidth=12; x.strokeStyle=O; x.beginPath(); x.moveTo(62,14); x.quadraticCurveTo(44,40,64,52); x.quadraticCurveTo(72,66,58,72); x.quadraticCurveTo(50,74,54,66); x.stroke(); x.lineWidth=8; x.strokeStyle=A; x.stroke(); x.lineWidth=3; x.strokeStyle=O; E(64,16,11,9,A); P([[72,14],[88,12],[88,18],[72,20]],A); eye(64,14,3.5);
+  }
+  if(!known){ x.fillStyle='rgba(255,255,255,.9)'; x.font='800 30px Sniglet, Nunito, sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('?',60,42); }
+  fishIconC.set(key,c); return c; }
+
+// ======================================================================================
+// ---------- Muelle de pesca y la casita de Tortu (sobre el mar, junto a Cuco) ----------
+// Un muelle de madera entra al mar; al final, sobre pilotes, la casita azul con techo de paja.
+// A los lados del muelle hay 10 cañas fijas, cada una con su balde. Tortu (un peluchito disfrazado
+// de tortuga) compra los peces y tiene el catálogo. Adentro hay una pecera con un mini Cuco.
+// ======================================================================================
+const PIER=(()=>{ const a=5.38; let rc=450; for(let r=250;r<1300;r++){ if(terrainH(Math.cos(a)*r,Math.sin(a)*r)<SEA_Y){ rc=r; break; } }
+  const th=Math.atan2(Math.cos(a),Math.sin(a));   // +z del muelle = mar adentro
+  return {a, bx:Math.cos(a)*rc, bz:Math.sin(a)*rc, th, c:Math.cos(th), s:Math.sin(th),
+    Y:.55, Z0:-22, ZR:-16, PZ0:72, PZ1:88, W:1.7, PW:8, HZ:80, HH:5, HW:3.2,
+    rods:[], buckets:[], door:{open:false, t:0, a:0, from:0, to:0, t0:-9, obs:[]}, roof:null, gP:null, near:false, y0:0, fdStamp:0, tortu:null, mini:null, tank:null}; })();
+const pW=(lx,lz)=>[PIER.bx+lx*PIER.c+lz*PIER.s, PIER.bz-lx*PIER.s+lz*PIER.c];
+const pL=(x,z)=>{ const dx=x-PIER.bx, dz=z-PIER.bz; return [dx*PIER.c-dz*PIER.s, dx*PIER.s+dz*PIER.c]; };
+const pV=(lx,y,lz)=>{ const [x,z]=pW(lx,lz); return new THREE.Vector3(x,y,z); };
+PIER.y0=terrainH(...pW(0,PIER.Z0));
+function pierDeckY(lz){ const P=PIER; if(lz<P.ZR) return P.y0+.06+(P.Y-P.y0-.06)*Math.max(0,(lz-P.Z0)/(P.ZR-P.Z0)); return P.Y; }
+function pierOn(lx,lz){ const P=PIER; return (Math.abs(lx)<=P.W+.05 && lz>=P.Z0 && lz<=P.PZ0+.2) || (Math.abs(lx)<=P.PW && lz>=P.PZ0 && lz<=P.PZ1); }
+PIER_GROUND=function(x,z,y){ const [lx,lz]=pL(x,z); if(!pierOn(lx,lz)) return null; const h=pierDeckY(lz); return y>=h-.75 ? h : null; };
+const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH-.15 && lz>P.HZ-P.HH+.15 && lz<P.HZ+P.HH-.15 && y>P.Y-.6 && y<P.Y+P.HW+2.5; };
+// ---------- construcción ----------
+(function buildPier(){
+  const P=PIER, gS=new THREE.Group(); gS.position.set(P.bx,0,P.bz); gS.rotation.y=P.th;
+  const gP=new THREE.Group(); gP.position.copy(gS.position); gP.rotation.y=P.th; gP.userData.noBatch=true; P.gP=gP;
+  const pBox=new THREE.BoxGeometry(1,1,1), pCyl=new THREE.CylinderGeometry(1,1,1,12);
+  const wood=felt('#b98250','rgba(70,35,10,.16)'), woodL=felt('#d2a06c','rgba(90,50,15,.14)'), woodD=felt('#86562f','rgba(50,25,5,.2)');
+  const B=(m,x,y,z,sx,sy,sz,par,rx,ry,rz)=>{ const o=new THREE.Mesh(pBox,m); o.position.set(x,y,z); o.scale.set(sx,sy,sz); if(rx||ry||rz) o.rotation.set(rx||0,ry||0,rz||0); (par||gS).add(o); return o; };
+  const C=(m,x,y,z,r,h,par)=>{ const o=new THREE.Mesh(pCyl,m); o.position.set(x,y,z); o.scale.set(r,h,r); (par||gS).add(o); return o; };
+  const obs=(lx,lz,r,top,bot,list)=>{ const [x,z]=pW(lx,lz); const o={x,z,r,top,walk:false}; if(bot!==undefined) o.bot=bot; (list||obstacles).push(o); return o; };
+  const lineObs=(x0,z0,x1,z1,r,top,bot,step)=>{ const n=Math.max(1,Math.ceil(Math.hypot(x1-x0,z1-z0)/(step||.45))); for(let i=0;i<=n;i++){ const t=i/n; obs(x0+(x1-x0)*t, z0+(z1-z0)*t, r, top, bot); } };
+  // tablones del muelle y de la plataforma
+  for(let z=P.Z0+.25, i=0; z<P.PZ0; z+=.5, i++) B(i%4===1?woodL:wood, 0, pierDeckY(z)-.06, z, P.W*2, .12, .44);
+  for(let z=P.PZ0+.25, i=0; z<P.PZ1; z+=.5, i++) B(i%4===1?woodL:wood, 0, P.Y-.06, z, P.PW*2, .12, .44);
+  [-1,1].forEach(sd=>B(woodD, sd*(P.W-.25), P.Y-.27, (P.ZR+P.PZ0)/2, .24, .3, P.PZ0-P.ZR));
+  [-1,0,1].forEach(k=>B(woodD, k*(P.PW-.6), P.Y-.27, (P.PZ0+P.PZ1)/2, .24, .3, P.PZ1-P.PZ0));
+  // pilotes: más largos mientras más hondo está el mar
+  const pile=(lx,lz)=>{ const [x,z]=pW(lx,lz), tb=terrainH(x,z), top=P.Y-.15, bot=tb-.9; if(top-bot<.5) return; C(woodD, lx, (top+bot)/2, lz, .21, top-bot); obstacles.push({x,z,r:.34,top:P.Y-.25,walk:false}); };
+  for(let z=P.ZR; z<=P.PZ0; z+=4) [-1,1].forEach(sd=>pile(sd*(P.W-.2), z));
+  for(const lx of [-7.6,-2.6,2.6,7.6]) for(const lz of [P.PZ0+.4, P.PZ0+5.4, P.PZ0+10.6, P.PZ1-.4]) pile(lx,lz);
+  // barandal (se puede brincar para echarse un clavado al mar)
+  const railSeg=(x0,z0,x1,z1,y0,y1)=>{ const L=Math.hypot(x1-x0,z1-z0), n=Math.max(1,Math.round(L/2)), ang=Math.atan2(x1-x0,z1-z0);
+    for(let i=0;i<=n;i++){ const t=i/n, x=x0+(x1-x0)*t, z=z0+(z1-z0)*t, y=y0+(y1-y0)*t; B(woodD, x, y+.5, z, .14, 1.0, .14); }
+    for(const hh of [.55,.98]){ const ym=(y0+y1)/2+hh, slope=Math.atan2(y1-y0,L); B(hh>.9?wood:woodL, (x0+x1)/2, ym, (z0+z1)/2, .1, .1, L, null, -slope*Math.cos(ang)*0, ang, 0).rotation.set(0,ang,0); }
+    lineObs(x0,z0,x1,z1,.22,Math.max(y0,y1)+1.0,Math.min(y0,y1)-.35); };
+  [-1,1].forEach(sd=>{ railSeg(sd*(P.W-.06),P.Z0+.3,sd*(P.W-.06),P.ZR,pierDeckY(P.Z0+.3),P.Y); railSeg(sd*(P.W-.06),P.ZR,sd*(P.W-.06),P.PZ0,P.Y,P.Y); });
+  [-1,1].forEach(sd=>{ railSeg(sd*(P.PW-.06),P.PZ0+.06,sd*(P.PW-.06),P.PZ1-.06,P.Y,P.Y); railSeg(sd*(P.W+.1),P.PZ0+.06,sd*(P.PW-.06),P.PZ0+.06,P.Y,P.Y); });
+  railSeg(-P.PW+.06,P.PZ1-.06,P.PW-.06,P.PZ1-.06,P.Y,P.Y);
+  // ---------- cañas fijas (5 por lado, donde el agua ya es honda) y un balde junto a cada una ----------
+  let zd=P.PZ0-30; for(let z=P.ZR; z<P.PZ0; z+=1){ if(terrainH(...pW(P.W+4,z))<SEA_Y-2.4){ zd=z; break; } }
+  const rodM=felt('#5a3a22','rgba(30,10,0,.2)'), corkM=felt('#d8b483','rgba(90,60,20,.2)'), reelM=new THREE.MeshStandardMaterial({color:0x9aa3ad, roughness:.45, metalness:.4});
+  const lineM=new THREE.LineBasicMaterial({color:0xf4f4f4}), bobR=felt('#e8453c'), bobW=felt('#fbf6ee');
+  const e=.62, up=new THREE.Vector3(0,1,0);
+  for(let k=0;k<5;k++){ const u=zd+1+(P.PZ0-4-(zd+1))*k/4;
+    [-1,1].forEach(sd=>{ const i=P.rods.length;
+      B(woodD, sd*(P.W-.06), P.Y+.62, u, .2, 1.24, .2);   // poste donde va la caña
+      const base=new THREE.Vector3(sd*(P.W-.02), P.Y+1.05, u), D=new THREE.Vector3(sd*Math.cos(e), Math.sin(e), 0), L=3.5;
+      const rod=new THREE.Mesh(new THREE.CylinderGeometry(.028,.065,L,8), rodM); rod.position.copy(base).addScaledVector(D,L/2); rod.quaternion.setFromUnitVectors(up,D); gS.add(rod);
+      const cork=new THREE.Mesh(pCyl,corkM); cork.scale.set(.075,.55,.075); cork.position.copy(base).addScaledVector(D,-.22); cork.quaternion.setFromUnitVectors(up,D); gS.add(cork);
+      const reel=new THREE.Mesh(pCyl,reelM); reel.scale.set(.13,.09,.13); reel.position.copy(base).addScaledVector(D,.12).add(new THREE.Vector3(0,-.14,0)); reel.rotation.z=Math.PI/2; gS.add(reel);
+      const tipL=base.clone().addScaledVector(D,L);
+      const tip=pV(tipL.x, tipL.y, tipL.z), cast=pV(sd*(P.W+11), SEA_Y, u+((k*7+(sd>0?3:0))%5-2)*.6), idle=pV(tipL.x, SEA_Y, tipL.z);
+      const geo=new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute([0,0,0, 0,0,0],3));
+      const line=new THREE.Line(geo,lineM); line.frustumCulled=false; line.userData.noBatch=true; scene.add(line);
+      const bob=new THREE.Group(); bob.userData.noBatch=true; const b1=new THREE.Mesh(sphereG,bobR); b1.scale.set(.12,.1,.12); b1.position.y=.06; const b2=new THREE.Mesh(sphereG,bobW); b2.scale.set(.12,.08,.12); bob.add(b1,b2); scene.add(bob);
+      P.rods.push({i, sd, u, tip, cast, idle, line, bob, pos:idle.clone(), stand:[sd*(P.W-.72), u-.35]});
+      // el balde (de metal) a un lado de la caña
+      P.buckets.push({i, home:pV(sd*(P.W-.5), P.Y, u+1.15), items:[], o:null, carried:false});
+    }); }
+  // ---------- la casita ----------
+  const HZ=P.HZ, HH=P.HH, HW=P.HW, Y=P.Y, z0=HZ-HH, z1=HZ+HH;
+  const blue=felt('#4f97d8','rgba(10,40,90,.15)'), blueIn=felt('#bfe3f7','rgba(40,80,120,.1)'), trim=felt('#f7f3e8','rgba(80,70,50,.1)');
+  const glass=new THREE.MeshStandardMaterial({color:0xcfefff, transparent:true, opacity:.35, roughness:.1, depthWrite:false});
+  // piso de azulejos rojo y verde
+  const tileTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d');
+    for(let i=0;i<2;i++) for(let j=0;j<2;j++){ g.fillStyle=(i+j)%2?'#5aa84f':'#d8574a'; g.fillRect(i*64,j*64,64,64); g.fillStyle='rgba(255,255,255,.14)'; g.fillRect(i*64+4,j*64+4,56,8); }
+    g.strokeStyle='rgba(60,40,30,.45)'; g.lineWidth=3; for(let k=0;k<=2;k++){ g.beginPath(); g.moveTo(k*64,0); g.lineTo(k*64,128); g.stroke(); g.beginPath(); g.moveTo(0,k*64); g.lineTo(128,k*64); g.stroke(); }
+    const im=g.getImageData(0,0,128,128), d=im.data; for(let q=0;q<d.length;q+=4){ const n=(Math.random()-.5)*14; d[q]+=n; d[q+1]+=n; d[q+2]+=n; } g.putImageData(im,0,0);
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(5,5); t.anisotropy=4; return t; })();
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(HH*2-.3,HH*2-.3), new THREE.MeshStandardMaterial({map:tileTex, roughness:.7})); floor.rotation.x=-Math.PI/2; floor.position.set(0,Y+.015,HZ); floor.receiveShadow=true; gS.add(floor);
+  // paredes (azul por fuera, azul clarito por dentro); la del frente tiene la puerta
+  const wall=(cx,cz,len,alongX,y0,y1)=>{ const h=y1-y0, cy=(y0+y1)/2; if(alongX){ B(blue,cx,cy,cz,len,h,.22); } else B(blue,cx,cy,cz,.22,h,len); };
+  const wallIn=(cx,cz,len,alongX,y0,y1,off)=>{ const h=y1-y0, cy=(y0+y1)/2; if(alongX) B(blueIn,cx,cy,cz+off,len,h,.03); else B(blueIn,cx+off,cy,cz,.03,h,len); };
+  wall(-2.9,z0,4.2,true,Y,Y+HW); wall(2.9,z0,4.2,true,Y,Y+HW); wall(0,z0,1.6,true,Y+2.45,Y+HW);
+  wallIn(-2.9,z0,4.2,true,Y,Y+HW,.13); wallIn(2.9,z0,4.2,true,Y,Y+HW,.13); wallIn(0,z0,1.6,true,Y+2.45,Y+HW,.13);
+  wall(0,z1,HH*2,true,Y,Y+HW); wallIn(0,z1,HH*2,true,Y,Y+HW,-.13);
+  [-1,1].forEach(sd=>{ wall(sd*HH,HZ,HH*2,false,Y,Y+HW); wallIn(sd*HH,HZ,HH*2,false,Y,Y+HW,-sd*.13); });
+  // esquinas, zoclo, marco de la puerta y ventanas
+  [[-HH,z0],[HH,z0],[-HH,z1],[HH,z1]].forEach(([x,z])=>B(trim,x,Y+HW/2,z,.34,HW+.05,.34));
+  [-.86,.86].forEach(x=>B(trim,x,Y+1.25,z0-.02,.14,2.5,.3)); B(trim,0,Y+2.52,z0-.02,1.86,.14,.3);
+  [-1,1].forEach(sd=>{ const wx=sd*HH, wz=HZ-2.9; [-1,1].forEach(f=>{ const ox=wx+sd*f*.14;
+      B(trim,ox,Y+1.9,wz,.06,.12,1.5); B(trim,ox,Y+1.05,wz,.06,.12,1.5); B(trim,ox,Y+1.47,wz-.7,.06,.95,.1); B(trim,ox,Y+1.47,wz+.7,.06,.95,.1); B(trim,ox,Y+1.47,wz,.06,.95,.07); B(trim,ox,Y+1.47,wz,.06,.07,1.3); });
+    B(glass,wx,Y+1.47,wz,.24,.8,1.32); });
+  B(wood,0,Y+.03,z0-1.1,2.2,.1,1.4);   // tapetito de la entrada (tabla)
+  // letrero sobre la puerta
+  { const c=document.createElement('canvas'); c.width=512; c.height=128; const g=c.getContext('2d'); g.fillStyle='#e9c48a'; g.fillRect(0,0,512,128); g.strokeStyle='#8a5a32'; g.lineWidth=10; g.strokeRect(5,5,502,118);
+    g.setLineDash([12,9]); g.lineWidth=3; g.strokeRect(18,18,476,92); g.setLineDash([]); g.fillStyle='#3a5a2a'; g.font='800 54px Sniglet, Nunito, sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('Pesca de Tortu',256,66);
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; const m=new THREE.Mesh(new THREE.PlaneGeometry(2.6,.65), new THREE.MeshStandardMaterial({map:t, roughness:.9})); m.position.set(0,Y+2.95,z0-.14); m.rotation.y=Math.PI; gS.add(m); P.sign=m; P.signTex=t; }
+  // techo de pirámide cubierto de paja (aparte, para quitarlo cuando estás adentro)
+  const thatch=(()=>{ const c=document.createElement('canvas'); c.width=c.height=256; const g=c.getContext('2d'); g.fillStyle='#d6b05a'; g.fillRect(0,0,256,256);
+    for(let i=0;i<2600;i++){ const x=Math.random()*256, y=Math.random()*256, L=8+Math.random()*16; g.strokeStyle=['#b88a3a','#f0d27a','#a27a32','#e2c066','#c99a44'][i%5]; g.lineWidth=1+Math.random()*1.6; g.beginPath(); g.moveTo(x,y); g.lineTo(x+(Math.random()-.5)*4,y+L); g.stroke(); }
+    for(let y=0;y<256;y+=32){ g.fillStyle='rgba(90,60,20,.18)'; g.fillRect(0,y,256,3); }
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(5,3); t.anisotropy=4; return t; })();
+  const roofM=new THREE.MeshStandardMaterial({map:thatch, roughness:1, side:THREE.DoubleSide});
+  const gR=new THREE.Group(); gR.position.copy(gS.position); gR.rotation.y=P.th;
+  const R=(HH+1.25)*Math.SQRT2, roof=new THREE.Mesh(new THREE.ConeGeometry(R,4.2,4,1,true), roofM); roof.rotation.y=Math.PI/4; roof.position.set(0,Y+HW+2.0,HZ); roof.castShadow=true; gR.add(roof);
+  const fringe=new THREE.Mesh(new THREE.CylinderGeometry(R*.985,R*1.03,.55,4,1,true), roofM); fringe.rotation.y=Math.PI/4; fringe.position.set(0,Y+HW-.18,HZ); gR.add(fringe);
+  const knob=new THREE.Mesh(new THREE.ConeGeometry(.35,.8,8), woodD); knob.position.set(0,Y+HW+4.2,HZ); gR.add(knob);
+  gR.userData.noBatch=true; scene.add(gR); P.roof=gR;
+  // obstáculos de las paredes (con hueco en la puerta)
+  const top=Y+HW+.2, bot=Y-.35;
+  lineObs(-HH,z0,-.95,z0,.32,top,bot,.4); lineObs(.95,z0,HH,z0,.32,top,bot,.4); lineObs(-HH,z1,HH,z1,.32,top,bot,.4); lineObs(-HH,z0,-HH,z1,.32,top,bot,.4); lineObs(HH,z0,HH,z1,.32,top,bot,.4);
+  for(const x of [-.55,-.18,.18,.55]){ const [wx,wz]=pW(x,z0); const o={x:wx,z:wz,r:.3,top:Y+2.6,walk:false,bot}; DYN_OBS.push(o); P.door.obs.push(o); }
+  // la puerta verde de madera (con bisagra a la izquierda)
+  { const dg=new THREE.Group(); dg.position.set(-.8,Y,z0); gP.add(dg); const gm=felt('#3f9a4a','rgba(0,40,0,.2)'), gd=felt('#2f7a38','rgba(0,30,0,.2)'), gold=new THREE.MeshStandardMaterial({color:0xe2b33c, roughness:.35, metalness:.5});
+    B(gm,.8,1.2,0,1.58,2.38,.1,dg); for(const x of [.3,.62,.98,1.3]) B(gd,x,1.2,-.06,.04,2.3,.02,dg).userData.noBatch=true; B(gd,.8,.6,-.065,1.4,.12,.02,dg); B(gd,.8,1.85,-.065,1.4,.12,.02,dg); B(gd,.8,1.22,-.07,.12,1.5,.02,dg,0,0,.85);
+    [-1,1].forEach(f=>{ const k=new THREE.Mesh(sphereG,gold); k.scale.setScalar(.08); k.position.set(1.42,1.15,f*.09); dg.add(k); });
+    dg.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); P.door.g=dg; }
+  // ---------- adentro: mostrador, Tortu, pecera y decoración ----------
+  B(wood,0,Y+.52,z1-1.85,4.6,1.04,.75); B(woodL,0,Y+1.07,z1-1.85,4.9,.08,.95); B(woodD,0,Y+.06,z1-1.85,4.7,.12,.8);
+  for(const x of [-1.6,0,1.6]){ const fm=fishMesh([2,3,31][x<0?0:x>0?2:1],.9); fm.position.set(x,Y+.6,z1-2.24); fm.rotation.y=Math.PI*.5+ (x<0?.2:-.2); gP.add(fm); }   // pececitos pintados en el mostrador
+  B(felt('#e05a4a'),1.6,Y+1.3,z1-1.85,.55,.38,.42); B(felt('#fbf6ee'),1.6,Y+1.52,z1-1.95,.4,.12,.05);
+  { const coinM=felt('#e2a92a','rgba(120,70,0,.25)'); for(let k=0;k<5;k++) C(coinM,-1.5+k*.05,Y+1.13+k*.035,z1-1.8+(k%2)*.04,.13,.03); }
+  // pecera: mitad arena (playita) y mitad agua; adentro vive un mini Cuco
+  { const tx=-HH+.78, tz=HZ-.2, base=Y+.86; P.tank={x:tx, z:tz, base};
+    B(woodD,tx,Y+.43,tz,1.05,.86,3.0); B(woodL,tx,Y+.88,tz,1.12,.05,3.08);
+    const sand=felt('#ecd49a','rgba(120,90,30,.14)'), dk=felt('#2c3a4a');
+    B(sand,tx,base+.04,tz,.9,.08,2.58);
+    B(sand,tx,base+.41,tz-.95,.9,.82,.7); B(sand,tx,base+.5,tz-.22,.9,.12,1.0,null,.6,0,0);
+    const water=new THREE.Mesh(pBox,new THREE.MeshStandardMaterial({color:0x2f9ee0, transparent:true, opacity:.55, roughness:.15, depthWrite:false})); water.scale.set(.88,.62,1.55); water.position.set(tx,base+.4,tz+.5); water.renderOrder=2; gS.add(water);
+    const gl=new THREE.Mesh(pBox,new THREE.MeshStandardMaterial({color:0xdff6ff, transparent:true, opacity:.16, roughness:.05, depthWrite:false})); gl.scale.set(.96,1.22,2.66); gl.position.set(tx,base+.61,tz); gl.renderOrder=3; gS.add(gl);
+    for(const [x,z] of [[-1,-1],[1,-1],[-1,1],[1,1]]) B(dk,tx+x*.47,base+.61,tz+z*1.32,.05,1.24,.05);
+    [-1,1].forEach(x=>B(dk,tx+x*.47,base+1.22,tz,.05,.05,2.66)); [-1,1].forEach(z=>B(dk,tx,base+1.22,tz+z*1.32,.96,.05,.05));
+    const weed=felt('#3fae5a'); for(let k=0;k<4;k++) C(weed,tx-.25+k*.17,base+.3,tz+.55+(k%2)*.4,.03,.45+(k%3)*.1);
+    const rock=felt('#9a9aaa'); const rk=new THREE.Mesh(sphereG,rock); rk.scale.set(.16,.1,.13); rk.position.set(tx+.2,base+.13,tz+.95); gS.add(rk);
+    C(felt('#a0703a'),tx+.2,base+1.0,tz-1.05,.03,.35); for(let k=0;k<4;k++){ const lf=new THREE.Mesh(sphereG,weed); lf.scale.set(.03,.02,.16); lf.position.set(tx+.2+Math.sin(k*1.57)*.1,base+1.17,tz-1.05+Math.cos(k*1.57)*.1); lf.rotation.y=k*1.57; gS.add(lf); }
+    const mini=makeTurtle(); mini.g.scale.setScalar(.03); mini.g.position.set(tx,base+.82,tz-.9); gP.add(mini.g);
+    P.mini={...mini, x:0, z:-.9, h:Math.PI, walk:0, swim:0, tgt:null, wait:2, blink:0, blinkT:2}; }
+  // repisa con frascos y conchas, salvavidas, cartel de peces, lámpara, barril, maceta y banca
+  { const jar=new THREE.MeshStandardMaterial({color:0x9ad8f0, transparent:true, opacity:.55, roughness:.15}), lid=felt('#e0b04a');
+    for(const y of [Y+1.45,Y+2.1]){ B(woodL,HH-.3,y,HZ+1.4,.4,.06,2.2); }
+    for(let k=0;k<3;k++){ C(jar,HH-.3,Y+1.62,HZ+.6+k*.6,.11,.28); C(lid,HH-.3,Y+1.78,HZ+.6+k*.6,.115,.04); }
+    [[23,.55],[31,.5],[32,.5]].forEach(([id,s],k)=>{ const f=fishMesh(id,s); f.position.set(HH-.3,Y+2.22,HZ+.7+k*.65); f.rotation.y=-Math.PI/2; gP.add(f); });
+    const ring=new THREE.Group(); ring.position.set(HH-.16,Y+2.15,HZ+3.4); ring.rotation.y=-Math.PI/2; gP.add(ring);
+    const red=felt('#e8453c'), wht=felt('#fbf6ee'); for(let k=0;k<8;k++){ const seg=new THREE.Mesh(new THREE.TorusGeometry(.38,.11,8,6,Math.PI/4), k%2?wht:red); seg.rotation.z=k*Math.PI/4; ring.add(seg); }
+    const pc=document.createElement('canvas'); pc.width=384; pc.height=256; const g=pc.getContext('2d'); g.fillStyle='#fbf1e2'; g.fillRect(0,0,384,256); g.strokeStyle='#8a5a32'; g.lineWidth=8; g.strokeRect(4,4,376,248);
+    g.fillStyle='#3a5a8a'; g.font='800 30px Sniglet, Nunito, sans-serif'; g.textAlign='center'; g.fillText('Peces del muelle',192,40);
+    [[2,40,60],[3,150,60],[9,262,60],[17,40,150],[28,150,150],[45,262,150]].forEach(([id,x,y])=>g.drawImage(fishIcon(id,true),x,y,90,60));
+    const pt=new THREE.CanvasTexture(pc); pt.encoding=THREE.sRGBEncoding; const poster=new THREE.Mesh(new THREE.PlaneGeometry(1.8,1.2), new THREE.MeshStandardMaterial({map:pt, roughness:.9})); poster.position.set(-2.6,Y+2.05,z1-.15); poster.rotation.y=Math.PI; gS.add(poster);
+    C(felt('#3a3a3a'),0,Y+HW+.95,HZ,.02,1.9); const shade=new THREE.Mesh(new THREE.ConeGeometry(.45,.4,16,1,true), new THREE.MeshStandardMaterial({color:0xf2c35a, roughness:.8, side:THREE.DoubleSide})); shade.position.set(0,Y+HW-.05,HZ); gS.add(shade);
+    const bulb=new THREE.Mesh(sphereG,new THREE.MeshBasicMaterial({color:0xfff2b0})); bulb.scale.setScalar(.13); bulb.position.set(0,Y+HW-.22,HZ); gS.add(bulb);
+    C(woodD,-HH+.65,Y+.55,z1-.7,.45,1.1); for(const y of [Y+.25,Y+.85]) C(felt('#7a7f8c'),-HH+.65,y,z1-.7,.47,.06);
+    C(felt('#c8683a','rgba(90,30,0,.2)'),HH-.7,Y+.32,z0+.8,.32,.64); const leaf=felt('#4caf50'); for(let k=0;k<6;k++){ const l=new THREE.Mesh(sphereG,leaf); l.scale.set(.18,.42,.1); l.position.set(HH-.7+Math.cos(k)*.15,Y+1.0,z0+.8+Math.sin(k)*.15); l.rotation.set(Math.cos(k)*.5,k,Math.sin(k)*.5); gS.add(l); }
+    B(wood,-HH+.5,Y+.45,HZ-2.9,.6,.08,1.6); for(const z of [-.65,.65]) B(woodD,-HH+.5,Y+.22,HZ-2.9+z,.5,.44,.08);
+    const st=fishMesh(23,.6); st.position.set(2.3,Y+2.3,z0+.16); st.rotation.x=-Math.PI/2; gP.add(st); }
+  // Tortu: un peluchito con disfraz completo de tortuga (solo se le ve la carita y los ojos)
+  { const t=makePlush(3), u=t.userData, suit=TURTLE_M.skin;
+    t.traverse(o=>{ if(o.isMesh && o.material && o.material.userData && o.material.userData.feltPQ && o!==u.body) o.material=suit; });
+    u.body.material=suit;
+    const hc=document.createElement('canvas'); hc.width=256; hc.height=128; const g=hc.getContext('2d'); g.fillStyle='#3a4927'; g.fillRect(0,0,256,128);
+    for(let k=0;k<22;k++){ g.strokeStyle=k%3?'rgba(190,196,84,.8)':'rgba(222,212,96,.95)'; g.lineWidth=k%3?2:3; const x=(k+.5)/22*256; g.beginPath(); g.moveTo(x,0); g.lineTo(x+3,128); g.stroke(); }
+    g.fillStyle=PLUSH_COLORS[3].hex; g.fillRect(0,0,256,26); g.strokeStyle='#2c3a1a'; g.lineWidth=3; g.setLineDash([6,5]); g.beginPath(); g.moveTo(0,27); g.lineTo(256,27); g.stroke(); g.setLineDash([]);
+    [0,128].forEach(x=>{ g.fillStyle='#d9402b'; g.beginPath(); g.ellipse(x,64,16,20,0,0,6.283); g.fill(); }); g.beginPath(); g.ellipse(256,64,16,20,0,0,6.283); g.fill();
+    const ht=new THREE.CanvasTexture(hc); ht.encoding=THREE.sRGBEncoding;
+    const hg=new THREE.SphereGeometry(1,28,18); hg.rotateX(Math.PI/2);
+    const hood=new THREE.Mesh(hg,new THREE.MeshStandardMaterial({map:ht, roughness:.95})); hood.scale.set(.45,.42,.44); hood.position.set(0,BODY_Y+1.33,.0); t.add(hood);
+    u.eyes.forEach(e=>{ e.position.z=.45; e.userData.base=e.position.clone(); });
+    const ew=new THREE.MeshStandardMaterial({color:0xfbf6ee, roughness:.6}), ep=new THREE.MeshStandardMaterial({color:0x1a1410, roughness:.3});
+    [-1,1].forEach(sd=>{ const w=new THREE.Mesh(sphereG,ew); w.scale.setScalar(.12); w.position.set(sd*.17,BODY_Y+1.74,.14); t.add(w); const p=new THREE.Mesh(sphereG,ep); p.scale.setScalar(.06); p.position.set(sd*.17,BODY_Y+1.76,.24); t.add(p); });
+    const shell=new THREE.Mesh(new THREE.SphereGeometry(1,24,10,0,Math.PI*2,0,Math.PI/2), TURTLE_M.shell); shell.scale.set(.46,.28,.52); shell.rotation.x=-Math.PI/2; shell.position.set(0,BODY_Y+.72,-.3); t.add(shell);
+    const belly=new THREE.Mesh(sphereG,new THREE.MeshStandardMaterial({color:0xe2c25e, roughness:.95})); belly.scale.set(.3,.42,.08); belly.position.set(0,BODY_Y+.62,.36); t.add(belly);
+    t.position.set(0,Y,z1-.95); t.rotation.y=Math.PI; t.userData.noBatch=true; gP.add(t); P.tortu={o:t, wave:0, saw:false, yaw:Math.PI}; }
+  obs(0,z1-1.85,.5,Y+1.12,bot); for(const x of [-1.9,-1,1,1.9]) obs(x,z1-1.85,.45,Y+1.12,bot);
+  for(const dz of [-1.1,-.4,.3,1.0]) obs(-HH+.78,HZ-.2+dz,.55,Y+2.1,bot);
+  obs(0,z1-.95,.45,Y+2.2,bot); obs(-HH+.65,z1-.7,.5,Y+1.15,bot); obs(HH-.7,z0+.8,.38,Y+1.2,bot);
+  mergeStatic(gS); gS.children.forEach(o=>{ if(!o.isMesh) return; const tr=o.material.transparent; o.castShadow=!tr; o.receiveShadow=true; if(tr) o.renderOrder=2; }); scene.add(gS); scene.add(gP); P.gS=gS;
+  // baldes: cada uno con su agua y hasta 3 peces asomándose
+  const metal=new THREE.MeshStandardMaterial({color:0xb8c2cc, roughness:.38, metalness:.45}), metalD=new THREE.MeshStandardMaterial({color:0x8a949e, roughness:.4, metalness:.5}), wat=new THREE.MeshStandardMaterial({color:0x4fa8d8, roughness:.15});
+  const pail=new THREE.CylinderGeometry(.3,.23,.5,18,1,true), rimG=new THREE.TorusGeometry(.3,.025,6,20), handG=new THREE.TorusGeometry(.3,.015,4,14,Math.PI);
+  const saved=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheBaldes')||'null'); }catch(e){ return null; } })();
+  P.buckets.forEach((b,i)=>{ const g=new THREE.Group(); g.userData.noBatch=true;
+    const s=new THREE.Mesh(pail,metal); s.position.y=.25; s.material.side=THREE.DoubleSide; g.add(s); const bt=new THREE.Mesh(new THREE.CircleGeometry(.23,16),metal); bt.rotation.x=-Math.PI/2; bt.position.y=.01; g.add(bt);
+    const r=new THREE.Mesh(rimG,metal); r.rotation.x=Math.PI/2; r.position.y=.5; g.add(r); [.17,.36].forEach(y=>{ const bd=new THREE.Mesh(new THREE.TorusGeometry(.245+y*.13,.012,4,20),metal); bd.rotation.x=Math.PI/2; bd.position.y=y; g.add(bd); });
+    const h=new THREE.Mesh(handG,metal); h.position.y=.5; g.add(h); mergeStatic(g);
+    const w=new THREE.Mesh(new THREE.CircleGeometry(.28,16),wat); w.rotation.x=-Math.PI/2; w.position.y=.38; w.visible=false; g.add(w); b.water=w;
+    b.slots=[]; b.o=g; b.pos=b.home.clone(); g.position.copy(b.home); g.rotation.y=P.th; scene.add(g);
+    g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
+    if(saved && Array.isArray(saved.b) && Array.isArray(saved.b[i])) b.items=saved.b[i].filter(id=>Number.isInteger(id) && FISH[id]).slice(0,60);
+    bucketVisual(b); });
+  if(saved && Number.isInteger(saved.h) && FISH[saved.h]) player.hand=saved.h;
+})();
+// ---------- datos del jugador: baldes, pez en la mano y catálogo ----------
+player.bucket=-1; if(player.hand===undefined) player.hand=-1; player.fish=null; player.feed=null; player.busy=false;
+let fishBait=0;   // 0 lombriz · 1 pez pequeño · 2 pez mediano
+const FDEX=(()=>{ try{ const o=JSON.parse(localStorage.getItem('mundoPeluchePeces')||'{}'); return o&&typeof o==='object'?o:{}; }catch(e){ return {}; } })();
+function saveFish(){ try{ localStorage.setItem('mundoPelucheBaldes', JSON.stringify({b:PIER.buckets.map(b=>b.items), h:player.hand})); localStorage.setItem('mundoPeluchePeces', JSON.stringify(FDEX)); }catch(e){} }
+const bucketUsed=b=>b.items.reduce((n,id)=>n+FISH_SPACE[FISH[id].s],0), BUCKET_CAP=30;
+function bucketVisual(b){ b.water.visible=b.items.length>0;
+  const last=b.items.slice(-2), key=last.join(','); if(key===b.slotKey) return; b.slotKey=key;
+  b.slots.forEach(o=>o.parent&&o.parent.remove(o)); b.slots=[];
+  last.forEach((id,k)=>{ const f=fishMesh(id,FISH[id].s===2?.32:.26); f.position.set(Math.cos(k*2.1)*.12,.42,Math.sin(k*2.1)*.12); f.rotation.set(-1.1,k*2.1,0); b.o.add(f); b.slots.push(f); }); }
+function myBucket(maxD){ if(player.bucket>=0) return PIER.buckets[player.bucket]; let best=null, bd=maxD||3.2; for(const b of PIER.buckets){ if(b.carried) continue; const d=Math.hypot(b.pos.x-player.pos.x,b.pos.z-player.pos.z); if(d<bd && Math.abs(b.pos.y-player.pos.y)<1.6){ bd=d; best=b; } } return best; }
+function fishDexCount(){ return Object.keys(FDEX).filter(k=>FDEX[k]>0 && FISH[+k]).length; }
+// ---------- tomar, dejar y ver el balde ----------
+function takeBucket(b){ if(player.bucket>=0 || b.carried) return; b.carried=true; player.bucket=b.i; holding=false; applyHeld(); renderHotbar();
+  const arm=plush.userData.arms.find(a=>a.userData.side>0); arm.userData.joint.add(b.o); b.o.position.set(0,-ARM_LOW-.62,0); b.o.rotation.set(0,0,0); audio.door(true); try{ sendPresence(true); }catch(e){} }
+function dropBucket(){ const b=PIER.buckets[player.bucket]; if(!b) return; const f=player.facing, x=player.pos.x+Math.sin(f)*.85, z=player.pos.z+Math.cos(f)*.85, y=groundAt(x,z,player.pos.y+.5);
+  b.o.parent&&b.o.parent.remove(b.o); scene.add(b.o); b.o.position.set(x,y,z); b.o.rotation.set(0,f,0); b.pos.set(x,y,z); b.carried=false; player.bucket=-1; audio.land(.3); try{ sendPresence(true); }catch(e){} }
+function holdFish(b,id){ const k=b.items.lastIndexOf(id); if(k<0 || player.hand>=0) return; b.items.splice(k,1); player.hand=id; bucketVisual(b); saveFish(); closeFishOv(); audio.splash(.2); try{ sendPresence(true); }catch(e){} }
+function storeFish(){ const b=myBucket(3.2); if(player.hand<0) return; if(b && bucketUsed(b)+FISH_SPACE[FISH[player.hand].s]<=BUCKET_CAP){ b.items.push(player.hand); bucketVisual(b); flashNote(FISH[player.hand].n+' regresó al balde'); }
+  else { flashNote(FISH[player.hand].n+' regresó al mar'); try{ splashBurst(player.pos.x,player.pos.y+.5,player.pos.z,.2); }catch(e){} }
+  player.hand=-1; saveFish(); audio.splash(.3); try{ sendPresence(true); }catch(e){} }
+// ---------- pescar ----------
+const BAIT_N=['lombriz','pez pequeño','pez mediano'];
+function baitsFor(b){ const out=[0]; if(b){ if(b.items.some(id=>FISH[id].s===0)) out.push(1); if(b.items.some(id=>FISH[id].s===1)) out.push(2); } return out; }
+function nearRod(){ let best=null, bd=1.5; for(const r of PIER.rods){ const [x,z]=pW(...r.stand), d=Math.hypot(x-player.pos.x,z-player.pos.z); if(d<bd && Math.abs(player.pos.y-PIER.Y)<.8){ bd=d; best=r; } } return best; }
+function rodBusyByOther(r){ for(const x of mp.remotes.values()) if(x.pz && x.pz[2]===r.i) return true; return false; }
+function pickFish(cls){ const W=[60,28,10,2], list=FISH.filter(f=>f.s===cls); let tot=0; for(const f of list) tot+=W[f.r]; let x=Math.random()*tot; for(const f of list){ x-=W[f.r]; if(x<=0) return f.id; } return list[0].id; }
+function startFishing(r){ if(player.fish || player.busy) return; const b=myBucket(3.2);
+  if(!b){ flashNote('Necesitas un balde cerca para guardar lo que pesques'); return; }
+  let bait=fishBait; if(!baitsFor(b).includes(bait)) bait=fishBait=0;
+  const cls=bait, need=FISH_SPACE[cls]; if(bucketUsed(b)+need>BUCKET_CAP){ flashNote(`No cabe un pez ${FISH_SIZE_N[cls]} en tu balde (${bucketUsed(b)}/${BUCKET_CAP})`); return; }
+  if(bait>0){ const k=b.items.findIndex(id=>FISH[id].s===bait-1); if(k<0) return; b.items.splice(k,1); bucketVisual(b); saveFish(); }
+  holding=false; applyHeld(); renderHotbar();
+  const [sx,sz]=pW(...r.stand); player.pos.set(sx,PIER.Y,sz); player.vel.set(0,0,0); player.vy=0; player.grounded=true;
+  player.facing=PIER.th+(r.sd>0?Math.PI/2:-Math.PI/2);
+  player.fish={rod:r.i, ph:'cast', t:0, cls, b:b.i, T:[3,5,7][cls]+Math.random()*[4,6,7][cls], N:[1,4,7][cls], got:0, win:[1.4,2.8,3.8][cls], nib:1+Math.random()};
+  player.busy=true; audio.jump(); setActions(null,null);
+  try{ sendPresence(true); }catch(e){} }
+function stopFishing(note){ const F=player.fish; if(!F) return; player.fish=null; player.busy=false; if(note) flashNote(note); try{ sendPresence(true); }catch(e){} }
+function reelFish(){ const F=player.fish; if(!F || F.ph!=='bite') return; F.got++; try{ const R=audio.raw(); R.tone('square',520+F.got*60,560+F.got*60,R.ctx.currentTime,.06,.05); }catch(e){}
+  const r=PIER.rods[F.rod]; r.pos.lerp(r.tip.clone().setY(SEA_Y),.12);
+  if(F.got>=F.N){ F.ph='catch'; F.t=0; F.sp=pickFish(F.cls); const b=PIER.buckets[F.b]; F.from=r.pos.clone(); F.mesh=fishMesh(F.sp,[.45,.7,1.1][F.cls]); scene.add(F.mesh); audio.splash(1); try{ splashBurst(r.pos.x,SEA_Y,r.pos.z,.4); }catch(e){} try{ sendPresence(true); }catch(e){} } }
+function fishCaught(F){ const b=PIER.buckets[F.b], f=FISH[F.sp]; scene.remove(F.mesh);
+  if(b && bucketUsed(b)+FISH_SPACE[f.s]<=BUCKET_CAP){ b.items.push(f.id); bucketVisual(b); } else { flashNote('¡No cupo en el balde! '+f.n+' regresó al mar'); stopFishing(); return; }
+  const isNew=!(FDEX[f.id]>0); FDEX[f.id]=(FDEX[f.id]||0)+1; saveFish();
+  flashNote((isNew?'¡Nuevo! ':'')+`Atrapaste: ${f.n} (${FISH_SIZE_N[f.s]}${f.r>=2?', '+FISH_RAR_N[f.r]:''})`);
+  try{ coinSound(isNew?4:2); }catch(e){}
+  player.fish=null; player.busy=false; try{ sendPresence(true); }catch(e){} }
+// cada cuadro: caña, sedal y corcho (mío, de otros o en reposo)
+function updateRods(dt,t){
+  const F=player.fish;
+  for(const r of PIER.rods){ let want=r.idle, dip=0, out=false;
+    if(F && F.rod===r.i){ out=F.ph!=='catch'; }
+    else { for(const x of mp.remotes.values()) if(x.pz && x.pz[2]===r.i){ out=x.pz[3]!==3; if(x.pz[3]===2) dip=1; } }
+    if(out) want=r.cast;
+    if(F && F.rod===r.i){
+      if(F.ph==='cast'){ const k=Math.min(1,F.t/.7); r.pos.set(r.tip.x+(r.cast.x-r.tip.x)*k, r.tip.y+(SEA_Y-r.tip.y)*k+Math.sin(k*Math.PI)*2.2, r.tip.z+(r.cast.z-r.tip.z)*k); }
+      else if(F.ph==='wait'||F.ph==='bite'){ r.pos.x+=(r.cast.x-r.pos.x)*Math.min(1,dt*.6); r.pos.z+=(r.cast.z-r.pos.z)*Math.min(1,dt*.6); dip=F.ph==='bite'?1:(F.nibT>0?.4:0); r.pos.y=SEA_Y+.02+Math.sin(t*3)*.03-dip*.22*(.6+.4*Math.sin(t*22)); }
+      else if(F.ph==='catch'){ r.pos.lerp(r.idle,Math.min(1,dt*4)); }
+    } else { r.pos.x+=(want.x-r.pos.x)*Math.min(1,dt*2); r.pos.z+=(want.z-r.pos.z)*Math.min(1,dt*2); r.pos.y=SEA_Y+.02+Math.sin(t*2.2+r.i)*.03-dip*.2*(.6+.4*Math.sin(t*22)); }
+    r.bob.position.copy(r.pos);
+    const a=r.line.geometry.attributes.position; a.setXYZ(0,r.tip.x,r.tip.y,r.tip.z); a.setXYZ(1,r.pos.x,r.pos.y+.1,r.pos.z); a.needsUpdate=true; }
+}
+function updateMyFishing(dt){ const F=player.fish; if(!F) return; F.t+=dt; const r=PIER.rods[F.rod];
+  if(F.ph==='cast' && F.t>=.7){ F.ph='wait'; F.t=0; audio.splash(.35); try{ splashBurst(r.cast.x,SEA_Y,r.cast.z,.15); }catch(e){} }
+  else if(F.ph==='wait'){ F.nib-=dt; F.nibT=(F.nibT||0)-dt; if(F.nib<=0){ F.nibT=.25; F.nib=1.2+Math.random()*1.8; try{ const R=audio.raw(); R.noise(R.ctx.currentTime,.05,1800,.03); }catch(e){} }
+    if(F.t>=F.T){ F.ph='bite'; F.t=0; audio.splash(.6); try{ splashBurst(r.pos.x,SEA_Y,r.pos.z,.25); }catch(e){} flashNote(F.N>1?`¡Picó algo grande! Jala ${F.N} veces rápido`:'¡Picó! ¡Jala!'); try{ sendPresence(true); }catch(e){} } }
+  else if(F.ph==='bite' && F.t>=F.win){ stopFishing(F.cls>0?'¡Se escapó! (y se llevó la carnada)':'¡Se escapó!'); }
+  else if(F.ph==='catch'){ const k=Math.min(1,F.t/.9), b=PIER.buckets[F.b]; const to=b.carried?player.pos.clone().add(new THREE.Vector3(0,1.2,0)):b.pos.clone().add(new THREE.Vector3(0,.5,0));
+    F.mesh.position.set(F.from.x+(to.x-F.from.x)*k, F.from.y+(to.y-F.from.y)*k+Math.sin(k*Math.PI)*3.2, F.from.z+(to.z-F.from.z)*k); F.mesh.rotation.set(Math.sin(F.t*14)*.5,F.t*5,0);
+    if(k>=1) fishCaught(F); }
+}
+// ---------- puerta ----------
+function setDoor(open,quiet){ const D=PIER.door; if(D.open===open) return; D.open=open; D.from=D.a; D.to=open?-1.75:0; D.t0=performance.now()/1000; if(!quiet){ D.t=now1(); try{ sendPresence(true); }catch(e){} } audio.door(open); }
+function nearDoor(){ const [lx,lz]=pL(player.pos.x,player.pos.z); return Math.abs(lx)<1.7 && Math.abs(lz-(PIER.HZ-PIER.HH))<2.3 && Math.abs(player.pos.y-PIER.Y)<1; }
+function nearTortu(){ const [lx,lz]=pL(player.pos.x,player.pos.z); return Math.abs(lx)<2.7 && lz>PIER.HZ+PIER.HH-3.6 && lz<PIER.HZ+PIER.HH-2.1 && Math.abs(player.pos.y-PIER.Y)<1; }
+function nearBucket(){ if(player.bucket>=0) return null; let best=null, bd=1.25; for(const b of PIER.buckets){ if(b.carried) continue; const d=Math.hypot(b.pos.x-player.pos.x,b.pos.z-player.pos.z); if(d<bd && Math.abs(b.pos.y-player.pos.y)<1.2){ bd=d; best=b; } } return best; }
+// ---------- darle de comer a Cuco ----------
+const _cuMouth=new THREE.Vector3();
+function cucoMouth(){ return CU.parts.headP.localToWorld(_cuMouth.set(0,-.25,2.75)); }
+function nearCucoHead(){ if(iRideCuco() || Math.abs(CU.v)>.8) return false; const m=cucoMouth(); return Math.hypot(m.x-player.pos.x,m.z-player.pos.z)<5.5 && player.pos.y>CU.y-2 && player.pos.y<CU.y+4; }
+function feedCuco(){ if(player.hand<0 || player.feed) return; const m=cucoMouth(); player.feed={t:0, id:player.hand, done:false};
+  player.facing=Math.atan2(m.x-player.pos.x,m.z-player.pos.z); player.vel.set(0,0,0); player.busy=true; PIER.fdStamp=now1();
+  CU.feed={t:0, who:null}; setActions(null,null); try{ sendPresence(true); }catch(e){} }
+const heartTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=64; const g=c.getContext('2d'); g.fillStyle='#ff5a8a'; g.strokeStyle='#fff'; g.lineWidth=4; g.beginPath(); g.moveTo(32,54); g.bezierCurveTo(4,34,10,8,32,22); g.bezierCurveTo(54,8,60,34,32,54); g.closePath(); g.stroke(); g.fill(); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; })();
+const hearts=[];
+function heartBurst(p){ for(let k=0;k<4;k++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:heartTex, transparent:true, depthWrite:false})); s.scale.setScalar(.9); s.position.copy(p).add(new THREE.Vector3((Math.random()-.5)*2,.5,(Math.random()-.5)*2)); scene.add(s); hearts.push({s, t:-k*.18}); } }
+function updateFeed(dt){ const F=player.feed; if(!F) return; F.t+=dt;
+  if(F.t>1.15 && !F.done){ F.done=true; player.hand=-1; saveFish(); chomp(); try{ sendPresence(true); }catch(e){} }
+  if(F.t>2.1){ player.feed=null; player.busy=false; flashNote('¡A Cuco le encantó! ♥'); } }
+function chomp(){ try{ const R=audio.raw(), t0=R.ctx.currentTime; for(let k=0;k<3;k++){ R.noise(t0+k*.16,.07,500,.12); R.tone('sine',180,110,t0+k*.16,.08,.08); } }catch(e){} heartBurst(cucoMouth().clone().add(new THREE.Vector3(0,1.5,0))); }
+// Cuco se agacha, abre la boca hacia el pez y se lo come (lo llama cucoUpdate al final)
+function cucoFeedAnim(dt,t){ const Fd=CU.feed; if(!Fd) return; Fd.t+=dt; const P=CU.parts;
+  let tgt=null; if(Fd.who){ const r=Fd.who; tgt=_cuMouth.set(r.pos.x+Math.sin(r.facing||0)*.6, r.pos.y+1.6, r.pos.z+Math.cos(r.facing||0)*.6); } else tgt=_cuMouth.copy(player.pos).add(new THREE.Vector3(Math.sin(player.facing)*.7,1.7,Math.cos(player.facing)*.7));
+  const k=Math.min(1,Fd.t/.6)*(Fd.t>1.7?Math.max(0,1-(Fd.t-1.7)/.5):1);
+  const hx=CU.x+Math.sin(CU.h)*(CU.B+3), hz=CU.z+Math.cos(CU.h)*(CU.B+3); let a=Math.atan2(tgt.x-hx,tgt.z-hz)-CU.h; a=Math.atan2(Math.sin(a),Math.cos(a)); a=THREE.MathUtils.clamp(a,-1,1);
+  P.neckP.rotation.y+=(a*.6-P.neckP.rotation.y)*k; P.headP.rotation.y+=(a*.4-P.headP.rotation.y)*k;
+  P.neckP.rotation.x=.42*k; P.headP.rotation.x=.25*k+(Fd.t>1&&Fd.t<1.3?-.25*Math.sin((Fd.t-1)/.3*Math.PI):0);
+  P.headP.position.z=3.2+(Fd.t>.95&&Fd.t<1.35?.7*Math.sin((Fd.t-.95)/.4*Math.PI):0);
+  if(Fd.t>1.15 && Fd.t<2.0) P.lids.forEach(e=>e.scale.y=.15);   // cierra los ojitos, feliz
+  if(Fd.who && !Fd.chomped && Fd.t>1.15){ Fd.chomped=true; chomp(); }
+  if(Fd.t>2.3){ CU.feed=null; P.headP.position.z=3.2; } }
+// ---------- adentro: Tortu, mini Cuco, techo ----------
+function updateHouse(dt,t){ const P=PIER;
+  // puerta
+  const D=P.door; const k=Math.min(1,(performance.now()/1000-D.t0)/.9); D.a=D.from+(D.to-D.from)*easeIO(k); D.g.rotation.y=D.a;
+  for(const o of D.obs) o.top=D.open?-99:P.Y+2.6;
+  // techo: se quita si estás adentro (o la cámara)
+  const inside=inHouse(player.pos.x,player.pos.z,player.pos.y) || inHouse(camera.position.x,camera.position.z,camera.position.y);
+  P.roof.visible=!inside;
+  // Tortu te mira y saluda cuando entras
+  const T=P.tortu, o=T.o, [lx,lz]=pL(player.pos.x,player.pos.z), inH=inHouse(player.pos.x,player.pos.z,player.pos.y);
+  let want=Math.PI; if(inH){ want=Math.atan2(lx-o.position.x, lz-o.position.z); }
+  T.yaw=lerpAng(T.yaw,want,1-Math.exp(-dt*3)); o.rotation.y=T.yaw;
+  if(inH && !T.saw){ T.saw=true; T.wave=t+1.8; audio.wave(); } if(!inH) T.saw=false;
+  poseLimbs(o,t,dt,0,false,0,t<T.wave,null,0,0,false);
+  o.userData.body.scale.set(1,1+Math.sin(t*2)*.012,.78);
+  // mini Cuco: va de la arena al agua y del agua a la arena
+  const M=P.mini, tk=P.tank; M.wait-=dt;
+  if(!M.tgt && M.wait<=0){ const sand=M.z>0; M.tgt=sand?{x:(Math.random()-.5)*.4, z:-1.15+Math.random()*.45}:{x:(Math.random()-.5)*.45, z:.35+Math.random()*.8}; }
+  let mv=0;
+  if(M.tgt){ const dx=M.tgt.x-M.x, dz=M.tgt.z-M.z, d=Math.hypot(dx,dz); if(d<.04){ M.tgt=null; M.wait=3+Math.random()*5; }
+    else { const want2=Math.atan2(dx,dz); M.h=lerpAng(M.h,want2,1-Math.exp(-dt*2.5)); let df=want2-M.h; df=Math.atan2(Math.sin(df),Math.cos(df)); if(Math.abs(df)<.6){ const sp=(M.swim>.5?.13:.08)*dt; M.x+=Math.sin(M.h)*sp; M.z+=Math.cos(M.h)*sp; mv=1; } } }
+  const gy=M.z<-.6 ? .82 : M.z<.2 ? .8-(M.z+.6)/.8*.58 : .12, wy=.69, swim=gy<wy-.08;
+  M.swim+=((swim?1:0)-M.swim)*Math.min(1,dt*3);
+  const y=swim ? wy-.06+Math.sin(t*1.5)*.008 : gy;
+  M.g.position.set(tk.x+M.x, tk.base+y, tk.z+M.z); M.g.rotation.y=M.h;
+  M.walk+=dt*(mv?4:0);
+  M.parts.legs.forEach(L=>{ const ph=M.walk+L.ph, sw=Math.sin(ph); L.p.rotation.x=sw*.4*mv*(1-M.swim)-M.swim*(.9+sw*.6)*L.sz*.55; L.p.rotation.z=L.sx*M.swim*.75; });
+  M.parts.neckP.rotation.y=Math.sin(t*.7)*.4; M.parts.headP.rotation.x=Math.sin(t*.9)*.08;
+  M.blinkT-=dt; if(M.blinkT<0){ M.blink=1; M.blinkT=2+Math.random()*4; } M.blink=Math.max(0,M.blink-dt*4.5); const lid=1-.88*Math.sin(Math.min(1,M.blink)*Math.PI); M.parts.lids.forEach(e=>e.scale.y=lid);
+}
+function pierUpdate(dt,t){ const P=PIER, d=Math.hypot(player.pos.x-pW(0,P.HZ)[0],player.pos.z-pW(0,P.HZ)[1]), dc=Math.hypot(camera.position.x-pW(0,30)[0],camera.position.z-pW(0,30)[1]);
+  P.near=d<140 || dc<160;
+  if(state==='play'){ updateMyFishing(dt); updateFeed(dt); }
+  if(P.near){ updateRods(dt,t); updateHouse(dt,t); }
+  for(let i=hearts.length-1;i>=0;i--){ const h=hearts[i]; h.t+=dt; h.s.visible=h.t>0; if(h.t>0){ h.s.position.y+=dt*1.6; h.s.material.opacity=Math.max(0,1-h.t/1.4); } if(h.t>1.4){ scene.remove(h.s); h.s.material.dispose(); hearts.splice(i,1); } }
+}
+// ---------- poses: balde en una mano, pez en la otra, pescando o dándole de comer a Cuco ----------
+const _qa=new THREE.Quaternion(), _qb=new THREE.Quaternion(), _eY=new THREE.Euler();
+let handFish=null, handFishId=-2;
+function poseCarry(obj,facing,bucketObj,fishId,fishing,feedT,holderKey){
+  const arms=obj.userData.arms, R=arms.find(a=>a.userData.side<0), Lf=arms.find(a=>a.userData.side>0);
+  if(fishing){ arms.forEach(a=>{ const sd=a.userData.side; a.rotation.z=sd*.35; a.rotation.x=-1.25; a.userData.joint.rotation.x=-.55; a.userData.joint.rotation.z=0; }); }
+  if(bucketObj && !fishing){ Lf.rotation.z=.22; Lf.rotation.x=0; Lf.userData.joint.rotation.x=-.1; Lf.userData.joint.rotation.z=0; }
+  if(feedT!==null && feedT!==undefined){ const k=Math.min(1,feedT/.8); R.rotation.z=-.25; R.rotation.x=-.9-1.0*k; R.userData.joint.rotation.x=-.9+.85*k; R.userData.joint.rotation.z=0; }
+  else if(fishId>=0 && !fishing){ R.rotation.z=-.3; R.rotation.x=-.85; R.userData.joint.rotation.x=-1.0; R.userData.joint.rotation.z=0; }
+  // el balde siempre derechito (cuelga del asa)
+  if(bucketObj){ Lf.userData.joint.updateWorldMatrix(true,false); Lf.userData.joint.getWorldQuaternion(_qa); _qb.setFromEuler(_eY.set(0,facing,0)); bucketObj.quaternion.copy(_qa.invert().multiply(_qb)); }
+}
+function fishInHand(obj,id,cache){ // cache: objeto donde guardar el pez que se ve en la mano
+  if(cache.id===id) return; if(cache.m){ cache.m.parent&&cache.m.parent.remove(cache.m); cache.m=null; } cache.id=id; if(id<0) return;
+  const R=obj.userData.arms.find(a=>a.userData.side<0), f=fishMesh(id,[.42,.6,.85][FISH[id].s]); f.position.set(0,-ARM_LOW-.08,.06); f.rotation.set(Math.PI/2,0,Math.PI/2); R.userData.joint.add(f); cache.m=f; }
+const myHand={id:-2, m:null};
+function pierPose(t,dt){ if(state!=='play' && state!=='pause') return;
+  const B=player.bucket>=0?PIER.buckets[player.bucket].o:null, F=player.feed;
+  fishInHand(plush, F&&F.done ? -1 : player.hand, myHand);
+  if(F && myHand.m && F.t>.75){ const m=cucoMouth(), k=Math.min(1,(F.t-.75)/.4); myHand.m.parent.updateWorldMatrix(true,false); const w=myHand.m.parent.localToWorld(new THREE.Vector3(0,-ARM_LOW-.08,.06)); const p=w.lerp(m,k); myHand.m.parent.worldToLocal(p); myHand.m.position.copy(p); }
+  if(B || player.hand>=0 || player.fish || F) poseCarry(plush, player.facing, B, player.hand, !!player.fish, F?F.t:null);
+}
+// otros jugadores: balde, pez, pescando, dándole de comer a Cuco
+function parsePier(r,pr){ const z=pr.pz; if(!Array.isArray(z) || z.length!==7 || !z.every(Number.isFinite)){ r.pz=null; return; }
+  const was=r.pz; r.pz=[z[0]?1:0, Number.isInteger(z[1])&&FISH[z[1]]?z[1]:-1, Number.isInteger(z[2])&&z[2]>=0&&z[2]<PIER.rods.length?z[2]:-1, z[3]|0, z[4], z[5]?1:0, z[6]];
+  if(was && z[4]!==was[4] && z[4]>0){ r.feedAt=performance.now()/1000; CU.feed={t:0, who:r}; }
+  if(z[6]>PIER.door.t+.05){ PIER.door.t=z[6]; const near=Math.hypot(r.pos.x-player.pos.x,r.pos.z-player.pos.z)<40; if(PIER.door.open!==!!z[5]) setDoor(!!z[5],true); if(!near){} } }
+function remotePierPose(r,t,dt){ const z=r.pz; r.pzHand=r.pzHand||{id:-2,m:null};
+  if(!z){ if(r.pzBucket) r.pzBucket.visible=false; fishInHand(r.obj,-1,r.pzHand); return; }
+  if(z[0] && !r.pzBucket){ const src=PIER.buckets[0].o, b=new THREE.Group(); src.children.forEach(c=>{ if(c.isMesh && c!==PIER.buckets[0].water && !PIER.buckets[0].slots.includes(c)) b.add(c.clone()); }); const arm=r.obj.userData.arms.find(a=>a.userData.side>0); arm.userData.joint.add(b); b.position.set(0,-ARM_LOW-.62,0); r.pzBucket=b; }
+  if(r.pzBucket) r.pzBucket.visible=!!z[0];
+  const ft=r.feedAt && performance.now()/1000-r.feedAt<2 ? performance.now()/1000-r.feedAt : null;
+  fishInHand(r.obj, ft!==null && ft>1.15 ? -1 : z[1], r.pzHand);
+  if(z[0] || z[1]>=0 || z[2]>=0 || ft!==null) poseCarry(r.obj, r.obj.rotation.y, z[0]?r.pzBucket:null, z[1], z[2]>=0, ft);
+}
+function pierPresence(){ const F=player.fish; return [player.bucket>=0?1:0, player.hand, F?F.rod:-1, F?(F.ph==='bite'?2:F.ph==='catch'?3:1):0, PIER.fdStamp, PIER.door.open?1:0, PIER.door.t]; }
+// ---------- botones ----------
+function pierActions(){
+  if(player.feed) return [null,null];
+  const F=player.fish;
+  if(F){ if(F.ph==='bite') return [{label:F.N>1?`¡Jalar! (${F.got}/${F.N})`:'¡Jalar!', run:reelFish}, null];
+    if(F.ph==='catch') return [null,null];
+    return [{label:'Esperando que pique…', disabled:true, run:()=>{}}, {label:'Dejar de pescar', run:()=>stopFishing()}]; }
+  if(player.pg || player.car || player.ac || player.swim || player.dive || player.mg) return null;
+  const store = player.hand>=0 ? {label: myBucket(3.2)?'Guardar el pez':'Soltar el pez', run:storeFish} : null;
+  if(player.hand>=0 && nearCucoHead()) return [{label:'Darle el pez a Cuco', run:feedCuco}, store];
+  if(!pierOnNow()) return null;
+  if(nearDoor()) return [{label:PIER.door.open?'Cerrar la puerta':'Abrir la puerta', run:()=>setDoor(!PIER.door.open)}, store || (player.bucket>=0?{label:'Dejar el balde', run:dropBucket}:null)];
+  if(nearTortu()) return [{label:'Hablar con Tortu', run:()=>openFishOv('shop')}, store];
+  const nb=nearBucket(), nr=nearRod();
+  const dB=nb?Math.hypot(nb.pos.x-player.pos.x,nb.pos.z-player.pos.z):99, dR=nr?Math.hypot(pW(...nr.stand)[0]-player.pos.x,pW(...nr.stand)[1]-player.pos.z):99;
+  if(nb && dB<dR) return [{label:'Tomar el balde', run:()=>takeBucket(nb)}, {label:`Ver el balde (${bucketUsed(nb)}/${BUCKET_CAP})`, run:()=>openFishOv('bucket',nb)}];
+  if(nr && player.hand<0){ if(rodBusyByOther(nr)) return [{label:'Alguien está pescando aquí', disabled:true, run:()=>{}}, null];
+    const b=myBucket(3.2), bs=baitsFor(b); if(!bs.includes(fishBait)) fishBait=0;
+    const ok=!!b && bucketUsed(b)+FISH_SPACE[fishBait]<=BUCKET_CAP;
+    const a1={label: !b?'Pescar (falta un balde)' : !ok?'Balde lleno' : `Pescar con ${BAIT_N[fishBait]}`, disabled:!ok, run:()=>startFishing(nr)};
+    const a2=bs.length>1 ? {label:'Carnada: '+BAIT_N[fishBait]+' ⇄', run:()=>{ fishBait=bs[(bs.indexOf(fishBait)+1)%bs.length]; actKey=''; flashNote('Carnada: '+BAIT_N[fishBait]+(fishBait?` (para un pez ${FISH_SIZE_N[fishBait]})`:' (para peces pequeños)')); }} : null;
+    return [a1,a2]; }
+  return null;
+}
+const pierOnNow=()=>{ const [lx,lz]=pL(player.pos.x,player.pos.z); return pierOn(lx,lz) && Math.abs(player.pos.y-pierDeckY(lz))<1.2; };
+// cuando no hay nada más que hacer: el pez de la mano y el balde
+function pierFallback(){ if(player.pg || player.car || player.ac || player.mg || player.fish || player.feed) return null;
+  if(player.hand>=0) return [{label: myBucket(3.2)?'Guardar el pez':'Soltar el pez', run:storeFish}, player.bucket>=0?{label:'Dejar el balde', run:dropBucket}:null];
+  if(player.bucket>=0){ const b=PIER.buckets[player.bucket]; return [b.items.length?{label:'Sacar un pez', run:()=>openFishOv('bucket',b)}:null, {label:'Dejar el balde', run:dropBucket}]; }
+  return null; }
+// ---------- ventana de Tortu (vender y catálogo) y del balde ----------
+const fishOv=ui('fishOv'); let fishTab='sell', fishFilter=-1, fishMode='shop', fishB=null;
+function openFishOv(mode,b){ if(state!=='play') return; fishMode=mode; fishB=b||null; fishOv.hidden=false; document.body.classList.add('fish-open'); touchEl.hidden=true; if(document.pointerLockElement) document.exitPointerLock(); renderFishOv(); audio.ui(); }
+function closeFishOv(relock){ if(fishOv.hidden) return false; fishOv.hidden=true; document.body.classList.remove('fish-open'); touchEl.hidden=!(state==='play' && isTouch); if(relock) lockPointer(); return true; }
+ui('fishClose').onclick=()=>closeFishOv(true);
+ui('fishTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{ fishTab=b.dataset.tab; renderFishOv(); });
+function sellBucket(){ return myBucket(4.5); }
+function fishRow(id,count,btns){ const row=document.createElement('div'); row.className='fish-row'; const f=FISH[id];
+  const cv=document.createElement('canvas'); cv.width=120; cv.height=80; cv.getContext('2d').drawImage(fishIcon(id,true),0,0); row.appendChild(cv);
+  const tx=document.createElement('div'); tx.className='fish-tx'; const b=document.createElement('b'); b.textContent=f.n+(count>1?` ×${count}`:''); const s=document.createElement('small'); s.textContent=`${FISH_SIZE_N[f.s]} · ${FISH_RAR_N[f.r]} · ${f.p} monedas`; tx.append(b,s); row.appendChild(tx);
+  btns.forEach(([lab,fn,dis])=>{ const bt=document.createElement('button'); bt.className='sbtn'; bt.textContent=lab; bt.disabled=!!dis; bt.onclick=fn; row.appendChild(bt); });
+  return row; }
+function renderFishOv(){ const body=ui('fishBody'), say=ui('fishSay'), tabs=ui('fishTabs'); body.textContent='';
+  if(fishMode==='bucket'){ const b=fishB; ui('fishTitle').textContent=`Tu balde (${bucketUsed(b)}/${BUCKET_CAP})`; tabs.hidden=true;
+    say.textContent=b.items.length?'Toma un pez para llevarlo en la mano (por ejemplo, para dárselo a Cuco).':'Está vacío. Pesca en las cañas del muelle: los peces caen aquí.';
+    const cnt=new Map(); b.items.forEach(id=>cnt.set(id,(cnt.get(id)||0)+1));
+    [...cnt.entries()].sort((a,c)=>FISH[a[0]].s-FISH[c[0]].s||a[0]-c[0]).forEach(([id,n])=>body.appendChild(fishRow(id,n,[[player.hand>=0?'Ya tienes uno en la mano':'Tomar uno',()=>holdFish(b,id),player.hand>=0]])));
+    return; }
+  ui('fishTitle').textContent='Tortu, el de los peces'; tabs.hidden=false;
+  tabs.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.tab===fishTab)));
+  if(fishTab==='sell'){ const b=sellBucket(), cnt=new Map(); if(b) b.items.forEach(id=>cnt.set(id,(cnt.get(id)||0)+1));
+    const total=(b?b.items.reduce((n,id)=>n+FISH[id].p,0):0)+(player.hand>=0?FISH[player.hand].p:0);
+    say.textContent=!b&&player.hand<0?'¡Hola! Trae tu balde con peces y te los compro. Las cañas están en el muelle.' : total?`¡Qué buena pesca! Te doy ${total} monedas por todo.`:'Tu balde está vacío. ¡Ve a pescar!';
+    if(total){ const all=document.createElement('button'); all.className='btn primary fish-all'; all.textContent=`Vender todo · ${total} monedas`; all.onclick=()=>{ if(b){ b.items.length=0; bucketVisual(b); } if(player.hand>=0) player.hand=-1; saveFish(); addCoins(total); audio.wave(); try{ sendPresence(true); }catch(e){} renderFishOv(); }; body.appendChild(all); }
+    if(player.hand>=0){ const id=player.hand; body.appendChild(fishRow(id,1,[['Vender el de tu mano',()=>{ player.hand=-1; saveFish(); addCoins(FISH[id].p); try{ sendPresence(true); }catch(e){} renderFishOv(); }]])); }
+    [...cnt.entries()].sort((a,c)=>FISH[c[0]].p-FISH[a[0]].p).forEach(([id,n])=>body.appendChild(fishRow(id,n,[['Vender 1',()=>{ const k=b.items.indexOf(id); if(k>=0){ b.items.splice(k,1); bucketVisual(b); saveFish(); addCoins(FISH[id].p); renderFishOv(); } }], n>1?[`Vender ${n}`,()=>{ b.items=b.items.filter(x=>x!==id); bucketVisual(b); saveFish(); addCoins(FISH[id].p*n); renderFishOv(); }]:null].filter(Boolean))));
+    return; }
+  // catálogo
+  const have=fishDexCount(); say.textContent=`Has atrapado ${have} de ${FISH.length} criaturas. Con lombriz salen pequeños, con un pez pequeño de carnada salen medianos y con uno mediano, ¡grandes!`;
+  const chips=document.createElement('div'); chips.className='fish-chips'; [[-1,'Todos'],[0,'Pequeños'],[1,'Medianos'],[2,'Grandes']].forEach(([v,l])=>{ const c=document.createElement('button'); c.className='chip'; c.textContent=l; c.setAttribute('aria-pressed',String(fishFilter===v)); c.onclick=()=>{ fishFilter=v; renderFishOv(); }; chips.appendChild(c); }); body.appendChild(chips);
+  const grid=document.createElement('div'); grid.className='fish-grid';
+  FISH.filter(f=>fishFilter<0||f.s===fishFilter).forEach(f=>{ const n=FDEX[f.id]||0, it=document.createElement('div'); it.className='fish-it'+(n?'':' unk');
+    const cv=document.createElement('canvas'); cv.width=120; cv.height=80; cv.getContext('2d').drawImage(fishIcon(f.id,n>0),0,0); it.appendChild(cv);
+    const b=document.createElement('b'); b.textContent=n?f.n:'???'; const s=document.createElement('small'); s.textContent=`${FISH_SIZE_N[f.s]}${n?' · '+f.p+' 🪙':''}`; const c=document.createElement('small'); c.textContent=n?`Atrapados: ${n}`:(f.r>=2?FISH_RAR_N[f.r]:'Sin atrapar'); it.append(b,s,c); grid.appendChild(it); });
+  body.appendChild(grid);
+}
 
 // ---------- Arco con flecha de ventosa y carrete de cuerda ----------
 // La flecha (palito con punta roja) se pega a lo que toque. Luego puedes ir hacia allá (el brazo del carrete se estira
@@ -8485,7 +9063,7 @@ ui('spExit').onclick=()=>{ fade(true,500); setTimeout(()=>exitSpace(false),520);
 // ---------- Mi progreso: guardado en la nube (tu cuenta de Claude) y código para pasarlo a otro dispositivo ----------
 // Se guarda todo lo que vas ganando: monedas, ropa, banderas, planetas, especies, tu nombre/color, mejor vuelta y opciones.
 // Al cargar se UNE con lo que ya tienes (nunca se pierde nada): monedas = las más altas, ropa/planetas/especies = todas.
-const SAVE_KEYS=['Monedas','Ropa','Banderas','Especies','Planetas','Jugador','MejorVuelta','Opciones'];
+const SAVE_KEYS=['Monedas','Ropa','Banderas','Especies','Planetas','Jugador','MejorVuelta','Opciones','Peces'];
 function saveSnapshot(){ const o={v:1}; for(const k of SAVE_KEYS){ try{ const v=localStorage.getItem('mundoPeluche'+k); if(v!=null) o[k]=v; }catch(e){} } return o; }
 const jparse=(s,d)=>{ try{ const v=JSON.parse(s); return v==null?d:v; }catch(e){ return d; } };
 function saveSummary(o){ const own=(jparse(o.Ropa,{}).own||[]).length, pl=Object.keys(jparse(o.Planetas,{})).length, sp=(jparse(o.Especies,[])||[]).length;
@@ -8505,6 +9083,7 @@ function mergeSaves(a,b){ const o={v:1};
   const ja=jparse(a.Jugador,null); o.Jugador=ja&&ja.name?a.Jugador:(b.Jugador||a.Jugador); if(!o.Jugador) delete o.Jugador;
   const la=+a.MejorVuelta||0, lb=+b.MejorVuelta||0, lap=la&&lb?Math.min(la,lb):(la||lb); if(lap) o.MejorVuelta=String(lap);
   if(a.Opciones||b.Opciones) o.Opciones=a.Opciones||b.Opciones;
+  { const pa=jparse(a.Peces,{}), pb=jparse(b.Peces,{}), pc={}; for(const k of new Set([...Object.keys(pa||{}),...Object.keys(pb||{})])){ const v=Math.max(+(pa||{})[k]||0,+(pb||{})[k]||0); if(v>0 && /^\d+$/.test(k)) pc[k]=v; } if(Object.keys(pc).length) o.Peces=JSON.stringify(pc); }
   return o; }
 function applySave(o){ for(const k of SAVE_KEYS){ try{ if(o[k]!=null) localStorage.setItem('mundoPeluche'+k,o[k]); }catch(e){} } }
 // código: comprimido y en letras seguras para copiar y pegar
@@ -8921,6 +9500,7 @@ function update(dt,t){ myLabelUpdate();
   player.acPose=acPose;
   let pgPose=null;
   cucoUpdate(dt,t);
+  pierUpdate(dt,t);
   if(state==='play' && player.pg) pgPose=updateMyPlay(dt);
   const bowMoving = state==='play' && updateMyBow(dt);
   updatePlayground(dt);
@@ -8933,7 +9513,7 @@ function update(dt,t){ myLabelUpdate();
   arenaUpdate(dt);
   if(state==='play'){ rocketUpdate(dt); if(SP.on) spaceUpdate(dt,t); }
   const dv=player.dive;
-  if(state==='play' && !player.car && !player.ac && !player.pg && !bowMoving && !player.mg && !arBall() && !arFrozen() && !SP.on && !player.rk){
+  if(state==='play' && !player.car && !player.ac && !player.pg && !bowMoving && !player.mg && !arBall() && !arFrozen() && !SP.on && !player.rk && !player.busy){
     let f=0,s=0;
     if(keys.KeyW||keys.ArrowUp) f+=1;
     if(keys.KeyS||keys.ArrowDown) f-=1;
@@ -9115,6 +9695,7 @@ function update(dt,t){ myLabelUpdate();
   else if(state==='play' && performance.now()/1000<player.pushUntil) pgPoseLimbs(plush,{push:1},t,dt,player.walk);
   if(state==='play' && !player.car && !player.ac && !player.pg) pulledByOthers(dt);
   myBowPose(dt);
+  pierPose(t,dt);
   crossEl.hidden = !(state==='play' && !player.mg && (camMode==='first' || bowHeld()));
   const fwd=Math.sin(player.diveAngle)*.85;
   blob.position.set(player.pos.x+Math.sin(player.facing)*fwd, player.groundY+.06, player.pos.z+Math.cos(player.facing)*fwd);
