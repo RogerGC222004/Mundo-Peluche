@@ -917,7 +917,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='98';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='99';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -7499,7 +7499,7 @@ const PLAT_COL=['#ff7aa2','#ffc23d','#6fd15a','#4fb0ff','#a77bff'];
 })();
 function platSetTile(k,alive){ const f=Math.floor(k/(PLAT.N*PLAT.N)), r=k%(PLAT.N*PLAT.N), m=PLAT.meshes[f], mt=new THREE.Matrix4();
   m.getMatrixAt(r,mt); const p=new THREE.Vector3(), q=new THREE.Quaternion(), s=new THREE.Vector3(); mt.decompose(p,q,s); s.setScalar(alive?1:0); mt.compose(p,q,s); m.setMatrixAt(r,mt); m.instanceMatrix.needsUpdate=true; }
-function platReset(gid){ if(PLAT.gid===gid) return; PLAT.gid=gid; PLAT.mine=[]; PLAT.seen.clear(); PLAT.cur=-1; PLAT.curT=0;
+function platReset(gid){ if(PLAT.gid===gid) return; PLAT.gid=gid; PLAT.mine=[]; if(PLAT.tick) PLAT.tick.clear(); PLAT.seen.clear(); PLAT.cur=-1; PLAT.curT=0;
   for(let k=0;k<PLAT.removed.length;k++) if(PLAT.removed[k]){ PLAT.removed[k]=0; platSetTile(k,true); } PLAT.warn.forEach((t,k)=>platTint(k,0)); PLAT.warn.clear(); }
 function platRemove(k){ if(PLAT.removed[k]) return; PLAT.removed[k]=1; platSetTile(k,false); try{ const A=AR_SPOTS[0], w=platTileWorld(k); splashBurst(w.x,w.y,w.z,.15); }catch(e){} }
 const _pc=new THREE.Color();
@@ -7608,7 +7608,7 @@ function arLead(a,dt){ const G=AR.G[a], ms=dt*1000;
     else G.ms=-1; return; }
   G.ms-=ms;
   if(G.ph===1 && G.ms<=0){ G.ph=2; G.ms=AR_COUNT; }
-  else if(G.ph===2 && G.ms<=0){ G.ph=3; G.ms=[200000,240000,150000][a]; G.pt=0; }
+  else if(G.ph===2 && G.ms<=0){ G.ph=3; G.ms=[600000,240000,150000][a]; G.pt=0; }
   else if(G.ph===3){
     G.pt=(G.pt||0)+ms; for(const u of G.pl){ const st=arStatus(a,u); if(!G.el.includes(u) && (!arPresent(u) || st===3 || st===0 || (st!==2 && G.pt>4000))) G.el.push(u); }
     const alive=G.pl.filter(u=>!G.el.includes(u));
@@ -7701,15 +7701,20 @@ function arenaUpdate(dt){
   arSendT-=dt; if(arSendT<=0 && (me.a>=0 || AR.lead.some(x=>x))){ arSendT=.2; sendPresence(false); }
 }
 // ---------------- jugar: plataformas ----------------
+// la baldosa que pisas empieza a caerse: en 1.5 s se va, aunque ya te hayas quitado de encima
+const PLAT_FALL=1.5; PLAT.tick=new Map();
 function platPlay(dt){ const k=player.grounded ? platTileAt(player.pos.x,player.pos.z,player.pos.y) : -1;
-  if(k>=0){ if(k===PLAT.cur) PLAT.curT+=dt; else { PLAT.cur=k; PLAT.curT=0; } if(PLAT.curT>1.0){ PLAT.mine.push(k); platRemove(k); PLAT.cur=-1; PLAT.curT=0; try{ const R=audio.raw(); R.noise(R.ctx.currentTime,.12,700,.12); }catch(e){} sendPresence(true); } }
-  else { PLAT.cur=-1; PLAT.curT=0; }
+  if(k>=0 && !PLAT.tick.has(k)) PLAT.tick.set(k,0);
+  let gone=false; PLAT.tick.forEach((t,q)=>{ t+=dt; if(PLAT.removed[q]){ PLAT.tick.delete(q); return; }
+    if(t>=PLAT_FALL){ PLAT.tick.delete(q); PLAT.mine.push(q); platRemove(q); gone=true; } else PLAT.tick.set(q,t); });
+  if(gone){ try{ const R=audio.raw(); R.noise(R.ctx.currentTime,.12,700,.12); }catch(e){} sendPresence(true); }
   if(player.pos.y<PLAT.y0-4 || player.swim) arOut(0,'¡Al agua!'); }
 function platWarn(dt){ if(AR.G[0].ph!==3){ if(PLAT.warn.size){ PLAT.warn.forEach((t,k)=>platTint(k,0)); PLAT.warn.clear(); } return; }
   const occ=new Set(); const check=(p)=>{ const k=platTileAt(p.x,p.z,p.y); if(k>=0) occ.add(k); };
   if(AR.me.a===0 && AR.me.st===2) check(player.pos); for(const r of mp.remotes.values()) if(r.az && r.az[0]===0 && r.az[1]===2) check(r.pos);
   occ.forEach(k=>{ if(!PLAT.warn.has(k)) PLAT.warn.set(k,0); });
-  PLAT.warn.forEach((t,k)=>{ t+= occ.has(k)?dt:-dt*2; if(t<=0 || PLAT.removed[k]){ PLAT.warn.delete(k); if(!PLAT.removed[k]) platTint(k,0); return; } PLAT.warn.set(k,t); platTint(k,t); }); }
+  // una vez pisada, se va poniendo roja hasta caerse (aunque ya nadie esté encima)
+  PLAT.warn.forEach((t,k)=>{ if(PLAT.removed[k]){ PLAT.warn.delete(k); return; } t+=dt; PLAT.warn.set(k,t); platTint(k,Math.min(1,t/PLAT_FALL)); }); }
 // ---------------- jugar: papa caliente ----------------
 function papaPlay(dt,G){ papaClamp(player.pos); if(G.h!==myUid) AR.me.req=null;   // solo pide pases quien tiene la papa
   if(G.h===myUid && AR.me.had!==true){ AR.me.had=true; AR.me.gotAt=performance.now()/1000; bigText('¡Tienes la papa!',1100); } else if(G.h!==myUid) AR.me.had=false;
