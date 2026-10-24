@@ -917,7 +917,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='99';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='100';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -3103,7 +3103,7 @@ function removeRemote(k){
 }
 const clampN=(v,a,b,d)=>Number.isFinite(v)?Math.min(b,Math.max(a,v)):d;
 function onPeers({peers}){
-  const seen=new Set(), drivenNow=new Set(), flownNow=new Set(), cuDrv={v:false};
+  const seen=new Set(), drivenNow=new Set(), flownNow=new Set(), cuDrv={v:false}, curPeers=new Set(peers.map(p=>p.peer));
   for(const p of peers){
     if(p.sameTab || p.kind==='agent') continue;
     const pr=p.presence||{}, pos=pr.p;
@@ -3113,6 +3113,8 @@ function onPeers({peers}){
     const name=cleanName(pr.n)||'Peluche';
     seen.add(p.peer);
     let r=mp.remotes.get(p.peer); if(r) r.goneAt=0;
+    // ¿es alguien que ya veíamos y solo se reconectó (llega con otra conexión)? se reusa su peluche en vez de duplicarlo
+    if(!r && typeof pr.id==='string' && pr.id){ const uid=pr.id.slice(0,12); for(const [k2,r2] of mp.remotes) if(k2!==p.peer && r2.uid===uid && !curPeers.has(k2)){ mp.remotes.delete(k2); mp.remotes.set(p.peer,r2); r=r2; r.goneAt=0; break; } }
     if(!r){ r=makeRemote(color,name); r.pos.set(x,y,z); mp.remotes.set(p.peer,r); audio.join(); }
     if(r.color!==color){ recolor(r.obj,color); r.color=color; }
     { const ou=parseOutfit(pr.ou), k=JSON.stringify(ou); if(k!==r.ouKey){ r.ouKey=k; applyOutfit(r.obj,ou); } }   // su ropa y accesorios
@@ -3182,7 +3184,7 @@ function onPeers({peers}){
 const REMOTE_GRACE=6000;
 function updateRemotes(dt,t){
   const k=1-Math.exp(-dt*12), nowG=performance.now();
-  for(const [key,r] of mp.remotes) if(r.goneAt && nowG-r.goneAt>REMOTE_GRACE && mp.connected){ removeRemote(key); audio.leave(); updateRoomUI(); }
+  for(const [key,r] of mp.remotes) if(r.goneAt && nowG-r.goneAt>REMOTE_GRACE && (mp.connected || nowG-r.goneAt>REMOTE_GRACE*2.5)){ removeRemote(key); audio.leave(); updateRoomUI(); }
   for(const r of mp.remotes.values()){
     if((!r.bw || r.held!=='bow') && r.obj.userData.bowRig) hideBowRig(r.obj.userData.bowRig);
     if(r.ai && updateRemoteInAir(r,dt,t)) continue;
@@ -6013,12 +6015,13 @@ let CRIT_FR=0;
 function updateCritters(dt){
   if(!critters.length) return; CRIT_FR++;
   const t=(Date.now()/1000)%100000, cx=camera.position.x, cz=camera.position.z, far=Math.min(CRITTER_FAR, settings.draw+10);
-  let ei=0; _cfr.setFromProjectionMatrix(_cfm.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
-  for(const c of critters){
+  _cfr.setFromProjectionMatrix(_cfm.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+  // cada animalito tiene SIEMPRE sus dos lugares de ojos (antes se recorrían y, al apagarse uno lejano, los ojos de otros quedaban flotando)
+  for(let ci=0;ci<critters.length;ci++){ const c=critters[ci], ei=ci*2;
     const d=Math.hypot(c.home.x-cx, c.home.y-cz)-c.R;
     const on=d<far && state!=='menu';
     // fuera de la cámara: no se calcula (al volver a verse retoma su paseo); cerca de ti siempre, por si lo empujas
-    if(on && c.vis && d>6){ _cfs.center.set(c.home.x,c.pos.y,c.home.y); _cfs.radius=c.R+2.5; if(!_cfr.intersectsSphere(_cfs)){ c.off=true; ei+=2; continue; } }
+    if(on && c.vis && d>6){ _cfs.center.set(c.home.x,c.pos.y,c.home.y); _cfs.radius=c.R+2.5; if(!_cfr.intersectsSphere(_cfs)){ c.off=true; continue; } }
     if(c.off){ c.off=false; c.first=true; }
     if(!on){ if(c.vis){ c.vis=false; if(c.snake) c.im.visible=false; else c.g.visible=false; for(let k=0;k<2;k++){ eyeWhites.setMatrixAt(ei+k,_cz); eyePupils.setMatrixAt(ei+k,_cz); eyeDomes.setMatrixAt(ei+k,_cz); } c.first=true; } continue; }
     if(!c.vis){ c.vis=true; if(c.snake) c.im.visible=true; else c.g.visible=true; }
@@ -6073,9 +6076,8 @@ function updateCritters(dt){
       _cl.compose(_cp.set(ex*sd,eyY,ez),_cq.identity(),_cs.set(er,er,er*.3)); _cl.premultiply(head); eyeWhites.setMatrixAt(ei+s,_cl);
       _cl.compose(_cp.set(ex*sd+e.p.x*er*.36,eyY+e.p.y*er*.36,ez+er*.3),_cq.identity(),_cs.set(er*.6,er*.6,er*.08)); _cl.premultiply(head); eyePupils.setMatrixAt(ei+s,_cl);
       _cl.compose(_cp.set(ex*sd,eyY,ez+er*.05),_cq.identity(),_cs.set(er*.97,er*.97,er*.5)); _cl.premultiply(head); eyeDomes.setMatrixAt(ei+s,_cl); }
-    ei+=2;
   }
-  eyeWhites.count=eyePupils.count=eyeDomes.count=ei;
+  eyeWhites.count=eyePupils.count=eyeDomes.count=critters.length*2;
   eyeWhites.instanceMatrix.needsUpdate=true; eyePupils.instanceMatrix.needsUpdate=true; eyeDomes.instanceMatrix.needsUpdate=true;
 }
 
