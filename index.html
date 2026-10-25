@@ -917,7 +917,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='103';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='104';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -3400,7 +3400,7 @@ const AR_SPOTS=(()=>{ const coastAt=a=>{ for(let r=300;r<1300;r+=1){ if(terrainH
   const mk=(id,name,a,centerOff,plateOff)=>{ const c=coastAt(a), u=[Math.cos(a),Math.sin(a)], v=[-Math.sin(a),Math.cos(a)];
     const at=d=>[u[0]*(c+d), u[1]*(c+d)];
     return {id, name, a, c, u, v, center:at(centerOff), plate:at(plateOff), watch:at(plateOff-6)}; };
-  return [mk('plat','Plataformas flotantes',1.37,38,-7), mk('papa','Papa caliente',4.71,-44,-20), mk('bola','Rebote sobre pelotas',3.93,21,-7)]; })();
+  return [mk('plat','Plataformas flotantes',1.37,38,-7), mk('papa','Papa caliente',4.71,-44,-20), mk('bola','Rebote sobre pelotas',3.93,21,-7), mk('carrera','Carrera de obstáculos',.15,42,-7)]; })();
 const TELEPORTS=[{id:'inicio', name:'Inicio', x:START.x, z:START.z}, {id:'pista', name:'Pista', x:MAP.park.x-6, z:MAP.park.z+30}, {id:'aero', name:'Aeropuerto', ...(([x,z])=>({x,z}))(airportXZ(85,-80))}, {id:'parque', name:'Parque', x:PG.x+1, z:PG.z+2}, {id:'feria', name:'Feria', x:FAIR.x+Math.sin(FAIR.yaw)*-(FAIR.R-5), z:FAIR.z+Math.cos(FAIR.yaw)*-(FAIR.R-5)}, ...AR_SPOTS.map(A=>({id:'ar_'+A.id, name:A.name, x:A.watch[0], z:A.watch[1], noPortal:true}))];
 
 // ---------- Portales del segundo piso del castillo: arcos de mini bombones que llevan a los lugares del mapa ----------
@@ -7585,7 +7585,7 @@ function handLocal(o,side,x,y,z,hx,hy,hz,stretch){ const arm=ARM(o,side); if(!ar
 // Fases: 0 fila → 1 a sus lugares (3 s) → 2 cuenta regresiva (5 s) → 3 a jugar → 4 resultados (6 s).
 const AR_LOBBY=10000, AR_PLACE=3000, AR_COUNT=5000, AR_END=6500;
 const ARN=AR_SPOTS.length;
-const AR={me:{a:-1, st:0, gid:'', seq:0, req:null, lastPass:0, awarded:''}, G:Array.from({length:ARN},()=>({ph:0, ms:-1, gid:'', pl:[], el:[], h:null, hms:0, hs:-1, prev:null, pause:0, rk:[], tie:0, sd:1})), lead:Array(ARN).fill(false), recvAt:Array(ARN).fill(0)};
+const AR={me:{a:-1, st:0, gid:'', seq:0, req:null, lastPass:0, awarded:''}, G:Array.from({length:ARN},()=>({ph:0, ms:-1, gid:'', pl:[], el:[], h:null, hms:0, hs:-1, prev:null, pause:0, rk:[], tie:0, sd:1, fin:[], ft:{}})), lead:Array(ARN).fill(false), recvAt:Array(ARN).fill(0)};
 const arW=(A,du,dv,y,out)=>(out||new THREE.Vector3()).set(A.center[0]+A.u[0]*du+A.v[0]*dv, y, A.center[1]+A.u[1]*du+A.v[1]*dv);
 const arL=(A,x,z)=>{ const dx=x-A.center[0], dz=z-A.center[1]; return [dx*A.u[0]+dz*A.u[1], dx*A.v[0]+dz*A.v[1]]; };
 const arYaw=(A,dx,dz)=>Math.atan2(dx,dz);
@@ -7685,10 +7685,144 @@ function makeBall(i){ const m=new THREE.Mesh(ballGeo,beachBallMat(i)); m.scale.s
 })();
 BOLA.mine=makeBall(0);
 
+// ---------------- 4) Carrera de obstáculos sobre el agua ----------------
+// Un recorrido de 400 m de plataformas acolchadas de colores flotando en el mar (unos 2 minutos caminando).
+// Hay cojines para brincar, plataformas que se mueven (de lado, adelante-atrás y arriba-abajo), pistones que empujan,
+// brazos que giran y cojines que rebotan. Si caes al agua quedas fuera; gana quien llegue primero a la meta.
+// Todo se mueve con la hora del reloj (Date.now), así cada quien lo ve igual sin mandar nada.
+const RC={L:400, Y:SEA_Y+1.0, P:[], M:[], S:[], R:[], on:-1, kv:new THREE.Vector2(), t0:0, near:false, hit:new Map(), grp:null};
+const rcA=()=>AR_SPOTS[3];
+const rcW=(s,w,y,out)=>arW(rcA(),w,s-RC.L/2,y,out);
+const rcL=(x,z)=>{ const [du,dv]=arL(rcA(),x,z); return [dv+RC.L/2, du]; };   // [s, w]
+(function defineRace(){ const Y=RC.Y, P=RC.P, M=RC.M, S=RC.S, R=RC.R;
+  const box=(s0,s1,w0,w1,c,y)=>P.push({t:'b', s0,s1,w0,w1, y:y??Y, c});
+  const pad=(s,w,r,c,bounce)=>P.push({t:'p', s,w,r, y:Y, c, bounce:!!bounce});
+  const mov=(s,w,ls,lw,c,ax,amp,per,ph)=>M.push({s,w,ls,lw,c,ax,amp,per,ph, cs:s, cw:w, cy:Y, ps:s, pw:w, py:Y});
+  const sweep=(s,w,L,y0,y1,sp,n,c)=>S.push({s,w,L,y0,y1,sp,n,c,a:0});
+  const ram=(s,side,c,per,ph)=>R.push({s,side,c,per,ph,w:side*3.6,pw:side*3.6});
+  // A. salida
+  box(0,14,-6,6,0);
+  // B. cojines para ir brincando
+  for(let k=0;k<10;k++) pad(17+k*3.6,(k%2?2.1:-2.1),1.55,1+k%5);
+  // C. puente con un tronco bajo que gira (hay que brincarlo)
+  box(55,87,-1.7,1.7,2); sweep(71,0,4.2,Y+.05,Y+.65,1.7,2,4);
+  // D. plataformas que van de lado a lado sobre el agua
+  for(let k=0;k<5;k++) mov(91+k*6,0,4,4,(k+1)%6,'w',3.6,4.6,k*.9);
+  box(118,128,-3,3,5);
+  // E. pasillo con pistones que empujan al agua
+  box(128,171,-1.7,1.7,3); [[136,1],[146,-1],[156,1],[166,-1]].forEach(([s,sd],k)=>ram(s,sd,(k+2)%6,3.2,k*.8));
+  // F. disco con tres brazos altos que giran (hay que esperar el hueco)
+  P.push({t:'p', s:178,w:0,r:7.2, y:Y, c:1}); sweep(178,0,6.8,Y+.15,Y+1.7,1.0,3,0);
+  box(184.5,188,-1.7,1.7,2);
+  // G. cojines que rebotan para cruzar un hueco grande
+  for(let k=0;k<5;k++) pad(190.5+k*6.5,(k%2?1.2:-1.2),1.6,4,true);
+  box(219,230,-3,3,0);
+  // H. plataformas que suben y bajan
+  for(let k=0;k<4;k++) mov(234+k*6,0,4,4,(k+3)%6,'y',1.15,4.8,k*1.2);
+  box(255,262,-3,3,1);
+  // I. viga angosta con molinos a los lados
+  box(262,292,-.65,.65,5); sweep(270,-3,4.3,Y+.2,Y+1.8,1.3,2,2); sweep(284,3,4.3,Y+.2,Y+1.8,-1.3,2,3);
+  box(292,296,-2.5,2.5,0);
+  // J. plataformas que van y vienen hacia adelante
+  for(let k=0;k<3;k++) mov(302+k*8,0,4.5,3.2,(k+4)%6,'s',2.6,4.4,k*1.4);
+  box(321,330,-3,3,2);
+  // K. disco final con brazo bajo (brincar) y brazo alto (esperar), pistones y cojines
+  P.push({t:'p', s:338,w:0,r:7.5, y:Y, c:4}); sweep(338,0,7.2,Y+.05,Y+.6,-1.4,1,1); sweep(338,0,7.2,Y+.2,Y+1.7,.9,1,5);
+  box(345,362,-1.7,1.7,3); ram(351,1,0,2.8,.3); ram(357,-1,2,2.8,1.5);
+  for(let k=0;k<5;k++) pad(364.5+k*3.6,(k%2?-1.8:1.8),1.5,(k+2)%5);
+  box(382,400,-6,6,0, Y);
+})();
+RC.COL=['#ff7aa2','#ffc23d','#6fd15a','#4fb0ff','#a77bff','#ff9a4a'];
+// dónde está ahora cada cosa que se mueve (con la hora compartida)
+function raceMove(now){ const twoPi=Math.PI*2;
+  for(const m of RC.M){ m.ps=m.cs; m.pw=m.cw; m.py=m.cy; const v=Math.sin(twoPi*now/m.per+m.ph)*m.amp; m.cs=m.s+(m.ax==='s'?v:0); m.cw=m.w+(m.ax==='w'?v:0); m.cy=RC.Y+(m.ax==='y'?v-.15:0); }
+  for(const sw of RC.S) sw.a=sw.sp*now%(twoPi);
+  // pistones: quietos afuera, empujan rápido hacia el otro lado y regresan despacio
+  for(const r of RC.R){ r.pw=r.w; const ph=((now/r.per+r.ph)%1+1)%1; let k; if(ph<.45) k=0; else if(ph<.55) k=(ph-.45)/.1; else if(ph<.7) k=1; else k=1-(ph-.7)/.3; r.k=k; r.w=r.side*(3.6-3.9*k); r.push=ph>=.45&&ph<.55; } }
+function racePieceTop(s,w,y){ let best=null, id=-1; const consider=(top,i)=>{ if(top<=y+.45 && y>=top-.8 && (best===null || top>best)){ best=top; id=i; } };
+  RC.P.forEach((p,i)=>{ if(p.t==='b'){ if(s>=p.s0&&s<=p.s1&&w>=p.w0&&w<=p.w1) consider(p.y,i); } else { const ds=s-p.s, dw=w-p.w; if(ds*ds+dw*dw<=p.r*p.r) consider(p.y+(p.bounce?.15:0),i); } });
+  RC.M.forEach((m,i)=>{ if(Math.abs(s-m.cs)<=m.ls/2 && Math.abs(w-m.cw)<=m.lw/2) consider(m.cy,1000+i); });
+  RC.R.forEach((r,i)=>{ if(Math.abs(s-r.s)<=.7 && Math.abs(w-r.w)<=1.3) consider(RC.Y+1.4,2000+i); });
+  return best===null?null:{top:best,id}; }
+function raceGround(x,z,y){ if(!RC.near) return null; const [s,w]=rcL(x,z); if(s<-3||s>RC.L+3||Math.abs(w)>14) return null; const r=racePieceTop(s,w,y); return r?r.top:null; }
+// construcción: lo fijo se junta en pocas piezas; lo que se mueve va aparte
+(function buildRace(){ const A=rcA(), yaw=Math.atan2(A.v[0],A.v[1]), st=new THREE.Group(), dy=new THREE.Group(); dy.userData.noBatch=true;
+  const mats=RC.COL.map(c=>felt(c,'rgba(0,0,0,.12)')), trim=felt('#fbf6ee','rgba(0,0,0,.08)'), dark=felt('#4a4f5c');
+  const boxG=new THREE.BoxGeometry(1,1,1), cylG=new THREE.CylinderGeometry(1,1,1,28);
+  const put=(o,s,w,y)=>{ const p=rcW(s,w,y); o.position.copy(p); o.rotation.y=yaw; return o; };
+  RC.P.forEach(p=>{ if(p.t==='b'){ const m=new THREE.Mesh(boxG,mats[p.c]); m.scale.set(p.w1-p.w0,.5,p.s1-p.s0); put(m,(p.s0+p.s1)/2,(p.w0+p.w1)/2,p.y-.25); st.add(m);
+        // bordito blanco acolchado a los lados
+        [p.w0,p.w1].forEach(w=>{ const e=new THREE.Mesh(boxG,trim); e.scale.set(.18,.56,p.s1-p.s0); put(e,(p.s0+p.s1)/2,w,p.y-.22); st.add(e); }); }
+    else { const m=new THREE.Mesh(cylG,p.bounce?felt('#ff5d8f','rgba(0,0,0,.12)'):mats[p.c]); m.scale.set(p.r,.5,p.r); put(m,p.s,p.w,p.y-.25); st.add(m);
+      const rim=new THREE.Mesh(new THREE.TorusGeometry(p.r,.12,6,28),trim); rim.rotation.x=Math.PI/2; const q=rcW(p.s,p.w,p.y); rim.position.copy(q); st.add(rim);
+      if(p.bounce){ const top=new THREE.Mesh(cylG,felt('#fff3a6')); top.scale.set(p.r*.7,.2,p.r*.7); put(top,p.s,p.w,p.y+.08); st.add(top); } } });
+  // flotadores debajo (para que se vea que flotan)
+  RC.P.forEach((p,i)=>{ if(i%2) return; const s=p.t==='b'?(p.s0+p.s1)/2:p.s, w=p.t==='b'?(p.w0+p.w1)/2:p.w; const f=new THREE.Mesh(cylG,dark); f.scale.set(.6,.9,.6); put(f,s,w,RC.Y-.9); st.add(f); });
+  // arcos de salida y meta
+  const arch=(s,label,c)=>{ [-1,1].forEach(sd=>{ const p=new THREE.Mesh(boxG,mats[c]); p.scale.set(.5,4.2,.5); put(p,s,sd*5.6,RC.Y+2.1); st.add(p); });
+    const bm=new THREE.MeshStandardMaterial({map:textTex([label],512,96,'#fff3d6','#3a3a5a','#ffd34d'), roughness:.8});
+    [[Math.PI,-.03],[0,.03]].forEach(([ry,off])=>{ const b=new THREE.Mesh(new THREE.PlaneGeometry(11.6,1.3), bm); put(b,s+off,0,RC.Y+4.3); b.rotation.y=yaw+ry; st.add(b); }); };   // se lee bien de los dos lados
+  arch(13.5,'SALIDA',3); arch(385,'¡META!',0);
+  st.traverse(o=>{ if(o.isMesh){ o.receiveShadow=true; } }); mergeStatic(st); st.children.forEach(o=>{ o.castShadow=true; o.receiveShadow=true; }); scene.add(st); RC.grp=st;
+  // lo que se mueve
+  RC.M.forEach(m=>{ const o=new THREE.Mesh(boxG,mats[m.c]); o.scale.set(m.lw,.5,m.ls); o.castShadow=true; o.receiveShadow=true; dy.add(o); m.o=o;
+    const e=new THREE.Mesh(boxG,trim); e.scale.set(m.lw+.1,.12,m.ls+.1); e.position.y=-.2; o.add(e); e.scale.divide(o.scale); });
+  RC.S.forEach(sw=>{ const g=new THREE.Group(); put(g,sw.s,sw.w,0); dy.add(g); sw.g=g;
+    const post=new THREE.Mesh(cylG,dark); post.scale.set(.35,sw.y1-RC.Y+.5,.35); post.position.y=(sw.y1+RC.Y)/2; g.add(post);
+    for(let k=0;k<sw.n;k++){ const arm=new THREE.Group(); arm.rotation.y=k/sw.n*Math.PI*2; g.add(arm);
+      const bar=new THREE.Mesh(cylG,mats[sw.c]); bar.scale.set(.28,sw.L,.28); bar.rotation.z=Math.PI/2; bar.position.set(sw.L/2,(sw.y0+sw.y1)/2,0); bar.castShadow=true; arm.add(bar);
+      if(sw.y1-sw.y0>.9){ const pan=new THREE.Mesh(boxG,mats[(sw.c+2)%6]); pan.scale.set(sw.L*.85,sw.y1-sw.y0,.18); pan.position.set(sw.L*.55,(sw.y0+sw.y1)/2,0); pan.castShadow=true; arm.add(pan); }
+      const tip=new THREE.Mesh(sphereG,trim); tip.scale.setScalar(.34); tip.position.set(sw.L,(sw.y0+sw.y1)/2,0); arm.add(tip); }
+    const [x,z]=[rcW(sw.s,sw.w,0).x, rcW(sw.s,sw.w,0).z]; obstacles.push({x,z,r:.45,top:sw.y1+.4,walk:false}); });
+  RC.R.forEach(r=>{ const o=new THREE.Mesh(boxG,mats[r.c]); o.scale.set(2.6,1.4,1.4); o.castShadow=true; dy.add(o); r.o=o;
+    const face=new THREE.Mesh(boxG,trim); face.scale.set(.12/2.6,1.1/1.4,1.2/1.4); face.position.x=-r.side*.5; o.add(face);
+    const house=new THREE.Mesh(boxG,dark); house.scale.set(1.2,1.8,1.8); put(house,r.s,r.side*5.4,RC.Y+.6); house.castShadow=true; scene.add(house); });
+  scene.add(dy); RC.dy=dy; RC.yaw=yaw;
+})();
+function raceVisual(){ const yaw=RC.yaw;
+  for(const m of RC.M){ const p=rcW(m.cs,m.cw,m.cy-.25); m.o.position.copy(p); m.o.rotation.y=yaw; }
+  for(const sw of RC.S){ sw.g.rotation.y=yaw+sw.a; }
+  for(const r of RC.R){ const p=rcW(r.s,r.w,RC.Y+.7); r.o.position.copy(p); r.o.rotation.y=yaw; } }
+// cada cuadro: moverlo todo, llevarte encima de lo que se mueve, golpes de brazos y pistones
+const _rcv=new THREE.Vector3();
+function raceTick(dt){ const A=rcA(), d=Math.hypot(player.pos.x-A.center[0],player.pos.z-A.center[1]), dc=Math.hypot(camera.position.x-A.center[0],camera.position.z-A.center[1]);
+  RC.near=d<RC.L*.75 || dc<RC.L*.8; if(!RC.near) return;
+  const now=Date.now()/1000; raceMove(now); raceVisual();
+  const [s,w]=rcL(player.pos.x,player.pos.z);
+  if(Math.abs(w)>16 || s<-6 || s>RC.L+6) return;
+  // encima de una plataforma que se mueve: te lleva con ella
+  for(let i=0;i<RC.M.length;i++){ const m=RC.M[i]; if(Math.abs(s-m.ps)<=m.ls/2+.1 && Math.abs(w-m.pw)<=m.lw/2+.1 && Math.abs(player.pos.y-m.py)<.3 && player.vy<=.1){
+      const p0=rcW(m.ps,m.pw,0), p1=rcW(m.cs,m.cw,0); player.pos.x+=p1.x-p0.x; player.pos.z+=p1.z-p0.z; if(m.cy>m.py) player.pos.y=Math.max(player.pos.y,m.cy); break; } }
+  let [ps,pw]=rcL(player.pos.x,player.pos.z); const py=player.pos.y;
+  const knock=(ks,kw,up)=>{ RC.kv.set(ks,kw); player.vy=Math.max(player.vy,up); player.grounded=false; player.squash=.8; try{ audio.bump(); }catch(e){} };
+  // brazos que giran
+  RC.S.forEach((sw,i)=>{ if(py>sw.y1 || py+1.7<sw.y0) return; const cool=RC.hit.get('s'+i)||0; if(performance.now()-cool<500) return;
+    for(let k=0;k<sw.n;k++){ const a=sw.a+k/sw.n*Math.PI*2, ds=-Math.sin(a), dw=Math.cos(a);   // dirección del brazo en (s,w)
+      const rs=ps-sw.s, rw=pw-sw.w, u=Math.max(0,Math.min(sw.L,rs*ds+rw*dw)), cs=sw.s+ds*u, cw=sw.w+dw*u, dd=Math.hypot(ps-cs,pw-cw);
+      if(dd<.6 && u>.3){ const sg=Math.sign(sw.sp), ts=-Math.cos(a)*sg, tw=-Math.sin(a)*sg;   // hacia donde gira
+        const tl=Math.hypot(ts,tw)||1; knock(ts/tl*9, tw/tl*9, 5); RC.hit.set('s'+i,performance.now()); break; } } });
+  // pistones
+  RC.R.forEach((r,i)=>{ if(Math.abs(ps-r.s)>1.1 || py>RC.Y+1.3) return; const front=r.w-r.side*1.3;   // la cara que empuja
+    if(Math.abs(pw-r.w)<1.3+.35){ const cool=RC.hit.get('r'+i)||0;
+      if(r.push && performance.now()-cool>500){ knock(0,-r.side*8,4.5); RC.hit.set('r'+i,performance.now()); }
+      pw=front-r.side*.36; const p=rcW(ps,pw,player.pos.y); player.pos.x=p.x; player.pos.z=p.z; } });
+  // el empujón se va acabando
+  if(RC.kv.lengthSq()>.01){ const k=RC.kv; const a=rcW(ps+k.x*dt,pw+k.y*dt,0), b=rcW(ps,pw,0); player.pos.x+=a.x-b.x; player.pos.z+=a.z-b.z; k.multiplyScalar(Math.exp(-dt*2.2)); }
+}
+// rebote en los cojines rosas
+function raceLand(g){ if(!RC.near) return false; const [s,w]=rcL(player.pos.x,player.pos.z); const r=racePieceTop(s,w,g+.1); if(!r || r.id>=1000 || !RC.P[r.id].bounce) return false;
+  player.pos.y=g; player.vy=12; player.grounded=false; player.squash=1; try{ const R=audio.raw(), t0=R.ctx.currentTime; R.tone('sine',180,520,t0,.2,.12); }catch(e){} return true; }
+// jugar: caer = fuera; llegar a la meta = guardar tu tiempo
+function racePlay(dt,G){ const me=AR.me; if(!RC.t0) RC.t0=performance.now();
+  if(player.pos.y<SEA_Y-.15 || player.swim){ arOut(3,'¡Al agua!'); return; }
+  const [s,w]=rcL(player.pos.x,player.pos.z);
+  if(s>=386 && Math.abs(w)<6 && player.pos.y>RC.Y-.3 && me.st===2){ me.st=4; me.finMs=Math.round(performance.now()-RC.t0); bigText('¡Llegaste! '+fmtRace(me.finMs),2200); try{ coinSound(4); }catch(e){} sendPresence(true); } }
+const fmtRace=ms=>{ const s=ms/1000; return Math.floor(s/60)+':'+(s%60).toFixed(1).padStart(4,'0'); };
+
 // ---------------- placas para unirse (en la playa) y letreros ----------------
 (function buildPlates(){ AR_SPOTS.forEach((A,i)=>{ const [x,z]=A.plate, h=terrainH(x,z);
   const m=padMesh(scene,x,z,.9); m.position.y=h+.04;
-  const sg=new THREE.Mesh(new THREE.PlaneGeometry(3.4,1.15), new THREE.MeshStandardMaterial({map:textTex([A.name, i===1?'Pásala antes de que explote':'¡El último gana!'],512,174,'#fff3d6','#7a2b2b','#ffd34d'), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(3.4,1.15), new THREE.MeshStandardMaterial({map:textTex([A.name, i===1?'Pásala antes de que explote':i===3?'¡El más rápido gana!':'¡El último gana!'],512,174,'#fff3d6','#7a2b2b','#ffd34d'), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
   const yaw=Math.atan2(A.u[0],A.u[1]); const sp=[x+A.u[0]*1.6, z+A.u[1]*1.6]; sg.position.set(sp[0],h+2.6,sp[1]); sg.rotation.y=yaw+Math.PI; scene.add(sg); fairGlow.push(sg.material); const sb=sg.clone(); sb.rotation.y=yaw; sb.position.addScaledVector(new THREE.Vector3(A.u[0],0,A.u[1]),.02); scene.add(sb);
   [-1,1].forEach(s=>{ const p=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,2.6,8),new THREE.MeshStandardMaterial({color:'#fbf3e4'})); p.position.set(sp[0]+A.v[0]*s*1.6,h+1.3,sp[1]+A.v[1]*s*1.6); scene.add(p); obstacles.push({x:p.position.x,z:p.position.z,r:.12,top:h+2.6,walk:false}); }); }); })();
 
@@ -7696,9 +7830,9 @@ BOLA.mine=makeBall(0);
 // ---------- Estado compartido ----------
 // ======================================================================================
 function arenaPresence(){ const me=AR.me, la=AR.lead.indexOf(true);
-  const agOf=a=>{ const G=AR.G[a]; return {a, ph:G.ph, ms:Math.round(G.ms/100)*100, gid:G.gid, pl:G.pl, el:G.el, h:G.h, hms:Math.round(G.hms/100)*100, pause:G.pause>0?1:0, rk:G.rk, tie:G.tie, sd:G.sd, prev:G.prev}; };
+  const agOf=a=>{ const G=AR.G[a]; return {a, ph:G.ph, ms:Math.round(G.ms/100)*100, gid:G.gid, pl:G.pl, el:G.el, h:G.h, hms:Math.round(G.hms/100)*100, pause:G.pause>0?1:0, rk:G.rk, tie:G.tie, sd:G.sd, prev:G.prev, fin:G.fin||[]}; };
   if(me.a<0) return {az:null, ag: la>=0 && AR.G[la].ph>0 ? agOf(la) : null, rt:null};   // aunque ya salí, sigo avisando cómo acabó la partida que llevaba
-  const az=[me.a, me.st]; if(me.a===2 && me.st===2) az.push(r2(BOLA.v.x), r2(BOLA.v.y), BOLA.dashT>0?1:0); if(me.a===1 && me.req) az.push(me.req[0], me.req[1]);
+  const az=[me.a, me.st]; if(me.a===2 && me.st===2) az.push(r2(BOLA.v.x), r2(BOLA.v.y), BOLA.dashT>0?1:0); if(me.a===1 && me.req) az.push(me.req[0], me.req[1]); if(me.a===3 && me.st===4) az.push(me.finMs||0);
   const ag=AR.lead[me.a] ? agOf(me.a) : la>=0 && AR.G[la].ph>0 ? agOf(la) : null;
   return {az, ag, rt: me.a===0 && PLAT.mine.length ? [PLAT.gid, ...PLAT.mine.slice(-200)] : null}; }
 const clean12=s=>typeof s==='string'?s.slice(0,24):'';
@@ -7706,7 +7840,7 @@ function parseArena(r,pr){
   const az=pr.az; r.az = Array.isArray(az) && Number.isInteger(az[0]) && az[0]>=0 && az[0]<ARN && Number.isInteger(az[1]) ? az.slice(0,6) : null;
   const ag=pr.ag; if(ag && typeof ag==='object' && Number.isInteger(ag.a) && ag.a>=0 && ag.a<ARN){
     r.ag={a:ag.a, ph:ag.ph|0, ms:+ag.ms||0, gid:clean12(ag.gid), pl:(Array.isArray(ag.pl)?ag.pl:[]).slice(0,16).map(clean12), el:(Array.isArray(ag.el)?ag.el:[]).slice(0,16).map(clean12),
-      h:ag.h?clean12(ag.h):null, hms:+ag.hms||0, pause:ag.pause?1:0, rk:(Array.isArray(ag.rk)?ag.rk:[]).slice(0,16).map(clean12), tie:ag.tie|0, sd:ag.sd|0, prev:ag.prev?clean12(ag.prev):null, at:performance.now()}; } else r.ag=null;
+      h:ag.h?clean12(ag.h):null, hms:+ag.hms||0, pause:ag.pause?1:0, rk:(Array.isArray(ag.rk)?ag.rk:[]).slice(0,16).map(clean12), tie:ag.tie|0, sd:ag.sd|0, prev:ag.prev?clean12(ag.prev):null, fin:(Array.isArray(ag.fin)?ag.fin:[]).slice(0,16).map(clean12), at:performance.now()}; } else r.ag=null;
   // baldosas que quitó ese jugador en esta partida
   if(Array.isArray(pr.rt) && pr.rt[0]===PLAT.gid && PLAT.gid){ for(let i=1;i<pr.rt.length;i++){ const k=pr.rt[i]; if(Number.isInteger(k) && k>=0 && k<PLAT.removed.length) platRemove(k); } }
 }
@@ -7721,14 +7855,17 @@ function arLeader(a){ const G=AR.G[a]; let best=null;
 // ---------------- el líder lleva el juego ----------------
 function arLead(a,dt){ const G=AR.G[a], ms=dt*1000;
   if(G.ph===0){ const q=[]; if(AR.me.a===a && AR.me.st===1) q.push(myUid); for(const r of mp.remotes.values()) if(r.az && r.az[0]===a && r.az[1]===1 && uidOf(r)) q.push(uidOf(r));
-    if(q.length>=2){ if(G.ms<0) G.ms=AR_LOBBY; G.ms-=ms; if(G.ms<=0){ q.sort(); G.ph=1; G.ms=AR_PLACE; G.gid=Math.random().toString(36).slice(2,9); G.pl=q.slice(0,12); G.el=[]; G.rk=[]; G.tie=0; G.h=null; G.hms=0; G.pause=2500; G.seen={}; G.sd=(Math.random()*1e6)|0; } }
+    if(q.length>=2){ if(G.ms<0) G.ms=AR_LOBBY; G.ms-=ms; if(G.ms<=0){ q.sort(); G.ph=1; G.ms=AR_PLACE; G.gid=Math.random().toString(36).slice(2,9); G.pl=q.slice(0,12); G.el=[]; G.rk=[]; G.tie=0; G.h=null; G.hms=0; G.pause=2500; G.seen={}; G.fin=[]; G.ft={}; G.sd=(Math.random()*1e6)|0; } }
     else G.ms=-1; return; }
   G.ms-=ms;
   if(G.ph===1 && G.ms<=0){ G.ph=2; G.ms=AR_COUNT; }
-  else if(G.ph===2 && G.ms<=0){ G.ph=3; G.ms=[600000,240000,150000][a]; G.pt=0; }
+  else if(G.ph===2 && G.ms<=0){ G.ph=3; G.ms=[600000,240000,150000,300000][a]; G.pt=0; }
   else if(G.ph===3){
-    G.pt=(G.pt||0)+ms; for(const u of G.pl){ const st=arStatus(a,u); if(!G.el.includes(u) && (!arPresent(u) || st===3 || st===0 || (st!==2 && G.pt>4000))) G.el.push(u); }
-    const alive=G.pl.filter(u=>!G.el.includes(u));
+    G.pt=(G.pt||0)+ms; G.fin=G.fin||[]; G.ft=G.ft||{};
+    for(const u of G.pl){ if(G.fin.includes(u)) continue; const st=arStatus(a,u);
+      if(a===3 && st===4 && !G.el.includes(u)){ G.fin.push(u); G.ft[u]=u===myUid?(AR.me.finMs||0):((arRemote(u)||{}).az||[])[2]||0; continue; }   // carrera: llegó a la meta
+      if(!G.el.includes(u) && (!arPresent(u) || st===3 || st===0 || (st!==2 && st!==4 && G.pt>4000))) G.el.push(u); }
+    const alive=G.pl.filter(u=>!G.el.includes(u) && !G.fin.includes(u));
     if(a===1 && alive.length>1){   // papa caliente
       if(!G.h || !alive.includes(G.h)){ G.pause-=ms; if(G.pause<=0){ G.h=alive[(Math.random()*alive.length)|0]; G.hms=20000; G.prev=null; } }
       else { G.hms-=ms;
@@ -7736,12 +7873,15 @@ function arLead(a,dt){ const G=AR.G[a], ms=dt*1000;
         const req = G.h===myUid ? AR.me.req : (r=>r&&r.az&&r.az[0]===1&&r.az.length>=4?[r.az[2],r.az[3]]:null)(arRemote(G.h));
         G.seen=G.seen||{}; if(req && req[1]>(G.seen[G.h]||0) && alive.includes(req[0]) && req[0]!==G.h){ G.seen[G.h]=req[1]; G.prev=G.h; G.h=req[0]; G.hms=Math.min(20000,G.hms+1000); }   // al pasarla se recarga un poquito (así no se puede quedar pasándola para siempre)
         if(G.hms<=0){ G.el.push(G.h); G.h=null; G.pause=3000; } } }
-    if(alive.length<=1 || G.ms<=0){ const al=G.pl.filter(u=>!G.el.includes(u)); G.rk=[...al, ...G.el.slice().reverse()]; G.tie=Math.max(1,al.length); G.ph=4; G.ms=AR_END; G.h=null; } }
+    if(a===3 ? (alive.length===0 || G.ms<=0) : (alive.length<=1 || G.ms<=0)){
+      if(a===3){ const fs=G.fin.slice().sort((p,q)=>(G.ft[p]||1e9)-(G.ft[q]||1e9)); G.rk=[...fs, ...alive, ...G.el.slice().reverse()]; G.tie=fs.length?1:Math.max(1,alive.length); }
+      else { const al=G.pl.filter(u=>!G.el.includes(u)); G.rk=[...al, ...G.el.slice().reverse()]; G.tie=Math.max(1,al.length); }
+      G.ph=4; G.ms=AR_END; G.h=null; } }
   else if(G.ph===4 && G.ms<=0){ G.ph=0; G.ms=-1; G.pl=[]; G.el=[]; G.h=null; }
 }
 // ---------------- los demás copian lo que dice el líder ----------------
 function arFollow(a,leaderUid){ const r=arRemote(leaderUid); if(!r || !r.ag || r.ag.a!==a) return; const G=AR.G[a], s=r.ag;
-  if(AR.recvAt[a]!==s.at){ AR.recvAt[a]=s.at; Object.assign(G,{ph:s.ph, ms:s.ms, gid:s.gid, pl:s.pl, el:s.el, h:s.h, hms:s.hms, pause:s.pause?1:0, rk:s.rk, tie:s.tie, sd:s.sd, prev:s.prev}); } }
+  if(AR.recvAt[a]!==s.at){ AR.recvAt[a]=s.at; Object.assign(G,{ph:s.ph, ms:s.ms, gid:s.gid, pl:s.pl, el:s.el, h:s.h, hms:s.hms, pause:s.pause?1:0, rk:s.rk, tie:s.tie, sd:s.sd, prev:s.prev, fin:s.fin||[]}); } }
 
 // ======================================================================================
 // ---------- Mi parte: unirme, jugar, quedar fuera, premios ----------
@@ -7760,11 +7900,13 @@ function arLeave(){ const me=AR.me, a=me.a; if(a<0) return; const was=me.st; me.
 function arStartSpot(a,n,N){ const A=AR_SPOTS[a], ang=n/N*Math.PI*2+.3;
   if(a===0){ const T=PLAT.T, r=Math.min(18,4+N*1.2); const du=Math.cos(ang)*r, dv=Math.sin(ang)*r; const j=Math.round(du/T+PLAT.N/2-.5), i=Math.round(dv/T+PLAT.N/2-.5); const w=arW(A,(j-(PLAT.N-1)/2)*T,(i-(PLAT.N-1)/2)*T,platTop(PLAT.F-1)); return [w,ang]; }
   if(a===1){ const r=8, w=arW(A,Math.cos(ang)*r,Math.sin(ang)*r,0); w.y=terrainH(w.x,w.z)+.05; return [w,ang]; }
+  if(a===3){ const w=rcW(3+Math.floor(n/4)*2.6, -4.5+(n%4)*3, RC.Y); return [w,ang]; }
   const r=7, w=arW(A,Math.cos(ang)*r,Math.sin(ang)*r,BOLA.top); return [w,ang]; }
 function arEnter(a,G){ const me=AR.me, n=G.pl.indexOf(myUid), [w,ang]=arStartSpot(a,n,G.pl.length), A=AR_SPOTS[a];
   me.gid=G.gid; me.st=2; me.req=null; me.lastPass=0;
   const c=arW(A,0,0,w.y), face=Math.atan2(c.x-w.x,c.z-w.z);
   if(a===0){ platReset(G.gid); }
+  if(a===3){ RC.t0=0; RC.kv.set(0,0); me.finMs=0; }
   arWarp(w.x,w.y,w.z,face);
   if(a===2){ BOLA.v.set(0,0); BOLA.vy=0; BOLA.fall=false; BOLA.mine.visible=true; }
   try{ audio.teleport(); }catch(e){} }
@@ -7795,7 +7937,7 @@ function arenaUpdate(dt){
   if(me.a>=0){ const a=me.a, G=AR.G[a];
     if(!mp.room){ arLeave(); return; }
     if(me.st===1 && G.ph>=1 && G.ph<=3 && G.pl.includes(myUid) && !G.el.includes(myUid) && me.gid!==G.gid) arEnter(a,G);
-    if(me.st>=2 && (G.gid!==me.gid || G.ph===0)){ const was=me.st; me.st=0; me.a=-1; ballOff(); if(was===2) arToBeach(a); renderArHud(); sendPresence(true); return; }
+    if(me.st>=2 && (G.gid!==me.gid || G.ph===0)){ const was=me.st; me.st=0; me.a=-1; ballOff(); if(was===2 || was===4) arToBeach(a); renderArHud(); sendPresence(true); return; }
     if(me.st===2 && G.ph===3 && G.el.includes(myUid)) arOut(a, a===1?'¡BUM! Se te quemó la papa':'¡Quedaste fuera!');
     if(me.st>=2 && G.ph===4) arResult(a,G);
     // cuenta regresiva y salida
@@ -7805,6 +7947,7 @@ function arenaUpdate(dt){
     if(me.st===2 && G.ph===3){
       if(a===0) platPlay(dt);
       if(a===1) papaPlay(dt,G);
+      if(a===3) racePlay(dt,G);
     }
     if(arBall()) ballPlay(dt,G);
   }
@@ -7881,11 +8024,11 @@ function remoteArenaPose(r,t,dt){ const az=r.az; let b=remoteBalls.get(r);
   if(az && az[0]===2 && az[1]===2 && AR.G[2].ph>=1){ if(!b){ b=makeBall(1); remoteBalls.set(r,b); } b.visible=true; b.position.set(r.pos.x,r.pos.y+BOLA.br,r.pos.z); const v=Math.hypot(az[2]||0,az[3]||0); b.rotation.x+=v*dt/BOLA.br; ballRiderPose(r.obj,t,dt,v); }
   else if(b) b.visible=false;
   if(az && az[0]===1 && AR.G[1].h===uidOf(r) && AR.G[1].ph===3) pgPoseLimbs(r.obj,{armsUp:1},t,dt,r.walk||0); }
-function arenaGround(x,z,y){ if(!arenaReady) return null; const A=AR_SPOTS[0]; if(Math.abs(x-A.center[0])<40 && Math.abs(z-A.center[1])<40) return platGround(x,z,y); return null; }
+function arenaGround(x,z,y){ if(!arenaReady) return null; const A=AR_SPOTS[0]; if(Math.abs(x-A.center[0])<40 && Math.abs(z-A.center[1])<40) return platGround(x,z,y); return raceGround(x,z,y); }
 // cámara: al acomodarse, una vuelta por arriba de la arena
 function arenaCamera(dt){ const me=AR.me; if(me.a<0 || me.st!==2 || AR.G[me.a].ph!==1) return false;
-  const A=AR_SPOTS[me.a], k=1-Math.max(0,AR.G[me.a].ms)/AR_PLACE, ang=k*1.8+Math.atan2(A.u[0],A.u[1]), rad=me.a===0?48:28, hgt=(me.a===0?platTop(4):terrainH(A.center[0],A.center[1]))+(me.a===0?22:16);
-  const c=arW(A,0,0,0), want=_pv.set(c.x+Math.sin(ang)*rad*(1-k*.6), hgt*(1-k*.35)+ (me.a===0?0:4*k), c.z+Math.cos(ang)*rad*(1-k*.6));
+  const A=AR_SPOTS[me.a], k=1-Math.max(0,AR.G[me.a].ms)/AR_PLACE, ang=k*1.8+Math.atan2(A.u[0],A.u[1]), rad=me.a===0?48:28, hgt=(me.a===0?platTop(4):me.a===3?RC.Y:terrainH(A.center[0],A.center[1]))+(me.a===0?22:16);
+  const c=me.a===3?rcW(8,0,0):arW(A,0,0,0), want=_pv.set(c.x+Math.sin(ang)*rad*(1-k*.6), hgt*(1-k*.35)+ (me.a===0?0:4*k), c.z+Math.cos(ang)*rad*(1-k*.6));
   camera.position.lerp(want,1-Math.exp(-dt*4)); camera.lookAt(player.pos.x*k+c.x*(1-k), (me.a===0?platTop(4):player.pos.y)+1, player.pos.z*k+c.z*(1-k)); plush.visible=true; return true; }
 // botón junto a cada placa
 function arenaActions(){ if(player.car||player.ac||player.pg||player.mg) return null; const me=AR.me;
@@ -7907,6 +8050,7 @@ function renderArHud(){ const me=AR.me, el=arHudEl(); if(!el) return;
   else if(G.ph===1||G.ph===2) txt='¡Prepárate!';
   else if(G.ph===3){ const alive=G.pl.filter(u=>!G.el.includes(u)).length; txt='Quedan '+alive+' · '+fmtMs(G.ms);
     if(me.a===1){ if(G.h===myUid) txt='¡Tienes la papa! Pásala: '+fmtMs(G.hms); else if(G.h){ const r=arRemote(G.h); txt='La tiene '+(r&&r.name||'alguien')+' · '+fmtMs(G.hms); } else txt='Nueva papa en un momento…'; }
+    if(me.a===3){ const fin=(G.fin||[]).length, N=G.pl.length, el=RC.t0?performance.now()-RC.t0:0; txt = me.st===4 ? '¡Llegaste! '+fmtRace(me.finMs)+' · llegaron '+fin+'/'+N : fmtRace(Math.floor(el/100)*100)+' · llegaron '+fin+'/'+N+' · quedan '+fmtMs(G.ms); }
     if(me.st===3) txt='Fuera · '+txt; }
   else if(G.ph===4) txt='Resultados';
   const key=A.name+'|'+txt; if(key===arHudKey) return; arHudKey=key; el.hidden=false; ui('arTitle').textContent=A.name; ui('arTxt').textContent=txt;
@@ -9628,6 +9772,7 @@ function update(dt,t){ myLabelUpdate();
   cucoUpdate(dt,t);
   pierUpdate(dt,t);
   trUpdate(dt,t);
+  raceTick(dt);
   if(state==='play' && player.pg) pgPose=updateMyPlay(dt);
   const bowMoving = state==='play' && updateMyBow(dt);
   updatePlayground(dt);
@@ -9734,7 +9879,7 @@ function update(dt,t){ myLabelUpdate();
         player.pos.y=g; player.vy=0;     // pegado al suelo al subir y bajar cuestas
       } else {
         player.vy -= 20*dt; player.pos.y += player.vy*dt;
-        if(player.pos.y<=g && trampLand(g)){}   // trampolín: rebota
+        if(player.pos.y<=g && (trampLand(g) || raceLand(g))){}   // trampolín: rebota
         else if(player.pos.y<=g){
           const impact=-player.vy;
           if(!player.grounded){
