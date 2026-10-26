@@ -386,6 +386,8 @@ body.in-mg #hint{display:none!important;}
 .opt-group h3{font-family:var(--display);font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:var(--felt-dk);margin:0 0 4px;}
 .opt{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:8px 0;border-bottom:2px dashed #e4dfcd;font-weight:700;font-size:15px;}
 .opt:last-child{border-bottom:none;}
+.opt-col{flex-direction:column;align-items:stretch;gap:6px;}
+.opt-col .seg button{flex:1;padding:6px 4px;}
 .opt label{flex:1;min-width:0;}
 .opt small{display:block;font-weight:600;font-size:12px;opacity:.75;}
 .opt output{font-variant-numeric:tabular-nums;min-width:3.2em;text-align:right;font-weight:800;}
@@ -642,8 +644,8 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       <h3>Pantalla</h3>
       <div class="opt"><label for="optFull">Pantalla completa<small>También con la tecla F</small></label><button class="switch" id="optFull" role="switch" aria-checked="false" aria-label="Pantalla completa"></button></div>
       <div class="opt"><label for="optFov">Campo de visión</label><div class="ctrl"><input type="range" id="optFov" min="50" max="100" step="1"><output id="optFovOut"></output></div></div>
-      <div class="opt"><label>Calidad gráfica<small>Baja va mejor en equipos lentos</small></label>
-        <div class="seg" id="optQuality"><button data-v="min">Mínima</button><button data-v="low">Baja</button><button data-v="mid">Media</button><button data-v="high">Alta</button></div></div>
+      <div class="opt opt-col"><label>Calidad gráfica<small>Baja va mejor en equipos lentos · Máxima es para equipos potentes</small></label>
+        <div class="seg" id="optQuality"><button data-v="min">Mínima</button><button data-v="low">Baja</button><button data-v="mid">Media</button><button data-v="high">Alta</button><button data-v="max">Máxima</button></div></div>
       <div class="opt"><label for="optUltra">Modo ultra ligero<small>Para teléfonos lentos: más sencillo y sin adornos que se mueven de fondo. Al cambiarlo el juego se vuelve a abrir.</small></label><button class="switch" id="optUltra" role="switch" aria-checked="false" aria-label="Modo ultra ligero"></button></div>
       <div class="opt"><label for="optAutoRes">Resolución automática<small>Baja un poco la nitidez si hace falta para ir fluido</small></label><button class="switch" id="optAutoRes" role="switch" aria-checked="true" aria-label="Resolución automática"></button></div>
       <div class="opt"><label>Límite de FPS<small>30 da un ritmo parejo en equipos lentos</small></label>
@@ -918,7 +920,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='107';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='108';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -933,6 +935,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
+const FX={on:false, ok:null, w:0, h:0};   // efectos de la calidad Máxima (ver «Calidad Máxima» más abajo)
 
 // Cada cuadro three.js vuelve a calcular la posición de TODOS los objetos (miles), aunque no se hayan movido.
 // Aquí solo se recalcula si cambió su posición, giro o tamaño; lo quieto se salta (en teléfonos lentos es de lo que más pesa).
@@ -1117,7 +1120,7 @@ let GROUND_MAT=null; const TERRAIN_LOD=[];
   [8,248,264,504].forEach(p=>{g.beginPath();g.moveTo(p,0);g.lineTo(p,size);g.stroke();g.beginPath();g.moveTo(0,p);g.lineTo(size,p);g.stroke();});
   const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.encoding=THREE.sRGBEncoding; t.anisotropy=8;
 
-  const SEG=ULTRA?160:({min:200, low:300, mid:380, high:420}[Q0]||300), warp=u=>520*u+980*Math.pow(u,5);   // ±1500 m, puntos más juntos en la isla
+  const SEG=ULTRA?160:({min:200, low:300, mid:380, high:420, max:480}[Q0]||300), warp=u=>520*u+980*Math.pow(u,5);   // ±1500 m, puntos más juntos en la isla
   const geo=new THREE.PlaneGeometry(2,2,SEG,SEG); geo.rotateX(-Math.PI/2);
   const pos=geo.attributes.position, uv=geo.attributes.uv, n=pos.count;
   const col=new Float32Array(n*3);
@@ -1435,7 +1438,7 @@ const trunkMat = felt('#9a6b45','rgba(60,30,10,.2)');
 const leafMats = [felt('#6fae3e'), felt('#7cbf4a'), felt('#f0a9bb','rgba(150,40,70,.12)'), felt('#ffcf6b','rgba(150,90,0,.12)')];
 const rockMat = felt('#c9c4d6','rgba(60,50,80,.15)');
 const sphereLo = new THREE.SphereGeometry(1, 8, 6);   // para bolitas muy chiquitas
-const sphereG = new THREE.SphereGeometry(1, ...({min:[9,6], low:[12,9], mid:[16,12], high:[20,16]}[Q0]||[12,9]));   // menos caras en calidad baja (hojas, rocas, nubes…)
+const sphereG = new THREE.SphereGeometry(1, ...({min:[9,6], low:[12,9], mid:[16,12], high:[20,16], max:[26,18]}[Q0]||[12,9]));   // menos caras en calidad baja (hojas, rocas, nubes…)
 const cylG = new THREE.CylinderGeometry(1,1,1,14), cylLo=new THREE.CylinderGeometry(1,1,1,7);
 const INST_LOD=[];   // grupos de árboles/rocas que cambian a la versión sencilla cuando quedan lejos
 const _o=new THREE.Object3D();
@@ -1890,7 +1893,7 @@ const FLOWER_MATS={petal:new THREE.MeshStandardMaterial({roughness:1}), stem:new
 (function flowers(){
   const FL=MAP.flowers.filter(([x,z])=>Math.hypot(x-START.x,z-START.z)>START.r+.6);   // nada de flores sobre el botón
   const cols=[0xffffff,0xffd2dc,0xffe27a,0xc8b6ff];
-  const petal=instanced(new THREE.SphereGeometry(.16,Q0==='high'||Q0==='mid'?8:5,Q0==='high'||Q0==='mid'?6:4), FLOWER_MATS.petal, FL, (o,[x,z])=>{ o.position.set(x,terrainH(x,z)+(ULTRA?.1:.36),z); o.scale.set(1,.55,1); }, {shadow:false});
+  const petal=instanced(new THREE.SphereGeometry(.16,Q0==='high'||Q0==='mid'||Q0==='max'?8:5,Q0==='high'||Q0==='mid'||Q0==='max'?6:4), FLOWER_MATS.petal, FL, (o,[x,z])=>{ o.position.set(x,terrainH(x,z)+(ULTRA?.1:.36),z); o.scale.set(1,.55,1); }, {shadow:false});
   const col=new THREE.Color(); FL.forEach(([,,c],i)=>petal.setColorAt(i,col.setHex(cols[c])));
   if(!ULTRA) instanced(new THREE.CylinderGeometry(.025,.025,.35,5), FLOWER_MATS.stem, FL, (o,[x,z])=>o.position.set(x,terrainH(x,z)+.17,z), {shadow:false});
 })();
@@ -2106,7 +2109,7 @@ const stars=(()=>{ const n=900, p=new Float32Array(n*3); let s=99;
 const PRECIP_BOX=26, PRECIP_H=34, SNOW_BOX=16, SNOW_H=22;
 let rainFx=null, snowFx=null;
 function buildPrecip(){
-  const q=settings.quality, nR=q==='min'?220:q==='low'?600:q==='mid'?1200:2000, nS=q==='min'?300:q==='low'?800:q==='mid'?1400:2200;
+  const q=settings.quality, nR=q==='min'?220:q==='low'?600:q==='mid'?1200:q==='max'?2600:2000, nS=q==='min'?300:q==='low'?800:q==='mid'?1400:q==='max'?3000:2200;
   const rp=new Float32Array(nR*6), rd=new Float32Array(nR*3);
   for(let i=0;i<nR;i++){ rd[i*3]=(Math.random()*2-1)*PRECIP_BOX; rd[i*3+1]=Math.random()*PRECIP_H; rd[i*3+2]=(Math.random()*2-1)*PRECIP_BOX; }
   const rg=new THREE.BufferGeometry(); rg.setAttribute('position',new THREE.BufferAttribute(rp,3));
@@ -2185,7 +2188,7 @@ function updateSky(dt){
   const clearSky=1-sm(.55,.95,W.cov+W.fog*.5);
   sunSprite.position.set(sunDir.x*R, sunDir.y*R, sunDir.z*R); sunSprite.scale.setScalar(R*.16);
   sunSprite.material.opacity=sm(-.08,.02,sunDir.y)*(.25+.75*clearSky); sunSprite.visible=sunSprite.material.opacity>.01 && !under;
-  sunSprite.material.color.copy(C.sunLow).lerp(_c1.set(0xffffff), sm(0,.3,sunDir.y));
+  sunSprite.material.color.copy(C.sunLow).lerp(_c1.set(0xffffff), sm(0,.3,sunDir.y)); if(FX.on) sunSprite.material.color.multiplyScalar(1.7);   // Máxima: el sol pasa de blanco y suelta su resplandor
   moonSprite.position.set(moonDir.x*R, moonDir.y*R, moonDir.z*R); moonSprite.scale.setScalar(R*.16);
   moonSprite.material.opacity=sm(-.08,.04,moonDir.y)*(1-day*.6)*(.2+.8*clearSky); moonSprite.visible=moonSprite.material.opacity>.01 && !under;
   stars.scale.setScalar(R*.97); stars.rotation.y=th*.5; stars.rotation.z=.4;
@@ -2619,6 +2622,7 @@ addEventListener('keydown',e=>{ if(e.code==='KeyM' && !e.repeat && !(e.target in
 const DEFAULTS={fov:65, quality:'low', shadows:true, draw:190, sens:1, invert:false, startCam:'third', alwaysRun:false, bob:true, fps:false, hints:true,
   master:80, music:60, sfx:80, muted:false, autoRes:true, fpsCap:'free', weather:true, layout:{}, qDef:1, autoFull:true, myName:false, ultra:false};
 let settings={...DEFAULTS};
+const QPR={min:.5, low:.75, mid:1.25, high:2, max:3};   // nitidez máxima por calidad (Máxima: la de la pantalla completa)
 let resScale=1;   // escala de resolución automática (1 = completa)
 try{ const s=JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'null'); if(s){ settings={...DEFAULTS,...s}; if(!s.qDef){ settings.quality='low'; settings.qDef=1; } } }catch(e){}   // gráficos en bajo por defecto (una sola vez para quien ya jugaba)
 function saveSettings(){ try{ localStorage.setItem('mundoPelucheOpciones', JSON.stringify(settings)); }catch(e){} }
@@ -2660,10 +2664,11 @@ function flashNote(msg){ const t=ui('toast'); t.textContent=msg; t.hidden=false;
 
 function applySettings(){
   camera.fov=settings.fov; camera.updateProjectionMatrix();
-  const pr = {min:.5, low:.75, mid:1.25, high:2}[settings.quality]||.75;
+  const pr = QPR[settings.quality]||.75, maxQ=settings.quality==='max';
   if(!settings.autoRes) resScale=1;
   renderer.setPixelRatio(Math.min(devicePixelRatio, pr)*resScale);
-  sun.shadow.mapSize.set(settings.quality==='low'?1024:2048, settings.quality==='low'?1024:2048);
+  { const ms=settings.quality==='low'?1024:maxQ?Math.min(4096,renderer.capabilities.maxTextureSize):2048; sun.shadow.mapSize.set(ms,ms);
+    const sz=maxQ?44:30; if(sc.right!==sz){ sc.left=sc.bottom=-sz; sc.right=sc.top=sz; sc.updateProjectionMatrix(); } }   // Máxima: sombras más finas y hasta más lejos
   { const st=settings.quality==='low' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;   // en Baja: orilla de sombra más simple (casi igual, menos trabajo para la tarjeta)
     if(renderer.shadowMap.type!==st){ renderer.shadowMap.type=st; try{ scene.traverse(o=>{ if(o.material) (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.needsUpdate=true); }); }catch(e){} } }
   if(sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map=null; }
@@ -2672,7 +2677,10 @@ function applySettings(){
   DECOR.forEach(o=>o.visible=!minQ);                 // ni flores ni cosas del fondo del mar
   if(typeof waterMats!=='undefined') waterMats.forEach(m=>{ const want=minQ?0:RIP_N; if(m.defines.RIP_LOOP!==want){ m.defines.RIP_LOOP=want; m.defines.WATER_DETAIL=minQ?0:1; m.needsUpdate=true; } });
   if(minQ && settings.draw>100){ settings.draw=100; }
-  if(settings.quality!==Q0 && applySettings.ready) flashNote('Algunos detalles de la calidad nueva se aplican al volver a abrir el juego');
+  FX.on=maxQ && fxSupported();
+  if(maxQ){ fxAniso(); setTimeout(fxAniso,4000); }
+  if(maxQ && !FX.ok && applySettings.ready) flashNote('Tu equipo no permite los efectos de luz de Máxima; lo demás sí se aplica');
+  else if(settings.quality!==Q0 && applySettings.ready) flashNote('Algunos detalles de la calidad nueva se aplican al volver a abrir el juego');
   refreshFog();
   camera.far=settings.draw*1.05+15; camera.updateProjectionMatrix();   // más allá todo queda cubierto por la niebla: no se dibuja
   ui('fps').hidden=!settings.fps;
@@ -6082,7 +6090,7 @@ const critters=[];
   };
   const build=(def,A,B,gummy)=>{ const g=new THREE.Group(), body=new THREE.Group(); g.add(body);
     def.build(A,B).forEach(([sh,col,x,y,z,sx,sy,sz,rx=0,ry=0,rz=0])=>{ const m=new THREE.Mesh(G[sh], gummy?gummyM(col):feltM(col)); m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.rotation.set(rx,ry,rz); body.add(m); });
-    mergeStatic(body); body.traverse(o=>{ if(o.isMesh){ o.castShadow=Q0==='mid'||Q0==='high'; o.receiveShadow=false; } }); g.visible=false; scene.add(g); return {g, body}; };
+    mergeStatic(body); body.traverse(o=>{ if(o.isMesh){ o.castShadow=Q0==='mid'||Q0==='high'||Q0==='max'; o.receiveShadow=false; } }); g.visible=false; scene.add(g); return {g, body}; };
   const add=(kind,def,home,R,opts={})=>{ const [A,B]=def.colors[critters.length%def.colors.length];
     const {g,body}=build(def,A,B,!!def.gummy); const s=opts.scale||1; g.scale.setScalar(s);
     critters.push({kind, def, g, body, home, R, s, sp:def.speed*(.8+rnd()*.4), ph:[rnd(0,6.28),rnd(0,6.28),rnd(0,6.28),rnd(0,6.28)], w:rnd(.12,.22), pw:rnd(.25,.5), yaw:rnd(0,6.28),
@@ -8279,7 +8287,7 @@ function planetMesh(P){ if(P.mesh) return P.mesh; const m=new THREE.Mesh(planetG
   if(P.ring){ const r=new THREE.Mesh(new THREE.RingGeometry(P.R*1.5,P.R*2.2,64),new THREE.MeshStandardMaterial({color:P.critPal[(P.seed%6)], transparent:true, opacity:.55, side:THREE.DoubleSide, roughness:.6})); r.position.copy(P.c); r.lookAt(P.c.clone().add(P.ax)); spaceScene.add(r); P.ringMesh=r; }
   if(P.t.atm){ const a=new THREE.Mesh(atmGeo,atmMat(P.t.atm)); a.scale.setScalar(P.R*ATM_K); a.position.copy(P.c); spaceScene.add(a); P.atmMesh=a; }
   return m; }
-const HI_SEG={min:[96,64], low:[128,90], mid:[176,120], high:[200,140]};
+const HI_SEG={min:[96,64], low:[128,90], mid:[176,120], high:[200,140], max:[240,170]};
 function planetHi(P,on){ if(!P.mesh || P.home) return; if(on===P.hi) return; P.hi=on; const old=P.mesh.geometry;
   let [w,h]=on?(HI_SEG[settings.quality]||HI_SEG.low):[40,28];
   if(on){ const k=Math.min(1.3,Math.max(.6,Math.sqrt(P.R/80))); w=Math.round(w*k); h=Math.round(h*k); }   // los chiquitos necesitan menos caras, los grandes más
@@ -8291,7 +8299,7 @@ function planetHi(P,on){ if(!P.mesh || P.home) return; if(on===P.hi) return; P.h
   else { if(P.deco){ spaceScene.remove(P.deco); P.deco=null; } (P.critters||[]).forEach(c=>spaceScene.remove(c.o)); P.critters=null; showFlags(P,false); dropPatch(P);
     if(P.capMat){ P.mesh.material=planetMat(P); P.capMat.dispose(); P.capMat=null; } } }
 // ---- parche de detalle (planetas grandes y colosales) ----
-const PATCH_N={min:64, low:80, mid:100, high:120};
+const PATCH_N={min:64, low:80, mid:100, high:120, max:140};
 const _ppu2=new THREE.Vector3(), _ppv2=new THREE.Vector3(), _ppd2=new THREE.Vector3();
 function dropPatch(P){ if(P.patch){ spaceScene.remove(P.patch); P.patch.geometry.dispose(); P.patch=null; } if(P.ldeco){ spaceScene.remove(P.ldeco); P.ldeco=null; } if(P.capMat) P.capMat.userData.capCos.value=2; }
 function patchGeo(P,c0,tA,N){ _ppu2.copy(Math.abs(c0.y)<.9?_y1:_ppd2.set(1,0,0)).cross(c0).normalize(); _ppv2.crossVectors(c0,_ppu2);
@@ -8542,7 +8550,7 @@ function dryNear(S,d){ const ok=q=>surfSR(S,q)>liquidR(S,q)+.4; if(ok(d)) return
   return d; }
 // ---- entrar y salir de la superficie ----
 function setSurface(P,d){ if(SURF.on && SURF.P===P) return SURF.S; clearSurface();
-  const S=makeSurf(P); SURF.S=S; SURF.P=P; SURF.on=true; SURF.T=Math.max(2,Math.ceil(Math.PI/2*S.R/SURF.TILE)); SURF.load={min:220, low:280, mid:340, high:420}[settings.quality]||280;
+  const S=makeSurf(P); SURF.S=S; SURF.P=P; SURF.on=true; SURF.T=Math.max(2,Math.ceil(Math.PI/2*S.R/SURF.TILE)); SURF.load={min:220, low:280, mid:340, high:420, max:480}[settings.quality]||280;
   // el espacio desaparece: solo queda el planeta de cerca
   for(const Q of planets.values()) if(Q && Q.mesh){ if(Q.hi) planetHi(Q,false); Q.mesh.visible=false; if(Q.ringMesh) Q.ringMesh.visible=false; if(Q.atmMesh) Q.atmMesh.visible=false; }
   spNebula.forEach(s=>s.visible=false); spStars.scale.setScalar(2000); spSunSprite.scale.setScalar(160);
@@ -10097,7 +10105,7 @@ function autoResolution(raw){
   let next=resScale;
   if(med>target*1.15 || slow>target*1.6){ next=Math.max(.5, resScale*.85); resGood=0; }      // va lento: menos píxeles
   else if(med<target*1.06 && resScale<1){ if(++resGood>=2){ next=Math.min(1, resScale*1.1); resGood=0; } } // va sobrado: más nitidez
-  if(Math.abs(next-resScale)>.01){ resScale=next; const pr={min:.5, low:.75, mid:1.25, high:2}[settings.quality]||.75; renderer.setPixelRatio(Math.min(devicePixelRatio,pr)*resScale); resize(); }
+  if(Math.abs(next-resScale)>.01){ resScale=next; const pr=QPR[settings.quality]||.75; renderer.setPixelRatio(Math.min(devicePixelRatio,pr)*resScale); resize(); }
   resWin=[]; resLast=now;
 }
 // Zonas enteras (feria, aeropuerto, coches, castillo…) que no se ven: se apagan solo mientras se dibuja.
@@ -10120,6 +10128,84 @@ function areaCullBegin(){ const now=performance.now();
     if(out){ c.visible=false; AREA.off.push(c); } } }
 function areaCullEnd(){ for(const c of AREA.off) c.visible=true; AREA.off.length=0; }
 { const rr=renderer.render.bind(renderer); renderer.render=(sc,cam)=>{ if(sc===scene && cam===camera){ areaCullBegin(); try{ rr(sc,cam); } finally{ areaCullEnd(); } } else rr(sc,cam); }; }
+
+// ---------- Calidad Máxima ----------
+// El mundo se dibuja primero en una imagen aparte (con más rango de luz: puede pasar de blanco) y con bordes suavizados.
+// Luego: lo más brillante (sol, lámparas, reflejos del agua, rayos) suelta un resplandor suave (bloom), los tonos muy
+// fuertes se redondean como en una cámara de cine en vez de quemarse, el color se aviva un poco y las orillas de la
+// pantalla se oscurecen apenas (viñeta). Solo en Máxima: en las demás calidades no cambia nada.
+function fxSupported(){ if(FX.ok!==null) return FX.ok;
+  try{ const gl=renderer.getContext(); FX.ok=!!(renderer.capabilities.isWebGL2 && (gl.getExtension('EXT_color_buffer_float')||gl.getExtension('EXT_color_buffer_half_float')) && THREE.WebGLMultisampleRenderTarget); }catch(e){ FX.ok=false; }
+  return FX.ok; }
+function fxAniso(){ const a=renderer.capabilities.getMaxAnisotropy(); if(a<=1) return;   // texturas nítidas aunque se vean de lado (el piso a lo lejos)
+  const K=['map','normalMap','roughnessMap','bumpMap','emissiveMap','alphaMap'];
+  [scene, spaceScene].forEach(S=>S && S.traverse(o=>{ const ms=o.material; if(!ms) return; (Array.isArray(ms)?ms:[ms]).forEach(m=>K.forEach(k=>{ const t=m[k]; if(t && t.isTexture && t.anisotropy<a && t.image){ t.anisotropy=a; t.needsUpdate=true; } })); })); }
+{ const vs='varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }';
+  const mk=(fs,u)=>new THREE.ShaderMaterial({uniforms:u, vertexShader:vs, fragmentShader:fs, depthTest:false, depthWrite:false, toneMapped:false, fog:false});
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute([-1,-1,0, 3,-1,0, -1,3,0],3)); g.setAttribute('uv',new THREE.Float32BufferAttribute([0,0, 2,0, 0,2],2));
+  FX.quad=new THREE.Mesh(g); FX.quad.frustumCulled=false; FX.scene=new THREE.Scene(); FX.scene.add(FX.quad); FX.cam=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+  FX.v=new THREE.Vector2(); FX.N=5; FX.lv=[]; FX.sp=new THREE.Vector3(); FX.sp2=new THREE.Vector3(); FX.sp3=new THREE.Vector3();
+  // bajar a la mitad (promedio de 4x4 pixeles); en el primer paso además se queda solo con lo muy brillante
+  FX.mDown=mk(`uniform sampler2D tSrc; uniform vec2 tx; uniform float bright, thr, knee; varying vec2 vUv;
+    vec3 lin(vec3 c){ c=max(c,0.0); return mix(c/12.92, pow((c+0.055)/1.055,vec3(2.4)), step(0.04045,c)); }
+    vec3 rd(vec2 o){ vec3 c=texture2D(tSrc,vUv+tx*o).rgb; return bright>0.5 ? lin(c) : c; }
+    void main(){ vec3 c=(rd(vec2(-1.0,-1.0))+rd(vec2(1.0,-1.0))+rd(vec2(-1.0,1.0))+rd(vec2(1.0,1.0)))*0.25;
+      if(bright>0.5){ float br=dot(c,vec3(0.2126,0.7152,0.0722)); float rq=clamp(br-thr+knee,0.0,2.0*knee); rq=rq*rq/(4.0*knee+1e-4); c*=max(rq,br-thr)/max(br,1e-4); c=min(c,vec3(8.0)); }
+      gl_FragColor=vec4(c,1.0); }`, {tSrc:{value:null}, tx:{value:new THREE.Vector2()}, bright:{value:0}, thr:{value:1.0}, knee:{value:.06}});
+  // desenfoque gaussiano (9 pasos con 5 lecturas)
+  FX.mBlur=mk(`uniform sampler2D tSrc; uniform vec2 dir; varying vec2 vUv;
+    void main(){ vec3 c=texture2D(tSrc,vUv).rgb*0.2270270; c+=(texture2D(tSrc,vUv+dir*1.3846154).rgb+texture2D(tSrc,vUv-dir*1.3846154).rgb)*0.3162162;
+      c+=(texture2D(tSrc,vUv+dir*3.2307692).rgb+texture2D(tSrc,vUv-dir*3.2307692).rgb)*0.0702703; gl_FragColor=vec4(c,1.0); }`, {tSrc:{value:null}, dir:{value:new THREE.Vector2()}});
+  // rayos de sol: lo brillante se arrastra hacia el sol; lo que tapa el sol (árboles, casas) deja sombras en los rayos
+  FX.mRays=mk(`uniform sampler2D tSrc; uniform vec2 sun; varying vec2 vUv;
+    void main(){ vec2 d=(vUv-sun)*(0.85/40.0); vec2 uv=vUv; vec3 c=vec3(0.0); float w=1.0;
+      for(int i=0;i<40;i++){ uv-=d; c+=texture2D(tSrc,clamp(uv,0.001,0.999)).rgb*w; w*=0.96; }
+      gl_FragColor=vec4(c*(1.0/40.0),1.0); }`, {tSrc:{value:null}, sun:{value:new THREE.Vector2()}});
+  // juntar todo y pasarlo a la pantalla
+  FX.mComp=mk(`uniform sampler2D tScene, b0, b1, b2, b3, b4, tRays; uniform vec3 raysC; uniform float bloomK, vig, sat, aspect, seed; varying vec2 vUv;
+    vec3 shoulder(vec3 x){ const float k=0.9; vec3 o=k+(1.0-k)*(1.0-exp(-(x-k)/(1.0-k))); return mix(x,o,step(k,x)); }
+    vec3 lin(vec3 c){ c=max(c,0.0); return mix(c/12.92, pow((c+0.055)/1.055,vec3(2.4)), step(0.04045,c)); }
+    vec3 toSRGB(vec3 c){ c=clamp(c,0.0,1.0); return mix(c*12.92, 1.055*pow(c,vec3(1.0/2.4))-0.055, step(0.0031308,c)); }
+    void main(){ vec3 c=lin(texture2D(tScene,vUv).rgb);
+      vec3 b=texture2D(b0,vUv).rgb*0.3+texture2D(b1,vUv).rgb*0.28+texture2D(b2,vUv).rgb*0.2+texture2D(b3,vUv).rgb*0.13+texture2D(b4,vUv).rgb*0.09;
+      c+=b*bloomK + texture2D(tRays,vUv).rgb*raysC;
+      float l=dot(c,vec3(0.2126,0.7152,0.0722)); c=max(mix(vec3(l),c,sat),0.0);
+      c=shoulder(c);
+      vec3 s=toSRGB(c); s=mix(s, s*s*(3.0-2.0*s), 0.1);   // un poco más de contraste
+      vec2 q=(vUv-0.5)*vec2(aspect,1.0); s*=1.0-vig*smoothstep(0.5,1.15,length(q)*1.2);
+      s+=(fract(sin(dot(gl_FragCoord.xy+seed,vec2(12.9898,78.233)))*43758.5453)-0.5)/255.0;   // sin escalones en el cielo
+      gl_FragColor=vec4(s,1.0); }`, {tScene:{value:null}, tRays:{value:null}, raysC:{value:new THREE.Color(0,0,0)}, b0:{value:null}, b1:{value:null}, b2:{value:null}, b3:{value:null}, b4:{value:null}, bloomK:{value:.5}, vig:{value:.18}, sat:{value:1.12}, aspect:{value:1}, seed:{value:0}});
+}
+function fxTarget(w,h,o){ const t=new THREE.WebGLRenderTarget(w,h,{type:THREE.HalfFloatType, format:THREE.RGBAFormat, minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter, depthBuffer:!!o, stencilBuffer:false}); t.texture.generateMipmaps=false; return t; }
+function fxSize(w,h){ FX.w=w; FX.h=h;
+  if(FX.main) FX.main.dispose(); FX.lv.forEach(l=>{ l.a.dispose(); l.b.dispose(); });
+  FX.main=new THREE.WebGLMultisampleRenderTarget(w,h,{type:THREE.HalfFloatType, format:THREE.RGBAFormat, minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter, stencilBuffer:false});
+  FX.main.samples=4; FX.main.texture.generateMipmaps=false; FX.main.texture.encoding=THREE.sRGBEncoding;   // guarda lo mismo que iría a la pantalla (así el cielo y la niebla se ven igual)
+  FX.lv=[]; let lw=w, lh=h; for(let i=0;i<FX.N;i++){ lw=Math.max(1,lw>>1); lh=Math.max(1,lh>>1); FX.lv.push({a:fxTarget(lw,lh), b:fxTarget(lw,lh), w:lw, h:lh}); } }
+function fxPass(m,out){ FX.quad.material=m; renderer.setRenderTarget(out); renderer.render(FX.scene,FX.cam); }
+function fxRender(S,cam){
+  renderer.getDrawingBufferSize(FX.v); const w=Math.max(1,FX.v.x|0), h=Math.max(1,FX.v.y|0);
+  if(!FX.main || w!==FX.w || h!==FX.h) fxSize(w,h);
+  const ac=renderer.autoClear; renderer.autoClear=true;
+  renderer.setRenderTarget(FX.main); renderer.render(S,cam);
+  const D=FX.mDown.uniforms, B=FX.mBlur.uniforms; let src=FX.main.texture, sw=w, sh=h;
+  for(let i=0;i<FX.N;i++){ const L=FX.lv[i];
+    D.tSrc.value=src; D.tx.value.set(1/sw,1/sh); D.bright.value=i===0?1:0; fxPass(FX.mDown,L.a);
+    B.tSrc.value=L.a.texture; B.dir.value.set(1/L.w,0); fxPass(FX.mBlur,L.b);
+    B.tSrc.value=L.b.texture; B.dir.value.set(0,1/L.h); fxPass(FX.mBlur,L.a);
+    src=L.a.texture; sw=L.w; sh=L.h; }
+  const C=FX.mComp.uniforms; C.tScene.value=FX.main.texture;
+  { // rayos solo si el sol está delante de la cámara (o un poco fuera de la pantalla)
+    let k=0; if(S===scene && sunSprite.visible){ const v=FX.sp.copy(sunSprite.position).add(skyRoot.position).project(cam);
+      const fwd=FX.sp2.copy(sunSprite.position).normalize().dot(cam.getWorldDirection(FX.sp3));
+      if(fwd>0){ const off=Math.max(Math.abs(v.x),Math.abs(v.y)); k=(1-sm(.9,1.6,off))*sm(0,.3,fwd)*sunSprite.material.opacity; FX.mRays.uniforms.sun.value.set(v.x*.5+.5, v.y*.5+.5); } }
+    if(k>.01){ FX.mRays.uniforms.tSrc.value=FX.lv[0].a.texture; fxPass(FX.mRays,FX.lv[1].b); C.tRays.value=FX.lv[1].b.texture;
+      C.raysC.value.copy(sunSprite.material.color).multiplyScalar(.7*k/1.7); }
+    else { C.tRays.value=FX.lv[1].b.texture; C.raysC.value.setRGB(0,0,0); } } for(let i=0;i<FX.N;i++) C['b'+i].value=FX.lv[i].a.texture;
+  C.aspect.value=w/h; C.seed.value=(C.seed.value+17.3)%1000;
+  C.bloomK.value=S===scene && typeof underwaterView!=='undefined' && underwaterView ? .3 : .5;
+  fxPass(FX.mComp,null); renderer.autoClear=ac; }
+renderer.info.autoReset=false;   // cuenta todos los dibujos del cuadro (en Máxima son varios pasos)
 function frame(){
   requestAnimationFrame(frame);
   if(settings.fpsCap==='30'){ const n=performance.now(); if(n-capLast<29) return; capLast=n-Math.min(10,Math.max(0,n-capLast-33.3)); }   // ritmo parejo de 30 (por tiempo: si el equipo no llega a 60, ya no baja a 15)
@@ -10133,7 +10219,8 @@ function frame(){
   if(state==='play') sendPresence(false);
   if(mp.room && performance.now()-mp.heartbeat>4000){ mp.heartbeat=performance.now(); mp.lastPayload=''; sendPresence(true); updateRoomUI(); }   // latido
   const p1=pf?performance.now():0;
-  if(shopOpen()) renderStudio(dt); else renderer.render(SP.on&&state!=='menu'?spaceScene:scene,camera);
+  renderer.info.reset();
+  if(shopOpen()) renderStudio(dt); else { const S=SP.on&&state!=='menu'?spaceScene:scene; if(FX.on) fxRender(S,camera); else renderer.render(S,camera); }
   if(pf){ const p2=performance.now(); fpsLogic+=p1-p0; fpsDraw+=p2-p1; fpsCalls+=renderer.info.render.calls; fpsTris+=renderer.info.render.triangles; }
   fpsFrames++; fpsTime+=raw;
   // con "Mostrar FPS": cuánto tarda la lógica del juego y cuánto preparar el dibujo (para saber qué frena en cada equipo)
