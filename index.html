@@ -918,7 +918,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='106';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='107';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -4791,9 +4791,9 @@ const trOnMat=(x,z,y)=>trD(x,z)<TR.R+.3 && y>TR.top-.6 && y<TR.top+30;
     const p=new THREE.Mesh(new THREE.CylinderGeometry(.11,.11,TR.NH+.7,10),lb); p.position.set(x,TR.H+TR.NH/2-.3,z); p.castShadow=true; g.add(p);
     const cap=new THREE.Mesh(sphereG,blk); cap.scale.setScalar(.15); cap.position.set(x,TR.H+TR.NH+.08,z); g.add(cap); }
   // la red: gris transparente con su tejido
-  const netTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'); x.strokeStyle='rgba(60,64,72,.95)'; x.lineWidth=3; for(let i=0;i<=64;i+=16){ x.beginPath(); x.moveTo(i,0); x.lineTo(i-64,64); x.stroke(); x.beginPath(); x.moveTo(i,0); x.lineTo(i+64,64); x.stroke(); }
-    const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(40,6); return t; })();
-  const netM=new THREE.MeshStandardMaterial({map:netTex, color:0x9aa0a8, transparent:true, opacity:.75, alphaTest:.05, side:THREE.DoubleSide, depthWrite:false, roughness:1});
+  const netTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'); x.strokeStyle='rgba(60,64,72,1)'; x.lineWidth=5; for(let i=0;i<=64;i+=16){ x.beginPath(); x.moveTo(i,0); x.lineTo(i-64,64); x.stroke(); x.beginPath(); x.moveTo(i,0); x.lineTo(i+64,64); x.stroke(); }
+    const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(40,6); t.generateMipmaps=false; t.minFilter=THREE.LinearFilter; return t; })();   // sin mipmaps: de lejos la red no se "borra"
+  const netM=new THREE.MeshStandardMaterial({map:netTex, color:0x9aa0a8, alphaTest:.3, side:THREE.DoubleSide, roughness:1});   // recortada: sin mezclar transparencias (más barato en teléfonos)
   const net=new THREE.Mesh(new THREE.CylinderGeometry(TR.R+.38,TR.R+.38,TR.NH,56,1,true, Math.PI/2-TR.door+TR.gap/2, Math.PI*2-TR.gap), netM); net.position.y=TR.H+TR.NH/2+.05; net.renderOrder=2; g.add(net);
   const rim=new THREE.Mesh(new THREE.TorusGeometry(TR.R+.38,.04,6,56),blk); rim.rotation.x=Math.PI/2; rim.position.y=TR.H+TR.NH+.05; g.add(rim);
   // la puerta: una tela de red que se cierra con cremallera (bisagra en un lado)
@@ -5089,6 +5089,7 @@ function makeTurtle(){
     const lg=new THREE.CylinderGeometry(1.05,.95,2.3,14); lg.translate(0,-1.0,0); const leg=new THREE.Mesh(lg,skinMat); leg.castShadow=true; leg.rotation.order='ZXY'; leg.rotation.z=sx*.62; leg.rotation.x=sz*.28; p.add(leg);
     const foot=new THREE.Mesh(new THREE.SphereGeometry(1,14,8),skinMat); foot.scale.set(1.35,.5,1.6); foot.position.set(sx*1.25,-1.8,sz*.55); foot.castShadow=true; p.add(foot);
     for(let c=-1;c<=1;c++){ const cl=new THREE.Mesh(new THREE.ConeGeometry(.16,.55,6),clawM); cl.rotation.x=Math.PI/2; cl.position.set(sx*1.25+c*.45,-1.95,sz*.55+1.55); p.add(cl); }
+    mergeStatic(p); p.children.forEach(o=>{ o.castShadow=true; });   // pata + pie + garras: 2 piezas en vez de 5
     legs.push({p, sx, sz, ph:k===0||k===3?0:Math.PI}); });
   const tail=new THREE.Mesh(new THREE.ConeGeometry(.55,2.2,10),skinMat); tail.rotation.x=-Math.PI/2-.35; tail.position.set(0,2.0,-CU.B-.6); g.add(tail);
   return {g, parts:{neckP,headP,lids,legs,shell,tail}};
@@ -5344,6 +5345,7 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
 (function buildPier(){
   const P=PIER, gS=new THREE.Group(); gS.position.set(P.bx,0,P.bz); gS.rotation.y=P.th;
   const gP=new THREE.Group(); gP.position.copy(gS.position); gP.rotation.y=P.th; gP.userData.noBatch=true; P.gP=gP;
+  const gI=new THREE.Group(); gP.add(gI); P.gI=gI;   // lo de adentro (Tortu, mini Cuco, adornos): solo se dibuja si estás cerca
   const pBox=new THREE.BoxGeometry(1,1,1), pCyl=new THREE.CylinderGeometry(1,1,1,12);
   const wood=felt('#b98250','rgba(70,35,10,.16)'), woodL=felt('#d2a06c','rgba(90,50,15,.14)'), woodD=felt('#86562f','rgba(50,25,5,.2)');
   const B=(m,x,y,z,sx,sy,sz,par,rx,ry,rz)=>{ const o=new THREE.Mesh(pBox,m); o.position.set(x,y,z); o.scale.set(sx,sy,sz); if(rx||ry||rz) o.rotation.set(rx||0,ry||0,rz||0); (par||gS).add(o); return o; };
@@ -5370,7 +5372,9 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
   // ---------- cañas fijas (5 por lado, donde el agua ya es honda) y un balde junto a cada una ----------
   let zd=P.PZ0-30; for(let z=P.ZR; z<P.PZ0; z+=1){ if(terrainH(...pW(P.W+4,z))<SEA_Y-2.4){ zd=z; break; } }
   const rodM=felt('#5a3a22','rgba(30,10,0,.2)'), corkM=felt('#d8b483','rgba(90,60,20,.2)'), reelM=new THREE.MeshStandardMaterial({color:0x9aa3ad, roughness:.45, metalness:.4});
-  const lineM=new THREE.LineBasicMaterial({color:0xf4f4f4}), bobR=felt('#e8453c'), bobW=felt('#fbf6ee');
+  const lineM=new THREE.LineBasicMaterial({color:0xf4f4f4});
+  const rodLines=new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(10*6),3)), lineM); rodLines.frustumCulled=false; rodLines.userData.noBatch=true; scene.add(rodLines); P.rodLines=rodLines;   // los 10 sedales: un solo dibujo
+  const bobM=new THREE.MeshStandardMaterial({roughness:.7, map:(()=>{ const c=document.createElement('canvas'); c.width=c.height=32; const g=c.getContext('2d'); g.fillStyle='#e8453c'; g.fillRect(0,0,32,17); g.fillStyle='#fbf6ee'; g.fillRect(0,17,32,15); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; })()});
   const e=.62, up=new THREE.Vector3(0,1,0);
   for(let k=0;k<5;k++){ const u=zd+1+(P.PZ0-4-(zd+1))*k/4;
     [-1,1].forEach(sd=>{ const i=P.rods.length;
@@ -5381,10 +5385,8 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
       const reel=new THREE.Mesh(pCyl,reelM); reel.scale.set(.13,.09,.13); reel.position.copy(base).addScaledVector(D,.12).add(new THREE.Vector3(0,-.14,0)); reel.rotation.z=Math.PI/2; gS.add(reel);
       const tipL=base.clone().addScaledVector(D,L);
       const tip=pV(tipL.x, tipL.y, tipL.z), cast=pV(sd*(P.W+11), SEA_Y, u+((k*7+(sd>0?3:0))%5-2)*.6), idle=pV(tipL.x, SEA_Y, tipL.z);
-      const geo=new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute([0,0,0, 0,0,0],3));
-      const line=new THREE.Line(geo,lineM); line.frustumCulled=false; line.userData.noBatch=true; scene.add(line);
-      const bob=new THREE.Group(); bob.userData.noBatch=true; const b1=new THREE.Mesh(sphereG,bobR); b1.scale.set(.12,.1,.12); b1.position.y=.06; const b2=new THREE.Mesh(sphereG,bobW); b2.scale.set(.12,.08,.12); bob.add(b1,b2); scene.add(bob);
-      P.rods.push({i, sd, u, tip, cast, idle, line, bob, pos:idle.clone(), stand:[sd*(P.W-.72), u-.35]});
+      const bob=new THREE.Mesh(sphereG,bobM); bob.scale.set(.12,.11,.12); bob.userData.noBatch=true; scene.add(bob);
+      P.rods.push({i, sd, u, tip, cast, idle, bob, pos:idle.clone(), stand:[sd*(P.W-.72), u-.35]});
       // el balde (de metal) a un lado de la caña
       P.buckets.push({i, home:pV(sd*(P.W-.5), P.Y, u+1.15), items:[], o:null, carried:false});
     }); }
@@ -5442,7 +5444,7 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
     dg.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); P.door.g=dg; }
   // ---------- adentro: mostrador, Tortu, pecera y decoración ----------
   B(wood,0,Y+.52,z1-1.85,4.6,1.04,.75); B(woodL,0,Y+1.07,z1-1.85,4.9,.08,.95); B(woodD,0,Y+.06,z1-1.85,4.7,.12,.8);
-  for(const x of [-1.6,0,1.6]){ const fm=fishMesh([2,3,31][x<0?0:x>0?2:1],.9); fm.position.set(x,Y+.6,z1-2.24); fm.rotation.y=Math.PI*.5+ (x<0?.2:-.2); gP.add(fm); }   // pececitos pintados en el mostrador
+  for(const x of [-1.6,0,1.6]){ const fm=fishMesh([2,3,31][x<0?0:x>0?2:1],.9); fm.position.set(x,Y+.6,z1-2.24); fm.rotation.y=Math.PI*.5+ (x<0?.2:-.2); gI.add(fm); }   // pececitos pintados en el mostrador
   B(felt('#e05a4a'),1.6,Y+1.3,z1-1.85,.55,.38,.42); B(felt('#fbf6ee'),1.6,Y+1.52,z1-1.95,.4,.12,.05);
   { const coinM=felt('#e2a92a','rgba(120,70,0,.25)'); for(let k=0;k<5;k++) C(coinM,-1.5+k*.05,Y+1.13+k*.035,z1-1.8+(k%2)*.04,.13,.03); }
   // pecera: mitad arena (playita) y mitad agua; adentro vive un mini Cuco
@@ -5458,14 +5460,14 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
     const weed=felt('#3fae5a'); for(let k=0;k<4;k++) C(weed,tx-.25+k*.17,base+.3,tz+.55+(k%2)*.4,.03,.45+(k%3)*.1);
     const rock=felt('#9a9aaa'); const rk=new THREE.Mesh(sphereG,rock); rk.scale.set(.16,.1,.13); rk.position.set(tx+.2,base+.13,tz+.95); gS.add(rk);
     C(felt('#a0703a'),tx+.2,base+1.0,tz-1.05,.03,.35); for(let k=0;k<4;k++){ const lf=new THREE.Mesh(sphereG,weed); lf.scale.set(.03,.02,.16); lf.position.set(tx+.2+Math.sin(k*1.57)*.1,base+1.17,tz-1.05+Math.cos(k*1.57)*.1); lf.rotation.y=k*1.57; gS.add(lf); }
-    const mini=makeTurtle(); mini.g.scale.setScalar(.03); mini.g.position.set(tx,base+.82,tz-.9); gP.add(mini.g);
+    const mini=makeTurtle(); mini.g.scale.setScalar(.03); mini.g.position.set(tx,base+.82,tz-.9); gI.add(mini.g);
     P.mini={...mini, x:0, z:-.9, h:Math.PI, walk:0, swim:0, tgt:null, wait:2, blink:0, blinkT:2}; }
   // repisa con frascos y conchas, salvavidas, cartel de peces, lámpara, barril, maceta y banca
   { const jar=new THREE.MeshStandardMaterial({color:0x9ad8f0, transparent:true, opacity:.55, roughness:.15}), lid=felt('#e0b04a');
     for(const y of [Y+1.45,Y+2.1]){ B(woodL,HH-.3,y,HZ+1.4,.4,.06,2.2); }
     for(let k=0;k<3;k++){ C(jar,HH-.3,Y+1.62,HZ+.6+k*.6,.11,.28); C(lid,HH-.3,Y+1.78,HZ+.6+k*.6,.115,.04); }
-    [[23,.55],[31,.5],[32,.5]].forEach(([id,s],k)=>{ const f=fishMesh(id,s); f.position.set(HH-.3,Y+2.22,HZ+.7+k*.65); f.rotation.y=-Math.PI/2; gP.add(f); });
-    const ring=new THREE.Group(); ring.position.set(HH-.16,Y+2.15,HZ+3.4); ring.rotation.y=-Math.PI/2; gP.add(ring);
+    [[23,.55],[31,.5],[32,.5]].forEach(([id,s],k)=>{ const f=fishMesh(id,s); f.position.set(HH-.3,Y+2.22,HZ+.7+k*.65); f.rotation.y=-Math.PI/2; gI.add(f); });
+    const ring=new THREE.Group(); ring.position.set(HH-.16,Y+2.15,HZ+3.4); ring.rotation.y=-Math.PI/2; gI.add(ring);
     const red=felt('#e8453c'), wht=felt('#fbf6ee'); for(let k=0;k<8;k++){ const seg=new THREE.Mesh(new THREE.TorusGeometry(.38,.11,8,6,Math.PI/4), k%2?wht:red); seg.rotation.z=k*Math.PI/4; ring.add(seg); }
     const pc=document.createElement('canvas'); pc.width=384; pc.height=256; const g=pc.getContext('2d'); g.fillStyle='#fbf1e2'; g.fillRect(0,0,384,256); g.strokeStyle='#8a5a32'; g.lineWidth=8; g.strokeRect(4,4,376,248);
     g.fillStyle='#3a5a8a'; g.font='800 30px Sniglet, Nunito, sans-serif'; g.textAlign='center'; g.fillText('Peces del muelle',192,40);
@@ -5476,7 +5478,7 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
     C(woodD,-HH+.65,Y+.55,z1-.7,.45,1.1); for(const y of [Y+.25,Y+.85]) C(felt('#7a7f8c'),-HH+.65,y,z1-.7,.47,.06);
     C(felt('#c8683a','rgba(90,30,0,.2)'),HH-.7,Y+.32,z0+.8,.32,.64); const leaf=felt('#4caf50'); for(let k=0;k<6;k++){ const l=new THREE.Mesh(sphereG,leaf); l.scale.set(.18,.42,.1); l.position.set(HH-.7+Math.cos(k)*.15,Y+1.0,z0+.8+Math.sin(k)*.15); l.rotation.set(Math.cos(k)*.5,k,Math.sin(k)*.5); gS.add(l); }
     B(wood,-HH+.5,Y+.45,HZ-2.9,.6,.08,1.6); for(const z of [-.65,.65]) B(woodD,-HH+.5,Y+.22,HZ-2.9+z,.5,.44,.08);
-    const st=fishMesh(23,.6); st.position.set(2.3,Y+2.3,z0+.16); st.rotation.x=-Math.PI/2; gP.add(st); }
+    const st=fishMesh(23,.6); st.position.set(2.3,Y+2.3,z0+.16); st.rotation.x=-Math.PI/2; gI.add(st); }
   // Tortu: un peluchito con disfraz completo de tortuga (solo se le ve la carita y los ojos)
   { const t=makePlush(3), u=t.userData, suit=TURTLE_M.skin;
     t.traverse(o=>{ if(o.isMesh && o.material && o.material.userData && o.material.userData.feltPQ && o!==u.body) o.material=suit; });
@@ -5493,7 +5495,7 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
     [-1,1].forEach(sd=>{ const w=new THREE.Mesh(sphereG,ew); w.scale.setScalar(.12); w.position.set(sd*.17,BODY_Y+1.74,.14); t.add(w); const p=new THREE.Mesh(sphereG,ep); p.scale.setScalar(.06); p.position.set(sd*.17,BODY_Y+1.76,.24); t.add(p); });
     const shell=new THREE.Mesh(new THREE.SphereGeometry(1,24,10,0,Math.PI*2,0,Math.PI/2), TURTLE_M.shell); shell.scale.set(.46,.28,.52); shell.rotation.x=-Math.PI/2; shell.position.set(0,BODY_Y+.72,-.3); t.add(shell);
     const belly=new THREE.Mesh(sphereG,new THREE.MeshStandardMaterial({color:0xe2c25e, roughness:.95})); belly.scale.set(.3,.42,.08); belly.position.set(0,BODY_Y+.62,.36); t.add(belly);
-    t.position.set(0,Y,z1-.95); t.rotation.y=Math.PI; t.userData.noBatch=true; gP.add(t); P.tortu={o:t, wave:0, saw:false, yaw:Math.PI}; }
+    t.position.set(0,Y,z1-.95); t.rotation.y=Math.PI; t.userData.noBatch=true; gI.add(t); P.tortu={o:t, wave:0, saw:false, yaw:Math.PI}; }
   obs(0,z1-1.85,.5,Y+1.12,bot); for(const x of [-1.9,-1,1,1.9]) obs(x,z1-1.85,.45,Y+1.12,bot);
   for(const dz of [-1.1,-.4,.3,1.0]) obs(-HH+.78,HZ-.2+dz,.55,Y+2.1,bot);
   obs(0,z1-.95,.45,Y+2.2,bot); obs(-HH+.65,z1-.7,.5,Y+1.15,bot); obs(HH-.7,z0+.8,.38,Y+1.2,bot);
@@ -5573,8 +5575,9 @@ function updateRods(dt,t){
       else if(F.ph==='wait'||F.ph==='bite'){ r.pos.x+=(r.cast.x-r.pos.x)*Math.min(1,dt*.6); r.pos.z+=(r.cast.z-r.pos.z)*Math.min(1,dt*.6); dip=F.ph==='bite'?1:(F.nibT>0?.4:0); r.pos.y=SEA_Y+.02+Math.sin(t*3)*.03-dip*.22*(.6+.4*Math.sin(t*22)); }
       else if(F.ph==='catch'){ r.pos.lerp(r.idle,Math.min(1,dt*4)); }
     } else { r.pos.x+=(want.x-r.pos.x)*Math.min(1,dt*2); r.pos.z+=(want.z-r.pos.z)*Math.min(1,dt*2); r.pos.y=SEA_Y+.02+Math.sin(t*2.2+r.i)*.03-dip*.2*(.6+.4*Math.sin(t*22)); }
-    r.bob.position.copy(r.pos);
-    const a=r.line.geometry.attributes.position; a.setXYZ(0,r.tip.x,r.tip.y,r.tip.z); a.setXYZ(1,r.pos.x,r.pos.y+.1,r.pos.z); a.needsUpdate=true; }
+    r.bob.position.copy(r.pos); r.bob.position.y+=.04;
+    const a=PIER.rodLines.geometry.attributes.position; a.setXYZ(r.i*2,r.tip.x,r.tip.y,r.tip.z); a.setXYZ(r.i*2+1,r.pos.x,r.pos.y+.1,r.pos.z); }
+  PIER.rodLines.geometry.attributes.position.needsUpdate=true;
 }
 function updateMyFishing(dt){ const F=player.fish; if(!F) return; F.t+=dt; const r=PIER.rods[F.rod];
   if(F.ph==='cast' && F.t>=.7){ F.ph='wait'; F.t=0; audio.splash(.35); try{ splashBurst(r.cast.x,SEA_Y,r.cast.z,.15); }catch(e){} }
@@ -5623,6 +5626,8 @@ function updateHouse(dt,t){ const P=PIER;
   // techo: se quita si estás adentro (o la cámara)
   const inside=inHouse(player.pos.x,player.pos.z,player.pos.y) || inHouse(camera.position.x,camera.position.z,camera.position.y);
   P.roof.visible=!inside;
+  // lo de adentro solo se dibuja (y se anima) si estás cerca de la casita o adentro
+  { const hc=pW(0,P.HZ), near=Math.hypot(camera.position.x-hc[0],camera.position.z-hc[1])<22 || inside; P.gI.visible=near; if(!near) return; }
   // Tortu te mira y saluda cuando entras
   const T=P.tortu, o=T.o, [lx,lz]=pL(player.pos.x,player.pos.z), inH=inHouse(player.pos.x,player.pos.z,player.pos.y);
   let want=Math.PI; if(inH){ want=Math.atan2(lx-o.position.x, lz-o.position.z); }
@@ -7780,10 +7785,11 @@ function raceGround(x,z,y){ if(!RC.near) return null; const [s,w]=rcL(x,z); if(s
     const house=new THREE.Mesh(boxG,dark); house.scale.set(1.2,1.8,1.8); put(house,r.s,r.side*5.4,RC.Y+.6); house.castShadow=true; scene.add(house); });
   scene.add(dy); RC.dy=dy; RC.yaw=yaw;
 })();
+const _rcp=new THREE.Vector3();
 function raceVisual(){ const yaw=RC.yaw;
-  for(const m of RC.M){ const p=rcW(m.cs,m.cw,m.cy-.25); m.o.position.copy(p); m.o.rotation.y=yaw; }
+  for(const m of RC.M){ const p=rcW(m.cs,m.cw,m.cy-.25,_rcp); m.o.position.copy(p); m.o.rotation.y=yaw; }
   for(const sw of RC.S){ sw.g.rotation.y=yaw+sw.a; }
-  for(const r of RC.R){ const p=rcW(r.s,r.w,RC.Y+.7); r.o.position.copy(p); r.o.rotation.y=yaw; } }
+  for(const r of RC.R){ const p=rcW(r.s,r.w,RC.Y+.7,_rcp); r.o.position.copy(p); r.o.rotation.y=yaw; } }
 // cada cuadro: moverlo todo, llevarte encima de lo que se mueve, golpes de brazos y pistones
 const _rcv=new THREE.Vector3();
 function raceTick(dt){ const A=rcA(), d=Math.hypot(player.pos.x-A.center[0],player.pos.z-A.center[1]), dc=Math.hypot(camera.position.x-A.center[0],camera.position.z-A.center[1]);
