@@ -920,7 +920,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='108';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='109';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -966,18 +966,69 @@ const sc = sun.shadow.camera; sc.left = -30; sc.right = 30; sc.top = 30; sc.bott
 sun.shadow.bias = -0.0005;
 scene.add(sun, sun.target);
 
+// ---------- Herramientas para dibujar texturas ----------
+// Todas las texturas se dibujan aquí mismo al cargar (no se descargan). Dibujarlas con más cuidado no cuesta nada al jugar:
+// el tamaño es el mismo, así que la tarjeta de video hace el mismo trabajo. Todo se repite sin costura (lo de una orilla
+// continúa en la otra), para que no se vean cortes donde la tela se repite ni en la unión de las esferas.
+const CANE_SHADE=(q,w,h)=>TK.tone(q,w,h,{amp:.04, grain:.02, cells:1, seed:w+h});   // caramelo: tono apenas irregular, como hecho a mano
+const TK=(()=>{
+  const rng=s=>()=>{ s=(s*1664525+1013904223)>>>0; return s/4294967296; };
+  // ruido suave que se repite sin costura: manchitas de tono como en la tela de verdad
+  function field(w,h,cells,R){ const cx=Math.max(1,cells|0), cy=Math.max(1,Math.round(cells*h/w)), v=new Float32Array(cx*cy); for(let i=0;i<v.length;i++) v[i]=R();
+    const out=new Float32Array(w*h);
+    for(let y=0;y<h;y++){ const fy=y/h*cy, y0=Math.floor(fy), ty=fy-y0, sy=ty*ty*(3-2*ty), r0=(y0%cy)*cx, r1=((y0+1)%cy)*cx;
+      for(let x=0;x<w;x++){ const fx=x/w*cx, x0=Math.floor(fx), tx=fx-x0, sx=tx*tx*(3-2*tx), x1=(x0+1)%cx;
+        const a=v[r0+x0]+(v[r0+x1]-v[r0+x0])*sx, b=v[r1+x0]+(v[r1+x1]-v[r1+x0])*sx; out[y*w+x]=a+(b-a)*sy; } }
+    return out; }
+  // variación de tono (manchas grandes y medianas) + granito fino. Solo cambia el color, nunca la transparencia.
+  function tone(g,w,h,o={}){ const R=rng(o.seed||7), A=o.amp===undefined?.06:o.amp, G=o.grain===undefined?.03:o.grain, cells=o.cells||4;
+    const im=g.getImageData(0,0,w,h), d=im.data, n1=field(w,h,cells,R), n2=field(w,h,cells*3,R), wa=o.warm||0;
+    const GT=new Float32Array(4093); for(let i=0;i<GT.length;i++) GT[i]=(R()-.5)*G*2;   // granito: tabla corta de azar (más rápido que pedir un número por pixel)
+    for(let i=0,p=0;i<d.length;i+=4,p++){ if(d[i+3]===0) continue; const t=(n1[p]-.5)*1.5+(n2[p]-.5)*.7, k=1+t*A*2+GT[(p*31+(p>>9)*17)%4093];
+      if(wa){ d[i]=d[i]*k*(1+t*wa); d[i+1]=d[i+1]*k; d[i+2]=d[i+2]*k*(1-t*wa); } else { d[i]*=k; d[i+1]*=k; d[i+2]*=k; } }
+    g.putImageData(im,0,0); }
+  // pelusa: pelitos cortos y un poco curvos; los que tocan una orilla se dibujan también del otro lado
+  function fuzz(g,w,h,o={}){ const paths=[], R=rng(o.seed||11), n=o.n||Math.round(w*h/12), L=o.len||3, cols=o.cols||['rgba(0,0,0,.08)','rgba(255,255,255,.2)'], dir=o.dir;
+    g.save(); g.setLineDash([]); g.lineWidth=o.lw||.7; g.lineCap='round';
+    for(let i=0;i<n;i++){ const x=R()*w, y=R()*h, a=dir===undefined?R()*6.2832:dir+(R()-.5)*(o.spread||.7), l=L*(.45+R()*1.1), b=(R()-.5)*l*.6;
+      const ex=Math.cos(a)*l, ey=Math.sin(a)*l, mx=ex/2-Math.sin(a)*b, my=ey/2+Math.cos(a)*b;
+      const ci=(R()*cols.length)|0, xs=[0], ys=[0]; if(x<l+2) xs.push(w); else if(x>w-l-2) xs.push(-w); if(y<l+2) ys.push(h); else if(y>h-l-2) ys.push(-h);
+      // se juntan en tandas por color (un solo trazo por tanda: mucho más rápido al cargar)
+      const P=paths[ci]||(paths[ci]=[]); for(const ox of xs) for(const oy of ys) P.push(x+ox,y+oy,x+ox+mx,y+oy+my,x+ox+ex,y+oy+ey); }
+    paths.forEach((P,ci)=>{ g.strokeStyle=cols[ci]; for(let k=0;k<P.length;k+=6*400){ g.beginPath(); for(let j=k;j<Math.min(P.length,k+6*400);j+=6){ g.moveTo(P[j],P[j+1]); g.quadraticCurveTo(P[j+2],P[j+3],P[j+4],P[j+5]); } g.stroke(); } });
+    g.restore(); }
+  // puntadas de hilo de verdad: sombra, hilo con brillo y los agujeritos de la aguja en cada punta
+  function stitch(g,pts,o={}){ const dash=o.dash||9, gap=o.gap||7, lw=o.lw||2.6, col=o.col||'#fff6e0', hi=o.hi||'rgba(255,255,255,.55)', sh=o.shadow||'rgba(0,0,0,.3)', hole=o.hole||'rgba(0,0,0,.32)';
+    const cum=[0]; for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1])); const L=cum[cum.length-1]; if(L<=0) return;
+    const at=s=>{ let i=1; while(i<cum.length-1 && cum[i]<s) i++; const t=(s-cum[i-1])/Math.max(1e-6,cum[i]-cum[i-1]); return [pts[i-1][0]+(pts[i][0]-pts[i-1][0])*t, pts[i-1][1]+(pts[i][1]-pts[i-1][1])*t]; };
+    const list=[]; for(let s0=(o.phase||0)%(dash+gap); s0<L; s0+=dash+gap){ const s1=Math.min(L,s0+dash); if(s1-s0>dash*.35) list.push([at(s0),at(s1)]); }
+    g.save(); g.setLineDash([]); g.lineCap='round';
+    const draw=(st,lwd,dx,dy)=>{ g.strokeStyle=st; g.lineWidth=lwd; g.beginPath(); for(const [a,b] of list){ g.moveTo(a[0]+dx,a[1]+dy); g.lineTo(b[0]+dx,b[1]+dy); } g.stroke(); };
+    draw(sh,lw+1.2,.7,1.1); draw(col,lw,0,0); draw(hi,Math.max(.6,lw*.32),-lw*.18,-lw*.22);
+    g.fillStyle=hole; for(const [a,b] of list) for(const q of [a,b]){ g.beginPath(); g.arc(q[0],q[1],Math.max(.6,lw*.32),0,6.2832); g.fill(); }
+    g.restore(); }
+  const line=(x0,y0,x1,y1)=>[[x0,y0],[x1,y1]];
+  const circle=(cx,cy,r,n=72)=>{ const p=[]; for(let i=0;i<=n;i++){ const a=i/n*6.2832; p.push([cx+Math.cos(a)*r,cy+Math.sin(a)*r]); } return p; };
+  // relleno acolchado: la tela se hunde un poco hacia las costuras (sombra suave en las orillas de cada parche)
+  function puff(g,x,y,w,h,o={}){ const d=o.depth||Math.min(w,h)*.18, a=o.alpha===undefined?.12:o.alpha, c=o.col||'0,0,0';
+    g.save(); const edges=[[x,y,x,y+d,x,y,w,d],[x,y+h,x,y+h-d,x,y+h-d,w,d],[x,y,x+d,y,x,y,d,h],[x+w,y,x+w-d,y,x+w-d,y,d,h]];
+    for(const [x0,y0,x1,y1,rx,ry,rw,rh] of edges){ const gr=g.createLinearGradient(x0,y0,x1,y1); gr.addColorStop(0,`rgba(${c},${a})`); gr.addColorStop(1,`rgba(${c},0)`); g.fillStyle=gr; g.fillRect(rx,ry,rw,rh); }
+    if(o.shine){ const gr=g.createRadialGradient(x+w*.42,y+h*.38,0,x+w*.5,y+h*.5,Math.max(w,h)*.6); gr.addColorStop(0,`rgba(255,255,255,${o.shine})`); gr.addColorStop(1,'rgba(255,255,255,0)'); g.fillStyle=gr; g.fillRect(x,y,w,h); }
+    g.restore(); }
+  // toque final para cualquier textura opaca: variación de tono + pelusa fina
+  function finish(c,o={}){ const g=c.getContext('2d'), w=c.width, h=c.height;
+    if(o.fuzz!==false) fuzz(g,w,h,{seed:o.seed||3, n:Math.round(w*h/(o.fuzzDiv||22)), len:o.len||2.4, cols:o.fuzzCols});
+    tone(g,w,h,{seed:(o.seed||3)+1, amp:o.amp===undefined?.05:o.amp, grain:o.grain===undefined?.025:o.grain, cells:o.cells||3}); return c; }
+  return {rng, field, tone, fuzz, stitch, line, circle, puff, finish};
+})();
+
 // ---------- Texturas de fieltro ----------
 function feltTexture(base, speck, size = 256, density = 5000, repeat = 1){
   const c = document.createElement('canvas'); c.width = c.height = size;
   const g = c.getContext('2d');
   g.fillStyle = base; g.fillRect(0,0,size,size);
-  for (let i=0;i<density;i++){
-    const x=Math.random()*size, y=Math.random()*size, a=Math.random()*Math.PI;
-    const l = 1+Math.random()*3;
-    g.strokeStyle = Math.random()<.5 ? speck : 'rgba(255,255,255,0.10)';
-    g.lineWidth = .6;
-    g.beginPath(); g.moveTo(x,y); g.lineTo(x+Math.cos(a)*l, y+Math.sin(a)*l); g.stroke();
-  }
+  TK.fuzz(g,size,size,{n:density, len:2.6, cols:[speck,'rgba(255,255,255,0.12)'], lw:.65, seed:density});
+  TK.tone(g,size,size,{amp:.018, grain:.02, cells:3, seed:size+density});   // suave: esta tela se repite muchas veces
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat, repeat);
   t.encoding = THREE.sRGBEncoding;
@@ -996,13 +1047,20 @@ function feltSheen(m){
 // fieltro se pueden dibujar juntos aunque sean de colores distintos.
 const FELT_PQ=new Map();
 function feltPQ(alpha,rep){ const key=alpha+'|'+rep; let t=FELT_PQ.get(key); if(t) return t;
-  const size=256, N=5000, strokes=[]; for(let i=0;i<N;i++){ const x=Math.random()*size, y=Math.random()*size, a=Math.random()*Math.PI, l=1+Math.random()*3; strokes.push([x,y,x+Math.cos(a)*l,y+Math.sin(a)*l,Math.random()<.5]); }
+  // pelitos un poco curvos; los que tocan una orilla se repiten del otro lado (sin costura)
+  const size=256, N=5600, strokes=[], R=TK.rng(4049+rep*13);
+  for(let i=0;i<N;i++){ const x=R()*size, y=R()*size, a=R()*6.2832, l=1+R()*3, b=(R()-.5)*l*.6, ex=Math.cos(a)*l, ey=Math.sin(a)*l, mx=ex/2-Math.sin(a)*b, my=ey/2+Math.cos(a)*b, sp=R()<.5;
+    const xs=[0], ys=[0]; if(x<l+2) xs.push(size); else if(x>size-l-2) xs.push(-size); if(y<l+2) ys.push(size); else if(y>size-l-2) ys.push(-size);
+    for(const ox of xs) for(const oy of ys) strokes.push([x+ox,y+oy,x+ox+mx,y+oy+my,x+ox+ex,y+oy+ey,sp]); }
   // tres pasadas con el mismo dibujo: cuánto queda del color base, cuánto pone la pelusa oscura y cuánto la clara
   const pass=(base,spk,wht)=>{ const c=document.createElement('canvas'); c.width=c.height=size; const g=c.getContext('2d'); g.fillStyle=base; g.fillRect(0,0,size,size); g.lineWidth=.6;
-    for(const [x,y,x2,y2,sp] of strokes){ g.strokeStyle=sp?spk:wht; g.beginPath(); g.moveTo(x,y); g.lineTo(x2,y2); g.stroke(); } return g.getImageData(0,0,size,size).data; };
+    g.lineCap='round'; for(const want of [true,false]){ g.strokeStyle=want?spk:wht; let n=0; g.beginPath();
+      for(const [x,y,mx,my,x2,y2,sp] of strokes){ if(sp!==want) continue; g.moveTo(x,y); g.quadraticCurveTo(mx,my,x2,y2); if(++n%400===0){ g.stroke(); g.beginPath(); } } g.stroke(); }
+    return g.getImageData(0,0,size,size).data; };
   const P=pass('#fff',`rgba(0,0,0,${alpha})`,'rgba(0,0,0,0.10)'), K=pass('#000',`rgba(255,255,255,${alpha})`,'rgba(0,0,0,0.10)'), W=pass('#000',`rgba(0,0,0,${alpha})`,'rgba(255,255,255,0.10)');
   const c=document.createElement('canvas'); c.width=c.height=size; const g=c.getContext('2d'), im=g.createImageData(size,size), d=im.data;
-  for(let i=0;i<d.length;i+=4){ d[i]=P[i]; d[i+1]=K[i]; d[i+2]=W[i]; d[i+3]=255; } g.putImageData(im,0,0);
+  const mot=TK.field(size,size,3,R), mot2=TK.field(size,size,9,R);   // manchitas suaves de tono (la tela nunca es de un color parejo)
+  for(let i=0,p=0;i<d.length;i+=4,p++){ d[i]=P[i]*(1-.07*mot[p]-.04*mot2[p]); d[i+1]=K[i]; d[i+2]=W[i]; d[i+3]=255; } g.putImageData(im,0,0);
   t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(rep,rep); t.anisotropy=4; FELT_PQ.set(key,t); return t; }
 function parseSpeck(s){ const m=/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+))?\s*\)/.exec(s||''); if(!m) return {c:[0,0,0], a:'0.1'};
   return {c:[+m[1]/255,+m[2]/255,+m[3]/255], a:String(m[4]===undefined?1:+m[4])}; }
@@ -1113,11 +1171,15 @@ let GROUND_MAT=null; const TERRAIN_LOD=[];
 (function ground(){
   const size=512, c=document.createElement('canvas'); c.width=c.height=size;
   const g=c.getContext('2d');
-  const tones=['#f4f4ee','#ebebe3','#f8f8f2','#efefe8'];
+  // cuatro parches de tela acolchada (cada uno con su propio pelo y un tono apenas distinto), unidos por costuras
+  const tones=['#f4f4ee','#ebebe3','#f8f8f2','#efefe8'], dirs=[.3,1.9,1.1,2.6];
   for(let i=0;i<2;i++)for(let j=0;j<2;j++){g.fillStyle=tones[(i*2+j)%4];g.fillRect(i*256,j*256,256,256);}
-  for(let i=0;i<16000;i++){const x=Math.random()*size,y=Math.random()*size,a=Math.random()*Math.PI;g.strokeStyle=Math.random()<.5?'rgba(0,0,0,.09)':'rgba(255,255,255,.35)';g.lineWidth=.7;g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.cos(a)*2.5,y+Math.sin(a)*2.5);g.stroke();}
-  g.strokeStyle='rgba(255,252,240,.85)'; g.lineWidth=3; g.setLineDash([14,10]);
-  [8,248,264,504].forEach(p=>{g.beginPath();g.moveTo(p,0);g.lineTo(p,size);g.stroke();g.beginPath();g.moveTo(0,p);g.lineTo(size,p);g.stroke();});
+  TK.tone(g,size,size,{amp:.05, grain:.025, cells:4, seed:91});
+  for(let i=0;i<2;i++)for(let j=0;j<2;j++){ g.save(); g.beginPath(); g.rect(i*256,j*256,256,256); g.clip();
+    TK.fuzz(g,size,size,{n:5200, len:2.8, dir:dirs[i*2+j], spread:1.4, cols:['rgba(0,0,0,.075)','rgba(255,255,255,.34)','rgba(90,110,40,.06)'], seed:200+i*2+j}); g.restore(); }
+  TK.fuzz(g,size,size,{n:2400, len:3.2, cols:['rgba(0,0,0,.06)','rgba(255,255,255,.3)'], seed:77});
+  for(let i=0;i<2;i++)for(let j=0;j<2;j++) TK.puff(g,i*256,j*256,256,256,{depth:22, alpha:.03, shine:.05});
+  [8,248,264,504].forEach(p=>{ TK.stitch(g,TK.line(p,0,p,size),{dash:14,gap:10,lw:3,col:'rgba(255,252,240,.9)',shadow:'rgba(60,50,20,.07)',hole:'rgba(60,50,20,.1)'}); TK.stitch(g,TK.line(0,p,size,p),{dash:14,gap:10,lw:3,col:'rgba(255,252,240,.9)',shadow:'rgba(60,50,20,.07)',hole:'rgba(60,50,20,.1)',phase:5}); });
   const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.encoding=THREE.sRGBEncoding; t.anisotropy=8;
 
   const SEG=ULTRA?160:({min:200, low:300, mid:380, high:420, max:480}[Q0]||300), warp=u=>520*u+980*Math.pow(u,5);   // ±1500 m, puntos más juntos en la isla
@@ -1341,9 +1403,9 @@ const SEA_TILE=12;
 const seaSurface=(()=>{
   const size=256, c=document.createElement('canvas'); c.width=c.height=size; const g=c.getContext('2d');
   g.fillStyle='#5fa9d8'; g.fillRect(0,0,size,size);
-  for(let i=0;i<4000;i++){const x=Math.random()*size,y=Math.random()*size,a=Math.random()*Math.PI;g.strokeStyle=Math.random()<.5?'rgba(20,60,110,.14)':'rgba(255,255,255,.16)';g.lineWidth=.7;g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.cos(a)*2.5,y+Math.sin(a)*2.5);g.stroke();}
-  g.strokeStyle='rgba(255,255,255,.5)'; g.lineWidth=3; g.setLineDash([10,9]);
-  for(let r=0;r<4;r++){ g.beginPath(); for(let x=0;x<=size;x+=4){ const y=32+r*64+Math.sin(x/size*Math.PI*4)*8; x?g.lineTo(x,y):g.moveTo(x,y);} g.stroke(); }
+  TK.tone(g,size,size,{amp:.06, grain:.02, cells:3, seed:5});
+  TK.fuzz(g,size,size,{n:4200, len:2.6, dir:0, spread:.9, cols:['rgba(20,60,110,.14)','rgba(255,255,255,.16)'], seed:51});
+  for(let r=0;r<4;r++){ const pts=[]; for(let x=0;x<=size;x+=4) pts.push([x,32+r*64+Math.sin(x/size*Math.PI*4)*8]); TK.stitch(g,pts,{dash:10,gap:9,lw:3,col:'rgba(255,255,255,.5)',hi:'rgba(255,255,255,.4)',shadow:'rgba(10,40,80,.14)',hole:'rgba(10,40,80,.16)',phase:r*5}); }
   seaTex=new THREE.CanvasTexture(c); seaTex.wrapS=seaTex.wrapT=THREE.RepeatWrapping; seaTex.encoding=THREE.sRGBEncoding;
   const S=3000; seaTex.repeat.set(S/SEA_TILE,S/SEA_TILE);
   const mat=makeWaterMat({A:WATER.seaA, depth:depthTexture(768,0,0,1250,SEA_Y,true), shallow:'#78d3df', deep:'#2266a8', deepD:7, detail:seaTex, tile:SEA_TILE, foam:1, opacity:.86});
@@ -1364,9 +1426,9 @@ let waterTex;
 (function lake(){
   const size=256, c=document.createElement('canvas'); c.width=c.height=size; const g=c.getContext('2d');
   g.fillStyle='#86bfe3'; g.fillRect(0,0,size,size);
-  for(let i=0;i<4000;i++){const x=Math.random()*size,y=Math.random()*size,a=Math.random()*Math.PI;g.strokeStyle=Math.random()<.5?'rgba(30,70,120,.12)':'rgba(255,255,255,.14)';g.lineWidth=.7;g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.cos(a)*2.5,y+Math.sin(a)*2.5);g.stroke();}
-  g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=3; g.setLineDash([10,9]);
-  for(let r=0;r<4;r++){ g.beginPath(); for(let x=0;x<=size;x+=4){ const y=32+r*64+Math.sin(x/size*Math.PI*4)*8; x?g.lineTo(x,y):g.moveTo(x,y);} g.stroke(); }
+  TK.tone(g,size,size,{amp:.06, grain:.02, cells:3, seed:6});
+  TK.fuzz(g,size,size,{n:4200, len:2.6, dir:0, spread:.9, cols:['rgba(30,70,120,.12)','rgba(255,255,255,.14)'], seed:61});
+  for(let r=0;r<4;r++){ const pts=[]; for(let x=0;x<=size;x+=4) pts.push([x,32+r*64+Math.sin(x/size*Math.PI*4)*8]); TK.stitch(g,pts,{dash:10,gap:9,lw:3,col:'rgba(255,255,255,.55)',hi:'rgba(255,255,255,.4)',shadow:'rgba(10,40,80,.14)',hole:'rgba(10,40,80,.16)',phase:r*5}); }
   waterTex=new THREE.CanvasTexture(c); waterTex.wrapS=waterTex.wrapT=THREE.RepeatWrapping; waterTex.repeat.set(6,6); waterTex.encoding=THREE.sRGBEncoding;
   const lm=makeWaterMat({A:WATER.lakeA, depth:depthTexture(96,LAKE.x,LAKE.z,LAKE.R,WATER_Y,false), shallow:'#9fd8e8', deep:'#4f9ccf', deepD:1.4, detail:waterTex, tile:LAKE.R*2/6, foam:.4, opacity:.9});
   lm.userData.lake=true; waterMats.push(lm);
@@ -1385,10 +1447,11 @@ const pathSamples=[], pathLines=[];
 (function paths(){
   const c=document.createElement('canvas'); c.width=64; c.height=128; const g=c.getContext('2d');
   g.fillStyle='#e8d6ae'; g.fillRect(0,0,64,128);
-  for(let i=0;i<900;i++){const x=Math.random()*64,y=Math.random()*128,a=Math.random()*Math.PI;g.strokeStyle=Math.random()<.5?'rgba(110,80,40,.14)':'rgba(255,255,255,.18)';g.lineWidth=.6;g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.cos(a)*2,y+Math.sin(a)*2);g.stroke();}
-  g.fillStyle='rgba(120,90,50,.25)'; g.fillRect(0,0,3,128); g.fillRect(61,0,3,128);
-  g.strokeStyle='#8a6a3e'; g.lineWidth=2.5; g.setLineDash([9,7]);
-  [8,56].forEach(x=>{g.beginPath();g.moveTo(x,0);g.lineTo(x,128);g.stroke();});
+  TK.tone(g,64,128,{amp:.06, grain:.03, cells:2, seed:12, warm:.04});
+  TK.fuzz(g,64,128,{n:900, len:2.2, cols:['rgba(110,80,40,.14)','rgba(255,255,255,.2)'], seed:13});
+  { const R=TK.rng(14); for(let i=0;i<40;i++){ g.fillStyle=R()<.5?'rgba(120,90,50,.18)':'rgba(255,250,235,.35)'; g.beginPath(); g.ellipse(10+R()*44,R()*128,.8+R()*1.2,.6+R(),R()*3,0,6.3); g.fill(); } }   // piedritas de tela
+  const eg=g.createLinearGradient(0,0,64,0); eg.addColorStop(0,'rgba(110,80,40,.3)'); eg.addColorStop(.09,'rgba(110,80,40,0)'); eg.addColorStop(.91,'rgba(110,80,40,0)'); eg.addColorStop(1,'rgba(110,80,40,.3)'); g.fillStyle=eg; g.fillRect(0,0,64,128);
+  [8,56].forEach(x=>TK.stitch(g,TK.line(x,0,x,128),{dash:9,gap:7,lw:2.5,col:'#8a6a3e',hi:'rgba(200,160,110,.5)',shadow:'rgba(60,40,10,.25)',hole:'rgba(60,40,10,.3)'}));
   const tex=new THREE.CanvasTexture(c); tex.wrapS=tex.wrapT=THREE.RepeatWrapping; tex.encoding=THREE.sRGBEncoding; tex.anisotropy=8;
   const mat=new THREE.MeshStandardMaterial({map:tex, roughness:1, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-4});
   const W=2.4;
@@ -1510,16 +1573,19 @@ const inPark=(x,z)=>(Math.abs(x-PARK.x)<PARK.hx && Math.abs(z-PARK.z)<PARK.hz) |
   // asfalto de fieltro gris con línea central y bordes cosidos
   const c=document.createElement('canvas'); c.width=128; c.height=128; const g=c.getContext('2d');
   g.fillStyle='#6d7080'; g.fillRect(0,0,128,128);
-  for(let i=0;i<2200;i++){ const x=Math.random()*128,y=Math.random()*128,a=Math.random()*Math.PI; g.strokeStyle=Math.random()<.5?'rgba(0,0,0,.14)':'rgba(255,255,255,.1)'; g.lineWidth=.7; g.beginPath(); g.moveTo(x,y); g.lineTo(x+Math.cos(a)*2,y+Math.sin(a)*2); g.stroke(); }
-  g.fillStyle='#f4f1e6'; g.fillRect(61,8,6,48);            // línea central discontinua
-  g.strokeStyle='#f4f1e6'; g.lineWidth=2.5; g.setLineDash([7,5]);
-  [5,123].forEach(x=>{ g.beginPath(); g.moveTo(x,0); g.lineTo(x,128); g.stroke(); });
+  TK.tone(g,128,128,{amp:.06, grain:.05, cells:2, seed:21});
+  TK.fuzz(g,128,128,{n:2400, len:2.2, cols:['rgba(0,0,0,.15)','rgba(255,255,255,.1)'], seed:22});
+  { const R=TK.rng(23); for(let i=0;i<260;i++){ g.fillStyle=R()<.6?'rgba(30,30,40,.22)':'rgba(220,220,230,.18)'; g.fillRect(R()*128,R()*128,1+R(),1+R()); } }   // granitos del asfalto
+  g.fillStyle="rgba(0,0,0,.18)"; g.fillRect(60,9,8,48);   // sombrita bajo el parche
+  g.fillStyle='#f4f1e6'; g.fillRect(61,8,6,48);            // línea central (parche de tela)
+  TK.stitch(g,[[61.6,9],[61.6,55],[66.4,55],[66.4,9],[61.6,9]],{dash:3,gap:2.5,lw:.9,col:'rgba(150,150,140,.8)',hi:'rgba(255,255,255,0)',shadow:'rgba(0,0,0,0)',hole:'rgba(0,0,0,.15)'});
+  [5,123].forEach(x=>TK.stitch(g,TK.line(x,0,x,128),{dash:7,gap:5,lw:2.5,col:'#f4f1e6',shadow:'rgba(0,0,0,.35)',hole:'rgba(0,0,0,.35)'}));
   const tex=new THREE.CanvasTexture(c); tex.wrapS=tex.wrapT=THREE.RepeatWrapping; tex.encoding=THREE.sRGBEncoding; tex.anisotropy=8;
   const asphalt=new THREE.MeshStandardMaterial({map:tex, roughness:1, polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-6});
   ribbon(-TRACK_W/2, TRACK_W/2, TRACK_Y, asphalt, 9);
   // bordillos rojo y blanco a ambos lados
   const cc=document.createElement('canvas'); cc.width=16; cc.height=64; const cg=cc.getContext('2d');
-  cg.fillStyle='#e5534b'; cg.fillRect(0,0,16,32); cg.fillStyle='#f6f2e6'; cg.fillRect(0,32,16,32);
+  cg.fillStyle='#e5534b'; cg.fillRect(0,0,16,32); cg.fillStyle='#f6f2e6'; cg.fillRect(0,32,16,32); TK.puff(cg,0,0,16,32,{depth:4,alpha:.18}); TK.puff(cg,0,32,16,32,{depth:4,alpha:.14}); TK.finish(cc,{fuzzDiv:10,len:1.6,amp:.04});
   const ct=new THREE.CanvasTexture(cc); ct.wrapS=ct.wrapT=THREE.RepeatWrapping; ct.encoding=THREE.sRGBEncoding;
   const curbMat=new THREE.MeshStandardMaterial({map:ct, roughness:1, polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-6});
   ribbon(TRACK_W/2, TRACK_W/2+1.3, TRACK_Y+.02, curbMat, 5);
@@ -1527,7 +1593,7 @@ const inPark=(x,z)=>(Math.abs(x-PARK.x)<PARK.hx && Math.abs(z-PARK.z)<PARK.hz) |
   // línea de meta a cuadros
   const [sx,sz]=P[0], [bx,bz]=P[1]; let tx=bx-sx, tz=bz-sz; const tl=Math.hypot(tx,tz); tx/=tl; tz/=tl;
   const fc=document.createElement('canvas'); fc.width=112; fc.height=16; const fg=fc.getContext('2d');
-  for(let i=0;i<14;i++) for(let j=0;j<2;j++){ fg.fillStyle=(i+j)%2?'#2c2c34':'#f6f2e6'; fg.fillRect(i*8,j*8,8,8); }
+  for(let i=0;i<14;i++) for(let j=0;j<2;j++){ fg.fillStyle=(i+j)%2?'#2c2c34':'#f6f2e6'; fg.fillRect(i*8,j*8,8,8); fg.fillStyle='rgba(255,255,255,.12)'; fg.fillRect(i*8,j*8,8,1); fg.fillStyle='rgba(0,0,0,.14)'; fg.fillRect(i*8,j*8+7,8,1); }
   const ft=new THREE.CanvasTexture(fc); ft.encoding=THREE.sRGBEncoding; ft.magFilter=THREE.NearestFilter;
   const finish=new THREE.Mesh(new THREE.PlaneGeometry(TRACK_W,2), new THREE.MeshStandardMaterial({map:ft, roughness:1, polygonOffset:true, polygonOffsetFactor:-5, polygonOffsetUnits:-10}));
   finish.rotation.x=-Math.PI/2; finish.rotation.z=Math.atan2(-tx,-tz); finish.position.set(sx, terrainH(sx,sz)+TRACK_Y+.03, sz); scene.add(finish);
@@ -1535,9 +1601,10 @@ const inPark=(x,z)=>(Math.abs(x-PARK.x)<PARK.hx && Math.abs(z-PARK.z)<PARK.hz) |
   // estacionamiento junto a la salida, con rayas cosidas entre lugares
   const lc=document.createElement('canvas'); lc.width=128; lc.height=256; const lg=lc.getContext('2d');
   lg.fillStyle='#7d8090'; lg.fillRect(0,0,128,256);
-  for(let i=0;i<2500;i++){ const x=Math.random()*128,y=Math.random()*256,a=Math.random()*Math.PI; lg.strokeStyle=Math.random()<.5?'rgba(0,0,0,.12)':'rgba(255,255,255,.1)'; lg.lineWidth=.7; lg.beginPath(); lg.moveTo(x,y); lg.lineTo(x+Math.cos(a)*2,y+Math.sin(a)*2); lg.stroke(); }
-  lg.strokeStyle='#f4f1e6'; lg.lineWidth=2.5; lg.setLineDash([6,4]);
-  for(let k=0;k<=5;k++){ const y=18+k*44; lg.beginPath(); lg.moveTo(30,y); lg.lineTo(110,y); lg.stroke(); }
+  TK.tone(lg,128,256,{amp:.06, grain:.05, cells:2, seed:31});
+  TK.fuzz(lg,128,256,{n:2600, len:2.2, cols:['rgba(0,0,0,.13)','rgba(255,255,255,.1)'], seed:32});
+  { const R=TK.rng(33); for(let i=0;i<420;i++){ lg.fillStyle=R()<.6?'rgba(30,30,40,.2)':'rgba(220,220,230,.16)'; lg.fillRect(R()*128,R()*256,1+R(),1+R()); } for(let k=0;k<5;k++){ lg.fillStyle='rgba(20,20,30,.12)'; lg.beginPath(); lg.ellipse(70,40+k*44,18,9,0,0,6.3); lg.fill(); } }   // manchitas de aceite en cada lugar
+  for(let k=0;k<=5;k++){ const y=18+k*44; TK.stitch(lg,TK.line(30,y,110,y),{dash:6,gap:4,lw:2.5,col:'#f4f1e6',shadow:'rgba(0,0,0,.35)',hole:'rgba(0,0,0,.3)'}); }
   const lt=new THREE.CanvasTexture(lc); lt.encoding=THREE.sRGBEncoding; lt.anisotropy=4;
   const lot=new THREE.Mesh(new THREE.PlaneGeometry(PARK.hx*2, PARK.hz*2, 12, 26), new THREE.MeshStandardMaterial({map:lt, roughness:1, polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-6}));
   lot.rotation.x=-Math.PI/2;
@@ -1651,7 +1718,7 @@ function clampCamToCake(target,want){
 const onCakeSurface=(x,z,y)=>{ const d=Math.hypot(x,z); return d<CAKE.R && !(d<START.r*.85 && y<START.top+.3); };
 (function cakeCastle(){
   let seed=777; const rnd=(a=0,b=1)=>{ seed=(seed*1664525+1013904223)>>>0; return a+seed/4294967296*(b-a); };
-  const canvasTex=(w,h,draw,repS=1,repT=1)=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; draw(c.getContext('2d'),w,h);
+  const canvasTex=(w,h,draw,repS=1,repT=1)=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; draw(c.getContext('2d'),w,h); TK.finish(c,{seed:w*7+h, amp:.045, fuzzDiv:26, len:2});
     const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(repS,repT); t.anisotropy=4; return t; };
   // Pared de pastel: crema abajo, bizcocho, fresa, bizcocho y chocolate escurriendo arriba
   const wallTex=canvasTex(256,256,(g,w,h)=>{
@@ -3416,9 +3483,12 @@ const TELEPORTS=[{id:'inicio', name:'Inicio', x:START.x, z:START.z}, {id:'pista'
 const portals=[], signGlow=[], signLights=[];
 const signMats=(()=>{ const c=document.createElement('canvas'); c.width=256; c.height=128; const g=c.getContext('2d');
   g.fillStyle='#5b3220'; g.fillRect(0,0,256,128); for(let i=0;i<4;i++) for(let j=0;j<2;j++){ g.fillStyle='#6e3d27'; g.fillRect(6+i*63,6+j*61,56,54); g.fillStyle='rgba(255,255,255,.08)'; g.fillRect(6+i*63,6+j*61,56,6); }
-  const sp=['#ff5d6c','#ffe14d','#7ed957','#4fc3f7','#c77dff','#ffffff']; for(let i=0;i<70;i++){ g.save(); g.translate(Math.random()*256,Math.random()*128); g.rotate(Math.random()*6.3); g.fillStyle=sp[i%6]; g.fillRect(-4,-1.2,8,2.4); g.restore(); }
+  for(let i=0;i<4;i++) for(let j=0;j<2;j++) TK.puff(g,6+i*63,6+j*61,56,54,{depth:9, alpha:.22, shine:.08});   // cuadritos de chocolate con volumen
+  const sp=['#ff5d6c','#ffe14d','#7ed957','#4fc3f7','#c77dff','#ffffff']; for(let i=0;i<70;i++){ g.save(); g.translate(Math.random()*256,Math.random()*128); g.rotate(Math.random()*6.3); g.fillStyle='rgba(0,0,0,.25)'; g.fillRect(-3.4,-.6,8,2.4); g.fillStyle=sp[i%6]; g.fillRect(-4,-1.2,8,2.4); g.restore(); }
+  TK.finish(c,{seed:338, amp:.05, fuzzDiv:30, len:1.8});
   const bt=new THREE.CanvasTexture(c); bt.encoding=THREE.sRGBEncoding;
   const cc=document.createElement('canvas'); cc.width=32; cc.height=128; const q=cc.getContext('2d'); q.fillStyle='#fffaf3'; q.fillRect(0,0,32,128); q.fillStyle='#e0303a'; for(let y=-32;y<160;y+=32){ q.beginPath(); q.moveTo(0,y); q.lineTo(32,y-16); q.lineTo(32,y-4); q.lineTo(0,y+12); q.fill(); }
+  CANE_SHADE(q,32,128);
   const ct=new THREE.CanvasTexture(cc); ct.encoding=THREE.sRGBEncoding; ct.wrapS=ct.wrapT=THREE.RepeatWrapping; ct.repeat.set(1,3);
   return {bar:new THREE.MeshStandardMaterial({map:bt, roughness:.4}), choco:new THREE.MeshStandardMaterial({color:0x4a2614, roughness:.4}), cane:new THREE.MeshStandardMaterial({map:ct, roughness:.3}),
     icing:new THREE.MeshStandardMaterial({color:0xffb6d5, roughness:.35}), cherry:new THREE.MeshStandardMaterial({color:0xc8102e, roughness:.25})}; })();
@@ -4223,7 +4293,7 @@ const RUNWAY={u0:5, u1:245, w:24}, APRON={u0:20, u1:195, v0:-95, v1:-12};
 const AIR_PARK=[[60,-52],[112,-52],[150,-58],[177,-58]];   // estacionamientos (u, v): 2 aviones y 2 helicópteros
 (function buildAirport(){
   const g=new THREE.Group(); g.position.set(AIRPORT.r0*APU[0], 0, AIRPORT.r0*APU[1]); g.rotation.y=-AIRPORT.a;
-  const cv=(w,h,draw)=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; draw(c.getContext('2d'),w,h); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=8; return t; };
+  const cv=(w,h,draw,fin)=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; draw(c.getContext('2d'),w,h); TK.finish(c,Object.assign({seed:w+h*3, amp:.05, grain:.04, fuzzDiv:18, len:2},fin||{})); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=8; return t; };
   const asphaltTex=(base,line)=>cv(256,256,(x,w,h)=>{ x.fillStyle=base; x.fillRect(0,0,w,h);
     for(let i=0;i<2600;i++){ x.fillStyle=Math.random()<.5?'rgba(255,255,255,.05)':'rgba(0,0,0,.07)'; x.fillRect(Math.random()*w,Math.random()*h,2,2); }
     if(line){ x.fillStyle='#f4f1e6'; x.fillRect(0,h/2-5,w*.55,10); } });
@@ -4790,8 +4860,10 @@ const trOnMat=(x,z,y)=>trD(x,z)<TR.R+.3 && y>TR.top-.6 && y<TR.top+30;
   for(let i=0;i<RN;i++) for(let j=0;j<SN;j++){ const a=i*(SN+1)+j, b=a+1, c=a+SN+1, d=c+1; idx.push(a,c,b,b,c,d); }
   const mg=new THREE.BufferGeometry(); mg.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); mg.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); mg.setIndex(idx); mg.computeVertexNormals();
   const matTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=256; const x=c.getContext('2d'); x.fillStyle='#1f2128'; x.fillRect(0,0,256,256);
-    x.strokeStyle='rgba(255,255,255,.07)'; x.lineWidth=1; for(let i=0;i<256;i+=6){ x.beginPath(); x.moveTo(i,0); x.lineTo(i,256); x.stroke(); x.beginPath(); x.moveTo(0,i); x.lineTo(256,i); x.stroke(); }
-    x.setLineDash([8,7]); x.strokeStyle='rgba(255,240,200,.45)'; x.lineWidth=3; x.beginPath(); x.arc(128,128,118,0,7); x.stroke(); x.beginPath(); x.arc(128,128,40,0,7); x.stroke();
+    for(let i=0;i<256;i+=4) for(let j=0;j<256;j+=4){ const o=((i+j)/4)%2; x.fillStyle=o?'rgba(255,255,255,.07)':'rgba(0,0,0,.18)'; x.fillRect(i,j,o?4:2,o?2:4); }   // tejido de la lona
+    TK.tone(x,256,256,{amp:.06, grain:.03, cells:3, seed:471});
+    TK.stitch(x,TK.circle(128,128,118,110),{dash:8,gap:7,lw:3,col:'rgba(255,240,200,.5)',hi:'rgba(255,255,255,.2)',shadow:'rgba(0,0,0,.4)',hole:'rgba(0,0,0,.4)'});
+    TK.stitch(x,TK.circle(128,128,40,40),{dash:8,gap:7,lw:3,col:'rgba(255,240,200,.5)',hi:'rgba(255,255,255,.2)',shadow:'rgba(0,0,0,.4)',hole:'rgba(0,0,0,.4)'});
     const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; })();
   const mat=new THREE.Mesh(mg,new THREE.MeshStandardMaterial({map:matTex, roughness:.9, side:THREE.DoubleSide})); mat.position.y=TR.H+.02; mat.receiveShadow=true; g.add(mat); TR.mat=mat; TR.matBase=Float32Array.from(pos);
   // postes acolchados (8) con tapita negra
@@ -5404,9 +5476,11 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
   const glass=new THREE.MeshStandardMaterial({color:0xcfefff, transparent:true, opacity:.15, roughness:.05, depthWrite:false, side:THREE.DoubleSide});
   // piso de azulejos rojo y verde
   const tileTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d');
-    for(let i=0;i<2;i++) for(let j=0;j<2;j++){ g.fillStyle=(i+j)%2?'#5aa84f':'#d8574a'; g.fillRect(i*64,j*64,64,64); g.fillStyle='rgba(255,255,255,.14)'; g.fillRect(i*64+4,j*64+4,56,8); }
-    g.strokeStyle='rgba(60,40,30,.45)'; g.lineWidth=3; for(let k=0;k<=2;k++){ g.beginPath(); g.moveTo(k*64,0); g.lineTo(k*64,128); g.stroke(); g.beginPath(); g.moveTo(0,k*64); g.lineTo(128,k*64); g.stroke(); }
-    const im=g.getImageData(0,0,128,128), d=im.data; for(let q=0;q<d.length;q+=4){ const n=(Math.random()-.5)*14; d[q]+=n; d[q+1]+=n; d[q+2]+=n; } g.putImageData(im,0,0);
+    for(let i=0;i<2;i++) for(let j=0;j<2;j++){ g.fillStyle=(i+j)%2?'#5aa84f':'#d8574a'; g.fillRect(i*64,j*64,64,64); }
+    TK.tone(g,128,128,{amp:.06, grain:.04, cells:4, seed:532});
+    for(let i=0;i<2;i++) for(let j=0;j<2;j++){ TK.puff(g,i*64+1.5,j*64+1.5,61,61,{depth:7, alpha:.25}); const gr=g.createLinearGradient(i*64,j*64,i*64+64,j*64+64); gr.addColorStop(0,'rgba(255,255,255,.18)'); gr.addColorStop(.5,'rgba(255,255,255,0)'); g.fillStyle=gr; g.fillRect(i*64+3,j*64+3,58,58); }   // brillo de mosaico esmaltado
+    g.fillStyle='#8a7a66'; for(let k=0;k<=2;k++){ g.fillRect(k*64-1.5,0,3,128); g.fillRect(0,k*64-1.5,128,3); }   // juntas
+    TK.fuzz(g,128,128,{n:500, len:1.4, cols:['rgba(0,0,0,.1)','rgba(255,255,255,.12)'], seed:533});
     const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(5,5); t.anisotropy=4; return t; })();
   const floor=new THREE.Mesh(new THREE.PlaneGeometry(HH*2-.3,HH*2-.3), new THREE.MeshStandardMaterial({map:tileTex, roughness:.7})); floor.rotation.x=-Math.PI/2; floor.position.set(0,Y+.015,HZ); floor.receiveShadow=true; gS.add(floor);
   // paredes (azul por fuera, azul clarito por dentro); la del frente tiene la puerta
@@ -5429,11 +5503,14 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
   // letrero sobre la puerta
   { const c=document.createElement('canvas'); c.width=512; c.height=128; const g=c.getContext('2d'); g.fillStyle='#e9c48a'; g.fillRect(0,0,512,128); g.strokeStyle='#8a5a32'; g.lineWidth=10; g.strokeRect(5,5,502,118);
     g.setLineDash([12,9]); g.lineWidth=3; g.strokeRect(18,18,476,92); g.setLineDash([]); g.fillStyle='#3a5a2a'; g.font='800 54px Sniglet, Nunito, sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('Pesca de Tortu',256,66);
+    TK.fuzz(g,512,128,{n:1500, len:6, dir:0, spread:.15, cols:['rgba(120,80,40,.12)','rgba(255,240,210,.12)'], seed:529}); TK.tone(g,512,128,{amp:.05, grain:.025, cells:5, seed:530, warm:.04});
     const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; const m=new THREE.Mesh(new THREE.PlaneGeometry(2.6,.65), new THREE.MeshStandardMaterial({map:t, roughness:.9})); m.position.set(0,Y+2.95,z0-.14); m.rotation.y=Math.PI; gS.add(m); P.sign=m; P.signTex=t; }
   // techo de pirámide cubierto de paja (aparte, para quitarlo cuando estás adentro)
   const thatch=(()=>{ const c=document.createElement('canvas'); c.width=c.height=256; const g=c.getContext('2d'); g.fillStyle='#d6b05a'; g.fillRect(0,0,256,256);
     for(let i=0;i<2600;i++){ const x=Math.random()*256, y=Math.random()*256, L=8+Math.random()*16; g.strokeStyle=['#b88a3a','#f0d27a','#a27a32','#e2c066','#c99a44'][i%5]; g.lineWidth=1+Math.random()*1.6; g.beginPath(); g.moveTo(x,y); g.lineTo(x+(Math.random()-.5)*4,y+L); g.stroke(); }
-    for(let y=0;y<256;y+=32){ g.fillStyle='rgba(90,60,20,.18)'; g.fillRect(0,y,256,3); }
+    for(let y=0;y<256;y+=32){ const gr=g.createLinearGradient(0,y,0,y+32); gr.addColorStop(0,'rgba(70,45,10,.32)'); gr.addColorStop(.25,'rgba(70,45,10,.05)'); gr.addColorStop(.8,'rgba(255,240,180,.06)'); gr.addColorStop(1,'rgba(70,45,10,.12)'); g.fillStyle=gr; g.fillRect(0,y,256,32); }
+    { const R=TK.rng(536); for(let y=0;y<256;y+=32) for(let i=0;i<70;i++){ const x=R()*256, L=6+R()*10; g.strokeStyle=['#f6dc8a','#c99a44','#e8c870'][i%3]; g.lineWidth=1.2+R(); g.beginPath(); g.moveTo(x,y+32-L); g.lineTo(x+(R()-.5)*3,y+33); g.stroke(); } }   // puntas sueltas al final de cada hilera
+    TK.tone(g,256,256,{amp:.06, grain:.03, cells:3, seed:537, warm:.05});
     const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(5,3); t.anisotropy=4; return t; })();
   const roofM=new THREE.MeshStandardMaterial({map:thatch, roughness:1, side:THREE.DoubleSide});
   const gR=new THREE.Group(); gR.position.copy(gS.position); gR.rotation.y=P.th;
@@ -5480,6 +5557,7 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
     const pc=document.createElement('canvas'); pc.width=384; pc.height=256; const g=pc.getContext('2d'); g.fillStyle='#fbf1e2'; g.fillRect(0,0,384,256); g.strokeStyle='#8a5a32'; g.lineWidth=8; g.strokeRect(4,4,376,248);
     g.fillStyle='#3a5a8a'; g.font='800 30px Sniglet, Nunito, sans-serif'; g.textAlign='center'; g.fillText('Peces del muelle',192,40);
     [[2,40,60],[3,150,60],[9,262,60],[17,40,150],[28,150,150],[45,262,150]].forEach(([id,x,y])=>g.drawImage(fishIcon(id,true),x,y,90,60));
+    TK.tone(g,384,256,{amp:.04, grain:.02, cells:3, seed:540, warm:.05}); TK.puff(g,8,8,368,240,{depth:26, alpha:.06});
     const pt=new THREE.CanvasTexture(pc); pt.encoding=THREE.sRGBEncoding; const poster=new THREE.Mesh(new THREE.PlaneGeometry(1.8,1.2), new THREE.MeshStandardMaterial({map:pt, roughness:.9})); poster.position.set(-2.6,Y+2.05,z1-.15); poster.rotation.y=Math.PI; gS.add(poster);
     C(felt('#3a3a3a'),0,Y+HW+.95,HZ,.02,1.9); const shade=new THREE.Mesh(new THREE.ConeGeometry(.45,.4,16,1,true), new THREE.MeshStandardMaterial({color:0xf2c35a, roughness:.8, side:THREE.DoubleSide})); shade.position.set(0,Y+HW-.05,HZ); gS.add(shade);
     const bulb=new THREE.Mesh(sphereG,new THREE.MeshBasicMaterial({color:0xfff2b0})); bulb.scale.setScalar(.13); bulb.position.set(0,Y+HW-.22,HZ); gS.add(bulb);
@@ -5495,6 +5573,7 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
     for(let k=0;k<22;k++){ g.strokeStyle=k%3?'rgba(190,196,84,.8)':'rgba(222,212,96,.95)'; g.lineWidth=k%3?2:3; const x=(k+.5)/22*256; g.beginPath(); g.moveTo(x,0); g.lineTo(x+3,128); g.stroke(); }
     g.fillStyle=PLUSH_COLORS[3].hex; g.fillRect(0,0,256,26); g.strokeStyle='#2c3a1a'; g.lineWidth=3; g.setLineDash([6,5]); g.beginPath(); g.moveTo(0,27); g.lineTo(256,27); g.stroke(); g.setLineDash([]);
     [0,128].forEach(x=>{ g.fillStyle='#d9402b'; g.beginPath(); g.ellipse(x,64,16,20,0,0,6.283); g.fill(); }); g.beginPath(); g.ellipse(256,64,16,20,0,0,6.283); g.fill();
+    TK.finish(hc,{seed:541, amp:.05, fuzzDiv:12, len:2.4});
     const ht=new THREE.CanvasTexture(hc); ht.encoding=THREE.sRGBEncoding;
     const hg=new THREE.SphereGeometry(1,28,18); hg.rotateX(Math.PI/2);
     const hood=new THREE.Mesh(hg,new THREE.MeshStandardMaterial({map:ht, roughness:.95})); hood.scale.set(.45,.42,.44); hood.position.set(0,BODY_Y+1.33,.0); t.add(hood);
@@ -6865,10 +6944,15 @@ function fAdd(par,geo,mat,x,y,z,sx,sy,sz,rx=0,ry=0,rz=0){ const m=new THREE.Mesh
 function fBar(par,mat,a,b,r){ const dx=b[0]-a[0], dy=b[1]-a[1], dz=b[2]-a[2], L=Math.hypot(dx,dy,dz); const o=new THREE.Mesh(fCyl,mat); o.scale.set(r,L,r);
   o.position.set((a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2); o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), new THREE.Vector3(dx/L,dy/L,dz/L)); par.add(o); return o; }
 function stripeTex(a,b,n=8){ const c=document.createElement('canvas'); c.width=256; c.height=64; const g=c.getContext('2d'); for(let i=0;i<n;i++){ g.fillStyle=i%2?b:a; g.fillRect(i*256/n,0,256/n+1,64); }
-  for(let i=0;i<900;i++){ g.fillStyle='rgba(0,0,0,.06)'; g.fillRect(Math.random()*256,Math.random()*64,1.5,1.5); }
+  for(let i=0;i<n;i++){ const x0=i*256/n, w=256/n, gr=g.createLinearGradient(x0,0,x0+w,0); gr.addColorStop(0,'rgba(0,0,0,.13)'); gr.addColorStop(.35,'rgba(255,255,255,.08)'); gr.addColorStop(.6,'rgba(0,0,0,0)'); gr.addColorStop(1,'rgba(0,0,0,.1)'); g.fillStyle=gr; g.fillRect(x0,0,w,64); }   // pliegues de la tela
+  TK.finish(c,{seed:n*31, amp:.04, fuzzDiv:16, len:2});
   const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; }
 function textTex(lines,w=512,h=192,bg='#fff3d6',fg='#7a2b2b',edge='#e5534b'){ const c=document.createElement('canvas'); c.width=w; c.height=h; const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding;
-  const draw=()=>{ const g=c.getContext('2d'); g.fillStyle=bg; g.fillRect(0,0,w,h); g.strokeStyle=edge; g.lineWidth=10; g.setLineDash([18,12]); g.strokeRect(12,12,w-24,h-24); g.setLineDash([]);
+  let base=null;
+  const draw=()=>{ const g=c.getContext('2d');
+    if(!base){ g.fillStyle=bg; g.fillRect(0,0,w,h); TK.finish(c,{seed:w+h, amp:.035, grain:.02, fuzzDiv:30, len:2}); TK.puff(g,0,0,w,h,{depth:22, alpha:.1});
+      TK.stitch(g,[[14,14],[w-14,14],[w-14,h-14],[14,h-14],[14,14]],{dash:18,gap:12,lw:8,col:edge,shadow:'rgba(0,0,0,.22)',hole:'rgba(0,0,0,.25)'}); base=g.getImageData(0,0,w,h); }
+    else g.putImageData(base,0,0);
     g.fillStyle=fg; g.textAlign='center'; g.textBaseline='middle'; const L=[].concat(lines);
     L.forEach((s,i)=>{ g.font=(i?'700 ':'800 ')+(i?Math.round(h*.17):Math.round(h*(L.length>1?.36:.5)))+'px Sniglet, Nunito, sans-serif'; g.fillText(s,w/2,h*(L.length>1?(i?.74:.4):.52),w-50); }); t.needsUpdate=true; };
   draw(); if(document.fonts) document.fonts.ready.then(draw); return t; }
@@ -6885,8 +6969,10 @@ function tent(par,w,d,h,ca,cb,title,sub){
 const fairGlow=[];   // letreros que se iluminan de noche
 // placa en el piso (aquí te paras para jugar)
 const padTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d'); g.fillStyle='#ffd34d'; g.beginPath(); g.arc(64,64,62,0,7); g.fill();
-  g.strokeStyle='#b07a12'; g.lineWidth=5; g.setLineDash([9,7]); g.beginPath(); g.arc(64,64,54,0,7); g.stroke(); g.setLineDash([]);
-  g.fillStyle='#e5534b'; g.beginPath(); g.moveTo(50,38); g.lineTo(88,64); g.lineTo(50,90); g.closePath(); g.fill(); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; })();
+  { const gr=g.createRadialGradient(54,50,4,64,64,62); gr.addColorStop(0,'rgba(255,255,255,.3)'); gr.addColorStop(.7,'rgba(255,255,255,0)'); gr.addColorStop(1,'rgba(120,70,0,.25)'); g.fillStyle=gr; g.beginPath(); g.arc(64,64,62,0,7); g.fill(); }
+  TK.stitch(g,TK.circle(64,64,54,60),{dash:9,gap:7,lw:4,col:'#b07a12',shadow:'rgba(80,40,0,.25)',hole:'rgba(80,40,0,.3)'});
+  g.fillStyle='rgba(120,30,20,.3)'; g.beginPath(); g.moveTo(51.5,40); g.lineTo(89.5,66); g.lineTo(51.5,92); g.closePath(); g.fill();
+  g.fillStyle='#e5534b'; g.beginPath(); g.moveTo(50,38); g.lineTo(88,64); g.lineTo(50,90); g.closePath(); g.fill(); TK.tone(g,128,128,{amp:.05, grain:.03, cells:3, seed:681}); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; })();
 function padMesh(par,x,z,r=.55){ const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,.06,28), [FM('#c79a2a'), new THREE.MeshStandardMaterial({map:padTex, roughness:.6, emissive:0xffd34d, emissiveIntensity:.05}), FM('#c79a2a')]); m.position.set(x,.03,z); m.rotation.y=Math.PI/2; par.add(m); return m; }
 function booth(e){ const g=new THREE.Group(); g.position.set(e.x,FY,e.z); g.rotation.y=e.yaw; scene.add(g); return g; }
 function blockAt(e,lx,lz,r,top=3){ const p=bW(e,lx,0,lz); obstacles.push({x:p.x,z:p.z,r,top:FY+top,walk:false}); }
@@ -7006,7 +7092,9 @@ let fairBulbs=null;
   // piso de la feria: fieltro durazno con costuras en círculos
   { const c=document.createElement('canvas'); c.width=c.height=512; const g=c.getContext('2d'); g.fillStyle='#f3d7b0'; g.fillRect(0,0,512,512);
     for(let i=0;i<9000;i++){ g.fillStyle=Math.random()<.5?'rgba(120,80,40,.08)':'rgba(255,255,255,.12)'; g.fillRect(Math.random()*512,Math.random()*512,2,2); }
-    g.strokeStyle='rgba(150,90,50,.45)'; g.lineWidth=3; g.setLineDash([12,9]); for(let r=40;r<256;r+=44){ g.beginPath(); g.arc(256,256,r,0,7); g.stroke(); }
+    TK.tone(g,512,512,{amp:.05, grain:.025, cells:5, seed:693, warm:.04}); TK.fuzz(g,512,512,{n:9000, len:2.6, cols:['rgba(120,80,40,.08)','rgba(255,255,255,.18)'], seed:694});
+    for(let r=40;r<256;r+=44){ const gr=g.createRadialGradient(256,256,r-10,256,256,r+2); gr.addColorStop(0,'rgba(150,90,50,0)'); gr.addColorStop(.85,'rgba(150,90,50,.12)'); gr.addColorStop(1,'rgba(150,90,50,0)'); g.fillStyle=gr; g.beginPath(); g.arc(256,256,r+2,0,7); g.fill();
+      TK.stitch(g,TK.circle(256,256,r,Math.round(r*.9)),{dash:12,gap:9,lw:3,col:'rgba(150,90,50,.55)',hi:'rgba(255,230,200,.3)',shadow:'rgba(90,50,20,.18)',hole:'rgba(90,50,20,.22)'}); }
     const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding;
     const m=new THREE.Mesh(new THREE.CircleGeometry(FAIR.R,72), new THREE.MeshStandardMaterial({map:t, roughness:1, polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-2}));
     m.rotation.x=-Math.PI/2; m.position.set(FAIR.x,FY+.05,FAIR.z); m.receiveShadow=true; root.add(m); }
@@ -7085,7 +7173,8 @@ function handLocal(o,side,x,y,z,hx,hy,hz,stretch){ const arm=ARM(o,side); if(!ar
   blockAt(e,0,3.5,1.0,1.4); blockAt(e,0,2.3,1.0,1.2); blockAt(e,0,4.7,1.0,1.4);
   // pelotas
   const ballTex=(()=>{ const c=document.createElement('canvas'); c.width=128; c.height=64; const q=c.getContext('2d'); q.fillStyle='#f07c2a'; q.fillRect(0,0,128,64); q.strokeStyle='#3a1d0a'; q.lineWidth=3;
-    [[0,32,128,32],[32,0,32,64],[96,0,96,64]].forEach(([a,b,c2,d])=>{ q.beginPath(); q.moveTo(a,b); q.lineTo(c2,d); q.stroke(); }); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; })();
+    { const R=TK.rng(701); for(let i=0;i<900;i++){ q.fillStyle=R()<.5?'rgba(120,50,10,.25)':'rgba(255,190,140,.22)'; q.beginPath(); q.arc(R()*128,R()*64,.8,0,6.3); q.fill(); } }   // granitos de la pelota
+    [[0,32,128,32],[32,0,32,64],[96,0,96,64]].forEach(([a,b,c2,d])=>{ q.beginPath(); q.moveTo(a,b); q.lineTo(c2,d); q.stroke(); }); TK.tone(q,128,64,{amp:.05, grain:.02, cells:2, seed:702}); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; })();
   const ballMat=new THREE.MeshStandardMaterial({map:ballTex, roughness:.85});
   const balls=[0,1,2].map(i=>{ const m=new THREE.Mesh(new THREE.SphereGeometry(BR,16,12),ballMat); m.castShadow=true; g.add(m); return {m, p:new THREE.Vector3(), v:new THREE.Vector3(), st:'tray', slot:i, scored:false}; });
   const traySpot=(i,out)=>out.set(-.36+i*.36,.56+BR,1.0);
@@ -7258,7 +7347,11 @@ function handLocal(o,side,x,y,z,hx,hy,hz,stretch){ const arm=ARM(o,side); if(!ar
   // tarima con 4 flechas y pantalla
   fAdd(g,fBox,FM('#3a3d46'),0,.08,0,2.2,.16,2.2);
   const arrowTex=(dir,col)=>{ const c=document.createElement('canvas'); c.width=c.height=64; const q=c.getContext('2d'); q.fillStyle='#22252c'; q.fillRect(0,0,64,64);
-    q.translate(32,32); q.rotate(dir); q.fillStyle=col; q.beginPath(); q.moveTo(0,-22); q.lineTo(20,2); q.lineTo(8,2); q.lineTo(8,22); q.lineTo(-8,22); q.lineTo(-8,2); q.lineTo(-20,2); q.closePath(); q.fill();
+    TK.puff(q,0,0,64,64,{depth:8, alpha:.35}); q.translate(32,32); q.rotate(dir);
+    const arrow=()=>{ q.beginPath(); q.moveTo(0,-22); q.lineTo(20,2); q.lineTo(8,2); q.lineTo(8,22); q.lineTo(-8,22); q.lineTo(-8,2); q.lineTo(-20,2); q.closePath(); };
+    q.save(); q.shadowColor=col; q.shadowBlur=6; q.fillStyle=col; arrow(); q.fill(); q.restore();
+    const gr=q.createLinearGradient(0,-22,0,22); gr.addColorStop(0,'rgba(255,255,255,.35)'); gr.addColorStop(1,'rgba(0,0,0,.15)'); q.fillStyle=gr; arrow(); q.fill(); q.setTransform(1,0,0,1,0,0);
+    TK.tone(q,64,64,{amp:.03, grain:.03, cells:2, seed:718});
     const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; };
   // flechas en el piso (vistas desde atrás del jugador: izquierda = +x)
   const LANES=[{n:'izq', dir:-Math.PI/2, col:'#c77dff', x:.62, z:0},{n:'aba', dir:Math.PI, col:'#4fc3f7', x:0, z:-.62},{n:'arr', dir:0, col:'#7ed957', x:0, z:.62},{n:'der', dir:Math.PI/2, col:'#ff5d6c', x:-.62, z:0}];
@@ -7621,7 +7714,7 @@ const PLAT_COL=['#ff7aa2','#ffc23d','#6fd15a','#4fb0ff','#a77bff'];
       c.set(PLAT_COL[f]); if((i+j)%2) c.multiplyScalar(.9); m.setColorAt(j*N+i,c); }
     m.frustumCulled=true; m.instanceMatrix.needsUpdate=true; m.instanceColor.needsUpdate=true; scene.add(m); PLAT.meshes.push(m); PLAT.orig.push(m.instanceMatrix.array.slice()); }
   // cuatro bastones de caramelo en las esquinas y letrero en la playa
-  const caneM=new THREE.MeshStandardMaterial({map:(()=>{ const cc=document.createElement('canvas'); cc.width=32; cc.height=128; const q=cc.getContext('2d'); q.fillStyle='#fffaf3'; q.fillRect(0,0,32,128); q.fillStyle='#e0303a'; for(let y=-32;y<160;y+=32){ q.beginPath(); q.moveTo(0,y); q.lineTo(32,y-16); q.lineTo(32,y-4); q.lineTo(0,y+12); q.fill(); } const t=new THREE.CanvasTexture(cc); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1,12); return t; })(), roughness:.35});
+  const caneM=new THREE.MeshStandardMaterial({map:(()=>{ const cc=document.createElement('canvas'); cc.width=32; cc.height=128; const q=cc.getContext('2d'); q.fillStyle='#fffaf3'; q.fillRect(0,0,32,128); q.fillStyle='#e0303a'; for(let y=-32;y<160;y+=32){ q.beginPath(); q.moveTo(0,y); q.lineTo(32,y-16); q.lineTo(32,y-4); q.lineTo(0,y+12); q.fill(); } CANE_SHADE(q,32,128); const t=new THREE.CanvasTexture(cc); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1,12); return t; })(), roughness:.35});
   const H=platTop(PLAT.F-1)+3-SEA_Y, half=(N/2)*T+.4;
   [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([a,b])=>{ const p=arW(A,a*half,b*half,SEA_Y+H/2); const m=new THREE.Mesh(new THREE.CylinderGeometry(.45,.45,H,12),caneM); m.position.copy(p); scene.add(m);
     const ball=new THREE.Mesh(sphereG,new THREE.MeshStandardMaterial({color:PLAT_COL[(a+1+b+1)%5], roughness:.3})); ball.scale.setScalar(.9); ball.position.set(p.x,SEA_Y+H+.6,p.z); scene.add(ball); });
@@ -7683,12 +7776,16 @@ const ballTexs=[];
 function beachBallMat(i){ if(ballTexs[i]) return ballTexs[i]; const c=document.createElement('canvas'); c.width=256; c.height=128; const g=c.getContext('2d');
   const cols=[['#ff5d6c','#ffe14d','#4fc3f7','#7ed957','#ffffff','#c77dff'],['#ff9a3c','#ffffff','#4f86c6','#ff5d6c','#ffffff','#7ed957']][i%2];
   cols.forEach((col,k)=>{ g.fillStyle=col; g.fillRect(k*256/6,0,256/6+1,128); }); g.fillStyle='#ffffff'; g.beginPath(); g.ellipse(128,6,256,12,0,0,7); g.fill(); g.beginPath(); g.ellipse(128,122,256,12,0,0,7); g.fill();
+  g.fillStyle='rgba(0,0,0,.12)'; for(let k=0;k<6;k++) g.fillRect(k*256/6-.7,0,1.4,128);   // costuras entre gajos
+  TK.tone(g,256,128,{amp:.03, grain:.015, cells:2, seed:760+i});
   const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return ballTexs[i]=new THREE.MeshStandardMaterial({map:t, roughness:.35}); }
 const ballGeo=new THREE.SphereGeometry(1,24,16);
 function makeBall(i){ const m=new THREE.Mesh(ballGeo,beachBallMat(i)); m.scale.setScalar(BOLA.br); m.castShadow=true; m.visible=false; scene.add(m); return m; }
 (function buildBola(){ const A=AR_SPOTS[2], c=arW(A,0,0,BOLA.top);
   const tc=document.createElement('canvas'); tc.width=tc.height=512; const g=tc.getContext('2d'); const cols=['#ffd1dc','#fff3a6','#c8f2b0','#b8e6fb'];
-  for(let r=8;r>0;r--){ g.fillStyle=cols[r%4]; g.beginPath(); g.arc(256,256,r*32,0,7); g.fill(); } g.strokeStyle='rgba(255,255,255,.8)'; g.lineWidth=6; g.setLineDash([16,12]); g.beginPath(); g.arc(256,256,250,0,7); g.stroke();
+  for(let r=8;r>0;r--){ g.fillStyle=cols[r%4]; g.beginPath(); g.arc(256,256,r*32,0,7); g.fill(); const gr=g.createRadialGradient(256,256,r*32-14,256,256,r*32); gr.addColorStop(0,'rgba(0,0,0,0)'); gr.addColorStop(1,'rgba(0,0,0,.1)'); g.fillStyle=gr; g.beginPath(); g.arc(256,256,r*32,0,7); g.fill(); }   // anillos acolchados
+  TK.tone(g,512,512,{amp:.04, grain:.02, cells:4, seed:761}); TK.fuzz(g,512,512,{n:7000, len:2.4, cols:['rgba(0,0,0,.05)','rgba(255,255,255,.25)'], seed:762});
+  TK.stitch(g,TK.circle(256,256,250,160),{dash:16,gap:12,lw:5,col:'rgba(255,255,255,.9)',shadow:'rgba(0,0,0,.16)',hole:'rgba(0,0,0,.18)'});
   const t=new THREE.CanvasTexture(tc); t.encoding=THREE.sRGBEncoding;
   const top=new THREE.Mesh(new THREE.CylinderGeometry(BOLA.R,BOLA.R,.8,48), [new THREE.MeshStandardMaterial({color:'#e5534b', roughness:.5}), new THREE.MeshStandardMaterial({map:t, roughness:.7}), new THREE.MeshStandardMaterial({color:'#e5534b'})]);
   top.position.set(c.x,BOLA.top-.4,c.z); top.receiveShadow=true; top.castShadow=true; scene.add(top);
@@ -8136,7 +8233,11 @@ TELEPORTS.push({id:'cohete', name:'Cohete', x:RK.x-Math.cos(.72)*10, z:RK.z-Math
 const islandRocket=makeRocket();
 islandRocket.g.position.set(RK.x,RK.h,RK.z); islandRocket.g.rotation.y=RK.yaw; scene.add(islandRocket.g);
 { const pad=new THREE.Mesh(new THREE.CylinderGeometry(6,6.4,.5,40),new THREE.MeshStandardMaterial({map:(()=>{ const c=document.createElement('canvas'); c.width=c.height=256; const g=c.getContext('2d'); g.fillStyle='#b8bcc6'; g.fillRect(0,0,256,256);
-    g.strokeStyle='#f6c445'; g.lineWidth=14; g.beginPath(); g.arc(128,128,90,0,7); g.stroke(); g.fillStyle='#33343b'; g.font='900 64px Nunito, sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('H',128,132); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; })(), roughness:.8}));
+    g.strokeStyle='rgba(60,62,70,.25)'; g.lineWidth=2; for(let k=0;k<=256;k+=64){ g.beginPath(); g.moveTo(k,0); g.lineTo(k,256); g.stroke(); g.beginPath(); g.moveTo(0,k); g.lineTo(256,k); g.stroke(); }   // placas de metal
+    { const R=TK.rng(806); g.fillStyle='rgba(60,62,70,.4)'; for(let x=0;x<256;x+=64) for(let y=0;y<256;y+=64) [[6,6],[58,6],[6,58],[58,58]].forEach(([a,b])=>{ g.beginPath(); g.arc(x+a,y+b,1.8,0,7); g.fill(); });
+      for(let i=0;i<14;i++){ g.fillStyle='rgba(40,40,46,.035)'; g.beginPath(); g.ellipse(128+(R()-.5)*80,128+(R()-.5)*80,20+R()*30,10+R()*20,R()*3,0,7); g.fill(); } }   // hollín de despegues
+    g.strokeStyle='#f6c445'; g.lineWidth=14; g.beginPath(); g.arc(128,128,90,0,7); g.stroke(); g.fillStyle='#33343b'; g.font='900 64px Nunito, sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('H',128,132);
+    TK.finish(c,{seed:807, amp:.05, grain:.04, fuzzDiv:24, len:1.8}); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; })(), roughness:.8}));
   pad.position.set(RK.x,RK.h-.2,RK.z); pad.receiveShadow=true; scene.add(pad);
   obstacles.push({x:RK.x,z:RK.z,r:6,top:RK.h+.05,walk:true});
   obstacles.push({x:RK.x,z:RK.z,r:2.5,top:RK.h+22,walk:false});
