@@ -62,6 +62,11 @@ body{background:var(--sky);color:var(--label-ink);font-family:var(--body);overfl
 .shop-item.on{outline-color:#6fbf5a;background:#f1fbe9;} .shop-item.on .st{color:#3f8a2f;}
 .shop-item.try{outline-color:#e5a52b;background:#fff6e0;}
 .cn{display:inline-block;width:13px;height:13px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#ffe58a,#f6c445 60%,#c58a12);border:1.5px solid #b07a12;}
+.shop-item .sw.pet-sw{display:flex;align-items:center;justify-content:center;font-size:26px;line-height:1;}
+.shop-petname{display:flex;align-items:center;gap:8px;background:#eef8ff;border-radius:12px;padding:6px 6px 6px 12px;font-weight:800;font-size:13px;margin-top:6px;}
+.shop-petname label{flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%;}
+.shop-petname input{flex:1 1 90px;min-width:0;font:800 15px var(--body);color:var(--thread);border:2px solid #cfe3f2;border-radius:10px;padding:5px 9px;background:#fff;}
+.shop-petname .btn{font-size:15px;padding:6px 14px;flex:0 0 auto;}
 .shop-buy{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff6e0;border-radius:12px;padding:8px 8px 8px 12px;font-weight:800;font-size:14px;}
 .shop-buy .btn{font-size:20px;padding:9px 18px;display:flex;gap:6px;white-space:nowrap;flex:0 0 auto;}
 .shop-buy .btn:disabled{filter:grayscale(.8);opacity:.6;cursor:default;}
@@ -515,6 +520,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <div class="shop-tabs" id="shopTabs" role="tablist"></div>
     <div class="shop-grid" id="shopGrid"></div>
     <div class="shop-buy" id="shopBuy" hidden><span id="shopBuyTxt"></span><button class="btn primary" id="shopBuyBtn">Comprar</button></div>
+    <div class="shop-petname" id="shopPetName" hidden><label for="petNameIn" id="petNameLbl">Nombre de tu mascota</label><input id="petNameIn" maxlength="16" autocomplete="off" spellcheck="false"><button class="btn primary" id="petNameBtn">Guardar</button></div>
     <div class="shop-foot"><button class="btn" id="shopBack">Volver al menú</button></div>
   </div>
 </div>
@@ -920,7 +926,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='109';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='110';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -3119,7 +3125,7 @@ function sendPresence(force){
     sd: aircraft.map(a=>[a.stairs, a.door, a.sdT]),
     id: myUid, bw: bowPresence(), ...mgPresence(), ou: outfitList(wardrobe.eq), ...arenaPresence(), ...spacePresence(),
     pl: player.pg ? [PG_KINDS.indexOf(player.pg.k), player.pg.i, r2(player.pg.v||0)] : null,
-    pu: myPush.i>=0 ? [myPush.i, myPush.t] : null, cu: cucoPresence(), pz: pierPresence(), tz: trPresence(),
+    pu: myPush.i>=0 ? [myPush.i, myPush.t] : null, cu: cucoPresence(), pz: pierPresence(), tz: trPresence(), pt: petPresence(),
     ai: player.ac && player.acPose ? (A=>[A.i, A.mode==='seated'||A.mode==='sitting'?A.seat:-1, r2(player.acPose.l[0]), r2(player.acPose.l[1]), r2(player.acPose.l[2]), r2(player.acPose.f||0), r2(player.acPose.sit||0), r2(player.acPose.walk?(player.acPose.mv||1):0), r2(player.acPose.armsUp||0), player.acPose.air?1:0])(player.ac) : null
   };
   const key=presFit(payload);
@@ -3174,7 +3180,7 @@ function makeRemote(color,name){
 }
 function removeRemote(k){
   const r=mp.remotes.get(k); if(!r) return;
-  scene.remove(r.obj, r.blob); { const rg=r.obj.userData.bowRig; if(rg){ scene.remove(rg.arrow); rg.rope.forEach(m=>scene.remove(m)); } }
+  scene.remove(r.obj, r.blob); if(r.pet){ petDispose(r.pet); r.pet=null; } { const rg=r.obj.userData.bowRig; if(rg){ scene.remove(rg.arrow); rg.rope.forEach(m=>scene.remove(m)); } }
   if(r.label.material.map) r.label.material.map.dispose(); r.label.material.dispose(); r.blob.material.dispose();
   mp.remotes.delete(k);
 }
@@ -3229,7 +3235,7 @@ function onPeers({peers}){
     // aviones y helicópteros: quién pilota, dónde quedaron, escaleras y puertas, y quién va a bordo
     { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<(PG_KINDS[pl[0]]==='bench'?BENCHES.length:PG_KINDS[pl[0]]==='cuco'?5:3) ? pl : null;
       if(pr.pu) pgCheckPush(r,pr.pu); }
-    parseCuco(r,pr,cuDrv); parsePier(r,pr); trParse(r,pr);   // Cuco: dónde está y si lo guía esta persona
+    parseCuco(r,pr,cuDrv); parsePier(r,pr); trParse(r,pr); parsePet(r,pr);   // Cuco: dónde está y si lo guía esta persona
     const ai=pr.ai;
     r.ai = Array.isArray(ai) && ai.length===10 && ai.every(Number.isFinite) && aircraft[ai[0]] && Math.abs(ai[2])<20 && Math.abs(ai[4])<20 ? ai : null;
     const ap=pr.ap;
@@ -6337,7 +6343,7 @@ function updateCoinFx(dt){
 // así todos en la sala ven tu peluche vestido igual que tú.
 const SLOT_OF={sudaderas:'top', camisas:'top', sueteres:'top', gorras:'hat', guantes:'gloves', calcetines:'socks', zapatos:'shoes', gafas:'glasses', colores:'skin', texturas:'tex'};
 const SHOP_CATS=[
-  {id:'sudaderas', name:'Sudaderas', ic:'🧥'}, {id:'camisas', name:'Camisas', ic:'👕'}, {id:'sueteres', name:'Suéteres', ic:'🧶'},
+  {id:'mascotas', name:'Mascotas', ic:'🐾'}, {id:'sudaderas', name:'Sudaderas', ic:'🧥'}, {id:'camisas', name:'Camisas', ic:'👕'}, {id:'sueteres', name:'Suéteres', ic:'🧶'},
   {id:'gorras', name:'Gorras', ic:'🧢'}, {id:'guantes', name:'Guantes', ic:'🧤'}, {id:'calcetines', name:'Calcetines', ic:'🧦'},
   {id:'zapatos', name:'Zapatos', ic:'👟'}, {id:'gafas', name:'Gafas', ic:'🕶️'}, {id:'colores', name:'Colores especiales', ic:'🌈'}, {id:'texturas', name:'Texturas', ic:'✨'}];
 // colores con sus formas en español: [clave, color, femenino, masculino, fem. plural, masc. plural]
@@ -6859,6 +6865,8 @@ function renderShop(){
   SHOP_CATS.forEach(c=>{ const b=document.createElement('button'); b.type='button'; b.className='shop-tab'+(c.id===shopCat?' on':''); b.innerHTML=`<span aria-hidden="true">${c.ic}</span>`; const t=document.createElement('span'); t.textContent=c.name; b.appendChild(t);
     b.onclick=()=>{ shopCat=c.id; renderShop(); }; tabs.appendChild(b); });
   const grid=ui('shopGrid'); grid.textContent='';
+  if(shopCat==='mascotas'){ renderPetShop(grid); return; }
+  ui('shopPetName').hidden=true; petTry=null;
   SHOP.filter(it=>it.cat===shopCat).forEach(it=>{
     const own=wardrobe.own.includes(it.id), on=wardrobe.eq[it.slot]===it.id, trying=shopTry&&shopTry.id===it.id;
     const b=document.createElement('button'); b.type='button'; b.className='shop-item'+(on?' on':'')+(trying?' try':'');
@@ -6878,7 +6886,7 @@ function shopPick(it){
   else shopTry = shopTry&&shopTry.id===it.id ? null : it;   // probártelo antes de comprar
   applyOutfit(plush, previewEq()); renderShop(); try{ sendPresence(true); }catch(e){}
 }
-ui('shopBuyBtn').onclick=()=>{ const it=shopTry; if(!it || coins<it.price || wardrobe.own.includes(it.id)) return;
+ui('shopBuyBtn').onclick=()=>{ if(shopCat==='mascotas'){ petBuy(); return; } const it=shopTry; if(!it || coins<it.price || wardrobe.own.includes(it.id)) return;
   coins-=it.price; saveCoins(); renderCoins(); wardrobe.own.push(it.id); wardrobe.eq[it.slot]=it.id; saveWardrobe(); shopTry=null;
   try{ coinSound(3); }catch(e){} applyOutfit(plush, wardrobe.eq); renderShop(); try{ sendPresence(true); }catch(e){} };
 // ---- Estudio: un cuarto blanco aparte donde giras y acercas a tu peluche ----
@@ -6898,7 +6906,7 @@ function setStudioNight(on){ stView.night=on; studio.background.set(on?'#1b1e30'
 function renderStudio(dt){
   if(stView.auto) stView.yaw+=dt*.35;
   // al acercarte la cámara mira más hacia la cara
-  const k=(stView.dist-ST_MIN)/(ST_MAX-ST_MIN), ty=1.9-k*.75, cp=Math.cos(stView.pitch);
+  const k=(stView.dist-ST_MIN)/(ST_MAX-ST_MIN), ty=1.9-k*.75-(STP.inst?.45*k:0), cp=Math.cos(stView.pitch);
   studioCam.position.set(Math.sin(stView.yaw)*cp*stView.dist, ty+Math.sin(stView.pitch)*stView.dist, Math.cos(stView.yaw)*cp*stView.dist);
   studioCam.lookAt(0,ty,0);
   // el peluche queda centrado en el espacio libre a la derecha del panel
@@ -6921,12 +6929,244 @@ function renderStudio(dt){
   ui('stReset').onclick=()=>{ stView.yaw=0; stView.pitch=.12; stView.dist=4.6; stView.auto=false; };
   ui('stNight').onclick=()=>setStudioNight(!stView.night); }
 function openShop(){ shopTry=null; batchDropUnder(plush); menuEl.hidden=true; shopEl.hidden=false; studio.add(plush); stView.auto=true; stView.dist=4.6; stView.pitch=.12; renderShop(); }
-function closeShop(){ shopTry=null; applyOutfit(plush, wardrobe.eq); shopEl.hidden=true; scene.add(plush); if(state==='menu') menuEl.hidden=false; }
+function closeShop(){ shopTry=null; petTry=null; applyOutfit(plush, wardrobe.eq); shopEl.hidden=true; scene.add(plush); if(state==='menu') menuEl.hidden=false; }
 ui('shopBtn').onclick=openShop; ui('shopBack').onclick=closeShop; ui('shopBack2').onclick=closeShop;
 addEventListener('keydown',e=>{ if(e.code==='Escape' && !shopEl.hidden){ e.preventDefault(); closeShop(); } });
 const shopOpen=()=>!shopEl.hidden;
 let shopRightPx=0, shopRightT=0;
 function shopCardRight(){ const now=performance.now(); if(now-shopRightT>500){ shopRightT=now; const c=shopEl.querySelector('.shop-card'); shopRightPx=c?c.getBoundingClientRect().right:0; } return innerWidth<600 ? 0 : shopRightPx; }
+
+// ======================================================================================
+// ---------- Mascotas: te siguen a todos lados ----------
+// ======================================================================================
+// Se compran en Personalizar → Mascotas. Cada una tiene un nombre que tú le pones y que ven todos en la sala.
+// Lo que viaja en tu presencia es solo "pt": [cuál mascota, su nombre] (unos 20 bytes). Cada quien mueve
+// las mascotas de los demás en su propio equipo siguiendo a su dueño, así no hay que mandar dónde va cada una.
+const PETS=[
+  {id:'pt_pollito', name:'Pollito', def:'Pío', price:40, ic:'🐥', bg:'#fff3a6', k:'bird', c:'#ffe14d', c2:'#ffcc33', beak:'#ff9a3c', walk:'hop', h:.62},
+  {id:'pt_rana', name:'Ranita', def:'Saltarina', price:45, ic:'🐸', bg:'#c8f2b0', k:'frog', c:'#7ed957', c2:'#e8f7c8', walk:'hop', h:.55},
+  {id:'pt_pato', name:'Patito', def:'Cuac', price:45, ic:'🦆', bg:'#e0f2ff', k:'bird', c:'#fbf6ee', c2:'#f2ead6', beak:'#ff9a3c', duck:1, walk:'waddle', h:.72},
+  {id:'pt_conejo', name:'Conejito', def:'Algodón', price:55, ic:'🐰', bg:'#ffe0ee', k:'quad', c:'#f5f1e6', c2:'#ffd0e4', ears:'bunny', tail:'puff', walk:'hop', legH:.12, h:.95},
+  {id:'pt_gato', name:'Gatito', def:'Michi', price:55, ic:'🐱', bg:'#e6e8ee', k:'quad', c:'#a3a8b0', c2:'#f5f1e6', ears:'cat', tail:'long', stripes:'#7d838c', h:.82},
+  {id:'pt_perro', name:'Perrito', def:'Firulais', price:55, ic:'🐶', bg:'#f6e2c8', k:'quad', c:'#c98b4f', c2:'#f3e2c4', ears:'dog', tail:'wag', collar:'#e5534b', h:.85},
+  {id:'pt_pinguino', name:'Pingüino', def:'Hielito', price:65, ic:'🐧', bg:'#dceeff', k:'bird', c:'#2b2b33', c2:'#f5f1e6', beak:'#ff9a3c', peng:1, walk:'waddle', h:.8},
+  {id:'pt_abeja', name:'Abejita', def:'Miel', price:65, ic:'🐝', bg:'#fff0b0', k:'bee', c:'#ffd23f', c2:'#2b2b33', fly:1.2, h:.55},
+  {id:'pt_tortuga', name:'Tortuguita', def:'Cuquito', price:70, ic:'🐢', bg:'#d6f0c8', k:'turtle', c:'#4f7a33', c2:'#e2c25e', slow:1, h:.48},
+  {id:'pt_panda', name:'Osito panda', def:'Bambú', price:80, ic:'🐼', bg:'#f2f2f2', k:'quad', c:'#f5f1e6', c2:'#f5f1e6', dark:'#2b2b33', ears:'round', tail:'puff', panda:1, legH:.17, h:.9},
+  {id:'pt_unicornio', name:'Unicornio', def:'Arcoíris', price:110, ic:'🦄', bg:'#f1e6ff', k:'quad', c:'#fbf6ff', c2:'#ffd0e4', ears:'cat', tail:'rainbow', horn:'#ffd166', mane:1, legH:.3, h:1.2},
+  {id:'pt_dragon', name:'Dragoncito', def:'Chispa', price:120, ic:'🐉', bg:'#d4f5d0', k:'quad', c:'#6fcf6a', c2:'#ffe58a', ears:'horns', tail:'spike', wings:'#4fa84a', spikes:'#ff9a3c', fly:1.1, h:1}];
+const PET_BY={}; PETS.forEach((p,i)=>{ p.i=i; PET_BY[p.id]=p; });
+const PETS_KEY='mundoPelucheMascotas';
+const pets=(()=>{ let s={own:[], eq:'', names:{}}; try{ const o=JSON.parse(localStorage.getItem(PETS_KEY)||'null'); if(o){ s.own=(o.own||[]).filter(id=>PET_BY[id]); s.eq=PET_BY[o.eq]&&s.own.includes(o.eq)?o.eq:''; for(const id of s.own) if(o.names && typeof o.names[id]==='string') s.names[id]=cleanName(o.names[id]); } }catch(e){} return s; })();
+function savePets(){ try{ localStorage.setItem(PETS_KEY, JSON.stringify(pets)); }catch(e){} }
+const petName=id=>(pets.names[id]||'').trim()||PET_BY[id].def;
+
+// ---- Modelos (todos de fieltro, unas 6-10 piezas cada uno) ----
+const PETM={}; const pm=h=>PETM[h]||(PETM[h]=felt(h,'rgba(0,0,0,.12)'));
+const petShineM=new THREE.MeshBasicMaterial({color:0xffffff});
+const petWingM=new THREE.MeshStandardMaterial({color:0xffffff, transparent:true, opacity:.6, roughness:.3, side:THREE.DoubleSide, depthWrite:false});
+const PETG={cone:new THREE.ConeGeometry(1,1,12), cyl:new THREE.CylinderGeometry(1,1,1,12), half:new THREE.SphereGeometry(1,20,10,0,Math.PI*2,0,Math.PI/2), tor:new THREE.TorusGeometry(1,.22,8,22)};
+function pp(par,geo,mat,x,y,z,sx,sy,sz,rx,ry,rz){ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.scale.set(sx,sy===undefined?sx:sy,sz===undefined?sx:sz); if(rx||ry||rz) m.rotation.set(rx||0,ry||0,rz||0); par.add(m); return m; }
+function petEyes(head,y,z,sep,r,yaw=.3){ [-1,1].forEach(s=>{ pp(head,sphereG,eyeMat,s*sep,y,z,r,r*1.2,r*.7,0,s*yaw); pp(head,sphereG,petShineM,s*sep+r*.35,y+r*.45,z+r*.5,r*.3); }); }
+function grp(par,x,y,z){ const g=new THREE.Group(); g.position.set(x,y,z); par.add(g); return g; }
+function petLeg(par,M,x,y,z,len,r){ const pv=grp(par,x,y,z); pp(pv,sphereG,M,0,-len/2,0,r,len/2+r*.4,r); pp(pv,sphereG,M,0,-len+.01,r*.35,r*1.15,r*.75,r*1.35); return pv; }
+function buildPet(spec){
+  const root=new THREE.Group(), body=grp(root,0,0,0), P={root, body, head:null, legs:[], wings:[], tail:null, ears:[], spec};
+  const M=pm(spec.c), M2=pm(spec.c2||spec.c);
+  if(spec.k==='quad'){
+    const L=spec.legH||.2, by=L+.2, bl=spec.k==='quad'&&spec.legH>=.3?.36:.3;
+    pp(body,sphereG,M,0,by,0,.25,.22,bl); pp(body,sphereG,M2,0,by-.06,.05,.18,.15,bl*.72);
+    if(spec.stripes) [-.12,0,.12].forEach(z=>pp(body,sphereG,pm(spec.stripes),0,by+.13,z,.2,.08,.05));
+    if(spec.collar) pp(body,PETG.tor,pm(spec.collar),0,by+.13,bl*.72,.15,.15,.13,Math.PI/2.4);
+    if(spec.spikes) [-.2,-.06,.08].forEach(z=>pp(body,PETG.cone,pm(spec.spikes),0,by+.24,z,.05,.11,.05));
+    if(spec.mane) ['#ff7fb0','#ffe14d','#7cc8f0','#ff7fb0','#ffe14d'].forEach((c,i)=>pp(body,sphereG,pm(c),0,by+.24+i*.04,bl*.55+i*.03,.07,.07,.06));
+    const hd=P.head=grp(body,0,by+.2+(spec.legH>=.3?.12:0),bl*.85); const hr=spec.legH>=.3?.19:.22;
+    pp(hd,sphereG,M,0,0,0,hr,hr*.95,hr);
+    const sl=spec.legH>=.3?.2:.17; pp(hd,sphereG,M2,0,-.06,sl,.11,.085,spec.legH>=.3?.13:.09);
+    pp(hd,sphereG,eyeMat,0,-.02,sl+(spec.legH>=.3?.12:.08),.035,.028,.025);   // nariz
+    petEyes(hd,.04,hr*.78,.085,.034);
+    if(spec.panda){ [-1,1].forEach(s=>pp(hd,sphereG,pm(spec.dark),s*.085,.03,hr*.72,.06,.075,.04,0,s*.3)); }
+    const D=spec.dark?pm(spec.dark):M;
+    if(spec.ears==='dog') [-1,1].forEach(s=>{ const e=grp(hd,s*.18,.08,0); pp(e,sphereG,pm('#7a4a26'),0,-.09,0,.06,.13,.09,0,0,s*.25); P.ears.push(e); });
+    if(spec.ears==='cat') [-1,1].forEach(s=>{ const e=grp(hd,s*.12,.17,0); pp(e,PETG.cone,M,0,.06,0,.07,.13,.05); pp(e,PETG.cone,pm('#ffb3c8'),0,.055,.02,.04,.08,.02); P.ears.push(e); });
+    if(spec.ears==='bunny') [-1,1].forEach(s=>{ const e=grp(hd,s*.08,.18,-.02); e.rotation.z=-s*.15; pp(e,sphereG,M,0,.17,0,.055,.19,.04); pp(e,sphereG,pm('#ffb3c8'),0,.17,.025,.03,.14,.02); P.ears.push(e); });
+    if(spec.ears==='round') [-1,1].forEach(s=>{ const e=grp(hd,s*.16,.16,0); pp(e,sphereG,D,0,0,0,.075,.075,.05); P.ears.push(e); });
+    if(spec.ears==='horns') [-1,1].forEach(s=>{ const e=grp(hd,s*.1,.17,-.04); pp(e,PETG.cone,pm('#fff3c4'),0,.06,0,.04,.12,.04,-.3); P.ears.push(e); });
+    if(spec.horn) pp(hd,PETG.cone,pm(spec.horn),0,.24,.06,.04,.2,.04,.35);
+    const legM=spec.panda?D:M;
+    [[-1,1],[1,1],[-1,-1],[1,-1]].forEach(([sx,sz])=>P.legs.push(petLeg(body,legM,sx*.13,L+.06,sz*bl*.55,L+.06,.07)));
+    const tl=P.tail=grp(body,0,by+.05,-bl*.95);
+    if(spec.tail==='wag') pp(tl,sphereG,M,0,.08,-.04,.05,.13,.05,-.5);
+    if(spec.tail==='puff') pp(tl,sphereG,pm('#ffffff'),0,0,-.02,.08);
+    if(spec.tail==='long') for(let i=0;i<5;i++) pp(tl,sphereG,i===4?M2:M,0,.03+i*.07,-.03-i*.035+i*i*.006,.045);
+    if(spec.tail==='rainbow') ['#ff7fb0','#ffe14d','#7cc8f0','#ff7fb0','#ffe14d'].forEach((c,i)=>pp(tl,sphereG,pm(c),(i-2)*.025,-.02-i*.04,-.06-i*.02,.05,.09,.05));
+    if(spec.tail==='spike'){ pp(tl,PETG.cone,M,0,0,-.12,.07,.28,.07,-Math.PI/2); pp(tl,PETG.cone,pm(spec.spikes),0,0,-.28,.06,.08,.03,-Math.PI/2); }
+    if(spec.wings) [-1,1].forEach(s=>{ const w=grp(body,s*.16,by+.15,0); pp(w,sphereG,pm(spec.wings),s*.18,0,0,.2,.025,.13,0,0,0); P.wings.push(w); });
+  } else if(spec.k==='bird'){
+    const by=.3; pp(body,sphereG,M,0,by,0,.21,.23,.24);
+    pp(body,sphereG,M2,0,by-.02,.08,.15,.18,.17);
+    const hd=P.head=grp(body,0,by+.28,.04); pp(hd,sphereG,M,0,0,0,spec.peng?.15:.16);
+    if(spec.peng) pp(hd,sphereG,M2,0,-.02,.07,.11,.1,.09);
+    if(spec.duck){ pp(hd,sphereG,pm(spec.beak),0,-.03,.15,.08,.03,.09); }
+    else pp(hd,PETG.cone,pm(spec.beak),0,-.02,.16,.04,.09,.04,Math.PI/2);
+    petEyes(hd,.04,.12,.07,.03);
+    if(!spec.peng && !spec.duck) pp(hd,sphereG,M,0,.15,-.01,.03,.06,.03,-.3);   // copetito
+    [-1,1].forEach(s=>{ const w=grp(body,s*.2,by+.06,0); pp(w,sphereG,spec.peng?M:M2,s*.03,-.04,0,.05,.15,.12,0,0,s*.25); P.wings.push(w); });
+    [-1,1].forEach(s=>{ const pv=grp(body,s*.09,.1,.02); pp(pv,sphereG,pm(spec.beak),0,-.07,.05,.06,.025,.09); pp(pv,PETG.cyl,pm(spec.beak),0,-.02,0,.015,.1,.015); P.legs.push(pv); });
+  } else if(spec.k==='frog'){
+    const by=.2; pp(body,sphereG,M,0,by,0,.27,.17,.25); pp(body,sphereG,M2,0,by-.05,.06,.22,.11,.19);
+    const hd=P.head=grp(body,0,by+.08,.12);
+    [-1,1].forEach(s=>{ pp(hd,sphereG,M,s*.1,.1,0,.075); pp(hd,sphereG,pm('#ffffff'),s*.1,.12,.035,.05); pp(hd,sphereG,eyeMat,s*.1,.125,.07,.025); });
+    pp(hd,sphereG,pm('#ff8fa8'),0,-.02,.13,.06,.012,.02);   // sonrisa
+    [[-1,1],[1,1]].forEach(([sx])=>P.legs.push(petLeg(body,M,sx*.14,.14,.14,.12,.05)));
+    [[-1,-1],[1,-1]].forEach(([sx])=>{ const pv=grp(body,sx*.2,.12,-.1); pp(pv,sphereG,M,0,0,0,.08,.08,.15); pp(pv,sphereG,M,0,-.08,.08,.08,.03,.1); P.legs.push(pv); });
+  } else if(spec.k==='bee'){
+    const by=.3; pp(body,sphereG,M,0,by,0,.17,.16,.21);
+    [-.06,.06].forEach(z=>pp(body,PETG.cyl,pm(spec.c2),0,by,z,.168,.035,.168,Math.PI/2));
+    pp(body,PETG.cone,pm(spec.c2),0,by,-.22,.04,.07,.04,-Math.PI/2);
+    const hd=P.head=grp(body,0,by+.06,.2); pp(hd,sphereG,M,0,0,0,.12); petEyes(hd,.02,.09,.05,.03);
+    [-1,1].forEach(s=>{ pp(hd,PETG.cyl,pm(spec.c2),s*.05,.13,0,.008,.12,.008,0,0,-s*.3); pp(hd,sphereG,pm(spec.c2),s*.085,.19,0,.025); });
+    [-1,1].forEach(s=>{ const w=grp(body,s*.08,by+.14,-.02); pp(w,sphereG,petWingM,s*.12,.04,0,.14,.02,.08,0,0,s*.4); P.wings.push(w); });
+  } else if(spec.k==='turtle'){
+    const by=.16; pp(body,PETG.half,M,0,by,0,.3,.22,.34); pp(body,PETG.tor,pm('#e7b43e'),0,by,0,.3,.34,.15,Math.PI/2);
+    [[0,.08],[-.12,-.05],[.12,-.05],[0,-.17]].forEach(([x,z])=>pp(body,sphereG,pm('#6b9a45'),x,by+.17,z,.08,.03,.08));
+    pp(body,sphereG,pm(spec.c2),0,by-.02,0,.27,.06,.31);
+    const hd=P.head=grp(body,0,by+.04,.34); pp(hd,sphereG,pm('#4a6a2f'),0,0,.04,.1,.09,.12);
+    [-1,1].forEach(s=>pp(hd,sphereG,pm('#d8402e'),s*.085,.0,.02,.015,.03,.04));   // orejitas rojas, como Cuco
+    petEyes(hd,.03,.12,.055,.025);
+    [[-1,1],[1,1],[-1,-1],[1,-1]].forEach(([sx,sz])=>{ const pv=grp(body,sx*.22,by,sz*.2); pp(pv,sphereG,pm('#4a6a2f'),sx*.03,-.06,0,.07,.05,.09); P.legs.push(pv); });
+    P.tail=grp(body,0,by,-.32); pp(P.tail,PETG.cone,pm('#4a6a2f'),0,0,-.03,.03,.08,.03,-Math.PI/2);
+  }
+  // todo lo que no se mueve por separado se junta: menos piezas para dibujar
+  const groups=[body,P.head,P.tail,...P.legs,...P.wings,...P.ears].filter(Boolean);
+  for(const g of groups) mergeStatic(g);
+  root.traverse(o=>{ if(o.isMesh){ o.castShadow=o.parent===body||o.parent===P.head; o.receiveShadow=false; } });   // solo cuerpo y cabeza hacen sombra (lo chiquito no se nota)
+  { const bb=new THREE.Box3().setFromObject(root), hgt=Math.max(.1,bb.max.y-Math.min(0,bb.min.y)); root.scale.setScalar(spec.h/hgt); }   // todas a su tamaño, midiendo el modelo
+  root.rotation.order='YXZ'; root.userData.noBatch=true;
+  return P;
+}
+
+// ---- Seguir al dueño ----
+// pet: {P (modelo), x,y,z, f, v, ph, hidden, label, name}
+function makePetInst(id, name){
+  const spec=PET_BY[id], P=buildPet(spec);
+  const label=new THREE.Sprite(new THREE.SpriteMaterial({transparent:true, depthWrite:false})); label.scale.set(1.15,.29,1);
+  scene.add(P.root, label);
+  const pet={id, spec, P, label, name:'', x:0, y:-999, z:0, f:0, v:0, ph:0, hidden:true, side:Math.random()<.5?-1:1, idle:0, look:0};
+  petSetName(pet, name); return pet; }
+function petSetName(pet,name){ if(pet.name===name) return; pet.name=name; const m=pet.label.material; if(m.map) m.map.dispose(); m.map=labelTexture(name); m.needsUpdate=true; }
+function petDispose(pet){ if(!pet) return; scene.remove(pet.P.root, pet.label); if(pet.label.material.map) pet.label.material.map.dispose(); pet.label.material.dispose(); pet.P.root.traverse(o=>{ if(o.isMesh && o.geometry) o.geometry.dispose(); }); }
+const _petV=new THREE.Vector3();
+function petFollow(pet, ox, oy, oz, of, vis, dt, t){
+  const R=pet.P.root, sp=pet.spec;
+  if(!vis){ R.visible=false; pet.label.visible=false; pet.hidden=true; return; }
+  // lugar junto al dueño: un poco atrás y a un lado
+  const sx=Math.sin(of), cz=Math.cos(of), tx=ox-sx*1.25+cz*pet.side*.85, tz=oz-cz*1.25-sx*pet.side*.85;
+  let dx=tx-pet.x, dz=tz-pet.z, d=Math.hypot(dx,dz);
+  if(pet.hidden || d>28 || Math.abs(oy-pet.y)>12){ pet.x=tx; pet.z=tz; pet.y=oy; pet.v=0; pet.f=of; dx=dz=d=0; pet.hidden=false; }
+  R.visible=true;
+  const want=d>.45 ? Math.min(sp.slow?5:10, (d-.3)*2.4 + (d>5?(d-5)*1.5:0)) : 0;
+  pet.v+=(want-pet.v)*Math.min(1,dt*7);
+  if(d>.01){ const st=Math.min(d,pet.v*dt); pet.x+=dx/d*st; pet.z+=dz/d*st; }
+  const mv=Math.min(1,pet.v/4);
+  // hacia dónde mira: a donde camina; si está quieto, voltea a ver a su dueño
+  const fT = pet.v>.6 ? Math.atan2(dx,dz) : Math.atan2(ox-pet.x, oz-pet.z);
+  let df=fT-pet.f; df=Math.atan2(Math.sin(df),Math.cos(df)); pet.f+=df*Math.min(1,dt*(pet.v>.6?8:3));
+  // piso: tierra, plataformas o agua (en el agua flota); los que vuelan se quedan un poco arriba
+  const hint=Math.max(pet.y,oy)+.6, g=groundAt(pet.x,pet.z,hint), ws=waterSurfaceY(pet.x,pet.z), inW=ws>g+.12;
+  let ty=inW ? ws-.06 : g; if(sp.fly) ty=Math.max(g,ws)+sp.fly+Math.sin(t*2.2+pet.side)*.12;
+  if(!sp.fly && !inW && oy>g+.3 && oy<g+3 && d<3) ty=Math.max(ty, groundAt(pet.x,pet.z,oy+.4));
+  pet.y+=(ty-pet.y)*Math.min(1,dt*(ty>pet.y?14:10));
+  pet.ph+=dt*(4+pet.v*2.2);
+  // animación
+  const P=pet.P; let hop=0, roll=0;
+  if(sp.walk==='hop' && !inW && !sp.fly){ hop=pet.v>.6 ? Math.abs(Math.sin(pet.ph*.8))*.32*Math.min(1,pet.v/2) : 0; P.legs.forEach((l,i)=>l.rotation.x=hop>.05?(i<2?-.6:.7):0); }
+  else if(sp.walk==='waddle'){ roll=Math.sin(pet.ph)*.22*mv; P.legs.forEach((l,i)=>l.rotation.x=Math.sin(pet.ph+(i?Math.PI:0))*.6*mv); }
+  else P.legs.forEach((l,i)=>l.rotation.x=Math.sin(pet.ph+((i===0||i===3)?0:Math.PI))*.65*mv*(inW?0:1) + (inW?Math.sin(t*6+i)*.4:0));
+  if(P.wings.length){ const fast=sp.k==='bee', fl=sp.fly ? Math.sin(t*(fast?40:9))*(fast?.6:.55) : (sp.k==='bird' ? Math.sin(t*14)*.35*(hop>.05||inW?1:mv*.4) : 0);
+    P.wings.forEach((w,i)=>w.rotation.z=(i?-1:1)*fl); }
+  if(P.tail) P.tail.rotation.y = sp.tail==='wag' ? Math.sin(t*(pet.v>.6?14:8))*.6 : Math.sin(t*2.5)*.25;
+  P.ears.forEach((e,i)=>e.rotation.x=Math.sin(t*3+i)*.08 + (hop>.05?-.3:0));
+  if(P.head){ const lk=pet.v<.6 ? Math.sin(t*.7+pet.side)*.25 : 0; P.head.rotation.y=lk; P.head.rotation.x=Math.sin(t*1.7)*.04; }
+  P.body.position.y=hop + (pet.v<.3?Math.sin(t*2.4)*.012:0);
+  R.position.set(pet.x, pet.y + (inW&&!sp.fly ? Math.sin(t*2+pet.side)*.03 : 0), pet.z);
+  R.rotation.set(sp.fly ? -.1*mv : 0, pet.f, roll);
+  // nombre arriba de la mascota (lejos ya no se dibuja)
+  const cd=camera.position.distanceTo(R.position);
+  pet.label.visible=cd<45; if(pet.label.visible) pet.label.position.set(pet.x, pet.y+sp.h+.38+hop+(sp.fly?.1:0), pet.z);
+  R.visible = cd<camera.far;
+}
+
+// mi mascota
+const myPet={inst:null, key:''};
+function petsUpdate(dt,t){
+  const id=pets.eq, key=id?id+'|'+petName(id):'';
+  if(key!==myPet.key){ if(myPet.inst && (!id || myPet.inst.id!==id)){ petDispose(myPet.inst); myPet.inst=null; }
+    if(id && !myPet.inst) myPet.inst=makePetInst(id, petName(id)); if(myPet.inst) petSetName(myPet.inst, petName(id)); myPet.key=key; }
+  if(myPet.inst){ const vis=!(player.car || player.ac || (typeof SP!=='undefined' && SP.on) || player.rk);
+    petFollow(myPet.inst, player.pos.x, player.pos.y, player.pos.z, player.facing, vis, dt, t); }
+  for(const r of mp.remotes.values()) if(r.pet){
+    const vis=r.obj.visible && r.obj.parent===scene && !r.car && !r.ai && !r.sp && !r.rk && !r.carAnim;
+    petFollow(r.pet, r.pos.x, r.pos.y, r.pos.z, r.obj.rotation.y, vis, dt, t); }
+  petStudio(dt,t);
+}
+// en la presencia: cuál y cómo se llama
+function petPresence(){ return pets.eq ? [PET_BY[pets.eq].i, petName(pets.eq)] : null; }
+function parsePet(r,pr){ const a=pr.pt; let id='', nm='';
+  if(Array.isArray(a) && a.length===2 && Number.isInteger(a[0]) && PETS[a[0]]){ id=PETS[a[0]].id; nm=cleanName(a[1])||PETS[a[0]].def; }
+  if(r.pet && r.pet.id!==id){ petDispose(r.pet); r.pet=null; }
+  if(id && !r.pet){ r.pet=makePetInst(id,nm); }
+  if(r.pet) petSetName(r.pet,nm); }
+
+// ---- En el estudio de Personalizar: tu mascota (o la que estás viendo) junto a tu peluche ----
+const STP={inst:null, id:''};
+let petTry=null;
+function petStudio(dt,t){
+  const want=shopOpen() ? (petTry ? petTry.id : pets.eq) : '';
+  if(want!==STP.id){ if(STP.inst){ studio.remove(STP.inst.root); STP.inst.root.traverse(o=>{ if(o.isMesh) o.geometry.dispose(); }); STP.inst=null; }
+    STP.id=want; if(want){ STP.inst=buildPet(PET_BY[want]); studio.add(STP.inst.root); } }
+  const P=STP.inst; if(!P) return;
+  const sp=P.spec, k=sp.k;
+  // siempre al lado del peluche, un poco adelante (como lo ve la cámara) y mirando hacia ella
+  const yw=stView.yaw, lx=-.85, fz=.35; P.root.position.set(Math.cos(yw)*lx+Math.sin(yw)*fz, .12+(sp.fly?.75+Math.sin(t*2.2)*.08:0), -Math.sin(yw)*lx+Math.cos(yw)*fz);
+  P.root.rotation.y=yw+.35+Math.sin(t*.6)*.12;
+  if(P.tail) P.tail.rotation.y=Math.sin(t*(sp.tail==='wag'?10:2.5))*(sp.tail==='wag'?.6:.25);
+  if(P.wings.length){ const fl=sp.fly?Math.sin(t*(k==='bee'?40:9))*(k==='bee'?.6:.55):Math.sin(t*3)*.15; P.wings.forEach((w,i)=>w.rotation.z=(i?-1:1)*fl); }
+  if(P.head) P.head.rotation.y=Math.sin(t*.8)*.3;
+  P.body.position.y=(sp.walk==='hop' ? Math.max(0,Math.sin(t*2.2))*.12 : Math.sin(t*2.4)*.012);
+  P.ears.forEach((e,i)=>e.rotation.x=Math.sin(t*3+i)*.1);
+}
+
+// ---- Pestaña de Mascotas en la tienda ----
+function renderPetShop(grid){
+  PETS.forEach(p=>{
+    const own=pets.own.includes(p.id), on=pets.eq===p.id, trying=petTry&&petTry.id===p.id;
+    const b=document.createElement('button'); b.type='button'; b.className='shop-item pet'+(on?' on':'')+(trying?' try':'');
+    const sw=document.createElement('span'); sw.className='sw pet-sw'; sw.style.background=p.bg; sw.textContent=p.ic;
+    const nm=document.createElement('span'); nm.className='nm'; nm.textContent=own ? petName(p.id) : p.name;
+    const st=document.createElement('span'); st.className='st'; st.innerHTML = on ? 'Contigo ✓' : own ? 'Tuya · llevar' : `<i class="cn"></i>${p.price}`;
+    b.append(sw,nm,st); b.onclick=()=>petPick(p); grid.appendChild(b); });
+  const bar=ui('shopBuy'), p=petTry;
+  if(p && !pets.own.includes(p.id)){ bar.hidden=false; const can=coins>=p.price;
+    ui('shopBuyTxt').textContent = can ? `${p.name}${p.fly?' · vuela':''}` : `Te faltan ${p.price-coins} monedas: gánalas en la feria`;
+    const bb=ui('shopBuyBtn'); bb.disabled=!can; bb.innerHTML=`Adoptar · <i class="cn"></i>${p.price}`; }
+  else bar.hidden=true;
+  // cambiar el nombre de la mascota que traes
+  const row=ui('shopPetName'), id=pets.eq;
+  if(id && !petTry){ row.hidden=false; ui('petNameLbl').textContent='Su nombre:'; const inp=ui('petNameIn'); if(document.activeElement!==inp) inp.value=petName(id); inp.placeholder=PET_BY[id].def; }
+  else row.hidden=true;
+}
+function petPick(p){
+  if(pets.own.includes(p.id)){ petTry=null; pets.eq = pets.eq===p.id ? '' : p.id; savePets(); try{ audio.cam(); }catch(e){} }
+  else petTry = petTry&&petTry.id===p.id ? null : p;   // verla antes de adoptarla
+  renderShop(); try{ sendPresence(true); }catch(e){} }
+function petBuy(){ const p=petTry; if(!p || coins<p.price || pets.own.includes(p.id)) return;
+  coins-=p.price; saveCoins(); renderCoins(); pets.own.push(p.id); pets.eq=p.id; savePets(); petTry=null;
+  try{ coinSound(3); }catch(e){} flashNote(`¡${p.name} ahora es tuyo! Ponle un nombre abajo`); renderShop(); try{ sendPresence(true); }catch(e){} }
+function petRename(){ const id=pets.eq; if(!id) return; const v=cleanName(ui('petNameIn').value); pets.names[id]=v; savePets(); ui('petNameIn').value=petName(id); ui('petNameIn').blur();
+  flashNote(`Ahora se llama ${petName(id)}`); renderShop(); try{ sendPresence(true); }catch(e){} }
+ui('petNameBtn').onclick=petRename;
+ui('petNameIn').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ e.preventDefault(); petRename(); } });
 
 // ======================================================================================
 // ---------- La feria ----------
@@ -10315,6 +10555,7 @@ function frame(){
   if(state!=='pause') update(dt,t);
   updateSky(dt);
   updateRemotes(dt,t);
+  petsUpdate(dt,t);
   updateSpaceRemotes(dt,t);
   updateOutfitGlow();
   if(state==='play') sendPresence(false);
