@@ -654,8 +654,8 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
         <div class="seg" id="optQuality"><button data-v="min">Mínima</button><button data-v="low">Baja</button><button data-v="mid">Media</button><button data-v="high">Alta</button><button data-v="max">Máxima</button></div></div>
       <div class="opt"><label for="optUltra">Modo ultra ligero<small>Para teléfonos lentos: más sencillo y sin adornos que se mueven de fondo. Al cambiarlo el juego se vuelve a abrir.</small></label><button class="switch" id="optUltra" role="switch" aria-checked="false" aria-label="Modo ultra ligero"></button></div>
       <div class="opt"><label for="optAutoRes">Resolución automática<small>Baja un poco la nitidez si hace falta para ir fluido</small></label><button class="switch" id="optAutoRes" role="switch" aria-checked="true" aria-label="Resolución automática"></button></div>
-      <div class="opt"><label>Límite de FPS<small>30 da un ritmo parejo en equipos lentos</small></label>
-        <div class="seg" id="optFpsCap"><button data-v="free">Libre</button><button data-v="30">30</button></div></div>
+      <div class="opt opt-col"><label>Límite de FPS<small>Libre = al ritmo de tu pantalla · 30 da un ritmo parejo en equipos lentos · 60 ahorra batería en pantallas rápidas</small></label>
+        <div class="seg" id="optFpsCap"><button data-v="30">30</button><button data-v="60">60</button><button data-v="90">90</button><button data-v="120">120</button><button data-v="free">Libre</button></div></div>
       <div class="opt"><label for="optShadows">Sombras</label><button class="switch" id="optShadows" role="switch" aria-checked="true" aria-label="Sombras"></button></div>
       <div class="opt"><label for="optWeather">Clima<small>Lluvia, nieve, tormentas y niebla de vez en cuando</small></label><button class="switch" id="optWeather" role="switch" aria-checked="true" aria-label="Clima"></button></div>
       <div class="opt"><label for="optDraw">Distancia de visión</label><div class="ctrl"><input type="range" id="optDraw" min="30" max="300" step="10"><output id="optDrawOut"></output></div></div>
@@ -926,7 +926,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 (() => {
-const GAME_VERSION='110';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='111';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -10436,6 +10436,7 @@ function update(dt,t){ myLabelUpdate();
 }
 
 let fpsFrames=0, fpsTime=0, fpsLogic=0, fpsDraw=0, fpsCalls=0, fpsTris=0; const fpsEl=ui('fps');
+const FPS_CAPS={'30':30,'60':60,'90':90,'120':120};   // límite de cuadros por segundo (Libre = al ritmo de la pantalla)
 let capLast=0, resWin=[], resLast=0, resGood=0;
 function autoResolution(raw){
   if(!settings.autoRes) return;
@@ -10549,7 +10550,7 @@ function fxRender(S,cam){
 renderer.info.autoReset=false;   // cuenta todos los dibujos del cuadro (en Máxima son varios pasos)
 function frame(){
   requestAnimationFrame(frame);
-  if(settings.fpsCap==='30'){ const n=performance.now(); if(n-capLast<29) return; capLast=n-Math.min(10,Math.max(0,n-capLast-33.3)); }   // ritmo parejo de 30 (por tiempo: si el equipo no llega a 60, ya no baja a 15)
+  { const cap=FPS_CAPS[settings.fpsCap]; if(cap){ const n=performance.now(), iv=1000/cap, tol=Math.min(4,iv*.25); if(n<capLast-tol) return; capLast=Math.max(capLast+iv, n-tol); } }   // ritmo parejo: lleva la cuenta de cuándo toca el siguiente cuadro (así 90 en una pantalla de 120 da 90 exactos)   // ritmo parejo de 30 (por tiempo: si el equipo no llega a 60, ya no baja a 15)
   const raw=clock.getDelta(), dt=Math.min(raw,.05), t=clock.elapsedTime;
   const pf=settings.fps, p0=pf?performance.now():0;
   if(state!=='pause') update(dt,t);
