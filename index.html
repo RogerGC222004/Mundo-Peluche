@@ -161,6 +161,7 @@ body.not-play .mg-hud, body.not-play .mg-ctl, body.not-play .mg-result{display:n
 .fish-row{display:flex;align-items:center;gap:10px;background:#fff;border-radius:12px;padding:6px 10px;box-shadow:0 3px 0 #c9dcea;}
 .fish-row canvas{width:66px;height:44px;flex:none;} .fish-tx{flex:1;display:flex;flex-direction:column;min-width:0;} .fish-tx b{font-family:var(--display);font-size:16px;color:#23415a;} .fish-tx small{font-size:12px;font-weight:700;opacity:.75;}
 .sbtn{font-family:var(--display);font-weight:800;font-size:14px;border:none;border-radius:10px;padding:7px 11px;background:#ffd36b;color:#5a4426;box-shadow:0 3px 0 #c9a24a;cursor:pointer;} .sbtn:disabled{opacity:.5;cursor:default;}
+.farm-ic{font-size:30px;line-height:1;width:44px;text-align:center;flex:none;}
 .fish-all{align-self:flex-start;font-size:20px;padding:10px 22px;}
 .fish-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px;}
 .fish-it{background:#fff;border-radius:12px;padding:6px 4px 7px;display:flex;flex-direction:column;align-items:center;text-align:center;box-shadow:0 3px 0 #c9dcea;}
@@ -842,7 +843,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
   const TIPS=['Adopta una mascota en Personalizar → Mascotas y ponle nombre.','En la feria ganas monedas para comprar ropa y mascotas.','Pesca en el muelle y véndele tus peces a Tortu.',
     'Súbete a Cuco, la tortuga gigante: caben hasta 5 peluches.','Crea una sala en Multijugador y comparte el código con tus amigos.','Si tu teléfono va lento, prueba el Modo ultra ligero en Opciones.',
     'De noche las luces de la feria se ven preciosas.','En el trampolín puedes rebotar tan alto que pasas por encima de la red.','Con el cohete puedes visitar planetas… ¡y darles una mordida!',
-    'En Personalizar puedes probarte la ropa antes de comprarla.'];
+    'En Personalizar puedes probarte la ropa antes de comprarla.','Dispárale con el arco a las dianas rojas y blancas para subir a las islas flotantes.','En la Isla Granja, Fresita te vende semillas: siembra, riega y cosecha.','Junto al lago hay 6 globos aerostáticos para volar a las islas.'];
   let tipI=Math.floor(Math.random()*TIPS.length); const tip=()=>{ $('ldTip').textContent='Consejo: '+TIPS[tipI++%TIPS.length]; }; tip(); const tipT=setInterval(tip,4200);
   const L=window.__LD={done:false, failed:false,
     step(txt,frac){ if(L.failed) return; const f=$('ldFill'); f.classList.add('js'); f.style.transform='scaleX('+Math.max(.04,Math.min(1,frac))+')'; if(txt) $('ldStep').textContent=txt; },
@@ -993,7 +994,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='112';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='113';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -2162,7 +2163,7 @@ function updateBubbles(dt, emitter){
 }
 
 // Altura del suelo donde está el jugador: terreno, o la cima de una roca/botón/cofre si está encima
-var PIER_GROUND=null, TRAMP_GROUND=null;   // el muelle y la casita de Tortu (se define más abajo)
+var PIER_GROUND=null, TRAMP_GROUND=null, FI_GROUND=null;   // el muelle y la casita de Tortu (se define más abajo)
 function groundAt(x,z,y){
   let g=terrainH(x,z);
   // sobre el asfalto de la pista o del estacionamiento
@@ -2174,6 +2175,7 @@ function groundAt(x,z,y){
   { const ar=arenaGround(x,z,y); if(ar!==null && ar>g) g=ar; }
   if(PIER_GROUND){ const pg=PIER_GROUND(x,z,y); if(pg!==null && pg>g) g=pg; }
   if(TRAMP_GROUND){ const tg=TRAMP_GROUND(x,z,y); if(tg!==null && tg>g) g=tg; }
+  if(FI_GROUND){ const fg=FI_GROUND(x,z,y); if(fg!==null && fg>g) g=fg; }   // islas flotantes
   for(const o of obsNear(x,z)){
     if(!o.walk) continue;
     const dx=x-o.x, dz=z-o.z;
@@ -2877,7 +2879,7 @@ ui('playBtn').onclick=startGame;
 ui('controlsBtn').onclick=()=>{controlsEl.hidden=false;};
 ui('closeControls').onclick=()=>{controlsEl.hidden=true;};
 ui('resumeBtn').onclick=()=>{show('play'); lockPointer();};
-ui('toMenuBtn').onclick=()=>{ if(SP.on) exitSpace(true); player.rk=null; leaveRoom(); show('menu'); player.pg=null; player.pos.set(START.x,START.top,START.z); player.vy=0; player.vel.set(0,0,0); player.dive=null; player.diveAngle=0; player.grounded=true; player.inWater=false; player.groundY=0; player.swim=false; player.car=null; if(player.ac){ player.ac=null; forceFirst(false); } updateTouchMode(); };
+ui('toMenuBtn').onclick=()=>{ if(player.balloon) blExit(true); if(SP.on) exitSpace(true); player.rk=null; leaveRoom(); show('menu'); player.pg=null; player.pos.set(START.x,START.top,START.z); player.vy=0; player.vel.set(0,0,0); player.dive=null; player.diveAngle=0; player.grounded=true; player.inWater=false; player.groundY=0; player.swim=false; player.car=null; if(player.ac){ player.ac=null; forceFirst(false); } updateTouchMode(); };
 // Botones que responden al instante al tocarlos, aunque otro dedo esté en el joystick
 // (con varios dedos el navegador a veces no manda "click", así que se usa el toque directo)
 let swallowClick=0;   // tras un toque, el "click" que manda el navegador al soltar no debe caer en lo que se abrió encima
@@ -3174,7 +3176,7 @@ function roomEnded(){ leaveRoom(); flashNote('Se perdió la conexión con la sal
 function sendPresence(force){
   if(!mp.room) return;
   const now=performance.now();
-  if(!force && now-mp.lastSent<(iDrive()||iPilot()||player.mg||AR.me.a>=0||(SP.on&&SP.mode==='fly')?66:100)) return;
+  if(!force && now-mp.lastSent<(iDrive()||iPilot()||player.balloon||player.mg||AR.me.a>=0||(SP.on&&SP.mode==='fly')?66:100)) return;
   const playing=state==='play';
   const payload={
     n: cleanName(profile.name)||'Peluche', c: profile.color,
@@ -3192,7 +3194,7 @@ function sendPresence(force){
     sd: aircraft.map(a=>[a.stairs, a.door, a.sdT]),
     id: myUid, bw: bowPresence(), ...mgPresence(), ou: outfitList(wardrobe.eq), ...arenaPresence(), ...spacePresence(),
     pl: player.pg ? [PG_KINDS.indexOf(player.pg.k), player.pg.i, r2(player.pg.v||0)] : null,
-    pu: myPush.i>=0 ? [myPush.i, myPush.t] : null, cu: cucoPresence(), pz: pierPresence(), tz: trPresence(), pt: petPresence(),
+    pu: myPush.i>=0 ? [myPush.i, myPush.t] : null, cu: cucoPresence(), pz: pierPresence(), tz: trPresence(), pt: petPresence(), bl: blPresence(), bs: blStates(),
     ai: player.ac && player.acPose ? (A=>[A.i, A.mode==='seated'||A.mode==='sitting'?A.seat:-1, r2(player.acPose.l[0]), r2(player.acPose.l[1]), r2(player.acPose.l[2]), r2(player.acPose.f||0), r2(player.acPose.sit||0), r2(player.acPose.walk?(player.acPose.mv||1):0), r2(player.acPose.armsUp||0), player.acPose.air?1:0])(player.ac) : null
   };
   const key=presFit(payload);
@@ -3253,7 +3255,7 @@ function removeRemote(k){
 }
 const clampN=(v,a,b,d)=>Number.isFinite(v)?Math.min(b,Math.max(a,v)):d;
 function onPeers({peers}){
-  const seen=new Set(), drivenNow=new Set(), flownNow=new Set(), cuDrv={v:false}, curPeers=new Set(peers.map(p=>p.peer));
+  const seen=new Set(), drivenNow=new Set(), flownNow=new Set(), cuDrv={v:false}, curPeers=new Set(peers.map(p=>p.peer)), blSeen=new Set();
   for(const p of peers){
     if(p.sameTab || p.kind==='agent') continue;
     const pr=p.presence||{}, pos=pr.p;
@@ -3302,7 +3304,7 @@ function onPeers({peers}){
     // aviones y helicópteros: quién pilota, dónde quedaron, escaleras y puertas, y quién va a bordo
     { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<(PG_KINDS[pl[0]]==='bench'?BENCHES.length:PG_KINDS[pl[0]]==='cuco'?5:3) ? pl : null;
       if(pr.pu) pgCheckPush(r,pr.pu); }
-    parseCuco(r,pr,cuDrv); parsePier(r,pr); trParse(r,pr); parsePet(r,pr);   // Cuco: dónde está y si lo guía esta persona
+    parseCuco(r,pr,cuDrv); parsePier(r,pr); trParse(r,pr); parsePet(r,pr); blParse(r,pr,p.peer,blSeen);   // Cuco: dónde está y si lo guía esta persona
     const ai=pr.ai;
     r.ai = Array.isArray(ai) && ai.length===10 && ai.every(Number.isFinite) && aircraft[ai[0]] && Math.abs(ai[2])<20 && Math.abs(ai[4])<20 ? ai : null;
     const ap=pr.ap;
@@ -3325,6 +3327,7 @@ function onPeers({peers}){
     });
   }
   if(!cuDrv.v) CU.drv=null;
+  BL.forEach(b=>{ if(b.remote && !blSeen.has(b.i)){ b.remote=null; b.net=null; b.t=now1(); } });   // globos que ya nadie maneja
   cars.forEach(c=>{ if(!drivenNow.has(c.i) && c.remote){ c.remote=null; c.t=now1(); } });
   aircraft.forEach(a=>{ if(!flownNow.has(a.i) && a.remote){ a.remote=null; a.sim=true; } });
   const nowG=performance.now();
@@ -3340,6 +3343,7 @@ function updateRemotes(dt,t){
     if(r.ai && updateRemoteInAir(r,dt,t)) continue;
     if(r.pl && updateRemoteInPlay(r,dt,t)) continue;
     if(r.wasAir){ r.wasAir=false; r.al=null; }
+    if(r.bl) blRemote(r);   // va en su globo
     if(r.carAnim && updateRemoteInCar(r,dt,t)) continue;
     r.pos.lerp(r.target,k);
     let d=r.facing-r.obj.rotation.y; d=Math.atan2(Math.sin(d),Math.cos(d)); r.obj.rotation.y+=d*k;
@@ -3784,6 +3788,7 @@ ui('mapZoomOut').onclick=()=>zoomAt(MAP_PX/2,MAP_PX/2,1/1.6);
 ui('mapCenter').onclick=centerOnMe;
 if(!isTouch) ui('mapTip').textContent='Arrastra para mover · rueda para acercar';
 function teleportTo(p){
+  if(player.balloon) blExit(true);
   if(typeof SP!=='undefined' && SP.on) exitSpace(true);
   if(player.rk){ player.rk=null; plush.visible=true; islandRocket.door.rotation.y=0; }
   if(player.ac){ player.ac=null; forceFirst(false); updateTouchMode(); }
@@ -4129,11 +4134,13 @@ function scanActions(){
   { const [x,y]=airActions(); if(x||y||player.ac){ setActions(x,y); return; } }
   if(SP.on){ const sa=spaceActions(); setActions(sa?sa[0]:null, sa?sa[1]:null); return; }
   { const ra=rocketActions(); if(ra){ setActions(ra[0],ra[1]); return; } }
+  { const la=blActions(); if(la){ setActions(la[0],la[1]); return; } }
   { const aa=arenaActions(); if(aa){ setActions(aa[0],aa[1]); return; } }
   if(heldItem()==='flag' && !player.car && !player.ac && !player.pg && !player.mg){ setActions({label:'Plantar bandera', run:plantFlag}, null); return; }
   { const ma=mgActions(); if(ma){ setActions(ma[0],ma[1]); return; } }
   { const pa=pierActions(); if(pa){ setActions(pa[0],pa[1]); return; } }
   { const ta=trActions(); if(ta){ setActions(ta[0],ta[1]); return; } }
+  { const fa=fiActions(); if(fa){ setActions(fa[0],fa[1]); return; } }
   { const [x,y]=pgActions(); if(x||y||player.pg){ setActions(x,y); return; } }
   { const ba=bowActions(); if(ba){ setActions(ba[0],ba[1]); return; } }
   if(player.car){
@@ -5894,7 +5901,7 @@ function fishRow(id,count,btns){ const row=document.createElement('div'); row.cl
   const tx=document.createElement('div'); tx.className='fish-tx'; const b=document.createElement('b'); b.textContent=f.n+(count>1?` ×${count}`:''); const s=document.createElement('small'); s.textContent=`${FISH_SIZE_N[f.s]} · ${FISH_RAR_N[f.r]} · ${f.p} monedas`; tx.append(b,s); row.appendChild(tx);
   btns.forEach(([lab,fn,dis])=>{ const bt=document.createElement('button'); bt.className='sbtn'; bt.textContent=lab; bt.disabled=!!dis; bt.onclick=fn; row.appendChild(bt); });
   return row; }
-function renderFishOv(){ const body=ui('fishBody'), say=ui('fishSay'), tabs=ui('fishTabs'); body.textContent='';
+function renderFishOv(){ if(fishMode==='farm'){ renderFarmOv(); return; } const body=ui('fishBody'), say=ui('fishSay'), tabs=ui('fishTabs'); body.textContent='';
   if(fishMode==='bucket'){ const b=fishB; ui('fishTitle').textContent=`Tu balde (${bucketUsed(b)}/${BUCKET_CAP})`; tabs.hidden=true;
     say.textContent=b.items.length?'Toma un pez para llevarlo en la mano (por ejemplo, para dárselo a Cuco).':'Está vacío. Pesca en las cañas del muelle: los peces caen aquí.';
     const cnt=new Map(); b.items.forEach(id=>cnt.set(id,(cnt.get(id)||0)+1));
@@ -6063,6 +6070,7 @@ function hitAt(p,ignoreSelf){
   for(const a of aircraft){ if(Math.abs(p.x-a.x)>16 || Math.abs(p.z-a.z)>16) continue; const [lx,lz]=airWorldToLocalFlat(a,p.x,p.z);
     const boxes=a.T.kind==='plane' ? [[0,PL.R+.2,(PL.len[0]+PL.len[1])/2,(PL.len[1]-PL.len[0])/2, a.y+PL.FY+PL.R],[5,4.5,.4,1.6,a.y+PL.FY+.3],[-5,4.5,.4,1.6,a.y+PL.FY+.3]] : [[0,1.5,0,2.4,a.y+3.4]];
     for(const [cx,hx,cz,hz,top] of boxes) if(Math.abs(lx-cx)<hx && Math.abs(lz-cz)<hz && p.y<top && p.y>a.y-.2) return {kind:'air', ref:a}; }
+  { const fh=fiHit(p); if(fh) return fh; }   // dianas e islas flotantes
   for(const o of obsNear(p.x,p.z)){ const dx=p.x-o.x, dz=p.z-o.z; if(dx*dx+dz*dz<o.r*o.r && p.y<o.top && p.y>(o.bot??-99) && p.y>g-.5) return {kind:'solid'}; }
   if(p.y<=g) return {kind:'ground'};
   const lvl=waterLevelAt(p.x,p.z); if(p.y<lvl && terrainH(p.x,p.z)<lvl) return {kind:'water'};
@@ -6127,7 +6135,8 @@ function updateMyBow(dt){
     if(hook.reachK<1) return true;
     bw_hp.copy(hook.pos); if(hook.kind==='peluche') bw_hp.y=hook.ref.pos.y;
     const body=bw_dv.copy(player.pos);           // los pies llegan al punto (a un peluche: a su lado)
-    const to=bw_hp.clone().sub(body); const d=to.length(), stop=hook.kind==='peluche'?1.1:.35;
+    const to=bw_hp.clone().sub(body); const d=to.length(), stop=hook.kind==='peluche'?1.1:hook.kind==='target'?1.2:.35;
+    if(d<stop && hook.kind==='target'){ const T=hook.ref; bowRelease(true); fiArrive(T); return false; }   // diana: te deja arriba de la isla
     if(d<stop){ player.vel.set(0,0,0); player.vy=hook.kind==='ground'?0:1.5; player.grounded=false; bowRelease(true); audio.land(.6); return false; }
     const sp=Math.min(BOW.goSpeed, d*6); to.multiplyScalar(sp/d);
     player.pos.addScaledVector(to,dt); player.vel.set(to.x*.25,0,to.z*.25); player.vy=0;
@@ -6154,7 +6163,7 @@ function bowActions(){
   if(!bowHeld()) return null;
   if(hook.mode===0) return [{label:'Disparar', run:bowShoot}, null];
   if(hook.mode===1) return [{label:'Disparar', disabled:true, run:()=>{}}, null];
-  if(hook.mode===2) return [{label:'Ir hacia allá', run:bowGo}, {label:'Jalar', run:bowPull}];
+  if(hook.mode===2) return hook.kind==='target' ? [{label:'Subir a la isla', run:bowGo}, {label:'Soltar', run:()=>bowRelease()}] : [{label:'Ir hacia allá', run:bowGo}, {label:'Jalar', run:bowPull}];
   return [{label:'Soltar', run:()=>bowRelease()}, null];
 }
 // Dibujo de mi arco y de los arcos de los demás
@@ -7170,10 +7179,10 @@ function petsUpdate(dt,t){
   const id=pets.eq, key=id?id+'|'+petName(id):'';
   if(key!==myPet.key){ if(myPet.inst && (!id || myPet.inst.id!==id)){ petDispose(myPet.inst); myPet.inst=null; }
     if(id && !myPet.inst) myPet.inst=makePetInst(id, petName(id)); if(myPet.inst) petSetName(myPet.inst, petName(id)); myPet.key=key; }
-  if(myPet.inst){ const vis=!(player.car || player.ac || (typeof SP!=='undefined' && SP.on) || player.rk);
+  if(myPet.inst){ const vis=!(player.car || player.ac || player.balloon || (typeof SP!=='undefined' && SP.on) || player.rk);
     petFollow(myPet.inst, player.pos.x, player.pos.y, player.pos.z, player.facing, vis, dt, t); }
   for(const r of mp.remotes.values()) if(r.pet){
-    const vis=r.obj.visible && r.obj.parent===scene && !r.car && !r.ai && !r.sp && !r.rk && !r.carAnim;
+    const vis=r.obj.visible && r.obj.parent===scene && !r.car && !r.ai && !r.sp && !r.rk && !r.carAnim && !r.bl;
     petFollow(r.pet, r.pos.x, r.pos.y, r.pos.z, r.obj.rotation.y, vis, dt, t); }
   petStudio(dt,t);
 }
@@ -7234,6 +7243,389 @@ function petRename(){ const id=pets.eq; if(!id) return; const v=cleanName(ui('pe
   flashNote(`Ahora se llama ${petName(id)}`); renderShop(); try{ sendPresence(true); }catch(e){} }
 ui('petNameBtn').onclick=petRename;
 ui('petNameIn').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ e.preventDefault(); petRename(); } });
+
+// ======================================================================================
+// ---------- Islas flotantes ----------
+// ======================================================================================
+// Seis islas en el cielo, unas sobre la isla y otras sobre el mar. Se sube con el arco (las dianas rojas y blancas
+// que cuelgan de la orilla) o en globo. Cada una tiene su tema; en la Isla Granja está el huerto de Fresita.
+const FI=[
+  {id:'jardin', name:'Isla Jardín', x:55, z:-45, y:24, R:12.5, falls:[[.9,'lake']], tg:[2.6,4.6]},
+  {id:'granja', name:'Isla Granja', x:170, z:170, y:22, R:15, falls:[[3.9,12]], tg:[.8,2.4,5.4]},
+  {id:'arbol', name:'Isla del Gran Árbol', x:-260, z:60, y:30, R:13, falls:[[5.2,14],[1.9,10]], tg:[.3,3.4]},
+  {id:'hongos', name:'Isla de los Hongos', x:440, z:-330, y:20, R:12, falls:[[2.4,'sea']], tg:[3.9,5.6]},
+  {id:'nubes', name:'Isla de las Nubes', x:-650, z:-60, y:34, R:14, falls:[[.3,16]], tg:[1.8,4.2]},
+  {id:'tesoro', name:'Isla del Tesoro', x:560, z:420, y:44, R:11, falls:[[4,'sea']], tg:[2.2,5.3]}];
+FI.forEach(I=>{ I.D=I.R*1.25; I.top=(x,z)=>{ const d=Math.hypot(x-I.x,z-I.z)/I.R; return I.y+.35*(1-d*d); }; });
+const fiRadAt=(I,y)=>{ if(y>I.y+.5 || y<I.y-I.D) return -1; const k=Math.min(1,Math.max(0,(I.y-y)/I.D)); return I.R*Math.pow(1-k,.75); };
+FI_GROUND=function(x,z,y){ for(const I of FI){ const dx=x-I.x, dz=z-I.z; if(dx*dx+dz*dz>I.R*I.R*.96) continue; const t=I.top(x,z); return y>=t-1.2 ? t : null; } return null; };
+const fiMat={grass:felt('#7fc456','rgba(30,70,10,.16)'), lip:felt('#69ad46','rgba(20,50,10,.2)'), root:felt('#8a5a34','rgba(40,20,5,.2)'),
+  rock:(()=>{ const m=felt('#ffffff','rgba(60,35,15,.18)'); m.vertexColors=true; return m; })(), pool:new THREE.MeshStandardMaterial({color:0x7fd0f0, roughness:.25, metalness:.1})};
+// la roca de abajo: un cono irregular con capas de tierra (cada isla con su forma)
+function fiRockGeo(I){ const seg=30, rings=8, R=I.R, D=I.D, rnd=TK.rng((Math.abs(I.x*7+I.z*13)|0)+11), pos=[], col=[], idx=[], jit=[];
+  for(let s=0;s<seg;s++) jit.push(.9+rnd()*.2);
+  const C=new THREE.Color();
+  for(let r=0;r<=rings;r++){ const k=r/rings, rad=R*Math.pow(1-k,.75), y=-.3-k*D;
+    for(let s=0;s<=seg;s++){ const a=s/seg*Math.PI*2, j=jit[s%seg]*(1+(rnd()-.5)*.25*k), rr=r===rings?0:(r===0?R:rad*j);
+      pos.push(Math.cos(a)*rr, y+(r>0&&r<rings?(rnd()-.5)*.9:0), Math.sin(a)*rr);
+      const band=Math.floor(k*5)%2; C.setRGB(.62-.25*k+(band?.05:0), .42-.2*k+(band?.03:0), .27-.12*k); if(r===0) C.setRGB(.45,.33,.2); col.push(C.r,C.g,C.b); } }
+  for(let r=0;r<rings;r++) for(let s=0;s<seg;s++){ const a=r*(seg+1)+s, b=a+seg+1; idx.push(a,b,a+1, a+1,b,b+1); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+  const uv=[]; for(let i=0;i<pos.length/3;i++) uv.push((i%(seg+1))/seg*4, Math.floor(i/(seg+1))/rings*3); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  g.setIndex(idx); g.computeVertexNormals(); return g; }
+// cascada: tela de agua que corre (se mueve la textura) y se deshace abajo
+const fallTex=(()=>{ const c=document.createElement('canvas'); c.width=64; c.height=256; const g=c.getContext('2d'); g.fillStyle='rgba(170,225,250,1)'; g.fillRect(0,0,64,256);
+  const R=TK.rng(77); for(let i=0;i<70;i++){ const x=R()*64, w=1+R()*3, y=R()*256, l=30+R()*90; g.fillStyle=`rgba(255,255,255,${.35+R()*.5})`; for(const oy of [0,-256,256]) g.fillRect(x,y+oy,w,l); }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.encoding=THREE.sRGBEncoding; return t; })();
+const fallU={t:{value:0}};
+function fallMat(endFade){ return new THREE.ShaderMaterial({ transparent:true, depthWrite:false, side:THREE.DoubleSide, fog:true,
+  uniforms:THREE.UniformsUtils.merge([THREE.UniformsLib.fog,{map:{value:fallTex}, fade:{value:endFade?1:0}, tm:{value:0}}]),
+  vertexShader:'#include <fog_pars_vertex>\nvarying vec2 vUv; varying float vWy; void main(){ vUv=uv; vWy=(modelMatrix*vec4(position,1.0)).y; vec4 mvPosition=modelViewMatrix*vec4(position,1.0); gl_Position=projectionMatrix*mvPosition;\n#include <fog_vertex>\n}',
+  fragmentShader:'#include <fog_pars_fragment>\nuniform sampler2D map; uniform float fade, tm; varying vec2 vUv; varying float vWy; void main(){ vec4 c=texture2D(map, vec2(vUv.x, vWy*.125 + tm*1.6)); float a=.88*smoothstep(0.0,.18,vUv.x)*smoothstep(1.0,.82,vUv.x)*mix(1.0, smoothstep(0.0,.35,vUv.y), fade)*smoothstep(1.0,.96,vUv.y);\n gl_FragColor=vec4(c.rgb, a);\n#include <fog_fragment>\n}' }); }
+const fallMats=[fallMat(true), fallMat(false)];   // con final que se deshace en el aire, y la que llega hasta el agua
+const mistTex=spriteTex((g,s)=>{ const r=s/2, gr=g.createRadialGradient(r,r,0,r,r,r); gr.addColorStop(0,'rgba(255,255,255,.85)'); gr.addColorStop(.6,'rgba(255,255,255,.35)'); gr.addColorStop(1,'rgba(255,255,255,0)'); g.fillStyle=gr; g.fillRect(0,0,s,s); },64);
+// dianas: círculos rojos y blancos (así se ve que ahí se puede pegar la flecha)
+const targetTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d');
+  [[62,'#ffffff'],[54,'#e5342b'],[44,'#ffffff'],[34,'#e5342b'],[24,'#ffffff'],[14,'#e5342b']].forEach(([r,col])=>{ g.fillStyle=col; g.beginPath(); g.arc(64,64,r,0,7); g.fill(); });
+  g.fillStyle='#ffd23f'; g.beginPath(); g.arc(64,64,6,0,7); g.fill(); TK.stitch(g,TK.circle(64,64,58,48),{dash:5,gap:4,lw:2,col:'#ffffff',shadow:'rgba(0,0,0,.2)',hole:'rgba(0,0,0,.25)'});
+  const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; return t; })();
+const fiPole=felt('#8a5a34','rgba(40,20,5,.2)'), fiTgtM=new THREE.MeshStandardMaterial({map:targetTex, roughness:.7, side:THREE.DoubleSide});
+const FI_TARGETS=[], FIBOX=new THREE.BoxGeometry(1,1,1), FIOCTA=new THREE.OctahedronGeometry(1,0);
+function fiBuild(I){
+  const base=new THREE.Group(); base.position.set(I.x,I.y,I.z); scene.add(base); I.base=base;
+  const rock=new THREE.Mesh(fiRockGeo(I), fiMat.rock); rock.castShadow=true; rock.receiveShadow=true; base.add(rock);
+  const topG=new THREE.CylinderGeometry(I.R,I.R*.98,.6,44,3); { const p=topG.attributes.position; for(let i=0;i<p.count;i++){ const x=p.getX(i), y=p.getY(i), z=p.getZ(i), d=Math.hypot(x,z)/I.R; if(y>.29) p.setY(i, .3+.35*(1-d*d)); } topG.computeVertexNormals(); }
+  const stat=new THREE.Group(); base.add(stat);   // lo fijo de la isla se junta al final (pocas piezas para dibujar)
+  const top=new THREE.Mesh(topG,fiMat.grass); top.position.y=-.3; stat.add(top);
+  const lip=new THREE.Mesh(new THREE.TorusGeometry(I.R,.32,6,48), fiMat.grass); lip.rotation.x=Math.PI/2; lip.position.y=-.32; lip.scale.z=.7; stat.add(lip);
+  // raíces colgando
+  const rnd=TK.rng((Math.abs(I.x*3+I.z)|0)+5), roots=stat, fallsG=new THREE.Group(); base.add(fallsG);
+  for(let i=0;i<9;i++){ const a=rnd()*6.28, rr=I.R*(.35+rnd()*.45), k=1-rr/I.R, y=-.3-I.D*(1-Math.pow(rr/I.R,1/.75))*.98, L=1.5+rnd()*3.5;
+    const m=new THREE.Mesh(PETG.cone, fiMat.root); m.scale.set(.12+rnd()*.1,L,.12+rnd()*.1); m.rotation.x=Math.PI; m.rotation.z=(rnd()-.5)*.4; m.position.set(Math.cos(a)*rr, y-L/2+.2, Math.sin(a)*rr); roots.add(m); }
+  // cascadas
+  I.falls.forEach(([a,len])=>{ const bottom = len==='lake' ? WATER_Y : len==='sea' ? SEA_Y : I.y-len, H=I.y-bottom-.1, W=len==='lake'?3.6:2.4;
+    const f=new THREE.Mesh(new THREE.PlaneGeometry(W,H), fallMats[typeof len==='number'?0:1]); const rx=Math.cos(a)*(I.R+.25), rz=Math.sin(a)*(I.R+.25);
+    f.position.set(rx, -.1-H/2, rz); f.rotation.y=-a+Math.PI/2; fallsG.add(f);
+    // charquito arriba que la alimenta
+    const pool=new THREE.Mesh(new THREE.CircleGeometry(1.7,20), fiMat.pool); pool.rotation.x=-Math.PI/2; pool.position.set(Math.cos(a)*(I.R-2.3), .1, Math.sin(a)*(I.R-2.3)); pool.scale.set(1.1,.75,1); pool.rotation.z=-a; stat.add(pool);
+    // neblina abajo
+    for(let k=0;k<(len==='lake'||len==='sea'?2:1);k++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:mistTex, transparent:true, depthWrite:false, opacity:.75}));
+      const sz=(len==='lake'||len==='sea'?4.5:3)+k*.8; s.scale.set(sz,sz*.6,1); s.position.set(rx*(1+.02*k)+(k-1.5)*.6, -.1-H+(typeof len==='number'?H*.22:.4)+k*.3, rz*(1+.02*k)); s.userData.noBatch=true; base.add(s); } });
+  // dianas en la orilla
+  (I.tg||[]).forEach(a=>{ const ca=Math.cos(a), sa=Math.sin(a), R=I.R+.35;
+    const pole=new THREE.Mesh(PETG.cyl, fiMat.root); pole.scale.set(.09,3.2,.09); pole.position.set(ca*R, -1.4, sa*R); stat.add(pole);
+    const disc=new THREE.Mesh(new THREE.CircleGeometry(1,32), fiTgtM);
+    const c=new THREE.Vector3(ca*(R+.1), -3.1, sa*(R+.1)); disc.position.copy(c); disc.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), new THREE.Vector3(ca,-.6,sa).normalize()); stat.add(disc);
+    const n=new THREE.Vector3(ca,-.6,sa).normalize(), wc=new THREE.Vector3(I.x+c.x, I.y+c.y, I.z+c.z), lx=I.x+ca*(I.R-1.6), lz=I.z+sa*(I.R-1.6);
+    FI_TARGETS.push({I, c:wc, n, land:new THREE.Vector3(lx, I.top(lx,lz)+.05, lz)}); });
+  mergeStatic(stat); stat.children.forEach(o=>{ o.receiveShadow=true; }); mergeStatic(fallsG); fallsG.children.forEach(o=>{ o.renderOrder=3; o.userData.noBatch=true; }); fallsG.userData.noBatch=true;
+  // lo de arriba (tema), solo se dibuja de cerca
+  const det=new THREE.Group(); det.position.copy(base.position); scene.add(det); I.det=det;
+  FI_THEME[I.id](I,det);
+  { const dec=new THREE.Group(); det.add(dec); const R=TK.rng((Math.abs(I.x+I.z*3)|0)+9), bush=felt('#5aa84f','rgba(20,60,10,.18)'), fl=['#ff7fb0','#ffd23f','#ffffff','#c77dff'].map(c=>felt(c));
+    for(let i=0;i<14;i++){ const a=R()*6.28, rr=I.R*(.55+R()*.38), x=Math.cos(a)*rr, z=Math.sin(a)*rr, y=I.top(I.x+x,I.z+z)-I.y;
+      if(i%2) pp(dec,sphereG,bush,x,y+.2,z,.45+R()*.3,.35,.45+R()*.3); else { pp(dec,PETG.cyl,bush,x,y+.18,z,.025,.36,.025); pp(dec,sphereG,fl[i%4],x,y+.38,z,.11,.07,.11); } }
+    mergeStatic(dec); }
+}
+// ---- decoraciones de cada isla ----
+const fiObs=(I,lx,lz,r,h,walk,extra)=>{ const x=I.x+lx, z=I.z+lz, t=I.top(x,z); const o=Object.assign({x,z,r,top:t+h,bot:t-.4,walk:!!walk},extra||{}); obstacles.push(o); return o; };
+const fiAdd=(par,geo,mat,x,y,z,sx,sy,sz,rx,ry,rz)=>pp(par,geo,mat,x,y,z,sx,sy,sz,rx,ry,rz);
+const FI_BOUNCE=[];
+const FI_THEME={
+  jardin(I,g){ const R=TK.rng(301), cols=['#ff7fb0','#c77dff','#ff9a3c'].map(c=>felt(c,'rgba(0,0,0,.1)')), stem=felt('#5fae4f','rgba(20,60,10,.2)'), ctr=felt('#ffcf3f','rgba(120,70,0,.25)');
+    for(let i=0;i<9;i++){ const a=i/9*6.28+R()*.4, rr=I.R*(.35+R()*.45), x=Math.cos(a)*rr, z=Math.sin(a)*rr, gy=I.top(I.x+x,I.z+z)-I.y, h=2.2+R()*3, pm2=cols[i%3];
+      fiAdd(g,PETG.cyl,stem,x,gy+h/2,z,.12,h,.12); fiAdd(g,sphereG,stem,x+.35,gy+h*.45,z,.45,.08,.22,0,0,.4);
+      for(let k=0;k<7;k++){ const pa=k/7*6.28; fiAdd(g,sphereG,pm2,x+Math.cos(pa)*.85,gy+h,z+Math.sin(pa)*.85,.7,.16,.45,0,-pa,0); } fiAdd(g,sphereG,ctr,x,gy+h+.07,z,.5,.26,.5);
+      fiObs(I,x,z,.25,h-.3); }
+    const bush=felt('#5aa84f','rgba(20,60,10,.18)'); for(let i=0;i<10;i++){ const a=R()*6.28, rr=I.R*(.2+R()*.7), x=Math.cos(a)*rr, z=Math.sin(a)*rr; fiAdd(g,sphereG,bush,x,I.top(I.x+x,I.z+z)-I.y+.25,z,.6+R()*.4,.45,.6+R()*.4); }
+    // banca para ver la vista
+    const wood=felt('#a8743f','rgba(60,30,10,.2)'); fiAdd(g,FIBOX,wood,-I.R*.45,.75,-I.R*.3,1.8,.12,.6); fiAdd(g,FIBOX,wood,-I.R*.45,1.15,-I.R*.3-.28,1.8,.5,.1);
+    mergeStatic(g); },
+  granja(I,g){ farmBuild(I,g); },
+  arbol(I,g){ const bark=felt('#7a4a26','rgba(30,15,5,.25)'), leaf=felt('#4f9a3a','rgba(10,50,10,.2)'), leaf2=felt('#6fbf4a','rgba(10,50,10,.18)');
+    fiAdd(g,PETG.cyl,bark,0,5.5,0,1.5,11,1.5); fiAdd(g,PETG.cone,bark,0,.6,0,2.4,1.6,2.4);
+    [[0,1,.6],[2.1,1.1,-.5],[-2.1,.6,.4],[-1,1,-.5]].forEach(([a,h,t])=>{ fiAdd(g,PETG.cyl,bark,Math.cos(a)*2.2,7.4+h,Math.sin(a)*2.2,.42,4.6,.42,0,-a,1.05); });
+    const R=TK.rng(411); for(let i=0;i<9;i++){ const a=i/9*6.28, rr=i===8?0:3.2+R()*1.8; fiAdd(g,sphereG,i%2?leaf:leaf2,Math.cos(a)*rr,11+R()*2.4+(i===8?2:0),Math.sin(a)*rr,3+R()*1.2,2.4+R()*.8,3+R()*1.2); }
+    // columpio colgado de una rama
+    const rope=felt('#e8d6b5','rgba(0,0,0,.1)'); fiAdd(g,PETG.cyl,rope,3.6,5.6,-.4,.04,4.6,.04); fiAdd(g,PETG.cyl,rope,3.6,5.6,.4,.04,4.6,.04); fiAdd(g,FIBOX,felt('#c98b4f','rgba(60,30,10,.2)'),3.6,3.3,0,.5,.08,1);
+    const mush=felt('#ff5d6c','rgba(80,0,0,.15)'), dot=felt('#ffffff'); for(let i=0;i<6;i++){ const a=R()*6.28, rr=4+R()*(I.R-6), x=Math.cos(a)*rr, z=Math.sin(a)*rr, gy=I.top(I.x+x,I.z+z)-I.y; fiAdd(g,PETG.cyl,dot,x,gy+.2,z,.08,.4,.08); fiAdd(g,PETG.half,mush,x,gy+.38,z,.3,.22,.3); }
+    mergeStatic(g); fiObs(I,0,0,1.7,11); },
+  hongos(I,g){ const stem=felt('#f6ead2','rgba(80,60,30,.15)'), cap=[felt('#ff5d6c','rgba(80,0,0,.15)'),felt('#c77dff','rgba(40,0,60,.15)'),felt('#ff9a3c','rgba(80,30,0,.15)')], dot=felt('#ffffff');
+    const L=[[0,0,6.5,3.2],[5.5,1.5,4,2.4],[-4.5,3.5,3.2,2.2],[-3.5,-5,2.4,1.8],[3.5,-5.5,5,2.6],[7.5,-1.5,1.6,1.3]];
+    L.forEach(([x,z,h,r],i)=>{ const gy=I.top(I.x+x,I.z+z)-I.y;
+      fiAdd(g,PETG.cyl,stem,x,gy+h/2,z,r*.28,h,r*.28); fiAdd(g,PETG.half,cap[i%3],x,gy+h-.15,z,r,r*.55,r); fiAdd(g,PETG.cyl,stem,x,gy+h-.12,z,r*.98,.08,r*.98);
+      const R=TK.rng(500+i); for(let k=0;k<7;k++){ const a=R()*6.28, t=.3+R()*.5; fiAdd(g,sphereG,dot,x+Math.cos(a)*r*t*.95,gy+h-.15+r*.55*Math.sqrt(1-t*t)*.98,z+Math.sin(a)*r*t*.95,r*.13,r*.05,r*.13); }
+      fiObs(I,x,z,r*.3,h-.2);
+      const o=fiObs(I,x,z,r*1.05,h-.15+r*.55*.75,true); o.bot=I.y+gy+h-.6; FI_BOUNCE.push(o); });
+    const grass=felt('#5aa84f','rgba(20,60,10,.18)'); const R=TK.rng(520); for(let i=0;i<14;i++){ const a=R()*6.28, rr=R()*(I.R-1.5), x=Math.cos(a)*rr, z=Math.sin(a)*rr; fiAdd(g,PETG.half,i%3?stem:cap[i%3],x,I.top(I.x+x,I.z+z)-I.y,z,.2+R()*.2,.25,.2+R()*.2); } mergeStatic(g); },
+  nubes(I,g){ const cl=felt('#ffffff','rgba(160,180,220,.18)'), pk=felt('#ffd0e4','rgba(120,40,80,.12)'), bl=felt('#c4e6fb','rgba(40,80,120,.12)'), gold=felt('#ffd23f','rgba(120,70,0,.2)');
+    const R=TK.rng(601); for(let i=0;i<22;i++){ const a=R()*6.28, rr=I.R*(.65+R()*.4), x=Math.cos(a)*rr, z=Math.sin(a)*rr; fiAdd(g,sphereG,cl,x,.4+R()*.6,z,1.2+R()*1.3,.8+R()*.7,1.2+R()*1.3); }
+    [[-3,-2,4.5,1.3,pk],[3,-2,4.5,1.3,bl],[0,2.5,6.5,1.6,pk]].forEach(([x,z,h,r,m])=>{ fiAdd(g,PETG.cyl,m,x,h/2+.2,z,r,h,r); fiAdd(g,PETG.cone,bl,x,h+1.3,z,r*1.25,2.4,r*1.25); fiAdd(g,sphereG,gold,x,h+2.6,z,.22); fiObs(I,x,z,r+.1,h); });
+    fiAdd(g,FIBOX,cl,0,1.3,-2,6,2.4,1); fiObs(I,-1.5,-2,1.1,2.4); fiObs(I,1.5,-2,1.1,2.4);
+    fiAdd(g,FIBOX,felt('#8e5cc8'),0,1.1,-1.45,1.4,1.9,.12);   // puertita
+    mergeStatic(g); },
+  tesoro(I,g){ const stone=felt('#c9c2b3','rgba(60,50,40,.2)'), moss=felt('#7fa85a','rgba(20,50,10,.2)'), wood=felt('#8a5a34','rgba(40,20,5,.2)'), gold=new THREE.MeshStandardMaterial({color:0xffd23f, roughness:.35, metalness:.6});
+    const R=TK.rng(701);
+    for(let i=0;i<7;i++){ const a=i/7*6.28+.3, rr=I.R*.68, x=Math.cos(a)*rr, z=Math.sin(a)*rr, h=i%3===1?1.4:2.6+R()*1.4; fiAdd(g,PETG.cyl,stone,x,h/2,z,.45,h,.45); fiAdd(g,FIBOX,stone,x,h+.15,z,1.1,.3,1.1); fiAdd(g,sphereG,moss,x,h+.32,z,.5,.12,.5); fiObs(I,x,z,.55,h+.3); }
+    const cry=[0xff7fb0,0x7cc8f0,0xc77dff,0x8fe0c0].map(c=>new THREE.MeshStandardMaterial({color:c, roughness:.15, metalness:.1, emissive:c, emissiveIntensity:.35}));
+    for(let i=0;i<10;i++){ const a=R()*6.28, rr=2.5+R()*(I.R-4.5), x=Math.cos(a)*rr, z=Math.sin(a)*rr, gy=I.top(I.x+x,I.z+z)-I.y, h=.8+R()*1.8, m=cry[i%4];
+      fiAdd(g,FIOCTA,m,x,gy+h*.45,z,h*.28,h*.6,h*.28,(R()-.5)*.4,R()*3,(R()-.5)*.4); }
+    // cofre: una vez al día da monedas
+    const ch=new THREE.Group(); ch.position.set(0,I.top(I.x,I.z)-I.y,0); g.add(ch); fiAdd(ch,FIBOX,wood,0,.35,0,1.4,.7,.9); fiAdd(ch,FIBOX,gold,0,.35,.46,.22,.3,.04);
+    [-.55,.55].forEach(x=>fiAdd(ch,FIBOX,gold,x,.35,0,.08,.72,.92));
+    const lid=new THREE.Group(); lid.position.set(0,.7,-.45); ch.add(lid); fiAdd(lid,FIBOX,wood,0,.14,.45,1.44,.28,.94); fiAdd(lid,FIBOX,gold,0,.14,.92,.22,.2,.04);
+    const coinsM=new THREE.Mesh(new THREE.CylinderGeometry(.55,.55,.12,16), gold); coinsM.position.set(0,.62,0); ch.add(coinsM); FI_CHEST.coins=coinsM;
+    mergeStatic(g); FI_CHEST.o=ch; FI_CHEST.lid=lid; FI_CHEST.x=I.x; FI_CHEST.z=I.z; FI_CHEST.y=I.top(I.x,I.z); fiObs(I,0,0,.85,.75,true); }
+};
+const FI_CHEST={o:null, lid:null, open:0, x:0, z:0, y:0};
+const CHEST_KEY='mundoPelucheCofre', today=()=>{ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); };
+const chestDone=()=>{ try{ return localStorage.getItem(CHEST_KEY)===today(); }catch(e){ return false; } };
+function openChest(){ if(chestDone()) return; try{ localStorage.setItem(CHEST_KEY,today()); }catch(e){} FI_CHEST.open=1; addCoins(30); flashNote('¡Encontraste 30 monedas en el cofre! Vuelve mañana por más'); try{ audio.wave(); }catch(e){} }
+// rebote en los hongos: caes en un sombrero y sales volando
+function fiBounce(g){ if(player.vy>-3) return false; const x=player.pos.x, z=player.pos.z;
+  for(const o of FI_BOUNCE){ if(Math.abs(g-o.top)>.05) continue; const dx=x-o.x, dz=z-o.z; if(dx*dx+dz*dz>o.r*o.r*.64) continue;
+    player.pos.y=g; player.vy=Math.min(17, -player.vy*.85+7); player.grounded=false; player.squash=1; try{ audio.jump(); audio.land(.5); }catch(e){} return true; }
+  return false; }
+// ¿la flecha le pegó a una diana o a la roca de una isla?
+function fiHit(p){ for(const T of FI_TARGETS){ const dx=p.x-T.c.x, dy=p.y-T.c.y, dz=p.z-T.c.z; if(dx*dx+dy*dy+dz*dz>1.6) continue; const along=dx*T.n.x+dy*T.n.y+dz*T.n.z; if(Math.abs(along)<.45) return {kind:'target', ref:T}; }
+  for(const I of FI){ const dx=p.x-I.x, dz=p.z-I.z; if(Math.abs(dx)>I.R+1 || Math.abs(dz)>I.R+1) continue; const r=fiRadAt(I,p.y); if(r>0 && dx*dx+dz*dz<r*r && p.y<I.top(p.x,p.z)-.2) return {kind:'solid'}; }
+  return null; }
+const fiSeen=new Set();
+function fiArrive(T){ player.pos.copy(T.land); player.vel.set(0,0,0); player.vy=4; player.grounded=false; player.facing=Math.atan2(T.I.x-T.land.x, T.I.z-T.land.z); audio.land(.7);
+  if(!fiSeen.has(T.I.id)){ fiSeen.add(T.I.id); flashNote('¡Llegaste a la '+T.I.name+'!'); } }
+function fiUpdate(dt,t){
+  fallU.t.value+=dt; const tm=fallU.t.value;
+  const cx=camera.position.x, cz=camera.position.z;
+  for(const I of FI){ const d=Math.hypot(I.x-cx,I.z-cz); I.det.visible=d<170; I.near=d<260; }
+  for(const m of fallMats) m.uniforms.tm.value=tm;   // el agua corre
+  if(FI_CHEST.lid){ const want=chestDone()?1:0; FI_CHEST.open+=(want-FI_CHEST.open)*Math.min(1,dt*4); FI_CHEST.lid.rotation.x=-FI_CHEST.open*1.7; FI_CHEST.coins.visible=FI_CHEST.open<.5; }
+  // ¿en qué isla estoy? (para el aviso de bienvenida al llegar caminando o en globo)
+  for(const I of FI){ if(fiSeen.has(I.id)) continue; const dx=player.pos.x-I.x, dz=player.pos.z-I.z; if(dx*dx+dz*dz<I.R*I.R && Math.abs(player.pos.y-I.y)<2){ fiSeen.add(I.id); flashNote('¡Llegaste a la '+I.name+'!'); } }
+}
+function fiActions(){ if(player.car||player.ac||player.pg||player.mg||player.balloon) return null;
+  if(FI_CHEST.o && Math.hypot(player.pos.x-FI_CHEST.x,player.pos.z-FI_CHEST.z)<2.3 && Math.abs(player.pos.y-FI_CHEST.y)<2) return chestDone() ? [{label:'Cofre vacío: vuelve mañana', disabled:true, run:()=>{}}, null] : [{label:'Abrir el cofre', run:openChest}, null];
+  return farmActions(); }
+
+// ======================================================================================
+// ---------- Globos aerostáticos (6, uno por jugador) ----------
+// ======================================================================================
+// Se manejan libres: con el joystick avanzas hacia donde miras, Saltar sube y Tirarse baja. El que maneja un globo
+// manda dónde va ("bl"); todos mandan dónde quedó cada globo ("bs") para que al llegar alguien nuevo los vea igual.
+// Si un globo se queda solo más de 3 minutos, regresa a la estación.
+const BL_ST={x:24, z:-88};
+const BL_COL=[['#ff5d6c','#ffe14d'],['#4fc3f7','#ffffff'],['#7ed957','#ffe14d'],['#c77dff','#ffd0e4'],['#ff9a3c','#4f86c6'],['#f28bb0','#ffffff']];
+const BL=[];
+function balloonTex(a,b){ const c=document.createElement('canvas'); c.width=256; c.height=128; const g=c.getContext('2d');
+  for(let i=0;i<8;i++){ g.fillStyle=i%2?b:a; g.fillRect(i*32,0,32,128); const gr=g.createLinearGradient(i*32,0,i*32+32,0); gr.addColorStop(0,'rgba(0,0,0,.12)'); gr.addColorStop(.4,'rgba(255,255,255,.1)'); gr.addColorStop(1,'rgba(0,0,0,.1)'); g.fillStyle=gr; g.fillRect(i*32,0,32,128); }
+  g.fillStyle='rgba(255,255,255,.55)'; g.fillRect(0,100,256,6); for(let i=0;i<=8;i++) TK.stitch(g,TK.line(i*32,0,i*32,128),{dash:5,gap:4,lw:1.6,col:'rgba(255,255,255,.7)',shadow:'rgba(0,0,0,.15)',hole:'rgba(0,0,0,.15)'});
+  TK.finish(c,{seed:a.length*7, amp:.04, fuzzDiv:20, len:2}); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.wrapS=THREE.RepeatWrapping; t.anisotropy=4; return t; }
+const wickerTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=64; const g=c.getContext('2d'); g.fillStyle='#b98a52'; g.fillRect(0,0,64,64);
+  for(let y=0;y<64;y+=8) for(let x=0;x<64;x+=8){ const o=((x+y)/8)%2; g.fillStyle=o?'#d4a76a':'#9a6e3c'; g.fillRect(x+(o?0:1),y+(o?1:0),o?8:6,o?6:8); }
+  const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(4,1); return t; })();
+const blBasketM=new THREE.MeshStandardMaterial({map:wickerTex, roughness:1}), blRopeM=felt('#e8d6b5','rgba(0,0,0,.1)'), blDarkM=felt('#5a3b22','rgba(0,0,0,.2)'), blBurnM=new THREE.MeshStandardMaterial({color:0x8a8f99, roughness:.4, metalness:.6});
+const blEnvGeo=(()=>{ const prof=[[.45,0],[.9,.4],[1.9,1.4],[2.8,2.8],[3.15,4.1],[3,5.2],[2.3,6.2],[1.2,6.85],[0,7.05]].map(([r,y])=>new THREE.Vector2(r,y)); return new THREE.LatheGeometry(new THREE.SplineCurve(prof).getPoints(18),24); })();
+function makeBalloon(i){ const g=new THREE.Group(); g.userData.noBatch=true; scene.add(g);
+  const st=new THREE.Group(); g.add(st); g.userData.st=st;
+  pp(st,new THREE.CylinderGeometry(.9,.78,1.05,16,1,true),blBasketM,0,.52,0,1,1,1); pp(st,new THREE.CircleGeometry(.78,16),blDarkM,0,.03,0,1,1,1,-Math.PI/2);
+  pp(st,PETG.tor,blDarkM,0,1.05,0,.9,.9,.6,Math.PI/2);
+  [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([a,b])=>{ const x=a*.62, z=b*.62; const r=pp(st,PETG.cyl,blDarkM,x*1.02,1.85,z*1.02,.025,1.7,.025); r.rotation.z=-a*.06; r.rotation.x=b*.06; });
+  pp(st,PETG.cyl,blDarkM,0,2.35,0,.28,.35,.28);
+  mergeStatic(st); st.children.forEach(o=>o.castShadow=true);
+  const env=new THREE.Mesh(blEnvGeo,new THREE.MeshStandardMaterial({map:balloonTex(...BL_COL[i]), roughness:.85})); env.position.y=2.65; env.castShadow=true; g.add(env);
+  const flame=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex, color:0xff9a3c, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending})); flame.position.y=2.75; flame.scale.set(.9,1.3,1); flame.visible=false; g.add(flame);
+  const hx=BL_ST.x+((i%3)-1)*9.5, hz=BL_ST.z+(Math.floor(i/3)-.5)*10, hy=groundAt(hx,hz,50);
+  const b={i, g, flame, env, x:hx, y:hy, z:hz, h:0, vx:0, vz:0, vy:0, home:[hx,hz], pilot:null, remote:null, net:null, t:0, burn:0, sway:Math.random()*6};
+  g.position.set(hx,hy,hz); return b; }
+for(let i=0;i<6;i++) BL.push(makeBalloon(i));
+// la estación: plataformas y letrero
+{ const pad=felt('#e8d6b5','rgba(80,60,30,.15)'), ring=felt('#ff9a3c','rgba(80,30,0,.15)'), stG=new THREE.Group(); scene.add(stG); const padG=new THREE.CylinderGeometry(2,2.1,.16,24);
+  BL.forEach(b=>{ const gy=groundAt(b.home[0],b.home[1],50); pp(stG,padG,pad,b.home[0],gy+.06,b.home[1],1,1,1); pp(stG,PETG.tor,ring,b.home[0],gy+.16,b.home[1],1.9,1.9,.5,Math.PI/2); });
+  const sx=BL_ST.x, sz=BL_ST.z-12, gy=groundAt(sx,sz,50), sg=new THREE.Mesh(new THREE.PlaneGeometry(4.2,1.4), new THREE.MeshStandardMaterial({map:textTex(['Globos','Vuela a las islas flotantes'],512,170), roughness:.8, side:THREE.DoubleSide}));
+  sg.material.side=THREE.FrontSide; sg.position.set(sx,gy+2.4,sz+.04); scene.add(sg); pp(stG,FIBOX,fiMat.root,sx,gy+2.4,sz-.03,4.4,1.6,.08); [-1.9,1.9].forEach(x=>pp(stG,PETG.cyl,fiMat.root,sx+x,gy+1.1,sz,.08,2.4,.08)); mergeStatic(stG); stG.children.forEach(o=>o.receiveShadow=true); obstacles.push({x:sx-1.9,z:sz,r:.15,top:gy+2.4,walk:false},{x:sx+1.9,z:sz,r:.15,top:gy+2.4,walk:false}); }
+TELEPORTS.push({id:'globos', name:'Globos', x:BL_ST.x, z:BL_ST.z+14, noPortal:true});
+const blGround=(x,z,y)=>Math.max(groundAt(x,z,y+.6), waterSurfaceY(x,z)-.1);
+function blPlace(b,dt,t){ b.sway+=dt; b.g.userData.st.visible=Math.hypot(b.x-camera.position.x,b.z-camera.position.z)<85 || b.pilot==='me';   // de lejos solo se dibuja el globo (la canasta ni se distingue) const sw=Math.sin(b.sway*.9)*.03, sw2=Math.cos(b.sway*.7)*.03; b.g.position.set(b.x,b.y,b.z); b.g.rotation.set(sw,b.h,sw2);
+  b.burn=Math.max(0,b.burn-dt*2.5); b.flame.visible=b.burn>.05; if(b.flame.visible){ const s=.6+b.burn*.6+Math.random()*.15; b.flame.scale.set(s*.7,s,1); } }
+function blDrive(b,dt){
+  let f=0,s=0; if(keys.KeyW||keys.ArrowUp) f+=1; if(keys.KeyS||keys.ArrowDown) f-=1; if(keys.KeyD||keys.ArrowRight) s+=1; if(keys.KeyA||keys.ArrowLeft) s-=1; f-=stick.y; s+=stick.x;
+  const mag=Math.min(1,Math.hypot(f,s)), run=(keys.ShiftLeft||keys.ShiftRight)||Math.hypot(stick.x,stick.y)>.95, sp=(run?10:6.5)*mag;
+  const fx=-Math.sin(yaw), fz=-Math.cos(yaw), rx=Math.cos(yaw), rz=-Math.sin(yaw); let dx=fx*f+rx*s, dz=fz*f+rz*s; const dl=Math.hypot(dx,dz)||1; dx/=dl; dz/=dl;
+  const kh=1-Math.exp(-dt*1.1); b.vx+=(dx*sp-b.vx)*kh; b.vz+=(dz*sp-b.vz)*kh;
+  const up=keys.Space||touchHold.up, dn=keys.KeyQ||keys.KeyC||touchHold.down, vyT=up&&!dn?3.4:dn&&!up?-3.4:0;
+  b.vy+=(vyT-b.vy)*(1-Math.exp(-dt*1.6)); if(up) b.burn=1;
+  blMove(b,dt);
+  if(Math.hypot(b.vx,b.vz)>.6) b.h=lerpAng(b.h,Math.atan2(b.vx,b.vz),1-Math.exp(-dt*1.5));
+  b.t=now1();
+}
+function blMove(b,dt){
+  let nx=b.x+b.vx*dt, nz=b.z+b.vz*dt, ny=b.y+b.vy*dt;
+  // no se mete en las islas: la canasta puede posarse arriba, pero por los lados las rodea
+  for(const I of FI){ const dx=nx-I.x, dz=nz-I.z, d=Math.hypot(dx,dz), min=I.R+3.3; if(d>min || ny>=I.y-.2 || ny+9.6<I.y-I.D*.85) continue;
+    if(b.y>=I.y-.25 && d<I.R) continue; const k=min/Math.max(d,.01); nx=I.x+dx*k; nz=I.z+dz*k; b.vx*=.6; b.vz*=.6; }
+  const lim=coastR(nx,nz)+260, rr=Math.hypot(nx,nz); if(rr>lim){ nx*=lim/rr; nz*=lim/rr; b.vx*=.5; b.vz*=.5; }
+  const gr=blGround(nx,nz,Math.max(ny,b.y)); if(ny<gr){ ny=gr; if(b.vy<0) b.vy=0; b.vx*=Math.exp(-dt*3); b.vz*=Math.exp(-dt*3); }
+  if(ny>98){ ny=98; if(b.vy>0) b.vy=0; }
+  b.x=nx; b.z=nz; b.y=ny; }
+function blUpdate(dt,t){
+  const now=Date.now()/1000;
+  for(const b of BL){
+    if(b.pilot==='me'){ if(state==='play') blDrive(b,dt); }
+    else if(b.remote && b.net){ const d=b.net, age=Math.min(.5,(performance.now()-d.at)/1000), tx=d.x+d.vx*age, tz=d.z+d.vz*age, ty=d.y+d.vy*age;
+      if(Math.hypot(tx-b.x,tz-b.z)>40){ b.x=tx; b.z=tz; b.y=ty; } const k=1-Math.exp(-dt*6); b.x+=(tx-b.x)*k; b.z+=(tz-b.z)*k; b.y+=(ty-b.y)*k; b.h=lerpAng(b.h,d.h,k); b.burn=d.vy>.5?1:b.burn; }
+    else { // solo: baja despacito hasta posarse; después de 3 min sin nadie, regresa a la estación
+      if(b.net){ const k=1-Math.exp(-dt*2); if(Math.hypot(b.net.x-b.x,b.net.z-b.z)>40){ b.x=b.net.x; b.z=b.net.z; b.y=b.net.y; } b.x+=(b.net.x-b.x)*k; b.z+=(b.net.z-b.z)*k; b.h=lerpAng(b.h,b.net.h,k); if(Math.hypot(b.net.x-b.x,b.net.z-b.z)<.05) b.net=null; }
+      b.vx*=Math.exp(-dt*1.5); b.vz*=Math.exp(-dt*1.5); b.vy+=(-1.6-b.vy)*(1-Math.exp(-dt*1.2)); blMove(b,dt);
+      const away=Math.hypot(b.x-b.home[0],b.z-b.home[1])>3;
+      if(away && b.t && now-b.t>180){ b.x=b.home[0]; b.z=b.home[1]; b.y=groundAt(b.x,b.z,50); b.h=0; b.vx=b.vz=b.vy=0; b.t=now1(); b.net=null; } }
+    blPlace(b,dt,t);
+  }
+  if(player.balloon){ const b=BL[player.balloon.i]; player.pos.set(b.x,b.y+.12,b.z); player.vel.set(0,0,0); player.vy=0; player.grounded=true; player.facing=b.h+Math.PI*0; player.groundY=b.y+.12; }
+}
+function blNear(){ let best=null, bd=2.5; for(const b of BL){ if(b.pilot||b.remote) continue; const d=Math.hypot(b.x-player.pos.x,b.z-player.pos.z); if(d<bd && Math.abs(b.y-player.pos.y)<2.5){ bd=d; best=b; } } return best; }
+function blButtons(on){ try{ centerText(ui('tJump'), on?'Subir':'Saltar'); centerText(ui('tDive'), on?'Bajar':'Tirarse'); }catch(e){} }
+let blHint=false;
+function blEnter(b){ if(b.pilot||b.remote||player.busy) return; if(hook.mode) bowRelease(true); holding=false; applyHeld(); renderHotbar();
+  b.pilot='me'; b.vx=b.vz=b.vy=0; player.balloon={i:b.i}; player.busy=true; player.dive=null; player.diveAngle=0; blButtons(true); audio.jump(); setActions(null,null);
+  if(!blHint){ blHint=true; flashNote(isTouch ? 'Globo: mueve el joystick para avanzar · Subir y Bajar para la altura' : 'Globo: WASD para avanzar · Espacio sube, Q baja'); }
+  try{ sendPresence(true); }catch(e){} }
+function blExit(quiet){ const B=player.balloon; if(!B) return; const b=BL[B.i]; b.pilot=null; b.t=now1(); player.balloon=null; player.busy=false; blButtons(false);
+  const a=b.h+Math.PI/2; player.pos.set(b.x+Math.sin(a)*1.5, b.y+.5, b.z+Math.cos(a)*1.5); player.vy=2.5; player.grounded=false; player.vel.set(0,0,0); if(!quiet) audio.getup();
+  try{ sendPresence(true); }catch(e){} }
+function blActions(){
+  if(player.balloon){ const b=BL[player.balloon.i], h=b.y-groundAt(b.x,b.z,b.y+.5); return [{label:h>3?'Saltar del globo':'Bajarse del globo', run:()=>blExit()}, null]; }
+  if(player.car||player.ac||player.pg||player.mg||player.swim||player.busy) return null;
+  const b=blNear(); return b ? [{label:'Subir al globo', run:()=>blEnter(b)}, null] : null; }
+function blPresence(){ return player.balloon ? (b=>[b.i, r2(b.x), r2(b.y), r2(b.z), Math.round(b.h*100)/100, r2(b.vx), r2(b.vy), r2(b.vz)])(BL[player.balloon.i]) : null; }
+function blStates(){ return BL.map(b=>[Math.round(b.x*10)/10, r2(b.y), Math.round(b.z*10)/10, Math.round(b.h*100)/100, b.t]); }
+function blParse(r,pr,peer,seen){ const a=pr.bl; r.bl=null;
+  if(Array.isArray(a) && a.length===8 && a.every(Number.isFinite) && Number.isInteger(a[0]) && BL[a[0]]){ const b=BL[a[0]];
+    if(b.pilot==='me'){ if(String(pr.id||'')<myUid){ blExit(true); flashNote('Alguien más se subió a ese globo'); } else return; }
+    r.bl=a; b.remote=peer; seen.add(b.i); b.net={x:clampN(a[1],-5000,5000,b.x), y:clampN(a[2],-60,120,b.y), z:clampN(a[3],-5000,5000,b.z), h:a[4], vx:clampN(a[5],-20,20,0), vy:clampN(a[6],-10,10,0), vz:clampN(a[7],-20,20,0), at:performance.now()}; }
+  if(Array.isArray(pr.bs)) pr.bs.forEach((e,i)=>{ const b=BL[i]; if(!b || !Array.isArray(e) || e.length!==5 || !e.every(Number.isFinite)) return; if(b.remote || b.pilot==='me') return;
+    if(e[4]>b.t+.05){ b.t=e[4]; b.net={x:clampN(e[0],-5000,5000,b.x), y:clampN(e[1],-60,120,b.y), z:clampN(e[2],-5000,5000,b.z), h:e[3]}; } }); }
+function blRemote(r){ const b=BL[r.bl[0]]; r.target.set(b.x,b.y+.12,b.z); r.pos.copy(r.target); r.moving=0; r.air=false; r.facing=b.h; }
+
+// ======================================================================================
+// ---------- El huerto de Fresita (en la Isla Granja) ----------
+// ======================================================================================
+// Fresita vende semillas. Las plantas crecen en tiempo real aunque cierres el juego, pero solo mientras la tierra está
+// mojada: al regar dura mojada 15 minutos. Si se seca se pausa (nunca se mueren). Lo que cosechas se lo vendes a Fresita.
+// El huerto es tuyo: se guarda en este navegador (cada quien ve el suyo).
+const CROPS=[
+  {id:'rabano', n:'Rábano', ic:'🌱', seed:2, sell:5, min:3, c:'#ff5d8f', k:'root'},
+  {id:'zanahoria', n:'Zanahoria', ic:'🥕', seed:3, sell:8, min:5, c:'#ff9a3c', k:'root'},
+  {id:'lechuga', n:'Lechuga', ic:'🥬', seed:4, sell:11, min:8, c:'#8fd85a', k:'leaf'},
+  {id:'tomate', n:'Tomate', ic:'🍅', seed:6, sell:18, min:15, c:'#e5342b', k:'bush'},
+  {id:'maiz', n:'Maíz', ic:'🌽', seed:8, sell:24, min:20, c:'#ffd23f', k:'corn'},
+  {id:'fresa', n:'Fresa', ic:'🍓', seed:10, sell:30, min:25, c:'#ff3b5c', k:'bush'},
+  {id:'calabaza', n:'Calabaza', ic:'🎃', seed:15, sell:50, min:40, c:'#ff8a1f', k:'big'},
+  {id:'sandia', n:'Sandía', ic:'🍉', seed:20, sell:70, min:60, c:'#3f9a3a', k:'big'}];
+const CROP_BY={}; CROPS.forEach(c=>CROP_BY[c.id]=c);
+const WET_MS=15*60000, FARM_KEY='mundoPelucheHuerto', FARM_N=9;
+const farm=(()=>{ let f={plots:Array(FARM_N).fill(null), seeds:{}, crop:{}, sel:0}; try{ const o=JSON.parse(localStorage.getItem(FARM_KEY)||'null'); if(o){
+  if(Array.isArray(o.plots)) f.plots=o.plots.slice(0,FARM_N).map(p=>p&&CROP_BY[p.c]&&Number.isFinite(p.g)?{c:p.c,g:Math.min(1,Math.max(0,p.g)),u:+p.u||Date.now(),w:+p.w||0}:null);
+  while(f.plots.length<FARM_N) f.plots.push(null);
+  for(const k in o.seeds||{}) if(CROP_BY[k]) f.seeds[k]=Math.max(0,o.seeds[k]|0); for(const k in o.crop||{}) if(CROP_BY[k]) f.crop[k]=Math.max(0,o.crop[k]|0); } }catch(e){} return f; })();
+function saveFarm(){ try{ localStorage.setItem(FARM_KEY, JSON.stringify({plots:farm.plots, seeds:farm.seeds, crop:farm.crop})); }catch(e){} }
+// avanza el crecimiento: solo cuenta el tiempo con la tierra mojada
+function farmGrow(now){ let ch=false; for(const p of farm.plots){ if(!p || p.g>=1){ if(p) p.u=now; continue; } const wet=Math.max(0, Math.min(now,p.w)-p.u); if(wet>0){ p.g=Math.min(1,p.g+wet/(CROP_BY[p.c].min*60000)); ch=true; } p.u=now; } return ch; }
+farmGrow(Date.now()); saveFarm();
+const FARM={I:null, plots:[], vendor:null, keys:[], t:0};
+const farmM={soil:felt('#8a5a34','rgba(40,20,5,.25)'), wet:felt('#5a3a22','rgba(20,10,0,.25)'), leaf:felt('#5aa84f','rgba(20,60,10,.2)'), leaf2:felt('#7fc456','rgba(20,60,10,.18)'), stalk:felt('#c9b25a','rgba(60,50,10,.2)')};
+const dropTex=spriteTex((g,s)=>{ g.fillStyle='#4fb3ff'; g.strokeStyle='#ffffff'; g.lineWidth=s*.07; g.beginPath(); g.moveTo(s/2,s*.12); g.bezierCurveTo(s*.85,s*.5,s*.8,s*.88,s/2,s*.88); g.bezierCurveTo(s*.2,s*.88,s*.15,s*.5,s/2,s*.12); g.closePath(); g.fill(); g.stroke(); },64);
+function farmBuild(I,g){ FARM.I=I;
+  // 9 parcelas en cuadrícula
+  for(let i=0;i<FARM_N;i++){ const lx=3+((i%3)-1)*2.6, lz=1.5+(Math.floor(i/3)-1)*2.6, x=I.x+lx, z=I.z+lz, y=I.top(x,z);
+    const drop=new THREE.Sprite(new THREE.SpriteMaterial({map:dropTex, transparent:true, depthWrite:false})); drop.scale.set(.5,.5,1); drop.position.set(lx,y-I.y+1.7,lz); drop.visible=false; g.add(drop);
+    FARM.plots.push({x,z,y,lx,lz,ly:y-I.y+.08,drop}); }
+  FARM.vis=new THREE.Group(); g.add(FARM.vis);   // tierra y plantas: todo junto (pocas piezas para dibujar)
+  // cerca de madera alrededor del huerto
+  const wood=felt('#c98b4f','rgba(60,30,10,.2)'), fence=new THREE.Group(); g.add(fence);
+  for(let k=0;k<4;k++) for(let j=0;j<=6;j++){ const t=-4.1+j*8.2/6, [lx,lz]=k===0?[t,-4.1]:k===1?[t,4.1]:k===2?[-4.1,t]:[4.1,t]; if(k===1 && Math.abs(t)<1.5) continue; const x=3+lx, z=1.5+lz, y=I.top(I.x+x,I.z+z)-I.y; pp(fence,FIBOX,wood,x,y+.45,z,.14,.9,.14); }
+  [[3,-2.6,8.2,0],[3,5.6,8.2,0],[-1.1,1.5,8.2,Math.PI/2],[7.1,1.5,8.2,Math.PI/2]].forEach(([x,z,l,r])=>{ const y=I.top(I.x+x,I.z+z)-I.y; pp(fence,FIBOX,wood,x,y+.62,z,l,.1,.06,0,r,0); pp(fence,FIBOX,wood,x,y+.32,z,l,.1,.06,0,r,0); });
+  mergeStatic(fence);
+  // puesto de Fresita
+  const sx=-5, sz=-3.5, sy=I.top(I.x+sx,I.z+sz)-I.y, stall=new THREE.Group(); stall.position.set(sx,sy,sz); stall.rotation.y=.5; g.add(stall);
+  pp(stall,FIBOX,wood,0,.55,0,2.6,1.1,1); pp(stall,FIBOX,felt('#fff3d6'),0,1.12,0,2.7,.06,1.1);
+  [[-1.25,-.45],[1.25,-.45],[-1.25,.45],[1.25,.45]].forEach(([x,z])=>pp(stall,PETG.cyl,wood,x,1.5,z,.06,3,.06));
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(3,.1,1.6), new THREE.MeshStandardMaterial({map:stripeTex('#ff5d6c','#ffffff',10), roughness:.9})); roof.position.set(0,3,-.1); roof.rotation.x=.18; stall.add(roof);
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(2.4,.8), new THREE.MeshStandardMaterial({map:textTex(['Semillas de Fresita','¡Siembra y cosecha!'],512,170,'#fff3d6','#b0203a','#ff5d6c'), roughness:.8})); sg.position.set(0,2.4,.62); stall.add(sg);
+  CROPS.slice(0,6).forEach((c,i)=>pp(stall,sphereG,pm(c.c),-1+i*.4,1.25,.15,.13));
+  mergeStatic(stall);
+  const v=FARM.vendor=makeFresita(); { const c=Math.cos(.5), sn=Math.sin(.5), lx=-2.1, lz=.75; v.position.set(sx+lx*c+lz*sn, sy, sz-lx*sn+lz*c); } v.rotation.y=.5; g.add(v); FARM.fx=v.position.x; FARM.fz=v.position.z;   // junto al puesto, de frente
+  fiObs(I,sx,sz,1.5,1.1); FARM.vx=I.x+sx; FARM.vz=I.z+sz;
+  const hay=felt('#e2c066','rgba(90,60,10,.2)'); [[9,-4],[9.6,-2.6],[-8,4]].forEach(([x,z])=>{ const y=I.top(I.x+x,I.z+z)-I.y; pp(g,PETG.cyl,hay,x,y+.45,z,.6,.9,.6,0,0,Math.PI/2); fiObs(I,x,z,.7,.9); });
+  farmVisual(true); }
+// Fresita: un peluche con forma de fresa, con sus semillitas y hojitas en la cabeza
+function makeFresita(){ const g=new THREE.Group(), red=felt('#ff3b5c','rgba(90,0,20,.18)'), seed=felt('#ffe58a'), leaf=felt('#4fa84a','rgba(10,50,10,.2)');
+  const prof=[[0,0],[.25,.05],[.45,.3],[.6,.75],[.62,1.1],[.52,1.4],[.28,1.6],[0,1.65]].map(([r,y])=>new THREE.Vector2(r,y));
+  const body=new THREE.Mesh(new THREE.LatheGeometry(new THREE.SplineCurve(prof).getPoints(20),24),red); body.position.y=.35; g.add(body);
+  const R=TK.rng(909); for(let i=0;i<22;i++){ const y=.5+R()*1.1, a=-1.3+R()*2.6, rr=.6*Math.sin(Math.PI*(y-.35)/1.65)+.02; pp(g,sphereG,seed,Math.sin(a)*rr,y+.35,Math.cos(a)*rr,.035,.05,.025,0,a,0); }
+  for(let k=0;k<7;k++){ const a=k/7*6.28; pp(g,sphereG,leaf,Math.cos(a)*.22,2,Math.sin(a)*.22,.22,.05,.1,0,-a,-.35); } pp(g,PETG.cyl,leaf,0,2.12,0,.04,.25,.04);
+  [-1,1].forEach(s=>{ pp(g,sphereG,eyeMat,s*.17,1.66,.55,.065,.1,.045,0,s*.3); pp(g,sphereG,petShineM,s*.17+.025,1.72,.59,.02); pp(g,sphereG,pm('#ff9ec0'),s*.33,1.5,.52,.09,.055,.03,0,s*.55); });
+  pp(g,new THREE.TorusGeometry(1,.25,6,12,Math.PI),pm('#7a1a2a'),0,1.52,.6,.08,.07,.05,0,0,Math.PI);   // sonrisa
+  const arms=[-1,1].map(s=>{ const a=grp(g,s*.55,1.1,.05); pp(a,sphereG,red,s*.12,-.18,0,.1,.24,.1,0,0,s*.4); return a; });
+  [-1,1].forEach(s=>pp(g,sphereG,red,s*.2,.13,.08,.13,.16,.15));
+  g.userData.arms=arms; mergeStatic(g); g.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); g.userData.noBatch=true; return g; }
+// cómo se ve cada parcela según la planta y qué tan crecida va
+function farmPlantMesh(par,c,st){ const L=farmM.leaf, L2=farmM.leaf2, F=pm(c.c);
+  if(st===0){ pp(par,sphereG,farmM.wet,0,.02,0,.25,.08,.25); return; }
+  if(st===1){ [-1,1].forEach(s=>pp(par,sphereG,L2,s*.08,.12,0,.1,.03,.06,0,0,s*.5)); pp(par,PETG.cyl,L,0,.06,0,.015,.12,.015); return; }
+  const big=st>=3;
+  if(c.k==='root'){ for(let i=0;i<5;i++){ const a=i/5*6.28; pp(par,sphereG,i%2?L:L2,Math.cos(a)*.08,.25+(big?.12:0),Math.sin(a)*.08,.05,.25+(big?.1:0),.05,Math.sin(a)*.4,0,Math.cos(a)*.4); } if(big) pp(par,c.id==='rabano'?sphereG:PETG.cone,F,0,.03,0,.14,c.id==='rabano'?.13:.16,.14,c.id==='rabano'?0:Math.PI); return; }
+  if(c.k==='leaf'){ const s=big?1:.6; for(let i=0;i<7;i++){ const a=i/7*6.28; pp(par,sphereG,i%2?L2:F,Math.cos(a)*.18*s,.16*s,Math.sin(a)*.18*s,.22*s,.14*s,.12*s,0,-a,.6); } pp(par,sphereG,F,0,.22*s,0,.2*s); return; }
+  if(c.k==='bush'){ const s=big?1:.65; pp(par,sphereG,L,0,.35*s,0,.42*s,.35*s,.42*s); pp(par,sphereG,L2,.15*s,.5*s,.1*s,.25*s); if(big) for(let i=0;i<6;i++){ const a=i/6*6.28; pp(par,sphereG,F,Math.cos(a)*.36,.35+Math.sin(i*2)*.12,Math.sin(a)*.36,c.id==='fresa'?.08:.11); } return; }
+  if(c.k==='corn'){ const h=big?1.6:.9; [-.25,0,.25].forEach((x,i)=>{ pp(par,PETG.cyl,L,x,h/2,(i-1)*.12,.035,h,.035); pp(par,sphereG,L2,x+.1,h*.6,(i-1)*.12,.18,.03,.06,0,0,.6); if(big) pp(par,sphereG,F,x+.06,h*.55,(i-1)*.12+.05,.07,.18,.07); }); return; }
+  if(c.k==='big'){ for(let i=0;i<5;i++){ const a=i/5*6.28; pp(par,sphereG,i%2?L:L2,Math.cos(a)*.42,.06,Math.sin(a)*.42,.26,.05,.18,0,-a,0); } if(big){ if(c.id==='sandia'){ pp(par,sphereG,F,0,.26,0,.42,.3,.32); pp(par,sphereG,pm('#2a6a28'),0,.27,0,.43,.12,.33); } else { pp(par,sphereG,F,0,.3,0,.4,.3,.4); pp(par,PETG.cyl,farmM.stalk,0,.62,0,.04,.15,.04); } } else pp(par,sphereG,L2,0,.12,0,.18); }
+}
+function farmStage(p){ return !p ? -1 : p.g>=1 ? 3 : p.g>=.5 ? 2 : p.g>=.08 ? 1 : 0; }
+function farmVisual(force){ const now=Date.now(); let key='';
+  FARM.plots.forEach((V,i)=>{ const p=farm.plots[i], wet=p&&p.g<1&&now<p.w; V.drop.visible=!!(p && p.g<1 && now>=p.w); key+=(p?p.c+farmStage(p)+(wet?'m':''):'-')+'|'; });
+  if(key===FARM.key && !force) return; FARM.key=key;
+  const G=FARM.vis; G.children.slice().forEach(o=>{ G.remove(o); if(o.geometry) o.geometry.dispose(); });
+  FARM.plots.forEach((V,i)=>{ const p=farm.plots[i], wet=p&&p.g<1&&now<p.w; pp(G,FIBOX,wet?farmM.wet:farmM.soil,V.lx,V.ly,V.lz,1.9,.2,1.9);
+    if(p){ const tmp=new THREE.Group(); farmPlantMesh(tmp,CROP_BY[p.c],farmStage(p)); tmp.children.slice().forEach(o=>{ o.position.x+=V.lx; o.position.y+=V.ly+.1; o.position.z+=V.lz; G.add(o); }); } });
+  mergeStatic(G); G.children.forEach(o=>{ o.castShadow=true; o.receiveShadow=true; }); }
+function farmUpdate(dt,t){ if(!FARM.I) return; FARM.t+=dt;
+  const near=FARM.I.det.visible; if(FARM.t>1){ FARM.t=0; if(farmGrow(Date.now())) saveFarm(); if(near) farmVisual(false); }
+  if(near){ FARM.plots.forEach(V=>{ if(V.drop.visible) V.drop.position.y=V.y-FARM.I.y+1.5+Math.sin(t*3+V.x)*.12; });
+    const v=FARM.vendor; if(v){ v.position.y=FARM.I.top(FARM.I.x+FARM.fx,FARM.I.z+FARM.fz)-FARM.I.y+Math.abs(Math.sin(t*2.2))*.05; const d=Math.hypot(player.pos.x-FARM.vx,player.pos.z-FARM.vz); v.userData.arms[1].rotation.z=d<6?-1.6+Math.sin(t*7)*.4:-.2; } }
+  // gotitas al regar
+  for(let i=farmFx.length-1;i>=0;i--){ const f=farmFx[i]; f.t+=dt; f.s.position.y-=dt*3; f.s.material.opacity=1-f.t/.7; if(f.t>.7){ scene.remove(f.s); f.s.material.dispose(); farmFx.splice(i,1); } } }
+const farmFx=[];
+function farmNearPlot(){ if(!FARM.I) return -1; let best=-1, bd=1.45; FARM.plots.forEach((V,i)=>{ const d=Math.hypot(player.pos.x-V.x,player.pos.z-V.z); if(d<bd && Math.abs(player.pos.y-V.y)<1.5){ bd=d; best=i; } }); return best; }
+const seedKinds=()=>CROPS.filter(c=>(farm.seeds[c.id]||0)>0);
+function farmActions(){ if(!FARM.I || player.swim || player.dive) return null; const I=FARM.I; if(Math.hypot(player.pos.x-I.x,player.pos.z-I.z)>I.R+1 || Math.abs(player.pos.y-I.y)>3) return null;
+  if(Math.hypot(player.pos.x-FARM.vx,player.pos.z-FARM.vz)<2.8) return [{label:'Hablar con Fresita', run:()=>openFishOv('farm')}, null];
+  const i=farmNearPlot(); if(i<0) return null; const p=farm.plots[i], now=Date.now();
+  if(!p){ const ks=seedKinds(); if(!ks.length) return [{label:'No tienes semillas: ve con Fresita', disabled:true, run:()=>{}}, null];
+    const c=ks[farm.sel%ks.length]; return [{label:`Plantar ${c.n} (${farm.seeds[c.id]})`, run:()=>farmPlant(i,c.id)}, ks.length>1?{label:'Otra semilla', run:()=>{ farm.sel++; scanActions(); }}:null]; }
+  const c=CROP_BY[p.c];
+  if(p.g>=1) return [{label:`Cosechar ${c.n}`, run:()=>farmHarvest(i)}, null];
+  if(now>=p.w) return [{label:'Regar 💧', run:()=>farmWater(i)}, null];
+  const left=Math.max(1,Math.ceil((1-p.g)*c.min - (now-p.u)/60000)), dryIn=Math.ceil((p.w-now)/60000);
+  return [{label:`${c.n}: faltan ~${left} min`, disabled:true, run:()=>{}}, {label:`Mojada ${dryIn} min más`, disabled:true, run:()=>{}}]; }
+function farmPlant(i,id){ if(farm.plots[i] || !(farm.seeds[id]>0)) return; farm.seeds[id]--; const now=Date.now(); farm.plots[i]={c:id, g:0, u:now, w:0}; saveFarm(); farmVisual(true); try{ audio.land(.4); }catch(e){} flashNote(`Plantaste ${CROP_BY[id].n}. ¡Ahora riégala!`); scanActions(); }
+function farmWater(i){ const p=farm.plots[i]; if(!p) return; const now=Date.now(); farmGrow(now); p.w=now+WET_MS; p.u=now; saveFarm(); farmVisual(true);
+  const V=FARM.plots[i]; for(let k=0;k<10;k++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:dropTex, transparent:true, depthWrite:false})); s.scale.set(.18,.18,1); s.position.set(V.x+(Math.random()-.5)*1.2, V.y+1.6+Math.random()*.6, V.z+(Math.random()-.5)*1.2); scene.add(s); farmFx.push({s,t:-Math.random()*.3}); }
+  player.facing=Math.atan2(V.x-player.pos.x,V.z-player.pos.z); try{ audio.splash(.4); }catch(e){} scanActions(); }
+function farmHarvest(i){ const p=farm.plots[i]; if(!p || p.g<1) return; farm.crop[p.c]=(farm.crop[p.c]||0)+1; const n=CROP_BY[p.c].n; farm.plots[i]=null; saveFarm(); farmVisual(true); try{ audio.wave(); }catch(e){} flashNote(`¡Cosechaste ${n}! Véndela con Fresita`); scanActions(); }
+// la tienda de Fresita (usa la misma ventana que Tortu)
+let farmTab='seeds';
+function farmRow(c,txt,btns){ const row=document.createElement('div'); row.className='fish-row'; const ic=document.createElement('span'); ic.className='farm-ic'; ic.textContent=c.ic; row.appendChild(ic);
+  const tx=document.createElement('div'); tx.className='fish-tx'; const b=document.createElement('b'); b.textContent=txt[0]; const s=document.createElement('small'); s.textContent=txt[1]; tx.append(b,s); row.appendChild(tx);
+  btns.filter(Boolean).forEach(([lab,fn,dis])=>{ const bt=document.createElement('button'); bt.className='sbtn'; bt.textContent=lab; bt.disabled=!!dis; bt.onclick=fn; row.appendChild(bt); }); return row; }
+function renderFarmOv(){ const body=ui('fishBody'), say=ui('fishSay'); body.textContent=''; ui('fishTitle').textContent='Fresita, la de las semillas'; ui('fishTabs').hidden=true;
+  const chips=document.createElement('div'); chips.className='fish-chips'; [['seeds','Comprar semillas'],['sell','Vender cosecha']].forEach(([v,l])=>{ const c=document.createElement('button'); c.className='chip'; c.textContent=l; c.setAttribute('aria-pressed',String(farmTab===v)); c.onclick=()=>{ farmTab=v; renderFarmOv(); }; chips.appendChild(c); }); body.appendChild(chips);
+  if(farmTab==='seeds'){ say.textContent=`¡Hola! Siembra en las parcelas y riégalas: crecen aunque cierres el juego, pero solo mientras la tierra está mojada (dura ${WET_MS/60000} min). Tienes ${coins} monedas.`;
+    CROPS.forEach(c=>{ const have=farm.seeds[c.id]||0; body.appendChild(farmRow(c,[`${c.n}${have?` · tienes ${have}`:''}`,`Crece en ${c.min} min mojada · la compro en ${c.sell} monedas`],
+      [[`Comprar · ${c.seed}`,()=>farmBuy(c,1),coins<c.seed], [`5 · ${c.seed*5}`,()=>farmBuy(c,5),coins<c.seed*5]])); }); return; }
+  const total=CROPS.reduce((n,c)=>n+(farm.crop[c.id]||0)*c.sell,0);
+  say.textContent = total ? `¡Qué buena cosecha! Te doy ${total} monedas por todo.` : 'Todavía no tienes nada cosechado. ¡Siembra, riega y regresa!';
+  if(total){ const all=document.createElement('button'); all.className='btn primary fish-all'; all.textContent=`Vender todo · ${total} monedas`; all.onclick=()=>{ farm.crop={}; saveFarm(); addCoins(total); try{ audio.wave(); }catch(e){} renderFarmOv(); }; body.appendChild(all); }
+  CROPS.forEach(c=>{ const n=farm.crop[c.id]||0; if(!n) return; body.appendChild(farmRow(c,[`${c.n} ×${n}`,`${c.sell} monedas cada una`],[['Vender 1',()=>{ farm.crop[c.id]--; saveFarm(); addCoins(c.sell); renderFarmOv(); }], n>1?[`Vender ${n}`,()=>{ farm.crop[c.id]=0; saveFarm(); addCoins(c.sell*n); renderFarmOv(); }]:null])); }); }
+function farmBuy(c,n){ if(coins<c.seed*n) return; coins-=c.seed*n; saveCoins(); renderCoins(); farm.seeds[c.id]=(farm.seeds[c.id]||0)+n; saveFarm(); try{ coinSound(Math.min(4,n)); }catch(e){} renderFarmOv(); }
+FI.forEach(fiBuild);   // se arman las islas al final (la granja necesita el huerto ya listo)
 
 // ======================================================================================
 // ---------- La feria ----------
@@ -10195,6 +10587,7 @@ function update(dt,t){ myLabelUpdate();
   cucoUpdate(dt,t);
   pierUpdate(dt,t);
   trUpdate(dt,t);
+  fiUpdate(dt,t); blUpdate(dt,t); farmUpdate(dt,t);
   raceTick(dt);
   if(state==='play' && player.pg) pgPose=updateMyPlay(dt);
   const bowMoving = state==='play' && updateMyBow(dt);
@@ -10302,7 +10695,7 @@ function update(dt,t){ myLabelUpdate();
         player.pos.y=g; player.vy=0;     // pegado al suelo al subir y bajar cuestas
       } else {
         player.vy -= 20*dt; player.pos.y += player.vy*dt;
-        if(player.pos.y<=g && (trampLand(g) || raceLand(g))){}   // trampolín: rebota
+        if(player.pos.y<=g && (trampLand(g) || raceLand(g) || fiBounce(g))){}   // trampolín: rebota
         else if(player.pos.y<=g){
           const impact=-player.vy;
           if(!player.grounded){
