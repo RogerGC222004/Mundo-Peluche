@@ -856,7 +856,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='114';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='115';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -871,6 +871,14 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
+// Lo muy iluminado ya no se «quema» a blanco parejo: las luces altas se suavizan y se ve el volumen y la tela en lo claro
+// (antes un peluche pastel al sol quedaba casi blanco y plano). Casi no cuesta: unas cuantas cuentas por pixel.
+if(!ULTRA){ THREE.ShaderChunk.tonemapping_pars_fragment=THREE.ShaderChunk.tonemapping_pars_fragment.replace('vec3 CustomToneMapping( vec3 color ) { return color; }',
+    'vec3 CustomToneMapping( vec3 color ) { color*=toneMappingExposure; vec3 d=max(color-0.72,0.0); return min(color,vec3(0.72))+d/(1.0+d/0.46); }');
+  renderer.toneMapping=THREE.CustomToneMapping;
+  // lo que no recibe luz (letreros, nombres, sol, luna, destellos) se queda tal cual
+  const SM0=THREE.SpriteMaterial; THREE.SpriteMaterial=class extends SM0{ constructor(p){ super(p); this.toneMapped=false; } };
+  const BM0=THREE.MeshBasicMaterial; THREE.MeshBasicMaterial=class extends BM0{ constructor(p){ super(p); this.toneMapped=false; } }; }
 const FX={on:false, ok:null, w:0, h:0};   // efectos de la calidad Máxima (ver «Calidad Máxima» más abajo)
 
 // Cada cuadro three.js vuelve a calcular la posición de TODOS los objetos (miles), aunque no se hayan movido.
@@ -1331,7 +1339,7 @@ function updateWater(dt){
   const day=sky.dayK, amb=_c1.copy(hemi.color).multiplyScalar(hemi.intensity*.9).add(_c2.copy(hemi.groundColor).multiplyScalar(hemi.intensity*.25));
   for(const m of waterMats){ const u=m.uniforms; u.uT.value=WATER.t; u.uA.value=m.userData.lake?WATER.lakeA:WATER.seaA;
     u.uSky.value.copy(skyNow).convertSRGBToLinear(); u.uAmb.value.copy(amb);
-    u.uSunD.value.copy(sun.position).sub(sun.target.position).normalize(); u.uSunC.value.copy(sun.color).multiplyScalar(sun.intensity); }
+    if(sky.sunD) u.uSunD.value.copy(sky.sunD); else u.uSunD.value.copy(sun.position).sub(sun.target.position).normalize(); u.uSunC.value.copy(sun.color).multiplyScalar(sun.intensity); }
   // ondas del jugador, de los demás y de los coches
   if(state==='play') waterTouch(myWaterSt, player.pos.x, player.pos.y, player.pos.z, Math.hypot(player.vel.x,player.vel.z), dt);
   for(const r of mp.remotes.values()){ r.wst=r.wst||{}; waterTouch(r.wst, r.pos.x, r.pos.y, r.pos.z, r.moving*5, dt); }
@@ -2178,14 +2186,15 @@ function updateSky(dt){
   hemi.color.copy(C.hemiSkyNight).lerp(C.hemiSkyDay,day);
   hemi.groundColor.copy(C.hemiGndNight).lerp(C.hemiGndDay,day);
   hemi.color.lerp(_c1.set(0xffc79c),dusk*.5);   // atardecer dorado
-  hemi.intensity=(.22+.53*day)*(1-.2*W.cov) + fl*1.4;
+  hemi.intensity=(.2+.45*day)*(1-.2*W.cov) + fl*1.4;   // un poco menos de luz pareja y un poco más de sol: más volumen
   const sunUp=sm(-.04,.2,sunDir.y), moonUp=sm(-.04,.2,moonDir.y);
   const useSun=sunDir.y>-.02, dir=useSun?sunDir:moonDir;
-  sun.intensity=useSun ? .85*sunUp*(1-.7*W.cov)*(1+dusk*.3) : .24*moonUp*(1-.6*W.cov);
+  sun.intensity=useSun ? 1.0*sunUp*(1-.7*W.cov)*(1+dusk*.3) : .24*moonUp*(1-.6*W.cov);
   sky.dusk=dusk;
   if(useSun) sun.color.copy(C.sunLow).lerp(C.sunNoon, sm(.05,.35,sunDir.y)); else sun.color.copy(C.moon);
   const fp=player.pos;
-  sun.position.set(fp.x+dir.x*60, fp.y+dir.y*60, fp.z+dir.z*60); sun.target.position.copy(fp);
+  (sky.sunD||(sky.sunD=new THREE.Vector3())).set(dir.x,dir.y,dir.z);   // el brillo del agua sigue al sol que se ve en el cielo
+  { const lx=dir.x, ly=dir.y*.7, lz=dir.z+.1, ll=Math.hypot(lx,ly,lz)||1; sun.position.set(fp.x+lx/ll*60, fp.y+ly/ll*60, fp.z+lz/ll*60); }   // la luz llega un poco más de lado: sombras más largas y se notan las formas sun.target.position.copy(fp);
   // Sol, luna y estrellas (siempre lejos, alrededor de la cámara)
   const R=camera.far*.82; skyRoot.position.copy(camera.position);
   { const U=skyDome.material.uniforms; skyDome.scale.setScalar(camera.far*.9); skyDome.visible=!under;
@@ -4292,7 +4301,7 @@ const AIR_PARK=[[60,-52],[112,-52],[150,-58],[177,-58]];   // estacionamientos (
 
 // ---------- Aviones y helicópteros ----------
 const PL={R:1.9, FY:3.1, F:2.05, doorZ:5.2, stairsLen:3.1, len:[-15,10.6]};
-const HE={F:1.05, door:[-1.3,.95]};
+const HE={F:1.05, door:[-1.3,.95], SX:1.7, SY:1.55, SZ:2.55, CY:2.05};   // casco: medidas del óvalo y altura del centro
 const AIR_TYPES=[
   {kind:'plane', name:'Avión', body:'#fbf7ee', stripe:'#4f86c6', tail:'#e5534b'},
   {kind:'plane', name:'Avión', body:'#fbf7ee', stripe:'#f2a541', tail:'#4f9b5a'},
@@ -4300,15 +4309,17 @@ const AIR_TYPES=[
   {kind:'heli',  name:'Helicóptero', body:'#5aa9e6', trim:'#2f3640'}];
 const AIR_HEAD=Math.atan2(APU[0],APU[1]);   // mirando hacia la pista (hacia el mar)
 // Asientos (x, z locales): 0 piloto, 1 copiloto, el resto pasajeros
-const PLANE_SEATS=[[.55,7.35],[-.55,7.35]]; for(let k=0;k<12;k++) [1.25,.72,-.72,-1.25].forEach(x=>PLANE_SEATS.push([x,3.6-k*.95]));
-const HELI_SEATS=[[.5,1.0],[-.5,1.0],[.65,-.85],[0,-.85],[-.65,-.85]];
-const PLANE_WALK=[[-.42,.42,-8.2,4.4],[-1.45,1.45,4.4,6.2],[-.95,.95,6.2,7.0]], HELI_WALK=[[-.95,.95,-.45,.5]];
+// un asiento por lado y pasillo en medio: así cabe un peluche en cada uno sin encimarse con el de junto ni con la pared
+const PLANE_ROWS=10, PLANE_PITCH=1.2;
+const PLANE_SEATS=[[.55,7.35],[-.55,7.35]]; for(let k=0;k<PLANE_ROWS;k++) [1.0,-1.0].forEach(x=>PLANE_SEATS.push([x,3.6-k*PLANE_PITCH]));
+const HELI_SEATS=[[.55,1.0],[-.55,1.0],[.62,-.95],[-.62,-.95]];   // 2 adelante y 2 atrás: cada peluche cabe completo bajo el techo
+const PLANE_WALK=[[-.15,.15,-8.2,4.4],[-1.4,1.4,4.4,6.2],[-.95,.95,6.2,7.0]], HELI_WALK=[[-1.0,1.0,-.5,.55]];
 const seatsOf=a=>a.T.kind==='plane'?PLANE_SEATS:HELI_SEATS, floorOf=a=>a.T.kind==='plane'?PL.F:HE.F;
 const cushionY=a=>floorOf(a)+.48;
 
 function buildPlane(T){
   const root=new THREE.Group(), st=new THREE.Group(), R=PL.R, FY=PL.FY;
-  const bodyM=new THREE.MeshStandardMaterial({color:T.body, roughness:.7, side:THREE.DoubleSide}), stripeM=felt(T.stripe), tailM=felt(T.tail), darkM=felt('#3a3d46');
+  const bodyM=felt(T.body,'rgba(0,0,0,.07)',2), stripeM=felt(T.stripe), tailM=felt(T.tail), darkM=felt('#3a3d46'); bodyM.side=THREE.DoubleSide;   // de fieltro como los coches (antes plástico liso: se veía plano)
   const winM=new THREE.MeshStandardMaterial({color:0x9fd3f0, roughness:.2, emissive:0x3f7fae, emissiveIntensity:.35});
   const cyl=(r1,r2,len,th0,thl,m)=>{ const c=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,len,28,1,true,th0,thl),m); c.rotation.x=Math.PI/2; return c; };
   // fuselaje con hueco para la puerta (lado izquierdo, +x)
@@ -4317,16 +4328,19 @@ function buildPlane(T){
   { const b=cyl(R,R,z1-z0,gap1,Math.PI*2-(gap1-gap0),bodyM); b.position.set(0,FY,(z0+z1)/2); st.add(b); }
   { const c=cyl(R,R,9-z1,0,Math.PI*2,bodyM); c.position.set(0,FY,(z1+9)/2); st.add(c); }
   const nose=new THREE.Mesh(new THREE.SphereGeometry(R,28,18,0,Math.PI*2,0,Math.PI/2),bodyM); nose.rotation.x=Math.PI/2; nose.scale.set(1,1.6,1); nose.position.set(0,FY,9); st.add(nose);
-  const tailc=cyl(R,.55,6,0,Math.PI*2,bodyM); tailc.rotation.x=-Math.PI/2; tailc.position.set(0,FY+.55,-12); st.add(tailc);
-  { const cap=new THREE.Mesh(new THREE.CircleGeometry(.56,16),bodyM); cap.rotation.y=Math.PI; cap.position.set(0,FY+1.1,-15); st.add(cap); }
+  // cola: empieza del mismo grueso que el fuselaje (sin hueco) y se adelgaza hacia atrás, subiendo la panza como un avión de verdad
+  { const g=new THREE.CylinderGeometry(.55,R,6,28,4,true); g.rotateX(-Math.PI/2); g.translate(0,0,-12);
+    const pa=g.attributes.position; for(let i=0;i<pa.count;i++){ const k=(-9-pa.getZ(i))/6; pa.setY(i,pa.getY(i)+1.1*k); }
+    g.computeVertexNormals(); const tailc=new THREE.Mesh(g,bodyM); tailc.position.set(0,FY,0); st.add(tailc); }
+  { const cap=new THREE.Mesh(new THREE.SphereGeometry(.55,16,10,0,Math.PI*2,0,Math.PI/2),bodyM); cap.rotation.x=-Math.PI/2; cap.scale.set(1,.45,1); cap.position.set(0,FY+1.1,-15); st.add(cap); }
   // franja y ventanillas
   [-1,1].forEach(s=>{ const f=new THREE.Mesh(new THREE.BoxGeometry(.06,.32,23),stripeM); f.position.set(s*(R+.01),FY-.25,-1.5); st.add(f);
-    for(let k=0;k<13;k++){ const z=3.6-k*.95; const w=new THREE.Mesh(new THREE.BoxGeometry(.1,.42,.3),winM); w.position.set(s*(R-.03),FY+.25,z); st.add(w); } });
+    for(let k=0;k<PLANE_ROWS;k++){ const z=3.6-k*PLANE_PITCH; const w=new THREE.Mesh(new THREE.BoxGeometry(.1,.46,.34),winM); w.position.set(s*(R-.03),FY+.3,z); st.add(w); } });   // una ventanilla por fila
   const ws=new THREE.Mesh(new THREE.BoxGeometry(2.2,.55,.6),winM); ws.position.set(0,FY+.95,9.55); ws.rotation.x=-.75; st.add(ws);
   // alas, motores, cola y tren de aterrizaje
-  const wing=new THREE.Mesh(new THREE.BoxGeometry(24,.36,3.6),bodyM); wing.position.set(0,FY-1.15,-.6); st.add(wing);
-  [-1,1].forEach(s=>{ const tip=new THREE.Mesh(new THREE.BoxGeometry(.3,1.2,1.2),tailM); tip.position.set(s*12,FY-.6,-1.6); st.add(tip);
-    const e=cyl(.72,.62,3,0,Math.PI*2,stripeM); e.position.set(s*5,FY-1.95,.4); st.add(e); const ec=new THREE.Mesh(new THREE.CircleGeometry(.6,18),darkM); ec.position.set(s*5,FY-1.95,1.91); st.add(ec);
+  const wing=new THREE.Mesh(new THREE.BoxGeometry(24,.36,3.6),bodyM); wing.position.set(0,FY-1.3,-.6); st.add(wing);   // debajo del piso de la cabina (antes se asomaba adentro)
+  [-1,1].forEach(s=>{ const tip=new THREE.Mesh(new THREE.BoxGeometry(.3,1.2,1.2),tailM); tip.position.set(s*12,FY-.75,-1.6); st.add(tip);
+    const e=cyl(.72,.62,3,0,Math.PI*2,stripeM); e.position.set(s*5,FY-2.05,.4); st.add(e); const ec=new THREE.Mesh(new THREE.CircleGeometry(.6,18),darkM); ec.position.set(s*5,FY-2.05,1.91); st.add(ec);
     const hs=new THREE.Mesh(new THREE.BoxGeometry(3.6,.22,1.9),bodyM); hs.position.set(s*2.2,FY+1.1,-13.6); st.add(hs); });
   const fin=new THREE.Mesh(new THREE.BoxGeometry(.28,4.2,3.2),tailM); fin.position.set(0,FY+3,-13.6); fin.rotation.x=-.32; st.add(fin);
   const wheel=(x,z,r)=>{ const w=new THREE.Mesh(new THREE.CylinderGeometry(r,r,.4,16),darkM); w.rotation.z=Math.PI/2; w.position.set(x,r,z); st.add(w);
@@ -4334,14 +4348,16 @@ function buildPlane(T){
   wheel(0,7.3,.42); [-1,1].forEach(s=>wheel(s*2.1,-1.0,.55));
   // interior: piso, asientos, cabina de mando
   const floorM=felt('#8e97ad'), seatM=new THREE.MeshStandardMaterial({color:0x4f86c6, roughness:1, emissive:0x1d3b66, emissiveIntensity:.25}), seatM2=new THREE.MeshStandardMaterial({color:0xe5534b, roughness:1, emissive:0x5a1714, emissiveIntensity:.25});
-  const fl=new THREE.Mesh(new THREE.BoxGeometry(3.5,.1,17.6),floorM); fl.position.set(0,PL.F-.05,-.4); st.add(fl);
-  const aisle=new THREE.Mesh(new THREE.BoxGeometry(.8,.02,13),felt('#c95f5f')); aisle.position.set(0,PL.F+.01,-1.9); st.add(aisle);
-  PLANE_SEATS.forEach(([x,z],i)=>{ const m=i<2?seatM2:seatM;
-    const c=new THREE.Mesh(new THREE.BoxGeometry(.5,.16,.48),m); c.position.set(x,PL.F+.4,z); st.add(c);
-    const b=new THREE.Mesh(new THREE.BoxGeometry(.5,.78,.13),m); b.position.set(x,PL.F+.82,z-.27); b.rotation.x=-.12; st.add(b);
-    const base=new THREE.Mesh(new THREE.BoxGeometry(.4,.32,.36),darkM); base.position.set(x,PL.F+.16,z); st.add(base); });
+  const fl=new THREE.Mesh(new THREE.BoxGeometry(3.0,.1,17.6),floorM); fl.position.set(0,PL.F-.05,-.4); st.add(fl);   // del ancho de adentro: ya no se asoma por fuera
+  const aisle=new THREE.Mesh(new THREE.BoxGeometry(.9,.02,13),felt('#c95f5f')); aisle.position.set(0,PL.F+.01,-1.9); st.add(aisle);
+  PLANE_SEATS.forEach(([x,z],i)=>{ const m=i<2?seatM2:seatM, w=i<2?.62:.82;
+    const c=new THREE.Mesh(new THREE.BoxGeometry(w,.16,.55),m); c.position.set(x,PL.F+.4,z); st.add(c);
+    const b=new THREE.Mesh(new THREE.BoxGeometry(w,.85,.13),m); b.position.set(x,PL.F+.86,z-.3); b.rotation.x=-.12; st.add(b);
+    const hr=new THREE.Mesh(new THREE.BoxGeometry(w*.55,.22,.15),m); hr.position.set(x,PL.F+1.36,z-.36); hr.rotation.x=-.12; st.add(hr);   // cabecera
+    const base=new THREE.Mesh(new THREE.BoxGeometry(w*.7,.32,.4),darkM); base.position.set(x,PL.F+.16,z); st.add(base); });
   { const cm=new THREE.MeshStandardMaterial({color:0xfbf3e4, roughness:1, emissive:0xfbf3e4, emissiveIntensity:.32, side:THREE.DoubleSide});   // techo claro de la cabina
-    const ce=new THREE.Mesh(new THREE.BoxGeometry(2.6,.06,16.4),cm); ce.position.set(0,FY+1.32,-.6); st.add(ce); }
+    const ce=new THREE.Mesh(new THREE.BoxGeometry(2.6,.06,16.4),cm); ce.position.set(0,FY+1.32,-.6); st.add(ce);
+    const wall=new THREE.Mesh(new THREE.CircleGeometry(R-.03,28),cm); wall.position.set(0,FY,-8.8); st.add(wall); }   // pared del fondo de la cabina
   const dash=new THREE.Mesh(new THREE.BoxGeometry(2,.5,.5),darkM); dash.position.set(0,PL.F+1.05,8.35); dash.rotation.x=-.3; st.add(dash);
   [-1,1].forEach(s=>{ const y=new THREE.Mesh(new THREE.TorusGeometry(.17,.035,8,18,Math.PI*1.4),felt('#2c2c34')); y.position.set(s*.55,PL.F+1.0,7.95); y.rotation.z=-Math.PI*.2; st.add(y); });
   const scr=new THREE.Mesh(new THREE.PlaneGeometry(1.6,.3),new THREE.MeshBasicMaterial({color:0x6ee7a6})); scr.position.set(0,PL.F+1.18,8.08); scr.rotation.x=-.3; st.add(scr);
@@ -4364,25 +4380,26 @@ function buildPlane(T){
 }
 function buildHeli(T){
   const root=new THREE.Group(), st=new THREE.Group(), F=HE.F;
-  const bodyM=new THREE.MeshStandardMaterial({color:T.body, roughness:.65, side:THREE.DoubleSide}), trimM=felt(T.trim), glassM2=new THREE.MeshStandardMaterial({color:0x9fd3f0, roughness:.15, transparent:true, opacity:.55, side:THREE.DoubleSide, depthWrite:false});
+  const bodyM=felt(T.body,'rgba(0,0,0,.1)',2), trimM=felt(T.trim), glassM2=new THREE.MeshStandardMaterial({color:0x9fd3f0, roughness:.15, transparent:true, opacity:.55, side:THREE.DoubleSide, depthWrite:false}); bodyM.side=THREE.DoubleSide;
   // cuerpo con abertura lateral (lado izquierdo, +x)
-  const body=new THREE.Mesh(new THREE.SphereGeometry(1,28,18,Math.PI+.75,Math.PI*2-1.5),bodyM); body.scale.set(1.45,1.3,2.35); body.position.set(0,1.9,0); st.add(body);
-  const bub=new THREE.Mesh(new THREE.SphereGeometry(1,24,14,Math.PI*.15,Math.PI*.7,.25,1.25),glassM2); bub.scale.set(1.5,1.35,2.42); bub.position.set(0,1.9,0); root.add(bub);
-  const fl=new THREE.Mesh(new THREE.BoxGeometry(2.3,.12,3.4),felt('#8e97ad')); fl.position.set(0,F-.06,0); st.add(fl);
-  const boom=new THREE.Mesh(new THREE.CylinderGeometry(.32,.18,5.4,14),bodyM); boom.rotation.x=Math.PI/2; boom.position.set(0,2.25,-4.4); st.add(boom);
-  const fin=new THREE.Mesh(new THREE.BoxGeometry(.16,1.5,1.0),trimM); fin.position.set(0,2.8,-6.9); st.add(fin);
-  const mast=new THREE.Mesh(new THREE.CylinderGeometry(.14,.18,.7,10),trimM); mast.position.set(0,3.35,0); st.add(mast);
-  [-1,1].forEach(s=>{ const sk=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,3.8,8),trimM); sk.rotation.x=Math.PI/2; sk.position.set(s*1.1,.1,0); st.add(sk);
-    [-.9,.9].forEach(z=>{ const p=new THREE.Mesh(new THREE.BoxGeometry(.08,.75,.08),trimM); p.position.set(s*1.0,.45,z); p.rotation.z=s*.2; st.add(p); }); });
+  // cabina más grande: un peluche sentado (≈1.7 de alto) cabe completo sin que se le asome la cabeza por el techo
+  const body=new THREE.Mesh(new THREE.SphereGeometry(1,28,18,Math.PI+.75,Math.PI*2-1.5),bodyM); body.scale.set(HE.SX,HE.SY,HE.SZ); body.position.set(0,HE.CY,0); st.add(body);
+  const bub=new THREE.Mesh(new THREE.SphereGeometry(1,24,14,Math.PI*.15,Math.PI*.7,.25,1.25),glassM2); bub.scale.set(HE.SX+.05,HE.SY+.05,HE.SZ+.07); bub.position.set(0,HE.CY,0); root.add(bub);
+  { const fl=new THREE.Mesh(new THREE.CylinderGeometry(1,1,.12,28),felt('#8e97ad')); fl.scale.set(1.24,1,1.84); fl.position.set(0,F-.06,0); st.add(fl); }   // piso ovalado: no se sale del casco
+  const boom=new THREE.Mesh(new THREE.CylinderGeometry(.34,.18,5.6,14),bodyM); boom.rotation.x=Math.PI/2; boom.position.set(0,2.4,-4.9); st.add(boom);
+  const fin=new THREE.Mesh(new THREE.BoxGeometry(.16,1.5,1.0),trimM); fin.position.set(0,2.95,-7.5); st.add(fin);
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(.14,.2,.7,10),trimM); mast.position.set(0,3.75,0); st.add(mast);
+  [-1,1].forEach(s=>{ const sk=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,4.0,8),trimM); sk.rotation.x=Math.PI/2; sk.position.set(s*1.25,.1,0); st.add(sk);
+    [-1,1].forEach(z=>{ const p=new THREE.Mesh(new THREE.BoxGeometry(.08,.95,.08),trimM); p.position.set(s*1.14,.55,z*.95); p.rotation.z=s*.2; st.add(p); }); });
   const seatM=new THREE.MeshStandardMaterial({color:0x3a3d46, roughness:1, emissive:0x1a1c22, emissiveIntensity:.3});
-  HELI_SEATS.forEach(([x,z])=>{ const c=new THREE.Mesh(new THREE.BoxGeometry(.5,.16,.48),seatM); c.position.set(x,F+.4,z); st.add(c);
-    const b=new THREE.Mesh(new THREE.BoxGeometry(.5,.75,.13),seatM); b.position.set(x,F+.8,z-.27); st.add(b); });
+  HELI_SEATS.forEach(([x,z])=>{ const c=new THREE.Mesh(new THREE.BoxGeometry(.66,.16,.52),seatM); c.position.set(x,F+.4,z); st.add(c);
+    const b=new THREE.Mesh(new THREE.BoxGeometry(.66,.8,.13),seatM); b.position.set(x,F+.82,z-.29); b.rotation.x=-.1; st.add(b); });
   const dash=new THREE.Mesh(new THREE.BoxGeometry(1.6,.4,.4),trimM); dash.position.set(0,F+.95,1.75); dash.rotation.x=-.4; st.add(dash);
   mergeStatic(st); st.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); root.add(st);
-  const rotorG=new THREE.Group(); rotorG.position.set(0,3.72,0); root.add(rotorG); const rotor=rotorG;
-  for(let k=0;k<4;k++){ const b=new THREE.Mesh(new THREE.BoxGeometry(.32,.06,5.3),trimM); b.position.z=2.65; const arm=new THREE.Group(); arm.rotation.y=k*Math.PI/2; arm.add(b); rotor.add(arm); }
+  const rotorG=new THREE.Group(); rotorG.position.set(0,4.12,0); root.add(rotorG); const rotor=rotorG;
+  for(let k=0;k<4;k++){ const b=new THREE.Mesh(new THREE.BoxGeometry(.32,.06,5.8),trimM); b.position.z=2.9; const arm=new THREE.Group(); arm.rotation.y=k*Math.PI/2; arm.add(b); rotor.add(arm); }
   const hub=new THREE.Mesh(new THREE.CylinderGeometry(.28,.28,.2,12),trimM); rotor.add(hub);
-  const tail=new THREE.Group(); tail.position.set(.22,2.8,-6.9); root.add(tail);
+  const tail=new THREE.Group(); tail.position.set(.22,2.95,-7.5); root.add(tail);
   [0,1].forEach(k=>{ const b=new THREE.Mesh(new THREE.BoxGeometry(.05,1.3,.16),trimM); b.rotation.x=k*Math.PI/2; tail.add(b); });
   root.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
   return {root, rotorG, tail};
@@ -4422,7 +4439,7 @@ function aircraftGround(x,z,y){
 function collideAircraft(pos){
   for(const a of aircraft){ if(Math.abs(pos.x-a.x)>16 || Math.abs(pos.z-a.z)>16) continue;
     const [lx,lz]=airWorldToLocalFlat(a,pos.x,pos.z), c=Math.cos(a.h), s=Math.sin(a.h);
-    const boxes=a.T.kind==='plane' ? [[0,PL.R+.35,(PL.len[0]+PL.len[1])/2,(PL.len[1]-PL.len[0])/2, a.y+PL.FY+PL.R],[5,1.15,.4,1.9,a.y+2],[-5,1.15,.4,1.9,a.y+2],[0,12.3,-.6,2.0,a.y+PL.FY-.95]] : [[0,1.85,0,2.7,a.y+3.2],[0,.5,-4.6,2.7,a.y+2.6]];   // cuerpo, motores, alas completas · cabina y cola
+    const boxes=a.T.kind==='plane' ? [[0,PL.R+.35,(PL.len[0]+PL.len[1])/2,(PL.len[1]-PL.len[0])/2, a.y+PL.FY+PL.R],[5,1.15,.4,1.9,a.y+2],[-5,1.15,.4,1.9,a.y+2],[0,12.3,-.6,2.0,a.y+PL.FY-.95]] : [[0,2.0,0,2.8,a.y+3.65],[0,.5,-5.0,2.8,a.y+3.0]];   // cuerpo, motores, alas completas · cabina y cola
     for(let [cx,hx,cz,hz,top] of boxes){
       if(pos.y>top-.3) continue;
       let hx2=hx; if(a.T.kind==='plane' && cx===0 && Math.abs(lz-PL.doorZ)<.62 && lx>0 && pos.y>a.y+PL.F-.5) hx2=PL.R+.12;   // en el descanso: hasta la pared
@@ -4575,7 +4592,7 @@ function updateMyAircraft(dt){
     landOnFoot(a,PL.R+.45,PL.doorZ,Math.PI/2); setTimeout(()=>{ if(!player.ac || player.ac.i!==a.i) setAirDoor(a,false); },900); return null;
   }
   if(A.mode==='climb'){   // saltito con las manos arriba, agarrarse del borde y subir
-    const st=[2.35,0,A.from[2]], edge=[1.75,.3,A.from[2]], inn=[.35,F,A.from[2]];
+    const st=[2.6,0,A.from[2]], edge=[1.95,.35,A.from[2]], inn=[.35,F,A.from[2]];
     if(el<.3){ const k=easeIO(el/.3); return {l:(A.l=L3(A.from,st,k)), f:-Math.PI/2, walk:true}; }
     if(el<.5) return {l:st, f:-Math.PI/2, crouch:Math.sin((el-.3)/.2*Math.PI/2)*.6};
     if(el<.85){ const k=(el-.5)/.35, p=L3(st,edge,easeIO(k)); p[1]+=Math.sin(k*Math.PI)*.25; A.l=p; return {l:p, f:-Math.PI/2, armsUp:1, air:true}; }
@@ -4583,10 +4600,10 @@ function updateMyAircraft(dt){
     player.ac={...A, mode:'inside', l:inn, f:0}; forceFirst(true); audio.getup(); updateTouchMode(); try{ sendPresence(true); }catch(e){} return {l:inn, f:0};
   }
   if(A.mode==='jumpOut'){
-    const d=[.95,F,A.from[2]], out=[2.6,0,A.from[2]];
+    const d=[.95,F,A.from[2]], out=[2.85,0,A.from[2]];
     if(el<.45){ const k=easeIO(el/.45); return {l:(A.l=L3(A.from,d,k)), f:lerpAng(A.f,Math.PI/2,k), walk:true}; }
     if(el<.95){ const k=(el-.45)/.5, p=L3(d,out,k); p[1]+=Math.sin(k*Math.PI)*.5; A.l=p; return {l:p, f:Math.PI/2, air:true}; }
-    landOnFoot(a,2.6,A.from[2],Math.PI/2); audio.land(.5); return null;
+    landOnFoot(a,2.85,A.from[2],Math.PI/2); audio.land(.5); return null;
   }
   if(A.mode==='sitting'){
     const k=Math.min(1,el/.4); A.l=L3(A.from,A.to,easeIO(k)); A.f=lerpAng(A.f,0,Math.min(1,dt*10));
@@ -4628,7 +4645,7 @@ function airActions(){
       return [{label:'Levantarse', run:standAir}, null];
     }
     if(A.mode!=='inside') return [null,null];
-    const seats=seatsOf(a); let best=-1, bd=.8;
+    const seats=seatsOf(a); let best=-1, bd=a.T.kind==='plane'?1.15:1.0;   // desde el pasillo se alcanza el asiento de la fila
     seats.forEach(([x,z],k)=>{ const d=Math.hypot(x-A.l[0],z-A.l[2]); if(d<bd && !airSeatTaken(a.i,k)){ bd=d; best=k; } });
     if(a.T.kind==='plane' ? A.l[2]>6.25 : (A.l[2]>.3 && A.l[0]<.55)){   // en la cabina de mando: piloto o copiloto
       const pa=airSeatTaken(a.i,0)||a.remote ? {label:'Alguien más pilota', disabled:true, run:()=>{}} : {label:'Pilotar', run:()=>sitAir(0)};
@@ -4649,7 +4666,7 @@ function airActions(){
       const near=lx>PL.R-.2 && lx<PL.R+6 && lz>PL.doorZ-2.2 && lz<PL.doorZ+2.2 && player.pos.y<a.y+1.2;
       if(near) return a.stairs ? [{label:'Guardar escalera', run:()=>setStairs(a,false)}, null] : [{label:'Bajar la escalera', run:()=>setStairs(a,true)}, null];
     } else {
-      if(lx>1.2 && lx<3.8 && lz>HE.door[0]-.4 && lz<HE.door[1]+.4 && player.pos.y<a.y+1.2) return [{label:'Subir al helicóptero', run:()=>boardHeli(a)}, null];
+      if(lx>1.4 && lx<4.0 && lz>HE.door[0]-.4 && lz<HE.door[1]+.4 && player.pos.y<a.y+1.2) return [{label:'Subir al helicóptero', run:()=>boardHeli(a)}, null];
     }
   }
   return [null,null];
@@ -5934,7 +5951,7 @@ function hitAt(p,ignoreSelf){
   for(const r of mp.remotes.values()){ const dx=p.x-r.pos.x, dz=p.z-r.pos.z; if(dx*dx+dz*dz<.36 && p.y>r.pos.y-.05 && p.y<r.pos.y+1.95) return {kind:'peluche', ref:r}; }
   for(const c of cars){ const dx=p.x-c.x, dz=p.z-c.z; if(dx*dx+dz*dz<4.4 && p.y>c.y-.1 && p.y<c.y+1.8){ const ch=Math.cos(c.h), sh=Math.sin(c.h), lx=dx*ch-dz*sh, lz=dx*sh+dz*ch; if(Math.abs(lx)<1.05 && Math.abs(lz)<2.2) return {kind:'car', ref:c}; } }
   for(const a of aircraft){ if(Math.abs(p.x-a.x)>16 || Math.abs(p.z-a.z)>16) continue; const [lx,lz]=airWorldToLocalFlat(a,p.x,p.z);
-    const boxes=a.T.kind==='plane' ? [[0,PL.R+.2,(PL.len[0]+PL.len[1])/2,(PL.len[1]-PL.len[0])/2, a.y+PL.FY+PL.R],[5,4.5,.4,1.6,a.y+PL.FY+.3],[-5,4.5,.4,1.6,a.y+PL.FY+.3]] : [[0,1.5,0,2.4,a.y+3.4]];
+    const boxes=a.T.kind==='plane' ? [[0,PL.R+.2,(PL.len[0]+PL.len[1])/2,(PL.len[1]-PL.len[0])/2, a.y+PL.FY+PL.R],[5,4.5,.4,1.6,a.y+PL.FY+.3],[-5,4.5,.4,1.6,a.y+PL.FY+.3]] : [[0,1.75,0,2.6,a.y+3.65]];
     for(const [cx,hx,cz,hz,top] of boxes) if(Math.abs(lx-cx)<hx && Math.abs(lz-cz)<hz && p.y<top && p.y>a.y-.2) return {kind:'air', ref:a}; }
   { const fh=fiHit(p); if(fh) return fh; }   // dianas e islas flotantes
   for(const o of obsNear(p.x,p.z)){ const dx=p.x-o.x, dz=p.z-o.z; if(dx*dx+dz*dz<o.r*o.r && p.y<o.top && p.y>(o.bot??-99) && p.y>g-.5) return {kind:'solid'}; }
@@ -8241,10 +8258,11 @@ function handLocal(o,side,x,y,z,hx,hy,hz,stretch){ const arm=ARM(o,side); if(!ar
   // canastillas (siempre derechas)
   const gcol=['#ff5d6c','#ffe14d','#7ed957','#4fc3f7','#c77dff','#ff9d5c'], gond=[];
   for(let k=0;k<NG;k++){ const c=new THREE.Group(); g.add(c);
-    fAdd(c,fBox,FM(gcol[k%6]),0,-1.2,0,1.5,.12,1.1); fAdd(c,fBox,FM(gcol[k%6]),0,-.95,.5,1.5,.5,.08); fAdd(c,fBox,FM(gcol[k%6]),0,-.95,-.5,1.5,.5,.08);
-    fAdd(c,fBox,FM('#fbf3e4'),0,-1.05,0,1.3,.2,.5);
-    const roof=new THREE.Mesh(new THREE.ConeGeometry(1,.5,4),FM(gcol[(k+2)%6])); roof.rotation.y=Math.PI/4; roof.position.y=.35; c.add(roof);
-    [-.6,.6].forEach(x=>fBar(c,FM('#fbf3e4'),[x,-1.1,0],[x,.15,0],.03)); gond.push(c); }
+    // canastilla más honda: el peluche sentado cabe completo bajo el techito (antes se le salía la cabeza)
+    fAdd(c,fBox,FM(gcol[k%6]),0,-2.3,0,1.7,.12,1.4); fAdd(c,fBox,FM(gcol[k%6]),0,-1.98,.66,1.7,.55,.08); fAdd(c,fBox,FM(gcol[k%6]),0,-1.98,-.66,1.7,.55,.08);
+    fAdd(c,fBox,FM('#fbf3e4'),0,-2.06,.2,1.45,.22,.5); fAdd(c,fBox,FM('#fbf3e4'),0,-1.7,.56,1.45,.5,.1);   // banca con respaldo
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(1.2,.55,4),FM(gcol[(k+2)%6])); roof.rotation.y=Math.PI/4; roof.position.y=.32; c.add(roof);
+    [-.78,.78].forEach(x=>fBar(c,FM('#fbf3e4'),[x,-2.25,0],[x,.1,0],.035)); gond.push(c); }
   const gondPos=(k,out)=>{ const a=angle()+k/NG*Math.PI*2; return out.set(Math.cos(a)*R, HUB+Math.sin(a)*R, 0); };
   const sg=new THREE.Mesh(new THREE.PlaneGeometry(4,1.3), new THREE.MeshStandardMaterial({map:textTex(['Rueda de la fortuna','¡Paseo gratis!'],512,166,'#fff3d6','#1b5e9a','#4fc3f7'), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
   sg.position.set(0,3.2,-3.8); sg.rotation.y=Math.PI; g.add(sg); fairGlow.push(sg.material); fAdd(g,fCyl,FM('#fbf3e4'),-1.7,1.6,-3.8,.05,3.2,.05); fAdd(g,fCyl,FM('#fbf3e4'),1.7,1.6,-3.8,.05,3.2,.05);
@@ -8254,11 +8272,11 @@ function handLocal(o,side,x,y,z,hx,hy,hz,stretch){ const arm=ARM(o,side); if(!ar
     start(M){ // la canastilla que está más abajo
       let best=0, by=1e9; for(let k=0;k<NG;k++){ gondPos(k,_v); if(_v.y<by){ by=_v.y; best=k; } } M.data={k:best, laps:0, a0:angle()}; M.score=0; },
     hud(M){ return {score:'Disfruta la vista', time:''}; },
-    update(M,dt){ gondPos(M.data.k,_v); const w=bW(e,_v.x,_v.y-1.1,_v.z); player.pos.copy(w); player.groundY=w.y; player.facing=e.yaw+Math.PI;
+    update(M,dt){ gondPos(M.data.k,_v); const w=bW(e,_v.x,_v.y-2.0,_v.z+.12); player.pos.copy(w); player.groundY=w.y; player.facing=e.yaw+Math.PI;
       const da=((angle()-M.data.a0)%(Math.PI*2)+Math.PI*2)%(Math.PI*2); if(M.t>5 && da<.05){ endMini(M,null); } },
     idle(dt){ wheel.rotation.z=angle(); for(let k=0;k<NG;k++){ gondPos(k,_v); gond[k].position.copy(_v); }
       const night=1-(sky.dayK??1); bulbMat.emissiveIntensity=.2+Math.max(0,night-.2)*2; },
-    pose(M,o,t,dt){ poseLimbs(o,t,dt,0,false,0,false,null,0,0,false,1,false); o.position.y=player.pos.y-.42+.02; },
+    pose(M,o,t,dt){ poseLimbs(o,t,dt,0,false,0,false,null,0,0,false,1,false); o.position.y=player.pos.y-.4; },
   };
   MINIS.push(def);
 }
@@ -8274,7 +8292,10 @@ function handLocal(o,side,x,y,z,hx,hy,hz,stretch){ const arm=ARM(o,side); if(!ar
   const top=new THREE.Mesh(new THREE.ConeGeometry(5,2,16,1,true), new THREE.MeshStandardMaterial({map:stripeTex('#ff9ec0','#fff3d6',16), side:THREE.DoubleSide, roughness:.9})); top.position.y=5.4; spin.add(top);
   fAdd(spin,fCyl,FM('#f6c445','shiny'),0,2.6,0,.45,5.2,.45); fAdd(spin,sphereG,FM('#e5534b','shiny'),0,6.6,0,.4,.4,.4);
   const horses=[], hc=['#fbf3e4','#c8b6ff','#9fe0ff','#ffd1dc','#fff3a6','#b8f0c0','#ffc8a8','#e0d4ff'];
-  for(let i=0;i<N;i++){ const a=i/N*Math.PI*2, h=new THREE.Group(); spin.add(h);
+  // cada caballito mira hacia donde avanza, es más grande (el peluche lo monta de verdad) y el tubo le queda enfrente al jinete
+  const HS=1.35, HOFF=.5;
+  const hLocal=(i,out)=>{ const a=horses[i].a; return out.set(Math.cos(a)*R-Math.sin(a)*HOFF, 0, Math.sin(a)*R+Math.cos(a)*HOFF); };
+  for(let i=0;i<N;i++){ const a=i/N*Math.PI*2, h=new THREE.Group(); h.scale.setScalar(HS); spin.add(h);
     fAdd(spin,fCyl,FM('#f6c445','shiny'),Math.cos(a)*R,2.6,Math.sin(a)*R,.05,4.9,.05);
     const c=FM(hc[i]); fAdd(h,sphereG,c,0,0,0,.28,.3,.6); fAdd(h,sphereG,c,0,.38,.5,.17,.32,.18,-.5); fAdd(h,sphereG,c,0,.62,.72,.15,.15,.24); fAdd(h,fBox,FM('#e5534b'),0,.3,-.05,.42,.06,.5);
     [-1,1].forEach(sd=>{ fAdd(h,sphereG,FM('#3a2a22'),sd*.1,.66,.88,.03,.03,.03); fAdd(h,fCyl,c,sd*.13,-.32,.32,.05,.4,.05,.5); fAdd(h,fCyl,c,sd*.13,-.32,-.35,.05,.4,.05,-.5); });
@@ -8284,18 +8305,19 @@ function handLocal(o,side,x,y,z,hx,hy,hz,stretch){ const arm=ARM(o,side); if(!ar
   for(let i=0;i<24;i++){ const a=i/24*Math.PI*2; fAdd(spin,sphereG,CL[i%4],Math.cos(a)*4.9,4.45,Math.sin(a)*4.9,.12,.12,.12); }
   blockAt(e,0,0,.6,6);
   { const p0=bW(e,0,0,0); obstacles.push({x:p0.x,z:p0.z,r:3.3,top:FY+.4,walk:true}); for(let k=0;k<16;k++){ const a=k/16*Math.PI*2, p=bW(e,Math.cos(a)*3.75,0,Math.sin(a)*3.75); obstacles.push({x:p.x,z:p.z,r:1.3,top:FY+.4,walk:true}); } }
-  const horseObs=[0,1,2,3,4,5,6,7].map(()=>{ const o={x:0,z:0,r:.42,top:FY+2.0,walk:false}; DYN_OBS.push(o); return o; });
+  const horseObs=[0,1,2,3,4,5,6,7].map(()=>{ const o={x:0,z:0,r:.55,top:FY+2.2,walk:false}; DYN_OBS.push(o); return o; });
   const sg=new THREE.Mesh(new THREE.PlaneGeometry(2.4,.8), new THREE.MeshStandardMaterial({map:textTex(['Carrusel','¡Paseo gratis!'],512,170,'#fff3d6','#c2185b','#ff9ec0'), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
   sg.position.set(0,1.6,-5.4); sg.rotation.y=Math.PI; g.add(sg); fairGlow.push(sg.material); [-1.1,1.1].forEach(x=>fAdd(g,fCyl,FM('#fbf3e4'),x,.8,-5.4,.05,1.6,.05));
   padMesh(g,0,-4.9,.6);
-  const hp=(i,t,out)=>{ const a=-(ang()+horses[i].a); return out.set(Math.cos(a)*R, 1.35+Math.sin(t*2.2+i)*.25, Math.sin(a)*R); };
+  // dónde va el caballito i (mismo giro que el modelo: antes el jinete quedaba en otro caballito y subía y bajaba a destiempo)
+  const hp=(i,t,out)=>{ hLocal(i,out); const th=ang(), c=Math.cos(th), sn=Math.sin(th), x=out.x, z=out.z; return out.set(x*c+z*sn, 1.35+Math.sin(t*2.2+i)*.25, -x*sn+z*c); };
   const _v=new THREE.Vector3();
   const def={id:'carrusel', name:'Carrusel', e, multi:true, pads:[[0,-4.9,1.1]], verb:'Subir al carrusel', noAgain:true, exitTo:[0,-5.9],
     start(M){ M.data={k:Math.floor(Math.random()*N)}; },
     hud(M){ return {score:'¡Arre, caballito!', time:fmtT(40-M.t)}; },
-    update(M,dt){ const t=Date.now()/1000; hp(M.data.k,t,_v); const w=bW(e,_v.x,_v.y-.12,_v.z); player.pos.copy(w); player.groundY=w.y;
-      const a=-(ang()+horses[M.data.k].a); player.facing=e.yaw+Math.atan2(-Math.sin(a),Math.cos(a))+Math.PI; if(M.t>40) endMini(M,null); },
-    idle(dt,mine){ const t=Date.now()/1000; spin.rotation.y=ang(); horses.forEach((o,i)=>{ o.h.position.set(Math.cos(o.a)*R,1.35+Math.sin(t*2.2+i)*.25,Math.sin(o.a)*R); o.h.rotation.y=-o.a; hp(i,t,_v); const w=bW(e,_v.x,0,_v.z); horseObs[i].x=w.x; horseObs[i].z=w.z; horseObs[i].r=mine?0:.42; }); },
+    update(M,dt){ const t=Date.now()/1000; hp(M.data.k,t,_v); const w=bW(e,_v.x,_v.y+.14,_v.z); player.pos.copy(w); player.groundY=w.y;
+      player.facing=e.yaw+ang()-horses[M.data.k].a+Math.PI; if(M.t>40) endMini(M,null); },
+    idle(dt,mine){ const t=Date.now()/1000; spin.rotation.y=ang(); horses.forEach((o,i)=>{ hLocal(i,o.h.position); o.h.position.y=1.35+Math.sin(t*2.2+i)*.25; o.h.rotation.y=Math.PI-o.a; hp(i,t,_v); const w=bW(e,_v.x,0,_v.z); horseObs[i].x=w.x; horseObs[i].z=w.z; horseObs[i].r=mine?0:.55; }); },
     pose(M,o,t,dt){ poseLimbs(o,t,dt,0,false,0,false,null,0,0,false,1,false); o.position.y=player.pos.y-.1; },
   };
   MINIS.push(def);
@@ -10872,7 +10894,7 @@ function fxAniso(){ const a=renderer.capabilities.getMaxAnisotropy(); if(a<=1) r
     vec3 rd(vec2 o){ vec3 c=texture2D(tSrc,vUv+tx*o).rgb; return bright>0.5 ? lin(c) : c; }
     void main(){ vec3 c=(rd(vec2(-1.0,-1.0))+rd(vec2(1.0,-1.0))+rd(vec2(-1.0,1.0))+rd(vec2(1.0,1.0)))*0.25;
       if(bright>0.5){ float br=dot(c,vec3(0.2126,0.7152,0.0722)); float rq=clamp(br-thr+knee,0.0,2.0*knee); rq=rq*rq/(4.0*knee+1e-4); c*=max(rq,br-thr)/max(br,1e-4); c=min(c,vec3(8.0)); }
-      gl_FragColor=vec4(c,1.0); }`, {tSrc:{value:null}, tx:{value:new THREE.Vector2()}, bright:{value:0}, thr:{value:1.0}, knee:{value:.06}});
+      gl_FragColor=vec4(c,1.0); }`, {tSrc:{value:null}, tx:{value:new THREE.Vector2()}, bright:{value:0}, thr:{value:renderer.toneMapping?.9:1.0}, knee:{value:.06}});   // con las luces altas suaves, lo más brillante llega a ~.9
   // desenfoque gaussiano (9 pasos con 5 lecturas)
   FX.mBlur=mk(`uniform sampler2D tSrc; uniform vec2 dir; varying vec2 vUv;
     void main(){ vec3 c=texture2D(tSrc,vUv).rgb*0.2270270; c+=(texture2D(tSrc,vUv+dir*1.3846154).rgb+texture2D(tSrc,vUv-dir*1.3846154).rgb)*0.3162162;
