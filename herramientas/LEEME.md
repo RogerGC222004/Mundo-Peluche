@@ -11,3 +11,7 @@
   - Por zona: `test_pier`, `test_feed`, `test_pier_mp`, `test_pets`, `test_pets_mp`, `test_fi` (islas, globo, huerto),
     `test_bl_mp` (globos en sala), `test_race`, `test_cuco2`, `test_tramp2`, `test_loader`.
   - Capturas: `shot_tx.py '[["nombre",hora0a1,[camx,camy,camz],[mirax,miray,miraz],["low"]]]' juego.html prefijo`.
+- `relieve/` — el relieve de la isla grande (v119): montañas, meseta con cañones, colinas y el río con su cascada.
+  - Las alturas van ya calculadas dentro del juego (`RL_DATA`, comprimidas), así carga rápido en teléfonos lentos.
+  - Si se cambian las montañas, cañones o llanos (`relieve/relief_gen.js`) o el bloque «Relieve (v119)» del juego,
+    hay que volver a generar: `node herramientas/relieve/gen.js fuente/mundo-peluche.html` (reescribe RL_DATA, RL_BED y RL_PLUNGE).
