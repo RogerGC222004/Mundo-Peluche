@@ -1,0 +1,30 @@
+import asyncio, re, sys, json
+exec(open('test_book_mp.py').read().split('async def m():')[0])
+page_html=page_html.replace("function frame(){","window.__T={ev(s){return eval(s);}}; function frame(){",1)
+async def m():
+  async with async_playwright() as p:
+    b=await p.chromium.launch(args=["--use-gl=swiftshader","--enable-unsafe-swiftshader"]); ctx=await b.new_context(viewport={"width":500,"height":300}); await ctx.add_init_script("window.__NOR=true;")
+    async def route(r):
+      if r.request.url.startswith("https://test.local"): await r.fulfill(body=page_html.encode(), content_type="text/html; charset=utf-8")
+      elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")
+      else: await r.abort()
+    await ctx.route("https://**/*", route)
+    A,ea=await open_game(ctx,'Ana'); await A.evaluate("document.getElementById('mpCreate').click()"); await A.wait_for_timeout(500)
+    code=re.search(r'Código (\w{6})', await A.text_content('#roomDiag')).group(1)
+    B,eb=await open_game(ctx,'Beto'); await B.wait_for_selector('#mpCode',state='visible',timeout=120000); await B.fill('#mpCode',code,timeout=120000); await B.evaluate("document.getElementById('mpJoin').click()"); await B.wait_for_timeout(3000)
+    ea_=lambda s: A.evaluate("s=>__T.ev(s)", s); eb_=lambda s: B.evaluate("s=>__T.ev(s)", s)
+    await ea_("(()=>{ mine.pick=2; caveEnter(); return 1; })()"); await A.wait_for_timeout(3000)
+    await ea_("(()=>{ selectedSlot=hotbar.indexOf('lamp'); holding=true; applyHeld(); const v=CV_VEINS.find(v=>v.k===0); player.pos.set(v.sx,v.y,v.sz); return 1; })()"); await A.wait_for_timeout(1500)
+    await B.wait_for_timeout(4000)
+    await eb_("(()=>{ player.pos.set(CV_EXIT.x+CV_EXIT.fx*3, CV_EXIT.y+.3, CV_EXIT.z+CV_EXIT.fz*3); return 1; })()"); await B.wait_for_timeout(2000)
+    seq0=await eb_("(()=>{ const r=[...mp.remotes.values()][0]; return JSON.stringify([r.pos.y.toFixed(1), r.mi, r.held, r.obj.userData.mg&&r.obj.userData.mg.helmet.visible, r.obj.userData.mg&&r.obj.userData.mg.pick&&r.obj.userData.mg.pick.userData.tier, r.obj.userData.mg&&r.obj.userData.mg.lamp.visible]); })()")
+    print('B ve a Ana en la mina', seq0)
+    print('A fps', await ea_("(()=>{ return new Promise(r=>{ let n=0; const t0=performance.now(); const f=()=>{ n++; if(performance.now()-t0<2000) requestAnimationFrame(f); else r(n/2); }; requestAnimationFrame(f); }); })()"))
+    for i in range(3):
+      print('  acc', await ea_("(()=>{ const a=mineActions(); const l=a&&a[0]?a[0].label:null; if(a&&a[0]&&!a[0].disabled) a[0].run(); return JSON.stringify([l, player.busy, MS.swingT.toFixed(2), player.pos.y.toFixed(1)]); })()")); await A.wait_for_timeout(1500)
+    print('B ve golpes', await eb_("(()=>{ const r=[...mp.remotes.values()][0]; return JSON.stringify([r.mi, r.miSwing<5]); })()"))
+    print('Ana minerales', await ea_("JSON.stringify(mine.ores)"), 'presencia bytes', await ea_("mp.presBytes"))
+    await ea_("caveLeave()"); await A.wait_for_timeout(6000)
+    print('afuera', await eb_("(()=>{ const r=[...mp.remotes.values()][0]; return JSON.stringify([r.pos.y.toFixed(1), r.mi, r.obj.userData.mg.helmet.visible]); })()"))
+    print('errores', ea[:3], eb[:3]); await b.close()
+asyncio.run(m())
