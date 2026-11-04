@@ -867,7 +867,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='122';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='123';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -3630,6 +3630,7 @@ function updateRemotes(dt,t){
     if(r.bl) blRemote(r);   // va en su globo
     if(r.carAnim && updateRemoteInCar(r,dt,t)) continue;
     r.pos.lerp(r.target,k);
+    if(!r.swim && !r.air && r.pos.y>CAVE_TOP){ const g=groundAt(r.pos.x,r.pos.z,r.pos.y+.6); if(Math.abs(r.pos.y-g)<1.5) r.pos.y=g; }   // pegado a MI suelo (con otra calidad la malla del suelo cambia un poquito) (v123)
     let d=r.facing-r.obj.rotation.y; d=Math.atan2(Math.sin(d),Math.cos(d)); r.obj.rotation.y+=d*k;
     r.walk += dt*(6+r.moving*6)*(r.moving>.05?1:0);
     r.dive += (r.diveTarget-r.dive)*(1-Math.exp(-dt*18));
@@ -4305,9 +4306,11 @@ function stepCar(c,dt,inp){
   if(wet && !c.wasWet && Math.abs(c.v)>1) audio.splash(1); c.wasWet=wet;
   if(c.v>maxV) c.v-=(wet?14:off?6:4)*dt;
   c.v=Math.max(-8,Math.min(T.maxV,c.v));
+  if(!wet && c.pitch) c.v-=9.8*Math.sin(c.pitch)*dt;   // cuesta arriba frena, cuesta abajo agarra vuelo (v123)
   c.h += c.v/4.3*Math.tan(c.steer)*dt;
   const nx=c.x+Math.sin(c.h)*c.v*dt, nz=c.z+Math.cos(c.h)*c.v*dt, nh=terrainH(nx,nz);
-  c.x=nx; c.z=nz;   // también se puede entrar al mar y al lago
+  { const h0=terrainH(c.x,c.z), st=Math.hypot(nx-c.x,nz-c.z);   // una pared o ladera muy parada no se puede subir en coche
+    if(st>1e-4 && !wet && (nh-h0)/st>.8){ if(Math.abs(c.v)>3) audio.bump(); c.v*=-.25; } else { c.x=nx; c.z=nz; } }   // también se puede entrar al mar y al lago
   // choques con árboles, rocas y palmeras (el coche son tres círculos a lo largo)
   const [fx,fz]=carFwd(c);
   for(const k of [-2.2,0,2.2]){
@@ -4881,6 +4884,7 @@ function stepPlane(a,dt,inp){
     a.b+=(0-a.b)*Math.min(1,dt*4);
     const wantP = (a.v>30 && inp.pitch>.15) ? .14 : 0; a.p+=(wantP-a.p)*Math.min(1,dt*2);
     a.y+=(gy-a.y)*Math.min(1,dt*12);
+    { const ah=airGroundY(a.x+Math.sin(a.h)*4,a.z+Math.cos(a.h)*4); if(ah-gy>1.6 && a.v>1){ a.v*=.5; if(a.v>4) audio.bump(); } }   // rodando por el suelo no se sube una ladera parada
     if(a.p>.1 && a.v>32){ a.onGround=false; a.vy=2; }
   } else {
     const target=30+a.thr*48;
@@ -4891,7 +4895,9 @@ function stepPlane(a,dt,inp){
     let vy=a.v*Math.sin(a.p); if(a.v<27){ vy-=(27-a.v)*.7; a.p-=.35*dt; }
     a.vy=vy; a.y+=vy*dt; if(a.y>420){ a.y=420; a.p=Math.min(a.p,0); }
     const gy=airGroundY(a.x,a.z);
-    if(a.y<=gy){
+    if(a.y<=gy && gy>8 && Math.hypot(terrainH(a.x+3,a.z)-terrainH(a.x-3,a.z), terrainH(a.x,a.z+3)-terrainH(a.x,a.z-3))/6>.28){   // contra una montaña: rebota hacia arriba (no se aterriza en una ladera) (v123)
+      a.y=gy+2.5; a.vy=0; a.v=Math.max(30,a.v*.7); a.p=Math.max(a.p,.42); a.b*=.3; audio.bump(); if(iPilot()) flashNote('¡Cuidado con la montaña! Sube la nariz');
+    } else if(a.y<=gy){
       const soft=a.vy>-7.5 && Math.abs(a.b)<.5 && a.p>-.25;
       a.y=gy; a.onGround=true; a.vy=0; a.b=0; if(!soft){ a.v*=.45; audio.bump(); flashNote('¡Aterrizaje brusco!'); } else audio.land(.6);
     }
@@ -11780,6 +11786,9 @@ const tmp=new THREE.Vector3();
 const SWIM_ENTER=SEA_Y-1.1;   // empieza a nadar donde el fondo queda más hondo que esto
 const SWIM_EXIT=SEA_Y-.9;     // vuelve a caminar cuando el fondo sube de aquí (evita parpadeos)
 const FLOAT_Y=SEA_Y-1.07;
+// dónde se nada: el mar, el río, el estanque y la poza de la cascada (en el lago no: es bajito). Devuelve el nivel del agua (v123)
+const swimLevel=(x,z)=>{ if(inLakeWater(x,z)) return null; const r=riverLevelAt(x,z); return r!==null?r:SEA_Y; };
+const swimWave=(x,z)=>riverLevelAt(x,z)!==null?waveH(x,z,WATER.lakeA,WATER.t):waveH(x,z,WATER.seaA,WATER.t);
 // Al nadar, el peluche se inclina desde el centro del cuerpo (no desde los pies),
 // para que al nadar acostado la espalda quede en la superficie y no se hunda.
 const SWIM_PIVOT=1.12;
@@ -11845,7 +11854,7 @@ function update(dt,t){ myLabelUpdate();
       if(up && !down) vyT=run?4:2.8;
       else if(down && !up) vyT=run?-4.2:-3;
       else {
-        vyT=THREE.MathUtils.clamp((FLOAT_Y+waveH(player.pos.x,player.pos.z,WATER.seaA,WATER.t)-player.pos.y)*1.6,-1.6,1.6);
+        vyT=THREE.MathUtils.clamp(((swimLevel(player.pos.x,player.pos.z)??SEA_Y)-1.07+swimWave(player.pos.x,player.pos.z)-player.pos.y)*1.6,-1.6,1.6);
         if(camMode==='first' && f!==0) vyT=Math.sin(pitch)*sp*Math.sign(f);   // en 1ª persona nadas hacia donde miras
       }
       player.vy += (vyT-player.vy)*(1-Math.exp(-dt*3.5));
@@ -11906,14 +11915,15 @@ function update(dt,t){ myLabelUpdate();
     const g=groundAt(player.pos.x, player.pos.z, player.pos.y);
     if(player.swim){
       player.pos.y += player.vy*dt;
-      { const top=FLOAT_Y+.05+waveH(player.pos.x,player.pos.z,WATER.seaA,WATER.t); if(player.pos.y>top){ player.pos.y=top; if(player.vy>0) player.vy=0; } }
+      const SL=swimLevel(player.pos.x,player.pos.z)??SEA_Y;
+      { const top=SL-1.07+.05+swimWave(player.pos.x,player.pos.z); if(player.pos.y>top){ player.pos.y=top; if(player.vy>0) player.vy=0; } }
       if(player.pos.y<g+.15){ player.pos.y=g+.15; if(player.vy<0) player.vy=0; }
       // Salir caminando al llegar a la orilla
-      if(terrainH(player.pos.x,player.pos.z) > SWIM_EXIT && player.pos.y-g < 1){
+      if(terrainH(player.pos.x,player.pos.z) > SL-.9 && player.pos.y-g < 1){
         player.swim=false; player.grounded=true; player.pos.y=g; player.vy=0;
       }
       // Brazadas que salpican en la superficie
-      if(moving>.2 && player.pos.y>FLOAT_Y-.4){ player.strokeT-=dt; if(player.strokeT<=0){ player.strokeT=.55; audio.splash(.22); } }
+      if(moving>.2 && player.pos.y>SL-1.47){ player.strokeT-=dt; if(player.strokeT<=0){ player.strokeT=.55; audio.splash(.22); } }
     } else {
       if(player.grounded && player.vy<=0 && player.pos.y-g < .6){
         player.pos.y=g; player.vy=0;     // pegado al suelo al subir y bajar cuestas
@@ -11938,7 +11948,8 @@ function update(dt,t){ myLabelUpdate();
         } else if(player.vy<0 && player.pos.y-g>.6) player.grounded=false;
       }
       // Entrar a nadar: el fondo queda hondo y el peluche ya está bajo el nivel del mar
-      if(player.pos.y>CAVE_TOP && terrainH(player.pos.x,player.pos.z) < SWIM_ENTER && player.pos.y < SEA_Y-.55 && !inLakeWater(player.pos.x,player.pos.z)){
+      const SLn=player.pos.y>CAVE_TOP?swimLevel(player.pos.x,player.pos.z):null;
+      if(SLn!==null && terrainH(player.pos.x,player.pos.z) < SLn-1.1 && player.pos.y < SLn-.55){
         const impact=Math.max(0,-player.vy);
         player.swim=true; player.dive=null; player.grounded=false; player.vy*=.25; player.strokeT=0;
         audio.splash(Math.min(1.3,.5+impact/10));
