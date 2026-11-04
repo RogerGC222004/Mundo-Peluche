@@ -29,6 +29,11 @@ function rlKeep(x,z){ let k=Math.max(airportFlat(x,z), rlAirCorr(x,z), fairFlat(
   for(const [cx,cz,r0,r1] of RL_KEEP){ const dx=x-cx, dz=z-cz; if(Math.abs(dx)>r1||Math.abs(dz)>r1) continue; k=Math.max(k,1-smooth(r0,r1,Math.hypot(dx,dz))); }
   const d=Math.hypot(x,z), a=Math.atan2(z,x), td=Math.abs(d-trackRadius(a)); k=Math.max(k,1-smooth(TRACK_W/2+10,TRACK_W/2+42,td));   // la pista
   return k; }
+// la parte del suelo que ya ponía la isla de antes (cerros y ondas del lago), para que las lagunitas queden al nivel del mar
+function rlOldPart(x,z){ const d=Math.hypot(x,z), cO=d/coastOldR(x,z); let h=0;
+  if(cO<.9){ for(const k of HILLS){ const dx=x-k.x, dz=z-k.z; h+=k.h*Math.exp(-(dx*dx+dz*dz)/(k.r*k.r)); } }
+  const ld=Math.hypot(x-LAKE.x, z-LAKE.z); h += (.6*Math.sin(x*.05)*Math.cos(z*.045) + .3*Math.sin(x*.11+z*.07)) * smooth(LAKE.R, LAKE.R+15, ld);
+  h *= smooth(10, 30, d) * (1-smooth(.72,.9,cO)) * (1-airportFlat(x,z)) * (1-fairFlat(x,z)); return h; }
 // ---- el relieve natural (sin río) ----
 function rlNatural(x,z){ const d=Math.hypot(x,z), a=Math.atan2(z,x), cN=d/coastRN(a);
   const coastFade=1-smooth(.8,.95,cN);
@@ -36,12 +41,15 @@ function rlNatural(x,z){ const d=Math.hypot(x,z), a=Math.atan2(z,x), cN=d/coastR
   const keep=rlKeep(x,z), rt=trackRadius(a);
   const out=smooth(rt+45,rt+175,d);   // afuera de la pista empieza lo nuevo
   // adentro: ondulación suave (la isla de antes ya tiene sus cerros)
-  let h=(1-out)*Math.max(0,rlFbm(x/75,z/75,3)-.4)*11*smooth(60,120,d);
+  let h=0;   // adentro (la isla de antes) no se toca: queda igual que siempre
   if(out>0){
     let hh=Math.max(1.5,7+(rlFbm(x/230+40,z/230,4)-.5)*30+(rlNoise(x/70,z/70)-.5)*7);   // colinas y valles
     let mt=0;
-    for(const P of RL_PEAKS){ const dx=x-P.x, dz=z-P.z; if(Math.abs(dx)>P.R*2.2||Math.abs(dz)>P.R*2.2) continue; const q=(dx*dx+dz*dz)/(P.R*P.R);
-      const m=P.h*Math.exp(-q*1.7)*(.72+.5*rlRidge(x/(P.R*.55)+P.x*.01,z/(P.R*.55)))*(1+(rlNoise(x/38,z/38)-.5)*.12*Math.exp(-q));
+    for(const P of RL_PEAKS){ let dx=x-P.x, dz=z-P.z; if(Math.abs(dx)>P.R*2.5||Math.abs(dz)>P.R*2.5) continue;
+      dx+=(rlNoise(x/170+3,z/170+P.x*.01)-.5)*P.R*.55; dz+=(rlNoise(x/170+P.z*.01,z/170+7)-.5)*P.R*.55;   // un poco torcida, no un cono perfecto
+      const q=(dx*dx+dz*dz)/(P.R*P.R), b=Math.exp(-q*1.6);
+      // forma de montaña: hombros y crestas suaves (sin torres), y canaletas en las laderas
+      const m=P.h*b*(.84+.3*rlRidge(x/(P.R*.85)+P.x*.01,z/(P.R*.85)))*(1+(rlNoise(x/30,z/30)-.5)*.07*b) - P.h*.05*rlRidge(x/26+P.x*.02,z/26)*b*(1-b)*4;
       mt=Math.max(mt,m)+Math.min(mt,m)*.25; }
     // meseta del este
     const M=RL_MESA, mk=rlMesaK(x,z);
@@ -58,7 +66,7 @@ function rlNatural(x,z){ const d=Math.hypot(x,z), a=Math.atan2(z,x), cN=d/coastR
       if(floor<h) h=floor; }
   }
   let r=h*(1-keep)*coastFade;
-  for(const P of RL_SEAPONDS){ const pd=Math.hypot(x-P.x,z-P.z); if(pd>P.R+12) continue; const b=pd<P.R ? SEA_Y-2.2*(1-(pd/P.R)*(pd/P.R)) : SEA_Y+(pd-P.R)*.35; if(b<r) r=b; }
+  for(const P of RL_SEAPONDS){ const pd=Math.hypot(x-P.x,z-P.z); if(pd>P.R+12) continue; const b=(pd<P.R ? SEA_Y-2.2*(1-(pd/P.R)*(pd/P.R)) : SEA_Y+(pd-P.R)*.6)-rlOldPart(x,z); if(b<r) r=b; }
   return r; }
 // ---- el río: su fondo baja siempre (se calcula de lo que hay alrededor) ----
 const RL_BED=(()=>{ const P=RL_RIVER.pts, L=RL_RIVER.L, n=P.length, bed=new Float32Array(n);
