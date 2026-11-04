@@ -87,3 +87,9 @@ function rlRiverCarve(x,z,h){ let n=RL_RIVER.near(x,z,RLN); const pd=Math.hypot(
 const RG={E:1460, S:5, N:0, h:null};
 (function rlBuild(){ const N=RG.N=Math.round(2*RG.E/RG.S)+1, h=RG.h=new Float32Array(N*N);
   for(let j=0;j<N;j++) for(let i=0;i<N;i++){ const x=-RG.E+i*RG.S, z=-RG.E+j*RG.S; h[j*N+i]=rlRiverCarve(x,z,rlNatural(x,z)); } })();
+// cimas con mirador: se les aplana la puntita (un llano de ~10 m) para poner el mirador
+const RL_FLATS=[[-1.6,900,420],[1.50,880,130]].map(([a,r,R])=>{ const [cx,cz]=polar(a,r), N=RG.N, S=RG.S, E=RG.E; let bi=0, bh=-1e9;
+  for(let j=Math.round((cz-R+E)/S);j<=Math.round((cz+R+E)/S);j++) for(let i=Math.round((cx-R+E)/S);i<=Math.round((cx+R+E)/S);i++){ const v=RG.h[j*N+i]; if(v>bh){ bh=v; bi=j*N+i; } }
+  const x=-E+(bi%N)*S, z=-E+Math.floor(bi/N)*S, top=bh-4;
+  for(let j=Math.round((z-30+E)/S);j<=Math.round((z+30+E)/S);j++) for(let i=Math.round((x-30+E)/S);i<=Math.round((x+30+E)/S);i++){ const k=j*N+i, d=Math.hypot(-E+i*S-x,-E+j*S-z); const t=smooth(9,26,d); RG.h[k]=top+(RG.h[k]-top)*t; }
+  return {x, z, y:+top.toFixed(2)}; });

@@ -11,13 +11,13 @@ const prefix=cut('const SEA_Y=-1.2;','function terrainH(x,z){')+cut('const PG={x
 const shared=cut('// ---------- Relieve (v119)','// alturas del relieve nuevo');
 const gen=fs.readFileSync(path.join(__dirname,'relief_gen.js'),'utf8');
 const t0=Date.now();
-(0,eval)(prefix+shared+gen+';globalThis.G={RG,RL_PLUNGE,RL_BED,RL_RIVER,rlBedAt};');
+(0,eval)(prefix+shared+gen+';globalThis.G={RG,RL_PLUNGE,RL_BED,RL_RIVER,rlBedAt,RL_FLATS};');
 const {N,h:H}=G.RG, Q=20, q=new Int32Array(N*N); for(let k=0;k<N*N;k++) q[k]=Math.round(H[k]*Q);
 const bytes=[]; for(let j=0;j<N;j++) for(let i=0;i<N;i++){ const k=j*N+i, a=i?q[k-1]:0, b=j?q[k-N]:0, c=(i&&j)?q[k-N-1]:0; const r=q[k]-(i&&j?a+b-c:(i?a:b)); let z=(r<<1)^(r>>31); while(z>=128){ bytes.push((z&127)|128); z>>>=7; } bytes.push(z); }
 const b64=zlib.deflateRawSync(Buffer.from(bytes),{level:9}).toString('base64');
 const bed=Array.from(G.RL_BED,v=>+v.toFixed(2));
-const block=`// alturas del relieve nuevo, ya calculadas (rejilla de ${N}×${N} cada ${G.RG.S} m, en vigésimos de metro, comprimidas)\nconst RL_DATA={E:${G.RG.E}, S:${G.RG.S}, N:${N}, Q:${Q}, z:'${b64}'};\nconst RL_BED=new Float32Array([${bed.join(',')}]);   // fondo del río cada ~4 m (siempre baja)\nconst RL_PLUNGE=${JSON.stringify(G.RL_PLUNGE,(k,v)=>typeof v==='number'?+v.toFixed(2):v)};   // poza al pie de la cascada\n`;
-const a=html.indexOf('// alturas del relieve nuevo'), e=html.indexOf('\n',html.indexOf('const RL_PLUNGE=',a))+1;
+const block=`// alturas del relieve nuevo, ya calculadas (rejilla de ${N}×${N} cada ${G.RG.S} m, en vigésimos de metro, comprimidas)\nconst RL_DATA={E:${G.RG.E}, S:${G.RG.S}, N:${N}, Q:${Q}, z:'${b64}'};\nconst RL_BED=new Float32Array([${bed.join(',')}]);   // fondo del río cada ~4 m (siempre baja)\nconst RL_PLUNGE=${JSON.stringify(G.RL_PLUNGE,(k,v)=>typeof v==='number'?+v.toFixed(2):v)};   // poza al pie de la cascada\nconst RL_FLATS=${JSON.stringify(G.RL_FLATS)};   // cimas aplanadas para los miradores\n`;
+const a=html.indexOf('// alturas del relieve nuevo'), lastL=html.indexOf('const RL_FLATS=',a)>0&&html.indexOf('const RL_FLATS=',a)<html.indexOf('// descomprimir RL_DATA',a)?'const RL_FLATS=':'const RL_PLUNGE=', e=html.indexOf('\n',html.indexOf(lastL,a))+1;
 html=html.slice(0,a)+block+html.slice(e); fs.writeFileSync(GAME,html);
 let mx=-1e9; for(const v of H) if(v>mx) mx=v;
 console.log('listo en', Date.now()-t0, 'ms · altura máxima', mx.toFixed(1), 'm · datos', b64.length, 'letras');
