@@ -867,7 +867,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='121';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='122';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -8632,10 +8632,28 @@ function makeHelmet(){ const g=new THREE.Group(), hm=feltM('#f6c445'); g.positio
   const ln=new THREE.Mesh(G('lensC',()=>new THREE.CircleGeometry(.075,20)),emMat('#fff3c4',1.4)); ln.position.set(0,.235,.415); ln.rotation.x=-.4; g.add(ln);
   g.traverse(o=>{ if(o.isMesh){ o.castShadow=false; } }); g.userData.lens=ln; return g; }
 const pickMats=PICKS.map(p=>p.met?new THREE.MeshStandardMaterial({color:p.c, metalness:p.met, roughness:.3, envMap:toyEnv}):(p.c==='#7fe6ff'?new THREE.MeshStandardMaterial({color:p.c, emissive:p.c, emissiveIntensity:.35, roughness:.15}):feltM(p.c)));
+// cabeza del pico: un arco que se afina hasta una punta en cada lado (más grueso en medio, donde entra el mango)
+function pickHeadGeo(R,th,r0,rough){ const NS=18, NR=8, pos=[], idx=[];
+  for(let i=0;i<=NS;i++){ const t=-1+2*i/NS, f=t*th, cx=R*Math.sin(f), cy=R*Math.cos(f)-R, nx=Math.sin(f), ny=Math.cos(f), r=r0*(.12+.88*Math.pow(1-Math.abs(t),.8))*(Math.abs(t)<.18?1.15:1);
+    for(let k=0;k<=NR;k++){ const a=k/NR*Math.PI*2, j=rough?1+(rlHash(i*7+k,tierSeed(rough))-.5)*.35:1, ca=Math.cos(a)*r*j, sa=Math.sin(a)*r*j*.8; pos.push(cx+nx*ca, cy+ny*ca, sa); } }
+  for(let i=0;i<NS;i++) for(let k=0;k<NR;k++){ const A=i*(NR+1)+k, B=A+NR+1; idx.push(A,B,A+1, A+1,B,B+1); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setIndex(idx); g.computeVertexNormals();
+  g.applyMatrix4(new THREE.Matrix4().set(0,0,1,0, 1,0,0,0, 0,1,0,0, 0,0,0,1));   // el arco va a lo largo de Y del pico y se curva hacia el mango (−Z)
+  return g; }
+const tierSeed=r=>r===true?3:r;
+// Pico: mango a lo largo de Z (sale de la mano hacia adelante) y la cabeza arriba, atravesada, con dos puntas (v121)
 function makePick(tier){ const g=new THREE.Group(); g.position.set(0,-ARM_LOW-.03,0);
-  const h=new THREE.Mesh(fCyl,feltM('#9a6b45')); h.position.set(0,0,.14); h.scale.set(.03,.62,.03); h.rotation.x=Math.PI/2; g.add(h);
-  const hd=new THREE.Mesh(G('pickhead',()=>{ const gg=new THREE.TorusGeometry(.3,.035,6,14,1.6); gg.rotateZ(Math.PI/2-.8); return gg; }),pickMats[tier]); hd.position.set(0,-.27,.42); hd.rotation.y=Math.PI/2; g.add(hd);
+  const wood=feltM('#9a6b45'), L=.66, z0=-.12, zTop=z0+L;
+  const h=new THREE.Mesh(fCyl,wood); h.position.set(0,0,z0+L/2); h.scale.set(.034,L,.034); h.rotation.x=Math.PI/2; g.add(h);
+  const grip=new THREE.Mesh(fCyl,feltM('#b5443c')); grip.position.set(0,0,z0+.13); grip.scale.set(.041,.2,.041); grip.rotation.x=Math.PI/2; g.add(grip);   // cinta para agarrar
+  const capM=tier===0?feltM('#7a5232'):solid('#7d828c',{metalness:.6, roughness:.35});
+  const cap=new THREE.Mesh(fCyl,capM); cap.position.set(0,0,zTop-.04); cap.scale.set(.052,.12,.052); cap.rotation.x=Math.PI/2; g.add(cap);   // anillo donde se une la cabeza
+  const hd=new THREE.Mesh(G('pickhead'+(tier===1?'r':''),()=>pickHeadGeo(.36,.95,.058,tier===1?5:0)),pickMats[tier]); hd.position.set(0,0,zTop+.02); g.add(hd);
+  if(tier===4){ const cm=pickMats[4]; [[.29,-.12],[-.29,-.12],[0,.035]].forEach(([y,z],i)=>{ const c=new THREE.Mesh(G('pickgem',()=>new THREE.OctahedronGeometry(1,0)),cm); c.position.set(0,y,zTop+.02+z); c.scale.set(.045,i===2?.07:.055,.045); g.add(c); }); }   // cristalitos
+  if(tier===3){ const sp=new THREE.Mesh(G('pickgem',()=>new THREE.OctahedronGeometry(1,0)),emMat('#fff6c8',1.2)); sp.position.set(.05,.12,zTop+.03); sp.scale.setScalar(.022); g.add(sp); }   // destello
   g.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); g.userData.tier=tier; return g; }
+// dibujito del pico para la tienda del topo
+const pickSvg=c=>`<svg viewBox="0 0 40 40" width="30" height="30" aria-hidden="true"><path d="M11 35L21 12" stroke="#7a5232" stroke-width="4.5" stroke-linecap="round"/><path d="M11.5 34l2.4-5.5" stroke="#b5443c" stroke-width="5.5" stroke-linecap="round"/><path d="M3 19Q20 -9 37 19Q29 11 20 11Q11 11 3 19Z" fill="${c}" stroke="rgba(0,0,0,.4)" stroke-width="1.5" stroke-linejoin="round"/><circle cx="20.5" cy="12" r="2.6" fill="#7d828c"/></svg>`;
 const lampBeamGeo=(()=>{ const g=new THREE.ConeGeometry(1.25,7,16,1,true); g.translate(0,-3.5,0); return g; })();
 function makeLamp(){ const g=new THREE.Group(); g.position.set(0,-ARM_LOW-.02,.02);
   const b=new THREE.Mesh(fCyl,solid('#e5534b',{roughness:.4})); b.position.set(0,-.06,0); b.scale.set(.045,.22,.045); g.add(b);
@@ -8754,8 +8772,8 @@ function elevTo(k){ const E=CV_ELEV[k], hub=CZ[k].R.hub, hx=hub.x+CV.x-E.x, hz=h
 
 // ---------- la tienda del topo y el elevador (usan la ventana de Tortu) ----------
 let mineTab='sell';
-function mineRow(col,txt,btns){ const row=document.createElement('div'); row.className='fish-row'; const ic=document.createElement('span'); ic.className='farm-ic';
-  const dot=document.createElement('i'); dot.style.cssText=`display:inline-block;width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 12%,${col} 45%,${col});box-shadow:0 1px 3px rgba(0,0,0,.3)`; ic.appendChild(dot); row.appendChild(ic);
+function mineRow(col,txt,btns,svg){ const row=document.createElement('div'); row.className='fish-row'; const ic=document.createElement('span'); ic.className='farm-ic';
+  if(svg){ ic.innerHTML=svg; row.appendChild(ic); } else { const dot=document.createElement('i'); dot.style.cssText=`display:inline-block;width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 12%,${col} 45%,${col});box-shadow:0 1px 3px rgba(0,0,0,.3)`; ic.appendChild(dot); row.appendChild(ic); }
   const tx=document.createElement('div'); tx.className='fish-tx'; const b=document.createElement('b'); b.textContent=txt[0]; const s=document.createElement('small'); s.textContent=txt[1]; tx.append(b,s); row.appendChild(tx);
   btns.filter(Boolean).forEach(([lab,fn,dis])=>{ const bt=document.createElement('button'); bt.className='sbtn'; bt.textContent=lab; bt.disabled=!!dis; bt.onclick=fn; row.appendChild(bt); }); return row; }
 function renderMineOv(){ const body=ui('fishBody'), say=ui('fishSay'); body.textContent=''; ui('fishTitle').textContent='Topo, el minero'; ui('fishTabs').hidden=true;
@@ -8763,7 +8781,7 @@ function renderMineOv(){ const body=ui('fishBody'), say=ui('fishSay'); body.text
   if(mineTab==='picks'){ say.textContent=`Cada pico rompe la roca que tapa el siguiente piso. Más abajo hay minerales más valiosos. Tienes ${coins} monedas.`;
     PICKS.forEach((P,i)=>{ const own=mine.pick>=i, next=i===mine.pick+1;
       body.appendChild(mineRow(P.c,[P.n, i===0?'Gratis · piso 1':`Abre el piso ${i+1}: ${FLOOR_TXT[i].toLowerCase()} · pica más rápido`],
-        [own?[i===mine.pick?'Lo usas ✓':'Ya lo tienes',()=>{},true] : [`Comprar · ${P.price}`,()=>mineBuyPick(i),!next||coins<P.price]])); }); return; }
+        [own?[i===mine.pick?'Lo usas ✓':'Ya lo tienes',()=>{},true] : [`Comprar · ${P.price}`,()=>mineBuyPick(i),!next||coins<P.price]], pickSvg(P.c))); }); return; }
   const total=ORES.reduce((n,o)=>n+(mine.ores[o.id]||0)*o.sell,0);
   say.textContent = total ? `¡Qué buenos minerales! Te doy ${total} moneda${total===1?'':'s'} por todo.` : 'Todavía no traes minerales. ¡Entra a la mina y pica las vetas que brillan!';
   if(total){ const all=document.createElement('button'); all.className='btn primary fish-all'; all.textContent=`Vender todo · ${total} moneda${total===1?'':'s'}`; all.onclick=()=>{ mine.ores={}; saveMine(); addCoins(total); try{ audio.wave(); }catch(e){} renderMineOv(); }; body.appendChild(all); }
