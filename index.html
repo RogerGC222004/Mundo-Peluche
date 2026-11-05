@@ -1005,7 +1005,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='123';   // súbelo en cada publicación para saber si todos tienen la misma
+const GAME_VERSION='124';   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
 const ULTRA = !!EARLY_OPTS.ultra;   // modo ultra ligero (teléfonos lentos): se decide al abrir el juego
@@ -3298,7 +3298,8 @@ addEventListener('keydown',e=>{
 });
 
 function lockPointer(){ if(isTouch) return; try{ const p=canvas.requestPointerLock&&canvas.requestPointerLock(); if(p&&p.catch)p.catch(()=>{}); }catch(e){} }
-function startGame(){ controlsEl.hidden=true; optionsEl.hidden=true; setCam(settings.startCam); show('play'); lockPointer(); }
+function startGame(){
+  if(window.__econBoost){ const b=window.__econBoost; window.__econBoost=0; setTimeout(()=>flashNote('¡Cambiaron los precios de la tienda! Por eso tus monedas se multiplicaron ×5: ahora tienes '+b),2500); } controlsEl.hidden=true; optionsEl.hidden=true; setCam(settings.startCam); show('play'); lockPointer(); }
 
 ui('playBtn').onclick=startGame;
 ui('controlsBtn').onclick=()=>{controlsEl.hidden=false;};
@@ -5848,7 +5849,7 @@ const FISH_RAW=[
  ['Manatí',2,'whale','#8a8a8a','#b0b0b0',1],['Foca',2,'dolphin','#8a7a6a','#d0c0a8',1],['Esturión',2,'fish','#6a6a5a','#c8c8b0',1],['Celacanto',2,'fish','#3a4a6a','#e8e8f0',3],
  ['Pez remo',2,'eel','#d8d8e8','#ff4a4a',3],['Kraken de peluche',2,'octo','#6a2ab0','#ff6ad0',3],['Tiburón sierra',2,'shark','#a89a7a','#5a4a3a',2]
 ];
-const FISH_PRICE=[[4,8,15,30],[20,35,60,110],[80,140,250,500]];
+const FISH_PRICE=[[4,8,15,30],[20,35,60,110],[40,70,125,250]];   // v124: los grandes valen la mitad (antes daban muchísimo)
 const FISH=FISH_RAW.map(([n,s,k,c1,c2,r],id)=>({id, n, s, k, c:[c1,c2], r, p:FISH_PRICE[s][r]}));
 const FISH_SPACE=[1,2,5], FISH_SIZE_N=['pequeño','mediano','grande'], FISH_SIZE_P=['Pequeños','Medianos','Grandes'], FISH_RAR_N=['común','poco común','raro','legendario'];
 
@@ -6823,7 +6824,10 @@ function updateCritters(dt){
 // ======================================================================================
 // ---------- Monedas de peluche ----------
 // ======================================================================================
-let coins=(()=>{ try{ return Math.max(0, parseInt(localStorage.getItem('mundoPelucheMonedas')||'0',10)||0); }catch(e){ return 0; } })();
+let coins=(()=>{ try{ let c=Math.max(0, parseInt(localStorage.getItem('mundoPelucheMonedas')||'0',10)||0);
+  // v124: los precios subieron ×5, así que las monedas que ya tenías también (una sola vez) para que no pierdas lo ganado
+  if(!localStorage.getItem('mundoPelucheEcon124')){ localStorage.setItem('mundoPelucheEcon124','1'); if(c>0){ c*=5; localStorage.setItem('mundoPelucheMonedas',String(c)); window.__econBoost=c; } }
+  return c; }catch(e){ return 0; } })();
 function saveCoins(){ try{ localStorage.setItem('mundoPelucheMonedas', String(coins)); }catch(e){} }
 function renderCoins(){ const el=document.getElementById('coinN'); if(el) el.textContent=coins.toLocaleString('es-MX'); }
 // textura acolchada: dorado con costuras en rombos, borde cosido y una estrella al centro
@@ -7131,7 +7135,7 @@ I('texturas','tx_terciopelo','Terciopelo',24,{tex:'terciopelo'});
  ['tx_cuadritos','Tablero','cuadritos',null,'#2a2a33']].forEach(([id,n,p,a,b])=>I('texturas',id,n,24,{tex:'pat', pat:p, a, b}));
 I('texturas','tx_metalazul','Metal azul',32,{tex:'metal', tint:'#7fb2ff'});
 
-const SHOP_BY={}; SHOP.forEach(it=>{ it.slot=SLOT_OF[it.cat]; SHOP_BY[it.id]=it; });
+const SHOP_BY={}; SHOP.forEach(it=>{ it.slot=SLOT_OF[it.cat]; if(it.price>0) it.price=Math.max(15,it.price*5); SHOP_BY[it.id]=it; });   // v124: precios ×5 (economía más justa)
 const OUT_SLOTS=['top','hat','gloves','socks','shoes','glasses','skin','tex'];
 // lo comprado y lo puesto
 const wardrobe=(()=>{ let w={own:[], eq:{}}; try{ const s=JSON.parse(localStorage.getItem('mundoPelucheRopa')||'null'); if(s){ w.own=(s.own||[]).filter(id=>SHOP_BY[id]); for(const k of OUT_SLOTS) if(s.eq && SHOP_BY[s.eq[k]] && w.own.includes(s.eq[k])) w.eq[k]=s.eq[k]; } }catch(e){} return w; })();
@@ -7788,7 +7792,7 @@ const PETS=[
   {id:'pt_caracol', name:'Caracol', def:'Lento', price:50, ic:'🐌', bg:'#f6ecd6', k:'snail', c:'#d9934a', c2:'#cfe08a', slow:1, h:.5},
   {id:'pt_hamster', name:'Hámster', def:'Bolita', price:55, ic:'🐹', bg:'#fff0d8', k:'quad', c:'#f2b878', c2:'#fff4e2', ears:'round', cheeks:1, tail:'puff', legH:.07, h:.6},
   {id:'pt_oveja', name:'Ovejita', def:'Nube', price:70, ic:'🐑', bg:'#f4f4f8', k:'quad', c:'#fbf8f0', c2:'#fbf8f0', dark:'#4a4550', ears:'dog', earC:'#4a4550', wool:1, face:1, legH:.16, h:.85}];
-const PET_BY={}; PETS.forEach((p,i)=>{ p.i=i; PET_BY[p.id]=p; });
+const PET_BY={}; PETS.forEach((p,i)=>{ p.i=i; p.price=Math.round(p.price*6/10)*10; PET_BY[p.id]=p; });   // v124: mascotas de 240 a 720
 const PETS_KEY='mundoPelucheMascotas';
 const pets=(()=>{ let s={own:[], eq:'', names:{}}; try{ const o=JSON.parse(localStorage.getItem(PETS_KEY)||'null'); if(o){ s.own=(o.own||[]).filter(id=>PET_BY[id]); s.eq=PET_BY[o.eq]&&s.own.includes(o.eq)?o.eq:''; for(const id of s.own) if(o.names && typeof o.names[id]==='string') s.names[id]=cleanName(o.names[id]); } }catch(e){} return s; })();
 function savePets(){ try{ localStorage.setItem(PETS_KEY, JSON.stringify(pets)); }catch(e){} }
@@ -8207,7 +8211,7 @@ const FI_THEME={
 const FI_CHEST={o:null, lid:null, open:0, x:0, z:0, y:0};
 const CHEST_KEY='mundoPelucheCofre', today=()=>{ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); };
 const chestDone=()=>{ try{ return localStorage.getItem(CHEST_KEY)===today(); }catch(e){ return false; } };
-function openChest(){ if(chestDone()) return; try{ localStorage.setItem(CHEST_KEY,today()); }catch(e){} FI_CHEST.open=1; addCoins(30); flashNote('¡Encontraste 30 monedas en el cofre! Vuelve mañana por más'); try{ audio.wave(); }catch(e){} }
+function openChest(){ if(chestDone()) return; try{ localStorage.setItem(CHEST_KEY,today()); }catch(e){} FI_CHEST.open=1; addCoins(90); flashNote('¡Encontraste 90 monedas en el cofre! Vuelve mañana por más'); try{ audio.wave(); }catch(e){} }
 // rebote en los hongos: caes en un sombrero y sales volando
 function fiBounce(g){ if(player.vy>-3) return false; const x=player.pos.x, z=player.pos.z;
   for(const o of FI_BOUNCE){ if(Math.abs(g-o.top)>.05) continue; const dx=x-o.x, dz=z-o.z; if(dx*dx+dz*dz>o.r*o.r*.64) continue;
@@ -8514,7 +8518,7 @@ const CANYON_KEY='mundoPelucheCofreCanon', canyonDone=()=>{ try{ return localSto
 function reliefActions(){ const C=RX.chest; if(!C || player.car||player.ac||player.pg||player.mg||player.balloon) return null;
   if(Math.hypot(player.pos.x-C.x,player.pos.z-C.z)>2.2 || Math.abs(player.pos.y-C.y)>2) return null;
   return canyonDone() ? [{label:'Cofre vacío: vuelve mañana', disabled:true, run:()=>{}}, null]
-    : [{label:'Abrir el cofre del cañón', run:()=>{ if(canyonDone()) return; try{ localStorage.setItem(CANYON_KEY,today()); }catch(e){} addCoins(25); flashNote('¡25 monedas en la cuevita del cañón! Vuelve mañana por más'); try{ audio.wave(); }catch(e){} }}, null]; }
+    : [{label:'Abrir el cofre del cañón', run:()=>{ if(canyonDone()) return; try{ localStorage.setItem(CANYON_KEY,today()); }catch(e){} addCoins(75); flashNote('¡75 monedas en la cuevita del cañón! Vuelve mañana por más'); try{ audio.wave(); }catch(e){} }}, null]; }
 const RX_SEEN=new Set();
 function reliefUpdate(dt){ const C=RX.chest; if(C){ const want=canyonDone()?1:0; C.open+=(want-C.open)*Math.min(1,dt*4); C.lid.rotation.x=-C.open*1.7; C.coins.visible=C.open<.5; }
   for(const [id,S,txt] of [['n',RX.snowTop,'¡Llegaste a la Cima Nevada! '],['v',RX.greenTop,'¡Llegaste a la cima de las montañas verdes! ']]){ if(RX_SEEN.has(id)) continue;
@@ -8546,17 +8550,17 @@ const ORES=[
   {id:'plata',    n:'Plata',            c:'#e2e6ec', f:1, sell:5,  gem:0, met:.9},
   {id:'oro',      n:'Oro',              c:'#f6c445', f:2, sell:8,  gem:0, met:.95},
   {id:'amatista', n:'Amatista',         c:'#a66bff', f:2, sell:10, gem:1, met:0},
-  {id:'esmeralda',n:'Esmeralda',        c:'#2fd47e', f:3, sell:14, gem:1, met:0},
-  {id:'rubi',     n:'Rubí',             c:'#ff3048', f:3, sell:16, gem:1, met:0},
-  {id:'diamante', n:'Diamante',         c:'#c9f6ff', f:4, sell:25, gem:1, met:0},
-  {id:'arcoiris', n:'Cristal arcoíris', c:'#ff9ec0', f:4, sell:60, gem:2, met:0}];
+  {id:'esmeralda',n:'Esmeralda',        c:'#2fd47e', f:3, sell:10, gem:1, met:0},
+  {id:'rubi',     n:'Rubí',             c:'#ff3048', f:3, sell:12, gem:1, met:0},
+  {id:'diamante', n:'Diamante',         c:'#c9f6ff', f:4, sell:18, gem:1, met:0},
+  {id:'arcoiris', n:'Cristal arcoíris', c:'#ff9ec0', f:4, sell:45, gem:2, met:0}];   // v124: lo de los pisos 4 y 5 vale un poco menos
 const ORE_BY={}; ORES.forEach(o=>ORE_BY[o.id]=o);
 const PICKS=[
   {n:'Pico de madera',  c:'#b88a5a', price:0,   met:0},
-  {n:'Pico de piedra',  c:'#8d8f96', price:60,  met:0},
-  {n:'Pico de hierro',  c:'#c9ccd2', price:180, met:.7},
-  {n:'Pico de oro',     c:'#f6c445', price:400, met:.95},
-  {n:'Pico de diamante',c:'#7fe6ff', price:750, met:.2}];
+  {n:'Pico de piedra',  c:'#8d8f96', price:150,  met:0},
+  {n:'Pico de hierro',  c:'#c9ccd2', price:450,  met:.7},
+  {n:'Pico de oro',     c:'#f6c445', price:1000, met:.95},
+  {n:'Pico de diamante',c:'#7fe6ff', price:2000, met:.2}];
 const FLOOR_TXT=['Carbón y cobre','Hierro y plata','Oro y amatista','Esmeralda y rubí','Diamante y cristal arcoíris'];
 const mine=(()=>{ const s={pick:0, ores:{}, open:[true,false,false,false,false], veins:{}, chest:'', tip:0};
   try{ const o=JSON.parse(localStorage.getItem(MINE_KEY)||'null'); if(o){ s.pick=Math.max(0,Math.min(4,o.pick|0)); for(const k in (o.ores||{})) if(ORE_BY[k]) s.ores[k]=Math.max(0,o.ores[k]|0);
@@ -10100,7 +10104,7 @@ let bigT=0;
 function bigText(s,ms=900,sub){ const el=ui('arBig'); if(sub){ const sp=document.createElement('span'); sp.className='sub'; sp.textContent=sub; el.replaceChildren(sp,document.createTextNode(s)); } else el.textContent=s; el.classList.toggle('long',!!sub || s.length>12); el.hidden=false; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); clearTimeout(bigT); bigT=setTimeout(()=>el.hidden=true,ms); }
 function arResult(a,G){ const me=AR.me; if(me.awarded===G.gid) return; me.awarded=G.gid;
   const i=G.rk.indexOf(myUid), place=i<0?G.pl.length:(i<G.tie?0:i), N=G.pl.length;
-  const coins=place===0?14+N*3:[0,10,7][place]||4;
+  const coins=2*(place===0?14+N*3:[0,10,7][place]||4);   // v124: el doble (jugar con amigos vale la pena)
   const names=['¡1er lugar!','2º lugar','3er lugar']; const title=place===0?(G.tie>1?'¡Ganaron juntos!':'¡Ganaste!'):(names[place]||(place+1)+'º lugar');
   ui('arResTitle').textContent=title; ui('arResText').textContent=AR_SPOTS[a].name+' · '+N+' jugadores'; ui('arResCoins').textContent='+'+coins; ui('arRes').hidden=false;
   setTimeout(()=>{ ui('arRes').hidden=true; },5500); setTimeout(()=>addCoins(coins),400);
@@ -11517,14 +11521,15 @@ ui('spExit').onclick=()=>{ fade(true,500); setTimeout(()=>exitSpace(false),520);
 // Se guarda todo lo que vas ganando: monedas, ropa, banderas, planetas, especies, tu nombre/color, mejor vuelta y opciones.
 // Al cargar se UNE con lo que ya tienes (nunca se pierde nada): monedas = las más altas, ropa/planetas/especies = todas.
 const SAVE_KEYS=['Monedas','Ropa','Banderas','Especies','Planetas','Jugador','MejorVuelta','Opciones','Peces'];
-function saveSnapshot(){ const o={v:1}; for(const k of SAVE_KEYS){ try{ const v=localStorage.getItem('mundoPeluche'+k); if(v!=null) o[k]=v; }catch(e){} } return o; }
+function saveSnapshot(){ const o={v:1, e:124}; /* e: versión de la economía (v124: precios ×5) */ for(const k of SAVE_KEYS){ try{ const v=localStorage.getItem('mundoPeluche'+k); if(v!=null) o[k]=v; }catch(e){} } return o; }
 const jparse=(s,d)=>{ try{ const v=JSON.parse(s); return v==null?d:v; }catch(e){ return d; } };
 function saveSummary(o){ const own=(jparse(o.Ropa,{}).own||[]).length, pl=Object.keys(jparse(o.Planetas,{})).length, sp=(jparse(o.Especies,[])||[]).length;
-  return {coins:Math.max(0,parseInt(o.Monedas||'0',10)||0), own, pl, sp}; }
+  return {coins:Math.max(0,econCoins(o)), own, pl, sp}; }
 const plur=(n,w)=>n+' '+w+(n===1?'':(/[aeiou]$/.test(w)?'s':'es')); const sumText=s=>[plur(s.coins,'moneda'),plur(s.own,'prenda'),plur(s.pl,'planeta'),plur(s.sp,'especie')].join(' · ');
 // une dos guardados (a = el de este dispositivo, b = el que llega)
-function mergeSaves(a,b){ const o={v:1};
-  o.Monedas=String(Math.max(parseInt(a.Monedas||'0',10)||0, parseInt(b.Monedas||'0',10)||0));
+const econCoins=o=>(parseInt(o.Monedas||'0',10)||0)*((+o.e||0)>=124?1:5);   // un guardado de antes de v124 vale ×5
+function mergeSaves(a,b){ const o={v:1, e:124};
+  o.Monedas=String(Math.max(econCoins(a), econCoins(b)));
   const ra=jparse(a.Ropa,{own:[],eq:{}}), rb=jparse(b.Ropa,{own:[],eq:{}});
   const own=[...new Set([...(ra.own||[]),...(rb.own||[])])].filter(id=>SHOP_BY[id]); const eq=(ra.own||[]).length||Object.keys(ra.eq||{}).length?(ra.eq||{}):(rb.eq||{});
   o.Ropa=JSON.stringify({own, eq});
