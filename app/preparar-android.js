@@ -16,7 +16,8 @@ if(!m.includes('xmlns:tools=')) m=m.replace('<manifest ','<manifest xmlns:tools=
 must(m,/<application[\s\S]*?>/,'<application>');
 m=m.replace(/(<application[\s\S]*?>)/, `$1\n        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="@string/admob_app_id"/>`);
 // juego para niños y familias: sin identificador de publicidad
-m=m.replace('</manifest>','    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove"/>\n</manifest>');
+m=m.replace('</manifest>',['com.google.android.gms.permission.AD_ID','android.permission.ACCESS_ADSERVICES_AD_ID','android.permission.ACCESS_ADSERVICES_TOPICS','android.permission.ACCESS_ADSERVICES_ATTRIBUTION']
+  .map(p=>`    <uses-permission android:name="${p}" tools:node="remove"/>\n`).join('')+'</manifest>');
 must(m,/<activity[\s\S]*?android:name="[^"]*MainActivity"/,'MainActivity en el manifest');
 m=m.replace(/(<activity\b)/, `$1\n            android:screenOrientation="${cfg.orientacion||'unspecified'}"`);
 write(MF,m);

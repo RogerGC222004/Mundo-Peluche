@@ -23,3 +23,18 @@
   - Las alturas van ya calculadas dentro del juego (`RL_DATA`, comprimidas), así carga rápido en teléfonos lentos.
   - Si se cambian las montañas, cañones o llanos (`relieve/relief_gen.js`) o el bloque «Relieve (v119)» del juego,
     hay que volver a generar: `node herramientas/relieve/gen.js fuente/mundo-peluche.html` (reescribe RL_DATA, RL_BED y RL_PLUNGE).
+
+## App de Android (v127)
+- `../app/` — Mundo Peluche como app (Capacitor 8, Android 16 / API 36). No se arma aquí: lo hace GitHub Actions
+  (`.github/workflows/app-android.yml`) cada vez que cambia `fuente/`, `app/` o la versión web.
+  - `construir.js` arma `app/www/` (el juego con three.js, PeerJS y letras dentro de la app).
+  - `preparar-android.js` ajusta el proyecto que crea `npx cap add android`: AdMob en modo niños (sin identificador de
+    publicidad), pantalla completa, pantalla encendida, orientación, íconos (`recursos/res/`), versión = GAME_VERSION y firma.
+  - `puente.js` conecta los botones ▶ con AdMob (`window.MundoAds`) y el botón atrás de Android con `window.mundoAtras`.
+  - `config.json`: códigos de AdMob (`pruebas: true` usa los anuncios de prueba de Google) y la orientación.
+  - Firma: `llave/subida.p12` (protegida con contraseña). Si el repositorio tiene el secreto `LLAVE_CLAVE`, el armado
+    genera el APK y el AAB firmados; si no, un APK de prueba.
+  - El resultado queda en Releases (`app-v<versión>`). Si el armado falla, el registro se guarda en la rama `registro-app`.
+  - La versión de la app (versionCode) es GAME_VERSION: para subir otra versión a Play hay que subir GAME_VERSION.
+- `../tienda/` — textos de la ficha de Google Play, respuestas de los cuestionarios y capturas.
+- `../privacidad.html` — política de privacidad (se publica con GitHub Pages).
