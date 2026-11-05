@@ -1,0 +1,78 @@
+# Arma la app de Android de Mundo Peluche cada vez que cambia el juego.
+# - Siempre: un APK para instalar y probar en tu teléfono.
+# - Si en GitHub existe el secreto LLAVE_CLAVE: el APK y el AAB (el que se sube a Google Play) van firmados con tu llave.
+# Todo queda en "Releases" del repositorio (app-v<versión>).
+name: App Android
+on:
+  push:
+    branches: [main]
+    paths: ['fuente/**', 'app/**', 'herramientas/build.js', 'herramientas/net_peer.js', 'herramientas/web/**', '.github/workflows/app-android.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: app-android
+  cancel-in-progress: true
+jobs:
+  armar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Versión
+        id: ver
+        run: echo "v=$(grep -oP "const GAME_VERSION='\K[0-9]+" fuente/mundo-peluche.html)" >> "$GITHUB_OUTPUT"
+      - name: Instalar Capacitor y librerías
+        working-directory: app
+        run: set -o pipefail; npm install --no-audit --no-fund 2>&1 | tee -a ../registro.txt
+      - name: Preparar el juego (www)
+        working-directory: app
+        run: set -o pipefail; node construir.js 2>&1 | tee -a ../registro.txt
+      - name: Proyecto Android
+        working-directory: app
+        run: |
+          set -o pipefail
+          npx cap add android 2>&1 | tee -a ../registro.txt
+          node preparar-android.js 2>&1 | tee -a ../registro.txt
+          npx cap sync android 2>&1 | tee -a ../registro.txt
+      - name: Armar (APK y AAB)
+        working-directory: app/android
+        env:
+          LLAVE_CLAVE: ${{ secrets.LLAVE_CLAVE }}
+        run: |
+          set -o pipefail
+          chmod +x gradlew
+          if [ -n "$LLAVE_CLAVE" ]; then
+            export LLAVE_ARCHIVO="$GITHUB_WORKSPACE/app/llave/subida.p12" LLAVE_ALIAS=mundopeluche
+            ./gradlew --no-daemon assembleRelease bundleRelease 2>&1 | tee -a ../../registro.txt
+            cp app/build/outputs/apk/release/app-release.apk "../../mundo-peluche-${{ steps.ver.outputs.v }}.apk"
+            cp app/build/outputs/bundle/release/app-release.aab "../../mundo-peluche-${{ steps.ver.outputs.v }}.aab"
+          else
+            ./gradlew --no-daemon assembleDebug 2>&1 | tee -a ../../registro.txt
+            cp app/build/outputs/apk/debug/app-debug.apk "../../mundo-peluche-${{ steps.ver.outputs.v }}-prueba.apk"
+          fi
+      - name: Publicar en Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          T="app-v${{ steps.ver.outputs.v }}"
+          gh release delete "$T" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$T" mundo-peluche-*.a* --target "$GITHUB_SHA" --title "Mundo Peluche ${{ steps.ver.outputs.v }} (Android)" \
+            --notes "APK para instalar en el teléfono. El .aab (si está) es el que se sube a Google Play."
+      - name: Guardar el registro si algo falló
+        if: failure()
+        run: |
+          git config user.name "armado-app"; git config user.email "armado-app@users.noreply.github.com"
+          git checkout --orphan registro-app
+          git rm -rq --cached . ; tail -c 400000 registro.txt > registro-app.txt || echo "sin registro" > registro-app.txt
+          git add registro-app.txt; git commit -qm "registro del armado ${GITHUB_SHA::7}"; git push -f origin registro-app

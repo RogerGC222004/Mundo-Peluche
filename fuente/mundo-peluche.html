@@ -892,7 +892,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='126';
+const GAME_VERSION='127';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -6800,7 +6800,7 @@ const ADS=(()=>{
     failMsg(){ return this.left()<=0 ? 'Ya viste los anuncios de hoy: vuelve mañana' : 'El anuncio no terminó, así que esta vez no cuenta'; },
     async show(){ if(busy || !this.ok() || this.left()<=0) return false; busy=true; let ok=false;
       try{ audio.suspend(); }catch(e){}
-      try{ const m=real(); ok = m ? !!(await m.show()) : await fake(); }catch(e){ ok=false; }
+      try{ const m=real(); if(m) flashNote('Cargando el anuncio…'); ok = m ? !!(await m.show()) : await fake(); }catch(e){ ok=false; }
       try{ audio.resume(); }catch(e){}
       busy=false; if(ok){ roll(); st.n++; save(); } return ok; }
   };
@@ -12419,6 +12419,17 @@ function frame(){
 }
 show('menu'); setCam(settings.startCam); applySettings(); applySettings.ready=true;
 try{ const gl=renderer.getContext(), ext=gl.getExtension('WEBGL_debug_renderer_info'); const nm=ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER); ui('gpuName').textContent='Tu equipo: '+String(nm).slice(0,60)+' · núcleos: '+(navigator.hardwareConcurrency||'?'); }catch(e){}
+// botón "atrás" de Android (lo llama la app): cierra lo que esté abierto o pausa. false = estás en el menú (la app se minimiza)
+window.mundoAtras=()=>{ const vis=id=>{ const e=ui(id); return !!e && !e.hidden; }, esc=()=>dispatchEvent(new KeyboardEvent('keydown',{key:'Escape', code:'Escape'}));
+  if(document.getElementById('loader') || vis('adScreen')) return true;
+  if(vis('options')){ optionsEl.hidden=true; return true; }
+  if(vis('saveOv')){ ui('saveClose').click(); return true; }
+  if(vis('controls')){ ui('closeControls').click(); return true; }
+  if(!shopEl.hidden){ closeShop(); return true; }
+  if(vis('mp')){ ui('mpBack').click(); return true; }
+  if(editor.on || state==='play'){ esc(); return true; }
+  if(state==='pause'){ ui('resumeBtn').click(); return true; }
+  return false; };
 const verLabel=()=>{ ui('verMenu').textContent='Versión '+GAME_VERSION+(ADS.test?' · anuncios de prueba':''); }; verLabel();
 { let n=0, t=0; ui('verMenu').addEventListener('click',()=>{ const now=Date.now(); if(now-t>1500) n=0; t=now;
     if(++n>=5){ n=0; ADS.setTest(!ADS.test); verLabel(); flashNote(ADS.test?'Anuncios de prueba activados: verás botones ▶ en la tienda, cofres y ventas':'Anuncios de prueba desactivados'); } }); } ui('verMp').textContent='Tu versión del juego: '+GAME_VERSION;
