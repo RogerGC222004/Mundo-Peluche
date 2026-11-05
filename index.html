@@ -1034,7 +1034,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='127';
+const GAME_VERSION='128';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -4894,9 +4894,11 @@ const AIR_PARK=[[60,-52],[112,-52],[150,-58],[177,-58]];   // estacionamientos (
   const box=(w,h,d,m,u,y,v)=>{ const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m); b.position.set(u,y,v); st.add(b); return b; };
   box(90,8,16,wallM,75,4,-118); box(92,.8,18,roofM,75,8.4,-118); box(86,3.2,.3,glassM,75,4.4,-109.9);
   for(let k=0;k<5;k++) box(3.2,3.6,.35,glassM,40+k*17,1.8,-109.85);
-  const signTex=cv(1024,160,(x,w,h)=>{ x.fillStyle='#4f86c6'; x.fillRect(0,0,w,h); x.fillStyle='#fffaf0'; x.font='800 104px Sniglet, Nunito, sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('AEROPUERTO PELUCHE',w/2,h/2+6); });
+  const drawSign=(x,w,h)=>{ x.fillStyle='#4f86c6'; x.fillRect(0,0,w,h); x.fillStyle='#fffaf0'; let fs=104; const T='AEROPUERTO PELUCHE'; x.font='800 '+fs+'px Sniglet, Nunito, sans-serif'; while(fs>40 && x.measureText(T).width>w-56){ fs-=4; x.font='800 '+fs+'px Sniglet, Nunito, sans-serif'; } x.textAlign='center'; x.textBaseline='middle'; x.fillText(T,w/2,h/2+6); };   // v128: el texto se achica si no cabe
+  const signTex=cv(1024,160,drawSign);
+  if(document.fonts) document.fonts.ready.then(()=>{ const c=signTex.image, x=c.getContext('2d'); drawSign(x,c.width,c.height); TK.finish(c,{seed:1024+160*3, amp:.05, grain:.04, fuzzDiv:18, len:2}); signTex.needsUpdate=true; });   // v128: se vuelve a dibujar con la letra del juego cuando termina de cargar
   const sign=new THREE.Mesh(new THREE.PlaneGeometry(40,6.2), new THREE.MeshStandardMaterial({map:signTex, roughness:.8}));
-  sign.position.set(75,11.6,-109.8); sign.rotation.y=Math.PI; g.add(sign); box(40.6,6.8,.3,roofM,75,11.6,-109.95);
+  sign.position.set(75,11.6,-109.76); g.add(sign); { const s2=sign.clone(); s2.position.z=-110.14; s2.rotation.y=Math.PI; g.add(s2); } box(40.6,6.8,.3,roofM,75,11.6,-109.95);   // v128: el letrero mira hacia afuera y también se lee por detrás (antes miraba hacia la caja azul y no se veía)
   // torre de control
   const tw=new THREE.Mesh(new THREE.CylinderGeometry(2.4,3,18,20),wallM); tw.position.set(152,9,-118); st.add(tw);
   const cab=new THREE.Mesh(new THREE.CylinderGeometry(4.6,3.6,4,20),glassM); cab.position.set(152,20,-118); st.add(cab);
@@ -6086,7 +6088,9 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
   { const c=document.createElement('canvas'); c.width=512; c.height=128; const g=c.getContext('2d'); g.fillStyle='#e9c48a'; g.fillRect(0,0,512,128); g.strokeStyle='#8a5a32'; g.lineWidth=10; g.strokeRect(5,5,502,118);
     g.setLineDash([12,9]); g.lineWidth=3; g.strokeRect(18,18,476,92); g.setLineDash([]); g.fillStyle='#3a5a2a'; g.font='800 54px Sniglet, Nunito, sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('Pesca de Tortu',256,66);
     TK.fuzz(g,512,128,{n:1500, len:6, dir:0, spread:.15, cols:['rgba(120,80,40,.12)','rgba(255,240,210,.12)'], seed:529}); TK.tone(g,512,128,{amp:.05, grain:.025, cells:5, seed:530, warm:.04});
-    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; const m=new THREE.Mesh(new THREE.PlaneGeometry(2.6,.65), new THREE.MeshStandardMaterial({map:t, roughness:.9})); m.position.set(0,Y+2.95,z0-.14); m.rotation.y=Math.PI; gS.add(m); P.sign=m; P.signTex=t; }
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; const m=new THREE.Mesh(new THREE.PlaneGeometry(2.6,.65), new THREE.MeshStandardMaterial({map:t, roughness:.9})); m.position.set(0,Y+3.0,z0-1.52); m.rotation.y=Math.PI; gS.add(m); P.sign=m; P.signTex=t;
+    // v128: colgado al frente del alero (antes quedaba debajo del techo de paja y no se veía al llegar): tabla de atrás y dos soportes al techo
+    B(woodD,0,Y+3.0,z0-1.49,2.72,.77,.05); [-1,1].forEach(sd=>B(woodD,sd*1.0,Y+3.25,z0-1.32,.07,.07,.3)); }
   // techo de pirámide cubierto de paja (aparte, para quitarlo cuando estás adentro)
   const thatch=(()=>{ const c=document.createElement('canvas'); c.width=c.height=256; const g=c.getContext('2d'); g.fillStyle='#d6b05a'; g.fillRect(0,0,256,256);
     for(let i=0;i<2600;i++){ const x=Math.random()*256, y=Math.random()*256, L=8+Math.random()*16; g.strokeStyle=['#b88a3a','#f0d27a','#a27a32','#e2c066','#c99a44'][i%5]; g.lineWidth=1+Math.random()*1.6; g.beginPath(); g.moveTo(x,y); g.lineTo(x+(Math.random()-.5)*4,y+L); g.stroke(); }
@@ -9153,6 +9157,7 @@ function tent(par,w,d,h,ca,cb,title,sub){
     sg.position.set(0,h+.35,-d/2-.06); sg.rotation.y=Math.PI; par.add(sg); fairGlow.push(sg.material); }
 }
 const fairGlow=[];   // letreros que se iluminan de noche
+fairGlow.push=function(...ms){ for(const m of ms) if(m && m.map && !m.emissiveMap) m.emissiveMap=m.map; return Array.prototype.push.apply(this,ms); };   // v128: de noche brillan las letras y el dibujo del letrero (antes todo el rectángulo se ponía blanco)
 // placa en el piso (aquí te paras para jugar)
 const padTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d'); g.fillStyle='#ffd34d'; g.beginPath(); g.arc(64,64,62,0,7); g.fill();
   { const gr=g.createRadialGradient(54,50,4,64,64,62); gr.addColorStop(0,'rgba(255,255,255,.3)'); gr.addColorStop(.7,'rgba(255,255,255,0)'); gr.addColorStop(1,'rgba(120,70,0,.25)'); g.fillStyle=gr; g.beginPath(); g.arc(64,64,62,0,7); g.fill(); }
