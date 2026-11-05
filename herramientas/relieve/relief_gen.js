@@ -87,10 +87,22 @@ const RL_PLUNGE=(()=>{ const B=RL_BED, L=RL_RIVER.L; let i0=-1; for(let i=1;i<B.
 const RLN={d:0,s:0,i:0};
 function rlRiverCarve(x,z,h){ let n=RL_RIVER.near(x,z,RLN); const pd=Math.hypot(x-RL_POND.x,z-RL_POND.z);
   if(pd<RL_POND.R+40){ const b=RL_POND.bed+Math.pow(smooth(RL_POND.R*.7,RL_POND.R+30,pd),1.2)*40; if(b<h) h=b; }
-  { const P=RL_PLUNGE, d=Math.hypot(x-P.x,z-P.z); if(d<P.R+25){ const b=d<P.R ? P.bottom+(P.lvl-.25-P.bottom)*Math.pow(d/P.R,2) : P.lvl-.25+(d-P.R)*.6; if(b<h) h=b; } }
-  if(n.d>RL_RIVER_W/2+45) return h; const bed=rlBedAt(n.s), w=RL_RIVER_W/2;
+  { const P=RL_PLUNGE, d=Math.hypot(x-P.x,z-P.z); if(d<P.R+25 && !((n.s<P.sTop-3 || n.s<P.sTop+2 && n.d>RL_RIVER_W/2-.5) && n.d<40)){ /* v126: la poza no escarba río arriba de la cascada */ const b=d<P.R ? P.bottom+(P.lvl-.25-P.bottom)*Math.pow(d/P.R,2) : P.lvl-.25+(d-P.R)*.6; if(b<h) h=b; } }
+  if(n.d>RL_RIVER_W/2+45) return rlRiverBanks(x,z,h,n); const bed=rlBedAt(n.s), w=RL_RIVER_W/2;
   const prof=n.d<w ? -1.0*(1-(n.d/w)*(n.d/w)) : (n.d-w)*.45+Math.pow(Math.max(0,n.d-w-6),1.4)*.05;
-  const c=bed+.35+prof; return Math.min(h,c); }
+  const c=bed+.35+prof; return rlRiverBanks(x,z,Math.min(h,c),n); }
+// v126: orillas. Donde el terreno de un lado ya estaba más bajo que el agua (el río va por una ladera, o llega al borde
+// del acantilado de la cascada), se levanta una orilla para que el agua quede siempre dentro de un cauce y nunca en el aire.
+// Lo mismo alrededor del estanque donde nace y de la poza. Todo en metros "de verdad" (se resta lo que suma la isla vieja y la playa).
+function rlRiverBanks(x,z,h,n){ const w=RL_RIVER_W/2, d=Math.hypot(x,z), off=rlOldPart(x,z)+shoreBaseN(d/coastRN(Math.atan2(z,x)));
+  const bank=(lv,dd,w0)=>Math.min(lv-.4+Math.max(0,dd-w0)*.45, lv+.8)-Math.max(0,dd-w0-5)*1.0;   // sube del borde del agua hasta +0.8 m y luego baja como talud
+  let t=-1e9;
+  if(n.d<=w-.5){ const lv=rlBedAt(n.s)+.75; if(lv>SEA_Y+.1 && !(n.s>RL_PLUNGE.sTop-3 && n.s<RL_PLUNGE.sBase+6)) t=lv-.4-1.0*(1-(n.d/w)*(n.d/w))-.6; }   // el fondo no más de ~2 m bajo el agua
+  // en el borde de la cascada las orillas siguen arriba unos metros (el agua cae por en medio)
+  if(n.d>w-.5 && n.d<w+40){ const lv=(n.s>RL_PLUNGE.sTop && n.s<RL_PLUNGE.sTop+2 ? rlBedAt(RL_PLUNGE.sTop) : rlBedAt(n.s))+.75, fade=smooth(RL_RIVER.total-30,RL_RIVER.total-8,n.s); if(lv>SEA_Y+.1) t=Math.max(t,bank(lv,n.d,w)-fade*20); }
+  for(const C of [[RL_POND.x,RL_POND.z,RL_POND.R,RL_POND.bed+.75],[RL_PLUNGE.x,RL_PLUNGE.z,RL_PLUNGE.R,RL_PLUNGE.lvl]]){ const pd=Math.hypot(x-C[0],z-C[1]);
+    if(pd>C[2]-1 && pd<C[2]+40 && n.d>w-.5) t=Math.max(t,bank(C[3],pd,C[2]+.6)); }
+  return Math.max(h,t-off); }
 // ---- la rejilla ----
 const RG={E:1460, S:5, N:0, h:null};
 (function rlBuild(){ const N=RG.N=Math.round(2*RG.E/RG.S)+1, h=RG.h=new Float32Array(N*N);
