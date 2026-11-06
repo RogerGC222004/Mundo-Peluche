@@ -892,7 +892,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='128';
+const GAME_VERSION='129';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -1969,11 +1969,27 @@ function vegMerge(parts){ let n=0; const nn=parts.map(([g])=>{ const q=g.index?g
   const bench=(par,x,z,y,yaw)=>{ const b=new THREE.Group(); b.position.set(x,y,z); b.rotation.y=yaw; par.add(b);
     add(b,box,wood,0,.45,0,2.2,.1,.5); add(b,box,wood,0,.8,-.25,2.2,.5,.08); [-.9,.9].forEach(o=>add(b,box,woodD,o,.22,0,.1,.45,.4));
     const c=Math.cos(yaw), sn=Math.sin(yaw); [-.75,0,.75].forEach(f=>obstacles.push({x:x+c*f, z:z-sn*f, r:.42, top:y+.5, walk:true})); BENCHES.push({x,z,y:y+.5,yaw}); };
+  // v129: bandera de México (franjas verde, blanca y roja con el escudo del águila sobre el nopal, dibujado sencillo)
+  const mxFlag=(g,W,H)=>{ const w3=W/3; g.fillStyle='#006847'; g.fillRect(0,0,w3+1,H); g.fillStyle='#ffffff'; g.fillRect(w3,0,w3+1,H); g.fillStyle='#ce1126'; g.fillRect(2*w3,0,W-2*w3,H);
+    const E=(x,y,rx,ry,r,c)=>{ g.fillStyle=c; g.beginPath(); g.ellipse(x,y,rx,ry,r||0,0,Math.PI*2); g.fill(); };
+    g.save(); g.translate(W/2,H/2+2); g.scale(H/128,H/128);
+    for(let i=0;i<8;i++) for(const sd of [-1,1]){ const a=Math.PI/2+sd*(.32+i*.24), r=31; E(Math.cos(a)*r, Math.sin(a)*r*.92+3, 5.2, 2.6, a+Math.PI/2, i%2?'#2f6e34':'#4a8f3c'); }   // ramas
+    g.fillStyle='#006847'; g.fillRect(-10,28,7,4); g.fillStyle='#e9e9e9'; g.fillRect(-3,28,6,4); g.fillStyle='#ce1126'; g.fillRect(3,28,7,4);   // listón
+    E(0,22,15,3.6,0,'#5b9bd5'); E(0,19,8,3,0,'#8a8f99');   // agua y piedra
+    E(0,11,5,8,0,'#3f8a3a'); E(-8,6,4,6.5,-.55,'#4a9a41'); E(8,5,4,6.5,.55,'#4a9a41'); E(-8,-1,1.4,1.4,0,'#ce1126'); E(9,-2,1.4,1.4,0,'#ce1126');   // nopal y tunas
+    g.fillStyle='#6b3f17'; g.beginPath(); g.moveTo(-4,-9); g.lineTo(-23,-29); g.lineTo(-21,-15); g.lineTo(-16,-4); g.closePath(); g.fill();   // ala izquierda
+    g.beginPath(); g.moveTo(4,-9); g.lineTo(22,-31); g.lineTo(21,-16); g.lineTo(15,-3); g.closePath(); g.fill();   // ala derecha
+    E(0,-3,8.5,11,.18,'#7a4a1e'); E(5,8,6,3,.3,'#5e3512');   // cuerpo y cola
+    g.strokeStyle='#5e3512'; g.lineWidth=2.2; g.beginPath(); g.moveTo(-3,6); g.lineTo(-5,4); g.moveTo(3,6); g.lineTo(2,3); g.stroke();   // patas sobre el nopal
+    E(-7,-15,5,4.5,0,'#7a4a1e'); g.fillStyle='#f2b630'; g.beginPath(); g.moveTo(-11,-16); g.lineTo(-17,-14); g.lineTo(-11,-12.5); g.closePath(); g.fill(); E(-8,-16.5,1,1,0,'#ffffff');   // cabeza y pico
+    g.strokeStyle='#3f9b4a'; g.lineWidth=2.4; g.lineCap='round'; g.beginPath(); g.moveTo(-15,-13.5); g.bezierCurveTo(-24,-8,-11,-3,-21,3); g.stroke();   // serpiente
+    g.restore(); };
   const flag=(par,x,z,y,h,cols)=>{ add(par,cyl,woodD,x,y+h/2,z,.09,h,.09); add(par,sphereG,felt('#ffd23f'),x,y+h+.1,z,.16,.16,.16);
-    const cv=document.createElement('canvas'); cv.width=64; cv.height=40; const g=cv.getContext('2d'); cols.forEach((c,i)=>{ g.fillStyle=c; g.fillRect(0,i*40/cols.length,64,40/cols.length+1); });
-    const t=new THREE.CanvasTexture(cv); t.encoding=THREE.sRGBEncoding; const f=new THREE.Mesh(new THREE.PlaneGeometry(1.6,1,6,1), new THREE.MeshStandardMaterial({map:t, side:THREE.DoubleSide, roughness:1}));
-    const q=f.geometry.attributes.position; for(let i=0;i<q.count;i++) q.setZ(i, Math.sin((q.getX(i)+.8)*2.6)*.12*(q.getX(i)+.8)); f.geometry.computeVertexNormals();
-    f.position.set(x+.82,y+h-.55,z); f.castShadow=true; par.add(f); obstacles.push({x,z,r:.2,top:y+h,walk:false}); };
+    const mx=cols==='mx', FW=mx?1.75:1.6, hw=FW/2;
+    const cv=document.createElement('canvas'); cv.width=mx?224:64; cv.height=mx?128:40; const g=cv.getContext('2d'); if(mx) mxFlag(g,cv.width,cv.height); else cols.forEach((c,i)=>{ g.fillStyle=c; g.fillRect(0,i*40/cols.length,64,40/cols.length+1); });
+    const t=new THREE.CanvasTexture(cv); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; const f=new THREE.Mesh(new THREE.PlaneGeometry(FW,1,6,1), new THREE.MeshStandardMaterial({map:t, side:THREE.DoubleSide, roughness:1}));
+    const q=f.geometry.attributes.position; for(let i=0;i<q.count;i++) q.setZ(i, Math.sin((q.getX(i)+hw)*2.6)*.12*(q.getX(i)+hw)); f.geometry.computeVertexNormals();
+    f.position.set(x+hw+.02,y+h-.55,z); f.castShadow=true; par.add(f); obstacles.push({x,z,r:.2,top:y+h,walk:false}); };
   // --- mirador de la cima nevada ---
   { const S=RX.snowTop, G=new THREE.Group(); scene.add(G); const y=S.y+.05, R=6.2, t=RX.trails[0], [ex,ez]=t[t.length-1], ea=Math.atan2(ez-S.z,ex-S.x);
     add(G,new THREE.CylinderGeometry(R,R+.6,3,32),stone,S.x,y-1.35,S.z,1,1,1);   // base de piedra
@@ -1986,7 +2002,7 @@ function vegMerge(parts){ let n=0; const nn=parts.map(([g])=>{ const q=g.index?g
     obstacles.push({x:S.x,z:S.z,r:R-.4,top:y+.31,walk:true});
     const inA=Math.atan2(-S.z,-S.x); bench(G,S.x+Math.cos(inA)*2.2,S.z+Math.sin(inA)*2.2,y+.31,Math.atan2(Math.cos(inA),Math.sin(inA))+Math.PI);   // mirando hacia la isla
     bench(G,S.x-Math.cos(inA)*2.2,S.z-Math.sin(inA)*2.2,y+.31,Math.atan2(Math.cos(inA),Math.sin(inA)));   // mirando al mar
-    flag(G,S.x+Math.cos(inA+1.6)*3.6,S.z+Math.sin(inA+1.6)*3.6,y+.31,4.2,['#e5342b','#ffffff','#e5342b']);
+    flag(G,S.x+Math.cos(inA+1.6)*3.6,S.z+Math.sin(inA+1.6)*3.6,y+.31,4.2,'mx');   // v129: bandera de México
     // letrero
     { const cv=document.createElement('canvas'); cv.width=256; cv.height=96; const g=cv.getContext('2d'); g.fillStyle='#f6ead0'; g.fillRect(0,0,256,96); g.strokeStyle='#8a6a3e'; g.lineWidth=6; g.strokeRect(3,3,250,90);
       g.fillStyle='#5a4426'; g.textAlign='center'; g.font='800 30px Sniglet, Nunito, sans-serif'; g.fillText('Cima Nevada',128,42); g.font='700 24px Nunito, sans-serif'; g.fillText(Math.round(S.y)+' m',128,76);
@@ -1995,7 +2011,7 @@ function vegMerge(parts){ let n=0; const nn=parts.map(([g])=>{ const q=g.index?g
     mergeStatic(G); }
   // --- cima verde: banca y bandera ---
   { const S=RX.greenTop, G=new THREE.Group(); scene.add(G); const inA=Math.atan2(-S.z,-S.x);
-    bench(G,S.x+Math.cos(inA)*1.5,S.z+Math.sin(inA)*1.5,S.y-.05,Math.atan2(Math.cos(inA),Math.sin(inA))+Math.PI); flag(G,S.x-Math.cos(inA)*1.8,S.z-Math.sin(inA)*1.8,S.y-.05,3.6,['#3f9b4a','#ffd23f','#3f9b4a']); mergeStatic(G); }
+    bench(G,S.x+Math.cos(inA)*1.5,S.z+Math.sin(inA)*1.5,S.y-.05,Math.atan2(Math.cos(inA),Math.sin(inA))+Math.PI); flag(G,S.x-Math.cos(inA)*1.8,S.z-Math.sin(inA)*1.8,S.y-.05,3.6,'mx'); mergeStatic(G); }   // v129: bandera de México
   // --- muñecos de nieve cerca de la cima ---
   { const G=new THREE.Group(); scene.add(G); const snow=felt('#fbfcff','rgba(120,140,170,.12)'), coal=felt('#2c2c34'), carrot=felt('#f28c28'), scarf=[felt('#e5342b'),felt('#3d8bd9'),felt('#9b5de5')];
     const S=RX.snowTop, t=RX.trails[0], ea=Math.atan2(t[t.length-1][1]-S.z,t[t.length-1][0]-S.x), spots=[];
