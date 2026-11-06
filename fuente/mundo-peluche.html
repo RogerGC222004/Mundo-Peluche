@@ -410,6 +410,9 @@ body.in-mg #hint{display:none!important;}
 .room-diag{margin:0;width:100%;font-size:12px;font-weight:700;opacity:.75;font-variant-numeric:tabular-nums;}
 .install-btn{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:3;font-family:var(--display);font-weight:800;font-size:17px;color:#5a4426;background:#fffaf0;border:none;border-radius:16px;padding:12px 18px;box-shadow:0 4px 0 #d9cba8, inset 0 0 0 2px #fffaf0, inset 0 0 0 4px rgba(201,168,119,.0);outline:2px dashed #c9a877;outline-offset:-7px;cursor:pointer;}
 .install-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #d9cba8;}
+.diag-card{max-width:620px;width:100%;display:flex;flex-direction:column;gap:10px;} .diag-card h2{margin:0;font-size:22px;}
+#diagTxt{margin:0;white-space:pre-wrap;word-break:break-word;font:700 13px/1.45 ui-monospace,Menlo,Consolas,monospace;background:#fff;border-radius:12px;padding:10px 12px;max-height:60vh;overflow:auto;text-align:left;}
+.diag-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
 .install-card{max-width:380px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;}
 .install-card h2{margin:0;font-size:22px;}
 .install-ico{display:block;border-radius:28px;box-shadow:0 5px 0 #d9cba8;transition:transform .15s;} .install-ico:active{transform:scale(.95);}
@@ -604,6 +607,14 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
   </div>
 </div>
 
+<div class="overlay" id="diagOv" hidden style="background:rgba(207,231,242,.8);z-index:60">
+  <div class="card diag-card" role="dialog" aria-labelledby="diagTitle">
+    <h2 id="diagTitle">Diagnóstico de conexión</h2>
+    <pre id="diagTxt"></pre>
+    <div class="diag-row"><button class="btn primary" id="diagCopy">Copiar</button><button class="btn" id="diagClose">Cerrar</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="installOv" hidden style="background:rgba(207,231,242,.7)">
   <div class="card install-card" role="dialog" aria-labelledby="installTitle">
     <h2 id="installTitle">Haz clic en el ícono para instalar</h2>
@@ -688,6 +699,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <button class="btn" id="pauseOptionsBtn">Opciones</button>
     <button class="btn" id="leaveRoomBtn" hidden>Salir de la sala</button>
     <p class="room-diag" id="roomDiag" hidden></p>
+    <button class="btn" id="diagBtn" hidden>Ver diagnóstico de conexión</button>
     <p class="room-diag" id="skyInfo"></p>
     <button class="btn" id="toMenuBtn">Menú principal</button>
   </div>
@@ -726,6 +738,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     </div>
 
     <p class="mp-msg" id="mpMsg" role="status"></p>
+    <button class="btn" id="diagBtn2" hidden style="font-size:15px;padding:8px 14px">Ver diagnóstico de conexión</button>
     <button class="btn" id="mpBack">Volver</button>
   </div>
 </div>
@@ -940,7 +953,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='135';
+const GAME_VERSION='136';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -12551,6 +12564,24 @@ function frame(){
 show('menu'); setCam(settings.startCam); applySettings(); applySettings.ready=true;
 try{ const gl=renderer.getContext(), ext=gl.getExtension('WEBGL_debug_renderer_info'); const nm=ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER); ui('gpuName').textContent='Tu equipo: '+String(nm).slice(0,60)+' · núcleos: '+(navigator.hardwareConcurrency||'?'); }catch(e){}
 // botón "atrás" de Android (lo llama la app): cierra lo que esté abierto o pausa. false = estás en el menú (la app se minimiza)
+// v136: diagnóstico de conexión de las salas (solo en la versión web y la app, que usan PeerJS)
+{ const pn=(typeof peerNet!=='undefined') ? peerNet : null;
+  if(pn && pn.log){ ['diagBtn','diagBtn2'].forEach(id=>{ ui(id).hidden=false; ui(id).onclick=()=>openDiag(); });
+    const ICE_ES={new:'nuevo', checking:'probando…', connected:'conectado', completed:'conectado', failed:'FALLÓ', disconnected:'se cortó', closed:'cerrado'}, TIPO={host:'local', srflx:'internet', prflx:'internet', relay:'relevo'};
+    let relay='probando… (6 s)', diagT=0;
+    const render=()=>{ const L=['Versión '+GAME_VERSION+' · '+(window.__MP_APP?'app':'web')+' · '+((/Android/i.test(navigator.userAgent)?'Android':/iPhone|iPad/i.test(navigator.userAgent)?'iPhone':'PC')), 'Relevo: '+relay, ''];
+      for(const r of pn.rooms()){ let d; try{ d=r.diag(); }catch(e){ continue; } if(d.closed) continue;
+        L.push((d.code==='LOBBY0'?'Vestíbulo (lista de salas)':'Sala '+d.code)+':');
+        L.push('  servidor de salas: '+(d.serverOk?'conectado':'sin conexión')+' · lugar '+(d.slot>=0?d.slot:'?')+(d.isHost?' (anfitrión)':' (invitado)')+' · jugadores: '+d.players+(d.connected?'':' · sin conectar'));
+        if(d.lastErr) L.push('  último error: '+d.lastErr);
+        for(const c of d.conns.slice(0,3)) L.push('  '+c.label+': '+(ICE_ES[c.ice]||c.ice)+' · rutas mías: '+(c.mine.map(t=>TIPO[t]||t).join(', ')||'ninguna')+(c.ruta?' · usa: '+c.ruta.split('-').map(t=>TIPO[t]||t).join('↔'):''));
+        L.push(''); }
+      L.push('Últimos pasos:'); pn.log().slice(-14).forEach(x=>L.push('  '+x));
+      ui('diagTxt').textContent=L.join('\n'); };
+    function openDiag(){ ui('diagOv').hidden=false; relay='probando… (6 s)'; render(); clearInterval(diagT); diagT=setInterval(()=>{ if(ui('diagOv').hidden){ clearInterval(diagT); return; } render(); },1000);
+      pn.relayTest().then(r=>{ relay=r.ok ? 'funciona ('+r.cuales.join(', ')+')' : 'NO funciona'+(r.errs&&r.errs.length?' ('+r.errs.join('; ')+')':'')+(r.err?' ('+r.err+')':''); render(); }); }
+    ui('diagClose').onclick=()=>{ ui('diagOv').hidden=true; };
+    ui('diagCopy').onclick=()=>{ const t=ui('diagTxt').textContent; try{ navigator.clipboard.writeText(t).then(()=>flashNote('Diagnóstico copiado'),()=>{}); }catch(e){} }; } }
 // v133: botón para instalar la app (solo en la versión web y en Android; en la app y en claude.ai no aparece)
 { const web=/github\.io$/.test(location.hostname) || /[?&]instalar=1/.test(location.search), android=/Android/i.test(navigator.userAgent) || /[?&]instalar=1/.test(location.search);
   if(web && android && !window.__MP_APP){ ui('installBtn').hidden=false;
@@ -12563,6 +12594,7 @@ try{ const gl=renderer.getContext(), ext=gl.getExtension('WEBGL_debug_renderer_i
     ui('installLink').addEventListener('click',()=>{ flashNote&&flashNote('Descargando el juego… ábrelo cuando termine para instalarlo'); }); } }
 window.mundoAtras=()=>{ const vis=id=>{ const e=ui(id); return !!e && !e.hidden; }, esc=()=>dispatchEvent(new KeyboardEvent('keydown',{key:'Escape', code:'Escape'}));
   if(document.getElementById('loader') || vis('adScreen')) return true;
+  if(vis('diagOv')){ ui('diagOv').hidden=true; return true; }
   if(vis('options')){ optionsEl.hidden=true; return true; }
   if(vis('saveOv')){ ui('saveClose').click(); return true; }
   if(vis('controls')){ ui('closeControls').click(); return true; }

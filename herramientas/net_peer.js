@@ -14,6 +14,20 @@ function makePeerNet(PREFIX){
     {urls:['turn:free.expressturn.com:3478','turn:free.expressturn.com:3478?transport=tcp'], username:'000000002109381326', credential:'y7zz58E4Y8ZWDOn+2TANqmlWBOI='},
     {urls:['turn:us-0.turn.peerjs.com:3478','turn:eu-0.turn.peerjs.com:3478'], username:'peerjs', credential:'peerjsp'}   // respaldo: el relevo que trae PeerJS
   ]}, debug:0};
+  // v136: diagnóstico (qué pasa al conectar), para ver dónde se rompe la conexión entre dos jugadores
+  const LOG=[]; const log=m=>{ const d=new Date(); LOG.push(d.toTimeString().slice(0,8)+' '+m); if(LOG.length>40) LOG.shift(); };
+  const ROOMS=new Set();
+  function watch(c,label,info0,tries=0){ const pc=c.peerConnection; if(!pc){ if(tries<20) setTimeout(()=>watch(c,label,info0,tries+1),150); return; }
+    const info=info0||{label, peer:String(c.peer||'').slice(-6), ice:'nuevo', mine:new Set(), ruta:''};
+    pc.addEventListener('icecandidate',e=>{ if(e.candidate){ const t=e.candidate.type||((/ typ (\w+)/.exec(e.candidate.candidate)||[])[1]); if(t) info.mine.add(t); } });
+    pc.addEventListener('iceconnectionstatechange',()=>{ info.ice=pc.iceConnectionState; log(label+': '+info.ice);
+      if(info.ice==='connected'||info.ice==='completed') pc.getStats().then(st=>{ st.forEach(r=>{ if(r.type==='candidate-pair' && r.state==='succeeded' && (r.nominated||r.selected)){ const l=st.get(r.localCandidateId), m=st.get(r.remoteCandidateId); info.ruta=(l&&l.candidateType)+'-'+(m&&m.candidateType); } }); }).catch(()=>{}); });
+    return info; }
+  function relayTest(){ return new Promise(res=>{ let pc; try{ pc=new RTCPeerConnection(Object.assign({},ICE.config,{iceTransportPolicy:'relay'})); }catch(e){ res({ok:false, err:String(e)}); return; }
+    const got=new Set(); let errs=[]; pc.onicecandidate=e=>{ if(e.candidate){ const u=e.candidate.url||''; got.add(/expressturn/.test(u)?'ExpressTURN':/peerjs/.test(u)?'PeerJS':'relevo'); } };
+    pc.onicecandidateerror=e=>{ errs.push((e.url||'')+' '+e.errorCode); };
+    try{ pc.createDataChannel('x'); pc.createOffer().then(o=>pc.setLocalDescription(o)); }catch(e){}
+    setTimeout(()=>{ try{pc.close();}catch(e){} res({ok:got.size>0, cuales:[...got], errs:errs.slice(0,3)}); }, 6000); }); }
   const SLOTS=3, HB=2000, DEAD=9000, OPEN_WAIT=10000, PROBE=12000;   // v130: más espera al conectar (por relevo tarda unos segundos más)
   const randId=()=>{ const a=new Uint32Array(3); crypto.getRandomValues(a); return PREFIX+'p-'+[...a].map(v=>v.toString(36)).join(''); };
   function merge(base, patch){ const o={...(base||{})}; for(const k in patch){ if(patch[k]===null) delete o[k]; else o[k]=patch[k]; } return o; }
@@ -23,6 +37,7 @@ function makePeerNet(PREFIX){
     let closed=false, connected=false, notifyT=0, retryT=0, hbT=0, probeT=0, gen=0;
     let me=null, myId='', isHost=false, slot=-1, hostConn=null, hostSeen=0;
     const clients=new Map(), seen=new Map(), pres=new Map(); let myPres={};
+    const conns=[]; let lastErr='', serverOk=false;
     let firstDone=null, firstFail=null; const ready=new Promise((res,rej)=>{ firstDone=res; firstFail=rej; });
     const setConn=c=>{ if(c===connected) return; connected=c; connH.forEach(h=>{ try{h(c);}catch(e){} }); };
     const list=()=>{ const out=[]; if(myId) out.push({peer:myId, kind:'viewer', sameTab:true, presence:myPres});
@@ -45,13 +60,13 @@ function makePeerNet(PREFIX){
       if(bounces>=2){ k++; bounces=0; }      // ese lugar dice estar ocupado pero no contesta: probar el siguiente
       if(k>=SLOTS){ restart(1500+Math.random()*1500); return; }
       stopAll(); const g=gen;
-      const p=new Peer(randId(), ICE); me=p;
+      const p=new Peer(randId(), ICE); me=p; log(code+': probando lugar '+k);
       let decided=false;
       const giveUp=next=>{ if(decided||g!==gen) return; decided=true; next(); };
-      p.on('open', id=>{ if(g!==gen) return; myId=id;
-        const c=p.connect(slotId(k), {reliable:true});
-        const to=setTimeout(()=>giveUp(()=>tryClient(k+1)), OPEN_WAIT);     // ocupado pero no contesta → siguiente lugar
-        c.on('open', ()=>{ if(g!==gen) return; clearTimeout(to); decided=true; hostConn=c; slot=k; hostSeen=Date.now(); setConn(true);
+      p.on('open', id=>{ if(g!==gen) return; myId=id; serverOk=true;
+        const c=p.connect(slotId(k), {reliable:true}); conns.unshift(watch(c,code+' → anfitrión '+k)); if(conns.length>6) conns.pop();
+        const to=setTimeout(()=>{ if(!decided && g===gen) log(code+': el anfitrión '+k+' no contestó en '+OPEN_WAIT/1000+' s'); giveUp(()=>tryClient(k+1)); }, OPEN_WAIT);     // ocupado pero no contesta → siguiente lugar
+        c.on('open', ()=>{ if(g!==gen) return; clearTimeout(to); decided=true; hostConn=c; slot=k; hostSeen=Date.now(); setConn(true); log(code+': conectado al anfitrión '+k);
           try{ c.send({t:'u', pr:myPres}); }catch(e){}
           hbT=setInterval(()=>{ if(g!==gen) return; if(Date.now()-hostSeen>DEAD){ restart(200+Math.random()*800); return; } try{ c.send({t:'hb'}); }catch(e){} }, HB);
           firstDone(); });
@@ -63,7 +78,7 @@ function makePeerNet(PREFIX){
         const lost=()=>{ if(g!==gen) return; if(hostConn===c){ restart(300+Math.random()*1200); } else { clearTimeout(to); giveUp(()=>tryClient(k+1)); } };
         c.on('close', lost); c.on('error', lost);
       });
-      p.on('error', e=>{ if(g!==gen) return;
+      p.on('error', e=>{ if(g!==gen) return; if(e.type!=='peer-unavailable'){ lastErr=e.type||String(e); log(code+': error '+lastErr); }
         if(e.type==='peer-unavailable'){ giveUp(()=>tryHost(k,bounces)); return; }   // nadie tiene ese lugar → ser el anfitrión
         if(e.type==='browser-incompatible'){ firstFail({code:'not_permitted'}); return; }
         if(!decided){ decided=true; restart(2500); } else if(!hostConn) restart(2500);
@@ -73,14 +88,14 @@ function makePeerNet(PREFIX){
     function tryHost(k,bounces=0){
       if(closed) return;
       stopAll(); const g=gen;
-      const p=new Peer(slotId(k), ICE); me=p; let opened=false;
-      p.on('open', id=>{ if(g!==gen) return; opened=true; myId=id; isHost=true; slot=k; pres.clear(); setConn(true); notify(); firstDone();
+      const p=new Peer(slotId(k), ICE); me=p; let opened=false; log(code+': soy anfitrión del lugar '+k+'?');
+      p.on('open', id=>{ if(g!==gen) return; opened=true; myId=id; isHost=true; slot=k; serverOk=true; log(code+': anfitrión del lugar '+k); pres.clear(); setConn(true); notify(); firstDone();
         hbT=setInterval(()=>{ if(g!==gen) return; const now=Date.now(); sendAll({t:'hb'});
           for(const [cid,t] of seen) if(now-t>DEAD) drop(cid); }, HB);
         if(k>0) probeT=setInterval(()=>probeLower(g), PROBE);
       });
-      p.on('connection', c=>{
-        c.on('open', ()=>{ if(g!==gen){ try{c.close();}catch(e){} return; } clients.set(c.peer,c); seen.set(c.peer,Date.now());
+      p.on('connection', c=>{ conns.unshift(watch(c,code+' ← invitado')); if(conns.length>6) conns.pop(); log(code+': alguien quiere entrar');
+        c.on('open', ()=>{ log(code+': entró un invitado'); if(g!==gen){ try{c.close();}catch(e){} return; } clients.set(c.peer,c); seen.set(c.peer,Date.now());
           c.send({t:'init', peers:Object.fromEntries([[myId,myPres], ...pres])}); });
         c.on('data', m=>{ if(g!==gen || !m) return; seen.set(c.peer,Date.now());
           if(m.t!=='u' || typeof m.pr!=='object') return;
@@ -91,7 +106,7 @@ function makePeerNet(PREFIX){
         const gone=()=>{ if(g===gen && clients.get(c.peer)===c) drop(c.peer); };
         c.on('close', gone); c.on('error', gone);
       });
-      p.on('error', e=>{ if(g!==gen) return;
+      p.on('error', e=>{ if(g!==gen) return; if(e.type!=='peer-unavailable'){ lastErr=e.type||String(e); log(code+': error '+lastErr); }
         if(!opened && e.type==='unavailable-id'){ setTimeout(()=>{ if(g===gen) tryClient(k,bounces+1); }, 300+Math.random()*500); return; }   // alguien lo tomó primero
         if(e.type==='browser-incompatible'){ firstFail({code:'not_permitted'}); return; }
         if(e.type==='peer-unavailable') return;          // un sondeo a otro lugar que no existe
@@ -119,11 +134,13 @@ function makePeerNet(PREFIX){
       onConnection(h){ connH.add(h); return ()=>connH.delete(h); },
       connected:()=>connected,
       async leave(){ closed=true; clearTimeout(timeout); stopAll(); },
-      get isHost(){ return isHost; }, get slot(){ return slot; }
+      get isHost(){ return isHost; }, get slot(){ return slot; },
+      diag:()=>({code, closed, serverOk, slot, isHost, connected, players:pres.size+(myId?1:0)-(pres.has(myId)?1:0), lastErr, conns:conns.filter(Boolean).map(i=>({label:i.label, ice:i.ice, mine:[...i.mine], ruta:i.ruta}))})
     };
+    ROOMS.add(room);
     room.lobby=room;
     return ready.then(()=>{ clearTimeout(timeout); return room; }, e=>{ closed=true; stopAll(); throw e; });
   }
-  return { join };
+  return { join, log:()=>LOG.slice(), relayTest, rooms:()=>[...ROOMS] };
 }
 const peerNet = makePeerNet('mundopeluche-v1-');
