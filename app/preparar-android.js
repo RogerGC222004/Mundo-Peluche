@@ -70,6 +70,12 @@ g=g.replace(/versionCode\s*=?\s*\d+/,'versionCode '+ver).replace(/versionName\s*
 must(g,/buildTypes\s*\{\s*release\s*\{/,'buildTypes.release');
 g=g.replace(/android\s*\{/,`android {
     signingConfigs {
+        debug {   // v132: firma de prueba fija, así el APK se actualiza encima sin desinstalar
+            storeFile file("../../llave/prueba-debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
         release {
             if (System.getenv("LLAVE_ARCHIVO")) {
                 storeFile file(System.getenv("LLAVE_ARCHIVO"))
