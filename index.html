@@ -418,6 +418,14 @@ body.in-mg #hint{display:none!important;}
 .room-item.mine{outline:2px dashed var(--felt-dk);outline-offset:-4px;}
 .room-empty{font-weight:700;font-size:14px;opacity:.7;padding:4px 2px;}
 .room-diag{margin:0;width:100%;font-size:12px;font-weight:700;opacity:.75;font-variant-numeric:tabular-nums;}
+.install-btn{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:3;font-family:var(--display);font-weight:800;font-size:17px;color:#5a4426;background:#fffaf0;border:none;border-radius:16px;padding:12px 18px;box-shadow:0 4px 0 #d9cba8, inset 0 0 0 2px #fffaf0, inset 0 0 0 4px rgba(201,168,119,.0);outline:2px dashed #c9a877;outline-offset:-7px;cursor:pointer;}
+.install-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #d9cba8;}
+.install-card{max-width:380px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;}
+.install-card h2{margin:0;font-size:22px;}
+.install-ico{display:block;border-radius:28px;box-shadow:0 5px 0 #d9cba8;transition:transform .15s;} .install-ico:active{transform:scale(.95);}
+.install-ico img{display:block;width:128px;height:128px;border-radius:28px;}
+.install-note{margin:0;font-weight:800;font-size:15px;}
+.install-small{margin:0;font-size:13px;font-weight:700;opacity:.7;}
 .version-tag{margin:0;font-size:13px;font-weight:800;color:var(--label-ink);opacity:.8;font-variant-numeric:tabular-nums;}
 #mpBack{align-self:flex-start;}
 .mp-msg.err{color:#a8322d;}
@@ -564,6 +572,8 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <canvas id="game" aria-label="Mundo Peluche"></canvas>
 
 <div class="overlay menu" id="menu">
+  <!-- v133: en la versión web (Android) un botón para instalar la app -->
+  <button class="install-btn" id="installBtn" hidden>¡Instala el juego!</button>
   <div class="menu-inner">
     <h1 class="title" aria-label="Mundo Peluche"><svg id="titleSvg" aria-hidden="true" viewBox="-24 -12 640 232"><g filter="url(#fluffy)"><g class="tw tw1"><text x="0" y="84" class="t-out">Mundo</text><g filter="url(#pillow)"><text x="0" y="84" class="t-puff">Mundo</text></g><text x="0" y="84" class="t-st">Mundo</text></g><g class="tw tw2"><text x="52" y="178" class="t-out">Peluche</text><g filter="url(#pillow)"><text x="52" y="178" class="t-puff">Peluche</text></g><text x="52" y="178" class="t-st">Peluche</text></g></g></svg></h1>
     <p class="version-tag" id="verMenu"></p>
@@ -596,6 +606,16 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <div class="shop-buy" id="shopBuy" hidden><span id="shopBuyTxt"></span><span class="bbtns"><button class="btn ad-btn" id="shopAdBtn" type="button" hidden></button><button class="btn primary" id="shopBuyBtn">Comprar</button></span></div>
     <div class="shop-petname" id="shopPetName" hidden><label for="petNameIn" id="petNameLbl">Nombre de tu mascota</label><input id="petNameIn" maxlength="16" autocomplete="off" spellcheck="false"><button class="btn primary" id="petNameBtn">Guardar</button></div>
     <div class="shop-foot"><button class="btn" id="shopBack">Volver al menú</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="installOv" hidden style="background:rgba(207,231,242,.7)">
+  <div class="card install-card" role="dialog" aria-labelledby="installTitle">
+    <h2 id="installTitle">Haz clic en el ícono para instalar</h2>
+    <a class="install-ico" id="installLink" href="https://github.com/RogerGC222004/Mundo-Peluche/releases/latest/download/mundo-peluche.apk" aria-label="Descargar e instalar Mundo Peluche"><img src="icono-192.png" alt="" width="128" height="128"></a>
+    <p class="install-note">Para actualizar, solo instálalo encima: no pierdes tu progreso.</p>
+    <p class="install-small">La primera vez, Android puede pedirte permiso para instalar apps que no vienen de la tienda.</p>
+    <button class="btn" id="installClose">Volver</button>
   </div>
 </div>
 
@@ -1056,7 +1076,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='132';
+const GAME_VERSION='133';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -12670,6 +12690,13 @@ function frame(){
 show('menu'); setCam(settings.startCam); applySettings(); applySettings.ready=true;
 try{ const gl=renderer.getContext(), ext=gl.getExtension('WEBGL_debug_renderer_info'); const nm=ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER); ui('gpuName').textContent='Tu equipo: '+String(nm).slice(0,60)+' · núcleos: '+(navigator.hardwareConcurrency||'?'); }catch(e){}
 // botón "atrás" de Android (lo llama la app): cierra lo que esté abierto o pausa. false = estás en el menú (la app se minimiza)
+// v133: botón para instalar la app (solo en la versión web y en Android; en la app y en claude.ai no aparece)
+{ const web=/github\.io$/.test(location.hostname) || /[?&]instalar=1/.test(location.search), android=/Android/i.test(navigator.userAgent) || /[?&]instalar=1/.test(location.search);
+  if(web && android && !window.__MP_APP){ ui('installBtn').hidden=false;
+    ui('installBtn').onclick=()=>{ ui('installOv').hidden=false; };
+    ui('installClose').onclick=()=>{ ui('installOv').hidden=true; };
+    ui('installOv').addEventListener('click',e=>{ if(e.target===ui('installOv')) ui('installOv').hidden=true; });
+    ui('installLink').addEventListener('click',()=>{ flashNote&&flashNote('Descargando el juego… ábrelo cuando termine para instalarlo'); }); } }
 window.mundoAtras=()=>{ const vis=id=>{ const e=ui(id); return !!e && !e.hidden; }, esc=()=>dispatchEvent(new KeyboardEvent('keydown',{key:'Escape', code:'Escape'}));
   if(document.getElementById('loader') || vis('adScreen')) return true;
   if(vis('options')){ optionsEl.hidden=true; return true; }
