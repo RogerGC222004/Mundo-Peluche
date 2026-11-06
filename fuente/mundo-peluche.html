@@ -416,10 +416,11 @@ body.in-mg #hint{display:none!important;}
 .install-ico img{display:block;width:128px;height:128px;border-radius:28px;}
 .install-note{margin:0;font-weight:800;font-size:15px;}
 .install-small{margin:0;font-size:13px;font-weight:700;opacity:.7;}
+.install-ver{margin:0;font-family:var(--display);font-weight:800;font-size:16px;color:#3f8a2c;} .install-ver small{display:block;font-family:inherit;font-size:13px;color:#8a6a3e;}
 /* v134: en horizontal (pantallas bajitas) el ícono va a la izquierda y el texto a la derecha, para que quepa sin deslizar */
 @media (orientation:landscape) and (max-height:520px){
-  .install-card{max-width:560px;display:grid;grid-template-columns:auto 1fr;grid-template-areas:"t t" "i n" "i s" "i b";gap:6px 18px;text-align:left;align-items:center;padding-block:14px;}
-  .install-card h2{grid-area:t;font-size:20px;text-align:center;} .install-ico{grid-area:i;} .install-note{grid-area:n;} .install-small{grid-area:s;} #installClose{grid-area:b;justify-self:start;}
+  .install-card{max-width:560px;display:grid;grid-template-columns:auto 1fr;grid-template-areas:"t t" "i v" "i n" "i s" "i b";gap:6px 18px;text-align:left;align-items:center;padding-block:14px;}
+  .install-card h2{grid-area:t;font-size:20px;text-align:center;} .install-ico{grid-area:i;} .install-note{grid-area:n;} .install-ver{grid-area:v;} .install-small{grid-area:s;} #installClose{grid-area:b;justify-self:start;}
   .install-ico img{width:104px;height:104px;border-radius:24px;} .install-ico{border-radius:24px;}
 }
 .version-tag{margin:0;font-size:13px;font-weight:800;color:var(--label-ink);opacity:.8;font-variant-numeric:tabular-nums;}
@@ -607,6 +608,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
   <div class="card install-card" role="dialog" aria-labelledby="installTitle">
     <h2 id="installTitle">Haz clic en el ícono para instalar</h2>
     <a class="install-ico" id="installLink" href="https://github.com/RogerGC222004/Mundo-Peluche/releases/latest/download/mundo-peluche.apk" aria-label="Descargar e instalar Mundo Peluche"><img src="icono-192.png" alt="" width="128" height="128"></a>
+    <p class="install-ver" id="installVer"></p>
     <p class="install-note">Para actualizar, solo instálalo encima: no pierdes tu progreso.</p>
     <p class="install-small">La primera vez, Android puede pedirte permiso para instalar apps que no vienen de la tienda.</p>
     <button class="btn" id="installClose">Volver</button>
@@ -938,7 +940,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='134';
+const GAME_VERSION='135';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -12552,7 +12554,10 @@ try{ const gl=renderer.getContext(), ext=gl.getExtension('WEBGL_debug_renderer_i
 // v133: botón para instalar la app (solo en la versión web y en Android; en la app y en claude.ai no aparece)
 { const web=/github\.io$/.test(location.hostname) || /[?&]instalar=1/.test(location.search), android=/Android/i.test(navigator.userAgent) || /[?&]instalar=1/.test(location.search);
   if(web && android && !window.__MP_APP){ ui('installBtn').hidden=false;
-    ui('installBtn').onclick=()=>{ ui('installOv').hidden=false; };
+    // v135: muestra qué versión trae la APK que se va a descargar (la última publicada en GitHub)
+    const verEl=ui('installVer'); const showVer=(v,lag)=>{ verEl.textContent='Versión del juego: '+v; if(lag){ const sm=document.createElement('small'); sm.textContent='La versión '+GAME_VERSION+' se está preparando: vuelve en unos minutos'; verEl.appendChild(sm); } };
+    ui('installBtn').onclick=()=>{ ui('installOv').hidden=false; showVer(GAME_VERSION,false);
+      fetch('https://api.github.com/repos/RogerGC222004/Mundo-Peluche/releases/latest',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{ const v=d && String(d.tag_name||'').replace(/^app-v/,''); if(v && /^\d+$/.test(v)) showVer(v, +v<+GAME_VERSION); }).catch(()=>{}); };
     ui('installClose').onclick=()=>{ ui('installOv').hidden=true; };
     ui('installOv').addEventListener('click',e=>{ if(e.target===ui('installOv')) ui('installOv').hidden=true; });
     ui('installLink').addEventListener('click',()=>{ flashNote&&flashNote('Descargando el juego… ábrelo cuando termine para instalarlo'); }); } }
