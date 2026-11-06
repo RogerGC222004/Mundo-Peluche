@@ -1,6 +1,7 @@
 # Arma la app de Android de Mundo Peluche cada vez que cambia el juego.
 # - Siempre: un APK para instalar y probar en tu teléfono.
-# - Si en GitHub existe el secreto LLAVE_CLAVE: el APK y el AAB (el que se sube a Google Play) van firmados con tu llave.
+# - El APK siempre lleva la firma de prueba fija (se actualiza encima sin desinstalar).
+# - Si en GitHub existe el secreto LLAVE_CLAVE: además el AAB (el que se sube a Google Play), firmado con tu llave.
 # Todo queda en "Releases" del repositorio (app-v<versión>).
 name: App Android
 on:
@@ -52,14 +53,16 @@ jobs:
         run: |
           set -o pipefail
           chmod +x gradlew
-          if [ -n "$LLAVE_CLAVE" ]; then
+          # v132: el APK para instalar siempre usa la misma firma de prueba (app/llave/prueba-debug.keystore),
+          # así cada versión nueva se instala encima de la anterior sin desinstalar ni perder el progreso.
+          mkdir -p ~/.android && cp "$GITHUB_WORKSPACE/app/llave/prueba-debug.keystore" ~/.android/debug.keystore
+          ./gradlew --no-daemon assembleDebug 2>&1 | tee -a ../../registro.txt
+          cp app/build/outputs/apk/debug/app-debug.apk "../../mundo-peluche-${{ steps.ver.outputs.v }}-prueba.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "../../mundo-peluche.apk"   # mismo nombre siempre: enlace fijo a la última versión
+          if [ -n "$LLAVE_CLAVE" ]; then   # para Google Play: el AAB firmado con tu llave
             export LLAVE_ARCHIVO="$GITHUB_WORKSPACE/app/llave/subida.p12" LLAVE_ALIAS=mundopeluche
-            ./gradlew --no-daemon assembleRelease bundleRelease 2>&1 | tee -a ../../registro.txt
-            cp app/build/outputs/apk/release/app-release.apk "../../mundo-peluche-${{ steps.ver.outputs.v }}.apk"
+            ./gradlew --no-daemon bundleRelease 2>&1 | tee -a ../../registro.txt
             cp app/build/outputs/bundle/release/app-release.aab "../../mundo-peluche-${{ steps.ver.outputs.v }}.aab"
-          else
-            ./gradlew --no-daemon assembleDebug 2>&1 | tee -a ../../registro.txt
-            cp app/build/outputs/apk/debug/app-debug.apk "../../mundo-peluche-${{ steps.ver.outputs.v }}-prueba.apk"
           fi
       - name: Publicar en Releases
         env:
