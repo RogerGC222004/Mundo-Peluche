@@ -10,9 +10,11 @@ function makePeerNet(PREFIX){
   const ICE={config:{iceServers:[
     {urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']},
     {urls:'stun:global.stun.twilio.com:3478'},
-    {urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'], username:'openrelayproject', credential:'openrelayproject'}
+    // v130: relevo propio de ExpressTURN (el de openrelay ya no acepta su clave pública); hace falta cuando los dos no están en la misma red
+    {urls:['turn:free.expressturn.com:3478','turn:free.expressturn.com:3478?transport=tcp'], username:'000000002109381326', credential:'y7zz58E4Y8ZWDOn+2TANqmlWBOI='},
+    {urls:['turn:us-0.turn.peerjs.com:3478','turn:eu-0.turn.peerjs.com:3478'], username:'peerjs', credential:'peerjsp'}   // respaldo: el relevo que trae PeerJS
   ]}, debug:0};
-  const SLOTS=3, HB=2000, DEAD=9000, OPEN_WAIT=5000, PROBE=12000;
+  const SLOTS=3, HB=2000, DEAD=9000, OPEN_WAIT=10000, PROBE=12000;   // v130: más espera al conectar (por relevo tarda unos segundos más)
   const randId=()=>{ const a=new Uint32Array(3); crypto.getRandomValues(a); return PREFIX+'p-'+[...a].map(v=>v.toString(36)).join(''); };
   function merge(base, patch){ const o={...(base||{})}; for(const k in patch){ if(patch[k]===null) delete o[k]; else o[k]=patch[k]; } return o; }
   function join(code){
@@ -104,7 +106,7 @@ function makePeerNet(PREFIX){
         c.on('open', ()=>{ clearTimeout(to); try{c.close();}catch(e){} if(g===gen && isHost && j<slot){ sendAll({t:'bye'}); setTimeout(()=>{ if(g===gen) tryClient(0); }, 150); } }); }
     }
     tryClient(0);
-    const timeout=setTimeout(()=>firstFail({code:'timeout'}), 25000);
+    const timeout=setTimeout(()=>firstFail({code:'timeout'}), 40000);
     addEventListener('pagehide', ()=>{ closed=true; stopAll(); });
     const room={
       code,
