@@ -1114,7 +1114,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='136';
+const GAME_VERSION='137';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -5689,8 +5689,8 @@ function trRemotePose(r,t,dt){ if(r.tz && r.tz[2]) pgPoseLimbs(r.obj,{climb:(per
 let myPush={i:-1,t:0}; player.pushUntil=0;
 function pgOccupied(k,i){ if(player.pg && player.pg.k===k && player.pg.i===i) return 'me';
   for(const r of mp.remotes.values()) if(r.pl && r.pl[0]===PG_KINDS.indexOf(k) && r.pl[1]===i) return r; return null; }
-const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco'];
-function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars') return;
+const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart'];
+function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars' && k!=='cart') return;
   holding=false; applyHeld(); renderHotbar();
   player.pg={k,i,t0:performance.now()/1000, from:[player.pos.x,player.pos.y,player.pos.z]};
   player.vel.set(0,0,0); player.vy=0; player.dive=null; player.diveAngle=0;
@@ -5704,14 +5704,16 @@ function stopPlay(){ const P=player.pg; if(!P) return; const pose=player.pgPose;
   else if(P.k==='ride'){ const e=PG_EQ.riders[P.i]; out=eqToWorld(e,.9,0,0); }
   else if(P.k==='see'){ const e=PG_EQ.seesaw; out=eqToWorld(e,.9,0,(P.i?1:-1)*e.half); }
   else if(P.k==='bench'){ const b=BENCHES[P.i]; out=[b.x+Math.sin(b.yaw)*.95,0,b.z+Math.cos(b.yaw)*.95]; }
+  else if(P.k==='cart'){ const q=MC.at(P.s||0); out=[q.x+Math.cos(q.yaw)*1.3, q.y, q.z-Math.sin(q.yaw)*1.3]; MC.s=P.s||0; }   // v137: te bajas a un lado del carrito
   else out=pose?pose.pos:[player.pos.x,player.pos.y,player.pos.z];
-  player.pos.set(out[0], groundAt(out[0],out[2],(P.k==='bench'?BENCHES[P.i].y:0)+.3), out[2]); if(pose) player.facing=pose.yaw;
+  player.pos.set(out[0], groundAt(out[0],out[2],(P.k==='bench'?BENCHES[P.i].y:P.k==='cart'?out[1]:0)+.3), out[2]); if(pose) player.facing=pose.yaw;
   player.pg=null; player.grounded=true; player.vy=0; audio.getup(); updateTouchMode(); try{ sendPresence(true); }catch(e){} }
 const pgIn=()=>{ let f=0; if(keys.KeyW||keys.ArrowUp) f+=1; if(keys.KeyS||keys.ArrowDown) f-=1; f-=stick.y; return Math.min(1,Math.abs(f)+Math.hypot(stick.x,0)*.5); };
 // Pose de un peluche en cada juego (la misma para mí y para los demás). Devuelve pos en el mundo, giro y postura.
 const rotX=(y,z,a)=>[y*Math.cos(a)-z*Math.sin(a), y*Math.sin(a)+z*Math.cos(a)];
 function playPose(k,i,v,dt){
   if(k==='cuco') return cucoSeatPose(i);
+  if(k==='cart'){ const q=MC.at(v); return {pos:[q.x,q.y+.2,q.z], yaw:q.yaw, sit:1, grip:1}; }
   if(k==='bench'){ const b=BENCHES[i]; if(!b) return null; const c=Math.cos(b.yaw), s=Math.sin(b.yaw); return {pos:[b.x-s*.12, b.y-.415, b.z-c*.12], yaw:b.yaw, sit:1}; }
   if(k==='swing'){ const e=PG_EQ.swings, [ry,rz]=rotX(-e.L-.415,-.06,-v);
     return {pos:eqToWorld(e,e.seats[i],e.pivot+ry,rz), yaw:e.yaw, tilt:-v, sit:1, holdUp:1}; }
@@ -5737,6 +5739,7 @@ function pgDuration(k){ return k==='slide'?3.85 : k==='bars'?(1.65+PG_EQ.bars.le
 function updateMyPlay(dt){
   const P=player.pg, el=performance.now()/1000-P.t0, inp=pgIn();
   if(P.k==='cuco') return cucoRide(P,el);
+  if(P.k==='cart') return mcRide(P,dt);   // v137
   if(P.k==='swing'){ const S=pgState.swing[P.i];
     S.w += (-(9.8/PG_EQ.swings.L)*Math.sin(S.a) - .12*S.w)*dt;
     if(inp>.1){ if(Math.abs(S.w)<.08 && Math.abs(S.a)<.05) S.w+=.6*inp; else S.w+=Math.sign(S.w)*1.25*inp*dt; }
@@ -5789,8 +5792,9 @@ function placePlay(obj,pose){ obj.position.set(pose.pos[0],pose.pos[1],pose.pos[
 function pgActions(){
   if(player.pg && player.pg.k==='cuco') return [{label:'Bajarse de Cuco', disabled:!player.pg.seated, run:stopPlay}, player.pg.i!==0 && player.pg.seated && !pgOccupied('cuco',0) ? {label:'Guiar a Cuco', run:cucoTakeLead} : null];
   if(!player.pg && !player.car && !player.ac && !player.dive && cucoNear()){ const s=cucoFreeSeat(); return [s<0 ? {label:'Cuco está lleno', disabled:true, run:()=>{}} : {label:'Subirse a Cuco', run:cucoBoard}, null]; }
+  if(!player.pg && !player.car && !player.ac && !player.dive && !player.swim && !player.mg && mcNear()) return [{label:'Subir al carrito', run:mcBoard}, null];   // v137
   if(player.pg){ const k=player.pg.k; if(k==='slide'||k==='bars') return [null,null];
-    return [{label: k==='swing'?'Bajarse del columpio': k==='ride'?'Bajarse': k==='bench'?'Levantarse':'Bajarse del sube y baja', run:stopPlay}, null]; }
+    return [{label: k==='cart'?'Bajar del carrito': k==='swing'?'Bajarse del columpio': k==='ride'?'Bajarse': k==='bench'?'Levantarse':'Bajarse del sube y baja', run:stopPlay}, null]; }
   if(player.car || player.ac || player.swim || player.dive) return [null,null];
   for(let i=0;i<BENCHES.length;i++){ const b=BENCHES[i]; if(Math.hypot(player.pos.x-b.x,player.pos.z-b.z)<1.5 && Math.abs(player.pos.y-(b.y-.5))<1 && !pgOccupied('bench',i)) return [{label:'Sentarse', run:()=>startPlay('bench',i)}, null]; }
   const px=player.pos.x, pz=player.pos.z; if(Math.hypot(px-PG.x,pz-PG.z)>PG.R+2) return [null,null];
@@ -5809,8 +5813,10 @@ function updateRemoteInPlay(r,dt,t){
   const d=r.pl, k=PG_KINDS[d[0]]; if(!k) return false;
   let v=0;
   if(k==='slide'||k==='bars'){ const key=d[0]+':'+d[1]; if(r.pgK!==key || Math.abs(r.pgEl-d[2])>.35) r.pgEl=d[2]; else r.pgEl+=dt; r.pgK=key; v=r.pgEl; }
+  else if(k==='cart'){ r.pgK=null; if(r.mcS===undefined || Math.abs(r.mcS-d[2])>4) r.mcS=d[2]; else r.mcS+=dt*4.2+(d[2]-r.mcS)*Math.min(1,dt*3); v=r.mcS; }
   else { r.pgK=null; v = k==='swing' ? pgState.swing[d[1]].a : k==='ride' ? pgState.rider[d[1]].a : 0; }
   const pose=playPose(k,d[1],v,dt); if(!pose || pose.done) return false;
+  if(k==='cart') mcRemoteCart(r,pose);
   placePlay(r.obj,pose); r.pos.set(...pose.pos); r.target.set(...pose.pos);
   if(pose.walk) r.walk+=dt*10;
   pgPoseLimbs(r.obj,pose,t,dt,r.walk); r.label.position.set(0,2.42,0); r.blob.visible=false;
@@ -8950,6 +8956,17 @@ const CVZ=CZ.map(()=>{ const g=new THREE.Group(); CAVE.add(g); return g; });   /
 })();
 
 // ---------- decoración: estalactitas, hongos que brillan, cristales, vigas y faroles ----------
+// v137: camino del carrito de la mina (piso 1): sale del cuarto central, da la vuelta en dos cuartos y regresa
+const MC_PATH=(()=>{ const Z=CZ[0], H=Z.R.hub, pts=[];
+  const add=(u,v)=>{ const l=pts[pts.length-1]; if(l && Math.hypot(l[0]-u,l[1]-v)<.05) return; pts.push([u,v]); };
+  const line=(a,b)=>{ const L=Math.hypot(b[0]-a[0],b[1]-a[1]), n=Math.max(1,Math.ceil(L/.6)); for(let i=1;i<=n;i++) add(a[0]+(b[0]-a[0])*i/n, a[1]+(b[1]-a[1])*i/n); };
+  add(H.x,H.z);
+  for(const [rm,dir] of [[Z.R.cx,1],[Z.R.cout,-1]]){ const a0=Math.atan2(H.z-rm.z,H.x-rm.x), rr=rm.r-2.8, E=[rm.x+Math.cos(a0)*rr, rm.z+Math.sin(a0)*rr];
+    line([H.x,H.z],E); const n=Math.ceil(2*Math.PI*rr/.6); for(let i=1;i<=n;i++){ const a=a0+dir*i/n*Math.PI*2; add(rm.x+Math.cos(a)*rr, rm.z+Math.sin(a)*rr); } line(E,[H.x,H.z]); }
+  // esquinas redondeadas (dos pasadas de Chaikin, cerrado)
+  let P=pts; for(let it=0;it<2;it++){ const Q=[]; for(let i=0;i<P.length;i++){ const a=P[i], b=P[(i+1)%P.length]; Q.push([a[0]*.75+b[0]*.25, a[1]*.75+b[1]*.25],[a[0]*.25+b[0]*.75, a[1]*.25+b[1]*.75]); } P=Q; }
+  return P; })();
+function mcNearTrack(u,v,m){ for(const q of MC_PATH) if(Math.abs(q[0]-u)<m && Math.abs(q[1]-v)<m && Math.hypot(q[0]-u,q[1]-v)<m) return true; return false; }
 const CV_LANTERNS=[];   // faroles (iluminan la roca cerca)
 const cvGlowTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=64; const g=c.getContext('2d'), gr=g.createRadialGradient(32,32,0,32,32,32); gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.3,'rgba(255,255,255,.45)'); gr.addColorStop(1,'rgba(255,255,255,0)'); g.fillStyle=gr; g.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
 const glowSpr=(col,sc,op=.55)=>{ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:cvGlowTex, color:col, transparent:true, opacity:op, blending:THREE.AdditiveBlending, depthWrite:false})); s.scale.set(sc,sc,1); return s; };
@@ -8963,7 +8980,7 @@ function cvAt(u,v){ return cvField(u,v,{}); }
     let n=0; for(let tries=0;tries<500 && n<42;tries++){ const rm=rooms[(R()*rooms.length)|0], a=R()*6.28, rr=Math.sqrt(R())*rm.r*1.05, u=rm.x+Math.cos(a)*rr, v=rm.z+Math.sin(a)*rr, f=cvAt(u,v);
       if(f.d>-.8 || f.top-f.bot<3) continue; n++;
       if(n%3){ const s=.6+R()*.9, m=new THREE.Mesh(stal,cvStoneM); m.position.set(u+CV.x, f.top-.75*s+.1, v+CV.z); m.scale.set(s,s*(.8+R()*.7),s); m.rotation.x=Math.PI; G.add(m); }   // del techo
-      else if(f.d>-2.2){ const s=.5+R()*.6, m=new THREE.Mesh(stal,cvStoneM); m.position.set(u+CV.x, f.bot+.7*s-.15, v+CV.z); m.scale.set(s,s,s); G.add(m); obstacles.push({x:u+CV.x, z:v+CV.z, r:.38*s+.1, top:f.bot+1.1*s, walk:false}); } }   // del piso, junto a la pared
+      else if(f.d>-2.2 && !(k===0 && mcNearTrack(u,v,1.6))){ const s=.5+R()*.6, m=new THREE.Mesh(stal,cvStoneM); m.position.set(u+CV.x, f.bot+.7*s-.15, v+CV.z); m.scale.set(s,s,s); G.add(m); obstacles.push({x:u+CV.x, z:v+CV.z, r:.38*s+.1, top:f.bot+1.1*s, walk:false}); } }   // del piso, junto a la pared
     // hongos y cristalitos que brillan, pegados a la pared
     for(let i=0;i<26;i++){ const rm=rooms[(R()*rooms.length)|0], a=R()*6.28; let rr=rm.r-1, u=0, v=0, f=null;
       for(let s=0;s<14;s++){ u=rm.x+Math.cos(a)*rr; v=rm.z+Math.sin(a)*rr; f=cvAt(u,v); if(f.d>-.35) break; rr+=.3; }
@@ -9048,6 +9065,79 @@ const CV_VEINS=[];
       CV_VEINS.push({id:k+'-'+i, k, ore:o.id, g, x, y, z, sx:x+nx*1.45, sz:z+nz*1.45, hits:0, shake:0}); }); });
   CV_VEINS.forEach(v=>v.g.visible=veinReady(v));
 })();
+// ---------- v137: mina parte 2 — carrito sobre rieles, luciérnagas, cofre escondido y reloj de las vetas ----------
+const MC=(()=>{ const P=MC_PATH, n=P.length, X=new Float32Array(n+1), Y=new Float32Array(n+1), Z=new Float32Array(n+1), S=new Float32Array(n+1);
+  for(let i=0;i<=n;i++){ const q=P[i%n]; X[i]=q[0]+CV.x; Z[i]=q[1]+CV.z; Y[i]=cvAt(q[0],q[1]).bot; if(i) S[i]=S[i-1]+Math.hypot(X[i]-X[i-1],Z[i]-Z[i-1]); }
+  for(let k=0;k<3;k++) for(let i=1;i<n;i++) Y[i]=(Y[i-1]+Y[i]*2+Y[i+1])/4; Y[n]=Y[0];   // vía sin brincos
+  const L=S[n];
+  const at=s=>{ s=((s%L)+L)%L; let lo=0, hi=n; while(hi-lo>1){ const m=(lo+hi)>>1; if(S[m]<=s) lo=m; else hi=m; } const t=(s-S[lo])/Math.max(1e-6,S[hi]-S[lo]);
+    return {x:X[lo]+(X[hi]-X[lo])*t, y:Y[lo]+(Y[hi]-Y[lo])*t, z:Z[lo]+(Z[hi]-Z[lo])*t, yaw:Math.atan2(X[hi]-X[lo],Z[hi]-Z[lo])}; };
+  // rieles y durmientes
+  const G=new THREE.Group(); CVZ[0].add(G); const railM=caveMat({color:'#9aa0aa', roughness:.4, metalness:.7}), box=new THREE.BoxGeometry(1,1,1);
+  for(let i=0;i<n;i++){ const ax=X[i], az=Z[i], bx=X[i+1], bz=Z[i+1], len=Math.hypot(bx-ax,bz-az); if(len<.01) continue; const yaw=Math.atan2(bx-ax,bz-az), c=Math.cos(yaw), sn=Math.sin(yaw), y=(Y[i]+Y[i+1])/2;
+    [-.42,.42].forEach(o=>{ const r=new THREE.Mesh(box,railM); r.position.set((ax+bx)/2+c*o, y+.13, (az+bz)/2-sn*o); r.scale.set(.07,.07,len+.04); r.rotation.y=yaw; G.add(r); });
+    if(i%2===0){ const t=new THREE.Mesh(box,cvWoodM); t.position.set(ax,Y[i]+.05,az); t.scale.set(1.15,.08,.22); t.rotation.y=yaw; G.add(t); } }
+  mergeStatic(G); G.children.forEach(o=>{ o.castShadow=false; o.receiveShadow=true; });
+  // el carrito (también se usa para los demás jugadores)
+  const bodyM=caveMat({color:'#a8774a', roughness:.85}), bandM=caveMat({color:'#e5534b', roughness:.6}), wheelM=caveMat({color:'#3a3d46', roughness:.5, metalness:.5});
+  const make=()=>{ const g=new THREE.Group();
+    const b=new THREE.Mesh(box,bodyM); b.position.y=.62; b.scale.set(1.05,.55,1.45); g.add(b);
+    const band=new THREE.Mesh(box,bandM); band.position.y=.86; band.scale.set(1.1,.1,1.5); g.add(band);
+    [[-.48,-.5],[.48,-.5],[-.48,.5],[.48,.5]].forEach(([x,z])=>{ const w=new THREE.Mesh(fCyl,wheelM); w.position.set(x,.24,z); w.scale.set(.22,.08,.22); w.rotation.z=Math.PI/2; g.add(w); });
+    g.traverse(o=>{ if(o.isMesh){ o.castShadow=false; } }); return g; };
+  const cart=make(); CVZ[0].add(cart);
+  const s0=Math.max(0, Z0start()); function Z0start(){ return CZ[0].R.hub.r-1.5; }
+  const M={at, L, make, cart, s:s0, remote:new Map()};
+  const q=at(s0); cart.position.set(q.x,q.y,q.z); cart.rotation.y=q.yaw;
+  return M; })();
+function mcNear(){ if(!inCave(player.pos.y)) return false; const c=MC.cart.position; return Math.hypot(player.pos.x-c.x,player.pos.z-c.z)<2.1 && Math.abs(player.pos.y-c.y)<1.8; }
+function mcBoard(){ startPlay('cart',0); const P=player.pg; if(!P || P.k!=='cart') return; P.s=MC.s; P.sp=0; P.yaw=MC.at(MC.s).yaw;
+  flashNote(isTouch?'¡Agárrate! Mueve el joystick hacia adelante para ir más rápido':'¡Agárrate! Mantén W para ir más rápido'); try{ audio.sit(); }catch(e){} }
+function mcRide(P,dt){ const fwd=(keys.KeyW||keys.ArrowUp?1:0)+Math.max(0,-stick.y), want=fwd>.2?7.5:4.2;
+  P.sp=(P.sp||0)+(want-(P.sp||0))*Math.min(1,dt*1.4); P.s=((P.s||0)+P.sp*dt)%MC.L; P.v=P.s;
+  const q=MC.at(P.s); P.yaw=lerpAng(P.yaw===undefined?q.yaw:P.yaw,q.yaw,Math.min(1,dt*7));
+  MC.cart.position.set(q.x,q.y,q.z); MC.cart.rotation.y=P.yaw; MC.s=P.s;
+  return {pos:[q.x,q.y+.2,q.z], yaw:P.yaw, sit:1, grip:1}; }
+function mcRemoteCart(r,pose){ let c=MC.remote.get(r); if(!c){ c=MC.make(); CVZ[0].add(c); MC.remote.set(r,c); } c.visible=true; c.position.set(pose.pos[0],pose.pos[1]-.2,pose.pos[2]); c.rotation.y=pose.yaw; }
+// luciérnagas: lucecitas que flotan en los cuartos (un solo dibujo por piso)
+const MFF=CZ.map((Z,k)=>{ const R=TK.rng(4400+k), rooms=Object.values(Z.R), N=12, base=[], pos=new Float32Array(N*3), col=new Float32Array(N*3);
+  for(let i=0;i<N*6 && base.length<N;i++){ const rm=rooms[(R()*rooms.length)|0], a=R()*6.28, rr=Math.sqrt(R())*rm.r*.8, u=rm.x+Math.cos(a)*rr, v=rm.z+Math.sin(a)*rr, f=cvAt(u,v);
+    if(f.d>-1 || f.top-f.bot<2.5) continue; base.push({x:u+CV.x, y:f.bot+1.1+R()*Math.max(.3,f.top-f.bot-2.2), z:v+CV.z, p:R()*6.28, w:.5+R()*.6}); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos.subarray(0,base.length*3),3)); g.setAttribute('color',new THREE.BufferAttribute(col.subarray(0,base.length*3),3));
+  const pts=new THREE.Points(g,new THREE.PointsMaterial({map:cvGlowTex, size:.42, sizeAttenuation:true, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, vertexColors:true}));
+  pts.frustumCulled=false; pts.userData.noBatch=true; CVZ[k].add(pts); return {pts, base}; });
+function mffTick(t){ for(let k=0;k<MFF.length;k++){ const F=MFF[k]; if(!CVZ[k].visible) continue; const P=F.pts.geometry.attributes.position, C=F.pts.geometry.attributes.color;
+  F.base.forEach((b,i)=>{ P.setXYZ(i, b.x+Math.sin(t*.4*b.w+b.p)*1.2, b.y+Math.sin(t*.9*b.w+b.p*2)*.35, b.z+Math.cos(t*.33*b.w+b.p)*1.2);
+    const gl=.35+.65*Math.max(0,Math.sin(t*1.6*b.w+b.p*3)); C.setXYZ(i,.85*gl,1*gl,.35*gl); }); P.needsUpdate=true; C.needsUpdate=true; } }
+// cofre escondido (piso 1, al fondo del cuarto de al lado): una vez al día
+const MCH=(()=>{ const Z=CZ[0], rm=Z.R.cx, H=Z.R.hub, a=Math.atan2(rm.z-H.z,rm.x-H.x)+.55; let rr=rm.r-1.8, u=0, v=0, f=null;
+  for(let i=0;i<16;i++){ u=rm.x+Math.cos(a)*rr; v=rm.z+Math.sin(a)*rr; f=cvAt(u,v); if(f.d>-1.1) break; rr+=.25; }
+  const x=u+CV.x, z=v+CV.z, y=f.bot, ch=new THREE.Group(); ch.position.set(x,y,z); ch.rotation.y=Math.atan2(rm.x-u,rm.z-v); CVZ[0].add(ch);
+  const gold=caveMat({color:'#f2c94c', roughness:.35, metalness:.6}), cw=caveMat({color:'#8a5a33', roughness:.85}), bx=new THREE.BoxGeometry(1,1,1), add=(par,m,px,py,pz,sx,sy,sz)=>{ const o=new THREE.Mesh(bx,m); o.position.set(px,py,pz); o.scale.set(sx,sy,sz); par.add(o); return o; };
+  add(ch,cw,0,.3,0,1.1,.6,.75); [-.42,.42].forEach(px=>add(ch,gold,px,.31,0,.07,.62,.78));
+  const lid=new THREE.Group(); lid.position.set(0,.6,-.37); ch.add(lid); add(lid,cw,0,.1,.37,1.14,.2,.78); add(lid,gold,0,.1,.37,.12,.22,.8);
+  const coins=new THREE.Mesh(new THREE.CylinderGeometry(.38,.38,.08,12),gold); coins.position.y=.56; ch.add(coins);
+  // dos rocas a los lados para que quede medio escondido
+  [-1,1].forEach(sd=>{ const r=new THREE.Mesh(new THREE.DodecahedronGeometry(1,0),cvStoneM); r.position.set(sd*1.15,.35,.25); r.scale.set(.55,.55+(sd>0?.2:0),.5); ch.add(r); });
+  const gs=glowSpr('#ffd36b',1.6,.35); gs.position.set(0,.7,0); ch.add(gs);
+  obstacles.push({x, z, r:.6, top:y+.7, walk:false});
+  return {x, y, z, lid, coins, gs, open:0}; })();
+const mchDone=()=>mine.chest===today();
+function mchOpen(){ if(mchDone()) return; mine.chest=today(); saveMine(); addCoins(60); adOffer(60); flashNote('¡Encontraste el cofre escondido de la mina! 60 monedas. Vuelve mañana por más'); try{ audio.wave(); }catch(e){} }
+// reloj de las vetas: al acercarte a una que ya picaste, cuánto falta para que vuelva a salir
+const MVT=(()=>{ const c=document.createElement('canvas'); c.width=256; c.height=84; const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding;
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t, transparent:true, depthWrite:false, depthTest:false})); sp.scale.set(2.6,.85,1); sp.renderOrder=9; sp.visible=false; CAVE.add(sp);
+  return {c, t, sp, v:null, last:''}; })();
+function mvtDraw(rem,frac){ const g=MVT.c.getContext('2d'), W=256, H=84; g.clearRect(0,0,W,H);
+  g.fillStyle='rgba(251,243,223,.95)'; g.beginPath(); g.roundRect?g.roundRect(4,4,W-8,H-8,18):g.rect(4,4,W-8,H-8); g.fill(); g.strokeStyle='#c9a877'; g.lineWidth=3; g.setLineDash([7,6]); g.stroke(); g.setLineDash([]);
+  const m=Math.floor(rem/60), sec=rem%60; g.fillStyle='#5a4426'; g.font='800 26px Nunito, sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('Vuelve en '+m+':'+String(sec).padStart(2,'0'),W/2,30);
+  g.fillStyle='#e6d8bb'; g.beginPath(); g.roundRect?g.roundRect(24,50,W-48,16,8):g.rect(24,50,W-48,16); g.fill();
+  g.fillStyle='#7cc14e'; const w=Math.max(16,(W-48)*frac); g.beginPath(); g.roundRect?g.roundRect(24,50,w,16,8):g.rect(24,50,w,16); g.fill(); MVT.t.needsUpdate=true; }
+function mvtTick(){ let best=null, bd=3.2; const p=player.pos; if(inCave(p.y) && state==='play') for(const v of CV_VEINS){ if(v.g.visible) continue; const d=Math.hypot(p.x-v.x,p.z-v.z); if(d<bd && Math.abs(p.y+.8-v.y)<2.5){ bd=d; best=v; } }
+  if(!best){ MVT.sp.visible=false; MVT.v=null; return; }
+  const end=mine.veins[best.id]||0, tot=veinRespawn(best.k), rem=Math.max(0,Math.ceil((end-Date.now())/1000)), frac=Math.min(1,Math.max(0,1-rem*1000/tot)), key=best.id+':'+rem;
+  if(key!==MVT.last){ MVT.last=key; mvtDraw(rem,frac); }
+  MVT.sp.position.set(best.x,best.y+1.55,best.z); MVT.sp.visible=true; MVT.v=best; }
 function veinReady(v){ const t=mine.veins[v.id]; return !t || Date.now()>=t; }
 const veinNeed=v=>Math.max(2, 3+v.k-Math.max(0,mine.pick-v.k));
 const veinRespawn=k=>(4+k*1.5)*60000;
@@ -9138,6 +9228,10 @@ function caveUpdate(dt,t){
     if(M.lamp.visible) Lu[1].set(M.spot.x,M.spot.y,M.spot.z,1.5);
     let n=2; for(const r of mp.remotes.values()){ if(n>3) break; if(!inCave(r.pos.y) || r.pos.distanceTo(hp)>30) continue; const g=r.obj.userData.mg; Lu[n++].set(r.pos.x,r.pos.y+2.2,r.pos.z,1.1); if(g && g.lamp.visible && n<=3) Lu[n++].set(g.spot.x,g.spot.y,g.spot.z,1.3); }
     const ls=CV_LANTERNS.map(l=>[l,(l.x-hp.x)**2+(l.y-hp.y)**2+(l.z-hp.z)**2]).sort((a,b)=>a[1]-b[1]); for(let i=0;i<2 && i<ls.length;i++){ const l=ls[i][0]; Lu[4+i].set(l.x,l.y,l.z,l.day?1.4:1.1); } }
+  // v137: luciérnagas, cofre escondido, reloj de vetas y carritos de los demás
+  if(inC){ mffTick(t); mvtTick(); } else MVT.sp.visible=false;
+  { const want=mchDone()?1:0; MCH.open+=(want-MCH.open)*Math.min(1,dt*4); MCH.lid.rotation.x=-MCH.open*1.7; MCH.coins.visible=MCH.open<.5; MCH.gs.visible=MCH.open<.5; }
+  for(const [r,c] of MC.remote){ if(!mp.remotes.has(r.id) && ![...mp.remotes.values()].includes(r)){ c.parent&&c.parent.remove(c); MC.remote.delete(r); continue; } if(!(r.pl && PG_KINDS[r.pl[0]]==='cart')) c.visible=false; }
   // vetas que vuelven a salir
   if(inC && (caveUpdate.t=(caveUpdate.t||0)+dt)>1){ caveUpdate.t=0; for(const v of CV_VEINS){ const r=veinReady(v); if(r && !v.g.visible){ v.g.visible=true; v.hits=0; } } }
   for(const v of CV_VEINS) if(v.shake>0){ v.shake=Math.max(0,v.shake-dt*4); v.g.position.set(v.x+(Math.random()-.5)*.08*v.shake, v.y+.12, v.z+(Math.random()-.5)*.08*v.shake); }
@@ -9181,6 +9275,7 @@ function mineActions(){
   if(player.swim || player.dive) return null;
   if(Math.hypot(p.x-CV_EXIT.x,p.z-CV_EXIT.z)<2.4) return [{label:'Salir de la mina', run:caveLeave}, null];
   for(const E of CV_ELEV) if(Math.hypot(p.x-E.x,p.z-E.z)<2.3 && Math.abs(p.y-E.y)<2.5) return [{label:'Usar el elevador', run:()=>openFishOv('elev')}, null];
+  if(Math.hypot(p.x-MCH.x,p.z-MCH.z)<2.1 && Math.abs(p.y-MCH.y)<2) return mchDone() ? [{label:'Cofre vacío: vuelve mañana', disabled:true, run:()=>{}}, null] : [{label:'Abrir el cofre escondido', run:mchOpen}, null];   // v137
   for(const B of CV_ROCK){ if(mine.open[B.k+1]) continue; if(Math.hypot(p.x-B.x,p.z-B.z)<4.2 && Math.abs(p.y-B.y)<3){
     if(mine.pick<B.k+1) return [{label:`Necesitas el ${pickName(B.k+1)} (cómpralo al topo)`, disabled:true, run:()=>{}}, null];
     return [{label:`Romper la roca (${B.hits}/5)`, run:()=>mineSwing({rock:B, x:B.x, z:B.z})}, null]; } }
