@@ -953,7 +953,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='144';
+const GAME_VERSION='145';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -1240,7 +1240,7 @@ const JI_TREES={su:290, sv:112, r:0, b:0, h:null};                  // v142: los
 const JI_FLATS=[JI_CAMP, JI_PLAZA, JI_TEMPLE, JI_ZIPB];
 const JI_DOCK={s1:JI.rcU*1.085, W:1.9, Y:SEA_Y+2.35, s0:0};
 // el río: nace en una poza en la falda del volcán, baja, cae en cascada a una laguna y sigue hasta el mar
-const JI_RIVER=(()=>{ const pts=[[-40,-180,40],[-22,-228,31],[-2,-262,23.5],[0,-265.5,11],[7,-278,11],[38,-342,8.5],[52,-405,5.2],[62,-470,1.4],[70,-520,-2.5]];   // su, sv, fondo
+const JI_RIVER=(()=>{ const pts=[[-40,-180,40],[-22,-228,31],[-2,-262,23.5],[0,-265.5,11],[7,-278,11],[38,-342,8.5],[52,-405,5.2],[62,-470,1.4],[70,-520,-7]];   // su, sv, fondo
   const P=pts.map(([su,sv,b])=>{ const [x,z]=jiS(su,sv); return {su,sv,x,z,b}; }), L=[0]; for(let i=1;i<P.length;i++) L.push(L[i-1]+Math.hypot(P[i].su-P[i-1].su,P[i].sv-P[i-1].sv));
   return {P, L, W:5, pond:{i:0, R:9, lvl:40.75}, lag:{su:7, sv:-278, R:19, lvl:11.75}, fallI:2, pool:{su:57, sv:-437, R:13, lvl:4.1}}; })();   // v142: poza ancha de las lianas
 const JI_GROTTO={su:30.5, sv:-264.5, r:7.5, b:6, h:JI_RIVER.lag.lvl+1.3};   // v142: la cueva junto a la cascada
@@ -1272,9 +1272,10 @@ function jiLand(su,sv,x,z){ let h=jiBase(su,sv,x,z);
 function jiExact(x,z){ const lx=x-JI.x, lz=z-JI.z, d=Math.hypot(lx,lz); if(d>JI.E*1.42) return DEEP_Y;
   const c=d/jiCoastR(Math.atan2(lz,lx));
   const base = c<.9?0 : c<1 ? lerp(0,-1.9,smooth(.9,1,c)) : c<1.06 ? lerp(-1.9,-8,smooth(1,1.06,c)) : c<1.2 ? lerp(-8,-25,smooth(1.06,1.2,c)) : c<1.34 ? lerp(-25,DEEP_Y,smooth(1.2,1.34,c)) : DEEP_Y;
-  if(c>=.95) return base;
-  const su=lx*JI.ux+lz*JI.uz, sv=lx*JI.vx+lz*JI.vz;
-  return base + jiLand(su,sv,x,z)*(1-smooth(.8,.95,c)); }
+  const su=lx*JI.ux+lz*JI.uz, sv=lx*JI.vx+lz*JI.vz; let c2=c;
+  if(c>.78 && c<1.1){ const n=jiRiverNear(su,sv); if(n.s>JI_RIVER.L[6]) c2=c-.12*(1-smooth(JI_RIVER.W+15,JI_RIVER.W+60,n.d)); }   // v145: cerca del mar el río conserva sus orillas (antes el agua quedaba más alta que la arena)
+  if(c2>=.95) return base;
+  return base + jiLand(su,sv,x,z)*(1-smooth(.8,.95,c2)); }
 function jiGridH(x,z){ const G=JI.grid; if(!G) return jiExact(x,z);
   const fx0=(x-G.x0)/G.CS, fz0=(z-G.z0)/G.CS, i=Math.floor(fx0), j=Math.floor(fz0); if(i<0||j<0||i>=G.W-1||j>=G.W-1) return jiExact(x,z);
   const fx=fx0-i, fz=fz0-j, W=G.W, H=G.H, a=H[j*W+i], d=H[j*W+i+1], b=H[(j+1)*W+i], c=H[(j+1)*W+i+1];
@@ -1325,9 +1326,10 @@ function diLand(su,sv,x,z){ let h=diBase(su,sv,x,z);
 function diExact(x,z){ const lx=x-DI.x, lz=z-DI.z, d=Math.hypot(lx,lz); if(d>DI.E*1.42) return DEEP_Y;
   const c=d/diCoastR(Math.atan2(lz,lx));
   const base = c<.9?0 : c<1 ? lerp(0,-1.9,smooth(.9,1,c)) : c<1.06 ? lerp(-1.9,-8,smooth(1,1.06,c)) : c<1.2 ? lerp(-8,-25,smooth(1.06,1.2,c)) : c<1.34 ? lerp(-25,DEEP_Y,smooth(1.2,1.34,c)) : DEEP_Y;
-  if(c>=.95) return base;
-  const su=lx*DI.ux+lz*DI.uz, sv=lx*DI.vx+lz*DI.vz;
-  return base + diLand(su,sv,x,z)*(1-smooth(.8,.95,c)); }
+  const su=lx*DI.ux+lz*DI.uz, sv=lx*DI.vx+lz*DI.vz; let c2=c;
+  if(c>.78 && c<1.1){ const n=diRiverNear(su,sv); c2=c-.06*(1-smooth(DI_RIVER.W+15,DI_RIVER.W+60,n.d)); }   // v145: el río de chocolate llega hasta el mar
+  if(c2>=.95) return base;
+  return base + diLand(su,sv,x,z)*(1-smooth(.8,.95,c2)); }
 function diGridH(x,z){ const G=DI.grid; if(!G) return diExact(x,z);
   const fx0=(x-G.x0)/G.CS, fz0=(z-G.z0)/G.CS, i=Math.floor(fx0), j=Math.floor(fz0); if(i<0||j<0||i>=G.W-1||j>=G.W-1) return diExact(x,z);
   const fx=fx0-i, fz=fz0-j, W=G.W, H=G.H, a=H[j*W+i], d=H[j*W+i+1], b=H[(j+1)*W+i], c=H[(j+1)*W+i+1];
@@ -2032,7 +2034,7 @@ function instanced(geo, mat, items, set, opts={}){
     let r=0; list.forEach(e=>{ r=Math.max(r, e.p.distanceTo(c)+gr*e.s); });
     g.boundingSphere=new THREE.Sphere(c, r+.5);
     const m=new THREE.InstancedMesh(g,mat,list.length); list.forEach((e,i)=>m.setMatrixAt(i,e.m));
-    const loSrc=geo===sphereG?sphereLo:geo===cylG?cylLo:null;   // de lejos: la misma figura con menos caras
+    const loSrc=opts.lo||(geo===sphereG?sphereLo:geo===cylG?cylLo:null);   // v145: o la que mande quien llama   // de lejos: la misma figura con menos caras
     if(loSrc){ const gl=loSrc.clone(); gl.boundingSphere=g.boundingSphere; INST_LOD.push({m, hi:g, lo:gl}); }
     m.frustumCulled=true;   // la esfera de arriba envuelve todo el grupo: si no se ve, no se dibuja (three.js lo apaga por defecto en grupos)
     m.castShadow=opts.shadow!==false; m.receiveShadow=true; scene.add(m); meshes.set(key,m);
@@ -11063,7 +11065,7 @@ function wiTick(dt,t){
   // el color del agua (bajito y espuma) usa la profundidad de esta isla cuando estás cerca
   if(WI.depth){ const near=Math.hypot(camera.position.x-WI.x,camera.position.z-WI.z)<WI.E+260, U=seaSurface.material.uniforms;
     if(!WI.mainDepth) WI.mainDepth=SEA_MAIN_DEPTH;
-    if(near!==!!WI.depthOn){ WI.depthOn=near; U.uDepth.value=near?WI.depth.tex:WI.mainDepth.tex; U.uRect.value=near?WI.depth.rect:WI.mainDepth.rect; } }
+    WI.depthOn=near; }   // v145: islandSeaDepth() decide cuál mar se ve
   if(d>WI.E+300) return;
   if(WI.flag) WI.flag.rotation.y=Math.sin(t*1.3)*.25;
   if(WI.smoke){ const A=WI.smokeAt; WI.smoke.forEach(s=>{ const k=((t*.12+s.userData.ph)%1); s.position.set(A.x+Math.sin(k*5+s.userData.ph*9)*.6*k, A.y+k*6, A.z+Math.cos(k*4)*.5*k); s.scale.setScalar(.8+k*2.6); s.material.opacity=.5*(1-k)*Math.min(1,k*5); }); }
@@ -11490,10 +11492,10 @@ function jiBuildWater(){ const R=JI_RIVER, P=R.P;
 // ---- plantas: árboles gigantes con lianas, palmeras, helechos y flores ----
 const JI_GEO=(()=>{ let G=null; return ()=>{ if(G) return G;
   const M=(x,y,z,sx,sy,sz,rx=0,ry=0,rz=0)=>new THREE.Matrix4().compose(new THREE.Vector3(x,y,z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)), new THREE.Vector3(sx,sy,sz));
-  const lo=MIN_Q||ULTRA, cyl=new THREE.CylinderGeometry(1,1,1,lo?5:7), ball=new THREE.SphereGeometry(1,lo?6:9,lo?4:6), cone=new THREE.ConeGeometry(1,1,lo?5:7);
+  const mk=(cyl,ball,cone,far)=>{
   const tree=vegMerge([[cyl,'#8a6a46',M(0,3.6,0,.5,7.2,.5)], [cone,'#7d5d3c',M(0,.5,0,1.1,1.2,1.1)],
     [ball,'#4c9a3b',M(0,8.2,0,3.4,2.2,3.4)], [ball,'#5aad45',M(1.8,7.4,.8,2.4,1.7,2.4)], [ball,'#43893a',M(-1.6,7.6,-1,2.5,1.8,2.5)], [ball,'#62b84b',M(.3,9.4,-.6,2.2,1.6,2.2)],
-    ...[[1.9,.4],[-1.4,1.6],[.6,-2],[-2,-.6],[1,1.9]].map(([x,z],k)=>[cyl,'#4f8a3a',M(x,5.6-k*.25,z,.05,3.2+k*.3,.05)])]);
+    ...(far?[]:[[1.9,.4],[-1.4,1.6],[.6,-2],[-2,-.6],[1,1.9]]).map(([x,z],k)=>[cyl,'#4f8a3a',M(x,5.6-k*.25,z,.05,3.2+k*.3,.05)])]);
   const palmParts=[]; let px=0, py=0; for(let i=0;i<6;i++){ palmParts.push([cyl,'#a57c52',M(px,py+.55,0,.24-i*.015,1.1,.24-i*.015,0,0,-.07*i)]); px+=.08*i; py+=1.05; }
   for(let k=0;k<7;k++){ const a=k/7*Math.PI*2; palmParts.push([ball,k%2?'#4fa843':'#5cb84c',M(px+Math.cos(a)*1.5,py-.25,Math.sin(a)*1.5,1.8,.1,.42,0,-a,-.35)]); }
   [[.25,0],[-.15,.22],[-.1,-.25]].forEach(([dx,dz])=>palmParts.push([ball,'#7a5232',M(px+dx,py-.15,dz,.2,.2,.2)]));
@@ -11501,7 +11503,10 @@ const JI_GEO=(()=>{ let G=null; return ()=>{ if(G) return G;
   const fern=vegMerge([[ball,'#3f8f3a',M(0,.35,0,1.1,.5,1.1)], [ball,'#4c9e45',M(.6,.45,.3,.7,.45,.7)], [ball,'#45963f',M(-.5,.4,-.4,.75,.5,.75)]]);
   const flowerP=vegMerge([[ball,'#3f8f3a',M(0,.45,0,.9,.6,.9)], [ball,'#ff5fa2',M(.45,.85,.2,.24,.18,.24)], [ball,'#ff5fa2',M(-.35,.8,.3,.22,.17,.22)], [ball,'#ffd23f',M(0,1,-.35,.2,.15,.2)]]);
   const flowerY=vegMerge([[ball,'#3f8f3a',M(0,.45,0,.9,.6,.9)], [ball,'#ffd23f',M(.45,.85,.2,.24,.18,.24)], [ball,'#ff7a3a',M(-.35,.8,.3,.22,.17,.22)], [ball,'#ffffff',M(0,1,-.35,.2,.15,.2)]]);
-  return G={tree, palm, fern, flowerP, flowerY}; }; })();
+  return {tree, palm, fern, flowerP, flowerY}; };
+  const lo=MIN_Q||ULTRA; G=mk(new THREE.CylinderGeometry(1,1,1,lo?5:7), new THREE.SphereGeometry(1,lo?6:9,lo?4:6), new THREE.ConeGeometry(1,1,lo?5:7));
+  G.lo=mk(new THREE.CylinderGeometry(1,1,1,4), new THREE.SphereGeometry(1,5,3), new THREE.ConeGeometry(1,1,4), true);   // v145: de lejos, los mismos árboles con muchas menos caras
+  return G; }; })();
 function* jiBuildPlants(){ const q={min:.35, low:.6, mid:.8, high:1, max:1}[Q0]||.6, trees=[], palms=[], ferns=[], fl1=[], fl2=[], rocks=[];
   const near=(su,sv,F,m)=>Math.hypot(su-F.su,sv-F.sv)<F.r+m;
   for(let gx=-JI.E;gx<JI.E;gx+=7){ if(((gx+JI.E)/7|0)%22===21) yield; for(let gz=-JI.E;gz<JI.E;gz+=7){ const r1=rlHash(gx*3-7,gz*7+5), r2=rlHash(gx+23,gz-31), r3=rlHash(gx*5-3,gz*3+9), r4=rlHash(gx+71,gz*2-13);
@@ -11518,8 +11523,8 @@ function* jiBuildPlants(){ const q={min:.35, low:.6, mid:.8, high:1, max:1}[Q0]|
     if(r4<.65*q && pd>4.5) ferns.push([x+(r2-.5)*3,z+(r1-.5)*3,.7+r3*.7,r1*6.28]);
     else if(r4>.9) (r1<.5?fl1:fl2).push([x+(r3-.5)*3,z+(r2-.5)*3,.8+r1*.5,r2*6.28]); } }
   yield;
-  const G=JI_GEO(), put=(L,geo,obs)=>{ if(!L.length) return; instanced(geo, VEG_GEO.mat, L, (o,[x,z,s,rot])=>{ o.position.set(x,groundMin(x,z,.25*s)-.1,z); o.scale.setScalar(s); o.rotation.y=rot; }); if(obs) L.forEach(([x,z,s])=>obstacles.push({x,z,r:obs*s,top:terrainH(x,z)+60,walk:false})); };
-  put(trees,G.tree,.6); yield; put(palms,G.palm,.32); yield; put(ferns,G.fern,0); put(fl1,G.flowerP,0); put(fl2,G.flowerY,0);
+  const G=JI_GEO(), put=(L,geo,obs,lo)=>{ if(!L.length) return; instanced(geo, VEG_GEO.mat, L, (o,[x,z,s,rot])=>{ o.position.set(x,groundMin(x,z,.25*s)-.1,z); o.scale.setScalar(s); o.rotation.y=rot; },{lo}); if(obs) L.forEach(([x,z,s])=>obstacles.push({x,z,r:obs*s,top:terrainH(x,z)+60,walk:false})); };
+  put(trees,G.tree,.6,G.lo.tree); yield; put(palms,G.palm,.32,G.lo.palm); yield; put(ferns,G.fern,0,G.lo.fern); put(fl1,G.flowerP,0,G.lo.flowerP); put(fl2,G.flowerY,0,G.lo.flowerY);
   if(rocks.length){ instanced(sphereG, rockMat, rocks, (o,[x,z,s,rot])=>{ const b=groundMin(x,z,.8*s)-.15*s; o.position.set(x,b+s*.35,z); o.scale.set(s*1.2,s*.7,s); o.rotation.y=rot; });
     rocks.forEach(([x,z,s])=>{ const b=groundMin(x,z,.8*s)-.15*s; obstacles.push({x,z,r:s*1.05,top:b+s*1.05,walk:true}); }); }
   JI.nTrees=trees.length+palms.length; }
@@ -11590,7 +11595,7 @@ function jiTick(dt,t){
   if(!JI.done && d<1450){ if(!JI.job) JI.job=jiBuildGen(); const t0=performance.now(), budget=d<720?1e9:(MIN_Q?4:6);
     try{ while(performance.now()-t0<budget){ if(JI.job.next().done){ JI.job=null; break; } } }catch(e){ console.warn('isla selva',e); JI.job=null; JI.done=true; } }
   if(JI.depth){ const near=Math.hypot(camera.position.x-JI.x,camera.position.z-JI.z)<JI.E+260, U=seaSurface.material.uniforms;
-    if(near!==!!JI.depthOn){ JI.depthOn=near; U.uDepth.value=near?JI.depth.tex:SEA_MAIN_DEPTH.tex; U.uRect.value=near?JI.depth.rect:SEA_MAIN_DEPTH.rect; } }
+    JI.depthOn=near; }   // v145: islandSeaDepth() decide cuál mar se ve
   if(d>JI.E+300) return;
   const night=1-(sky.dayK??1);
   for(const F of JI_FIRE){ if(F.f){ const k=.75+.3*Math.sin(t*9+F.f.userData.ph)+.15*Math.sin(t*23+F.f.userData.ph); F.f.scale.y=(F.f.scale.x>.2?.7:.4)*k; } if(F.s) F.s.material.opacity=(.25+.6*night)*(.85+.15*Math.sin(t*11)); }
@@ -11930,7 +11935,7 @@ function* diBuildGen(){
   diBuildWater(); yield;
   yield* diBuild2(); yield;   // v144: las actividades (antes de las plantas, para no poner dulces encima)
   yield* diBuildPlants(); yield;
-  diBuildDock(); yield;
+  yield* diBuildDock(); yield;
   yield* diBuildCake(); yield;
   { const N=MIN_Q?160:256, E=DI.E, data=new Uint8Array(N*N);
     for(let j=0;j<N;j++){ for(let i=0;i<N;i++){ const x=DI.x-E+2*E*(i+.5)/N, z=DI.z-E+2*E*(j+.5)/N; data[j*N+i]=Math.round(THREE.MathUtils.clamp((SEA_Y-terrainH(x,z)+2)/12,0,1)*255); } if(j%40===39) yield; }
@@ -11977,7 +11982,7 @@ function diBuildWater(){ const R=DI_RIVER, P=R.P, L=DI_LAKE;
 // ---- plantas: el bosque de dulces ----
 const DI_GEO=(()=>{ let G=null; return ()=>{ if(G) return G;
   const M=(x,y,z,sx,sy,sz,rx=0,ry=0,rz=0)=>new THREE.Matrix4().compose(new THREE.Vector3(x,y,z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)), new THREE.Vector3(sx,sy,sz));
-  const lo=MIN_Q||ULTRA, cyl=new THREE.CylinderGeometry(1,1,1,lo?6:10), ball=new THREE.SphereGeometry(1,lo?7:10,lo?5:7), cone=new THREE.ConeGeometry(1,1,lo?6:9), ring=new THREE.TorusGeometry(1,.14,lo?4:6,lo?12:20);
+  const mk=(cyl,ball,cone,ring,lo)=>{
   const lolli=col=>vegMerge([[cyl,'#fff6f2',M(0,2.2,0,.13,4.4,.13)], [cyl,col,M(0,5.4,0,1.7,.5,1.7,Math.PI/2)], [ring,'#ffffff',M(0,5.4,.27,1.05,1.05,1,0)], [ring,'#ffffff',M(0,5.4,-.27,1.05,1.05,1,0)], [ring,'#ffffff',M(0,5.4,.27,.5,.5,1,0)], [ring,'#ffffff',M(0,5.4,-.27,.5,.5,1,0)], [cyl,'#fff6f2',M(0,5.4,0,.22,.56,.22,Math.PI/2)]]);
   const cotton=(c1,c2,c3)=>vegMerge([[cyl,'#fff3f8',M(0,2.8,0,.32,5.6,.32)], [cyl,'#ff8fb8',M(0,1.4,0,.34,.5,.34)], [cyl,'#ff8fb8',M(0,3.2,0,.34,.5,.34)], [cyl,'#ff8fb8',M(0,5,0,.34,.5,.34)],
     [ball,c1,M(0,7.2,0,2.9,2.3,2.9)], [ball,c2,M(1.7,6.6,.6,2.1,1.8,2.1)], [ball,c3,M(-1.5,6.8,-.9,2.2,1.8,2.2)], [ball,c2,M(.2,8.6,-.4,2,1.6,2)], [ball,c3,M(-.3,6.2,1.6,1.7,1.4,1.7)]]);
@@ -11990,13 +11995,16 @@ const DI_GEO=(()=>{ let G=null; return ()=>{ if(G) return G;
   const shells=vegMerge([[cone,'#ff9ec4',M(0,.08,0,.32,.16,.42,Math.PI/2.2)], [cone,'#c7a6ff',M(.7,.07,.3,.26,.14,.34,Math.PI/2.2,1.2)], [cone,'#ffe27a',M(-.4,.07,.6,.24,.13,.3,Math.PI/2.2,2.4)], [ball,'#8fe3d8',M(.3,.05,-.5,.2,.09,.2)]]);
   const sprinkles=vegMerge(['#ff5fa2','#ffd23f','#5ec8ff','#7be07b','#b07cff','#ff8a2a','#ffffff','#ff5fa2'].map((c,k)=>{ const a=k*2.4, r=.4+(k%3)*.45; return [cyl,c,M(Math.cos(a)*r,.08,Math.sin(a)*r,.09,.5,.09,Math.PI/2,a*1.7,0)]; }));
   const drip=col=>vegMerge([[ball,col,M(0,0,0,1.6,.7,1.6)], [ball,col,M(.2,-.8,.05,.6,1.1,.6)], [ball,col,M(-.9,-.5,0,.45,.8,.45)]]);
-  return G={lol:['#ff4f7b','#9b5de5','#ffa630','#3ab0ff','#4cd07a'].map(lolli), cotP:cotton('#ffb3d9','#ff9ccc','#ffc8e4'), cotB:cotton('#a9d8ff','#8cc8ff','#c9e6ff'), cane, mushR:mush('#ff4d5e'), mushV:mush('#a66bff'), drops, shells, sprinkles, dripW:drip('#fff7f2'), dripP:drip('#ff9cc5'), dripC:drip('#9fe3c0')}; }; })();
+  return {lol:['#ff4f7b','#9b5de5','#ffa630','#3ab0ff','#4cd07a'].map(lolli), cotP:cotton('#ffb3d9','#ff9ccc','#ffc8e4'), cotB:cotton('#a9d8ff','#8cc8ff','#c9e6ff'), cane, mushR:mush('#ff4d5e'), mushV:mush('#a66bff'), drops, shells, sprinkles, dripW:drip('#fff7f2'), dripP:drip('#ff9cc5'), dripC:drip('#9fe3c0')}; };
+  const lo=MIN_Q||ULTRA; G=mk(new THREE.CylinderGeometry(1,1,1,lo?6:10), new THREE.SphereGeometry(1,lo?7:10,lo?5:7), new THREE.ConeGeometry(1,1,lo?6:9), new THREE.TorusGeometry(1,.14,lo?4:6,lo?12:20), lo);
+  G.lo=mk(new THREE.CylinderGeometry(1,1,1,4), new THREE.SphereGeometry(1,5,3), new THREE.ConeGeometry(1,1,4), new THREE.TorusGeometry(1,.14,3,8), true);   // v145: de lejos, versión sencilla
+  return G; }; })();
 function diNoPlant(su,sv,x,z){ const C=DI_CAKE; if(Math.hypot(su-C.su,sv-C.sv)<C.tiers[0].r+12) return true;
   const P=DI_PLAZA; if(Math.hypot(su-P.su,sv-P.sv)<P.r+5) return true; if(su>P.su && su<DI.rcU+5 && Math.abs(sv)<10) return true;
   const L=DI_LAKE; if(Math.hypot(su-L.su,sv-L.sv)<L.R+6) return true; if(diNoPlant2(su,sv)) return true; const P0=DI_RIVER.P[0]; if(Math.hypot(su-P0.su,sv-P0.sv)<DI_RIVER.pond.R+8) return true;
   return false; }
 function* diBuildPlants(){ const q={min:.35, low:.6, mid:.8, high:1, max:1}[Q0]||.6, lol=[[],[],[],[],[]], cotP=[], cotB=[], canes=[], mR=[], mV=[], drops=[], shells=[];
-  for(let gx=-DI.E;gx<DI.E;gx+=8){ if(((gx+DI.E)/8|0)%20===19) yield; for(let gz=-DI.E;gz<DI.E;gz+=8){ const r1=rlHash(gx*3-7,gz*7+5), r2=rlHash(gx+23,gz-31), r3=rlHash(gx*5-3,gz*3+9), r4=rlHash(gx+71,gz*2-13);
+  for(let gx=-DI.E;gx<DI.E;gx+=8){ if(((gx+DI.E)/8|0)%7===6) yield; for(let gz=-DI.E;gz<DI.E;gz+=8){ const r1=rlHash(gx*3-7,gz*7+5), r2=rlHash(gx+23,gz-31), r3=rlHash(gx*5-3,gz*3+9), r4=rlHash(gx+71,gz*2-13);
     const x=DI.x+gx+(r1-.5)*6.5, z=DI.z+gz+(r2-.5)*6.5, lx=x-DI.x, lz=z-DI.z, cc=Math.hypot(lx,lz)/diCoastR(Math.atan2(lz,lx)); if(cc>.93) continue;
     const [su,sv]=diL(x,z); if(diNoPlant(su,sv,x,z)) continue;
     const h=diGridH(x,z); if(h<1 || diWaterLevel(x,z)!==null) continue; const pd=diPathD(x,z); if(pd<3.5) continue;
@@ -12009,10 +12017,10 @@ function* diBuildPlants(){ const q={min:.35, low:.6, mid:.8, high:1, max:1}[Q0]|
     else if(r3<p+.12*q) (r4<.5?mR:mV).push([x,z,.8+r1*.8,r2*6.28]);
     if(r4>.55 && r4<.55+.3*q && pd>4.5) drops.push([x+(r2-.5)*3,z+(r1-.5)*3,.8+r3*.6,r1*6.28]); } }
   yield;
-  const G=DI_GEO(), put=(L,geo,obs)=>{ if(!L.length) return; instanced(geo, VEG_GEO.mat, L, (o,[x,z,s,rot])=>{ o.position.set(x,groundMin(x,z,.25*s)-.1,z); o.scale.setScalar(s); o.rotation.y=rot; }); if(obs) L.forEach(([x,z,s])=>obstacles.push({x,z,r:obs*s,top:terrainH(x,z)+60,walk:false})); };
-  put(cotP,G.cotP,.5); put(cotB,G.cotB,.5); yield; lol.forEach((L,i)=>put(L,G.lol[i],.25)); put(canes,G.cane,.3); yield;
-  if(mR.length||mV.length){ put(mR,G.mushR,0); put(mV,G.mushV,0); [...mR,...mV].forEach(([x,z,s])=>{ obstacles.push({x,z,r:.55*s,top:terrainH(x,z)+1.6*s,walk:false}); }); }
-  put(drops,G.drops,0); put(shells,G.shells,0);
+  const G=DI_GEO(), put=(L,geo,obs,lo)=>{ if(!L.length) return; instanced(geo, VEG_GEO.mat, L, (o,[x,z,s,rot])=>{ o.position.set(x,groundMin(x,z,.25*s)-.1,z); o.scale.setScalar(s); o.rotation.y=rot; },{lo}); if(obs) L.forEach(([x,z,s])=>obstacles.push({x,z,r:obs*s,top:terrainH(x,z)+60,walk:false})); };
+  put(cotP,G.cotP,.5,G.lo.cotP); yield; put(cotB,G.cotB,.5,G.lo.cotB); yield; for(let i=0;i<5;i++){ put(lol[i],G.lol[i],.25,G.lo.lol[i]); yield; } put(canes,G.cane,.3,G.lo.cane); yield;
+  if(mR.length||mV.length){ put(mR,G.mushR,0,G.lo.mushR); put(mV,G.mushV,0,G.lo.mushV); [...mR,...mV].forEach(([x,z,s])=>{ obstacles.push({x,z,r:.55*s,top:terrainH(x,z)+1.6*s,walk:false}); }); }
+  yield; put(drops,G.drops,0,G.lo.drops); put(shells,G.shells,0,G.lo.shells);
   DI.nTrees=cotP.length+cotB.length+lol.reduce((a,L)=>a+L.length,0)+canes.length; }
 // ---- letreros y faroles de bombón ----
 const DI_FIRE=[];
@@ -12021,15 +12029,18 @@ function diGumLamp(G,x,z,y,col){ wiAdd(G,cylG,wiMat('#ffffff'),x,y+1.4,z,.08,2.8
   obstacles.push({x,z,r:.18,top:y+60,walk:false}); }
 function diStripe(G,x,z,y0,h,r,seg=.7){ for(let k=0,yy=y0;yy<y0+h-.01;k++,yy+=seg){ const hh=Math.min(seg,y0+h-yy); wiAdd(G,cylG,wiMat(k%2?'#ffffff':'#e8333f','rgba(0,0,0,.06)'),x,yy+hh/2,z,r,hh,r); } }
 // ---- el muelle de galleta y el arco de caramelo ----
-function diBuildDock(){ const D=DI_DOCK, G=new THREE.Group(); scene.add(G); const cook=wiMat('#d9a866','rgba(90,50,10,.2)'), cookD=wiMat('#b98448','rgba(60,30,5,.2)'), chip=wiMat('#4e2c1a');
+function* diBuildDock(){ const D=DI_DOCK; let G=new THREE.Group(); scene.add(G); const cook=wiMat('#d9a866','rgba(90,50,10,.2)'), cookD=wiMat('#b98448','rgba(60,30,5,.2)'), chip=wiMat('#4e2c1a');
   const len=D.s1-D.s0, mid=(D.s0+D.s1)/2, [mx,mz]=diS(mid,0), ry=Math.atan2(DI.ux,DI.uz);
   wiAdd(G,WI_BOXG,cook,mx,D.Y-.14,mz,D.W*2,.28,len,ry);
   for(let s=D.s0+1.5;s<D.s1;s+=3){ const [x,z]=diS(s,0); wiAdd(G,WI_BOXG,cookD,x,D.Y+.003,z,D.W*2-.1,.012,.08,ry); }   // las galletas, una tras otra
   for(let s=D.s0+.5;s<D.s1;s+=.9){ const q=rlHash(s*7|0,3), [x,z]=diS(s,(q-.5)*D.W*1.6); wiAdd(G,sphereG,chip,x,D.Y,z,.12,.05,.1); }   // chispas de chocolate
-  for(let s=D.s0+2;s<=D.s1;s+=4) for(const e of [-1,1]){ const [x,z]=diS(s,e*(D.W-.15)), g=terrainH(x,z); diStripe(G,x,z,Math.min(g,D.Y-1),D.Y+.5-Math.min(g,D.Y-1),.17,.5); }
+  mergeStatic(G); yield; G=new THREE.Group(); scene.add(G);
+  for(let s=D.s0+2;s<=D.s1;s+=4) for(const e of [-1,1]){ const [x,z]=diS(s,e*(D.W-.15)), g=terrainH(x,z), y0=Math.max(Math.min(g,D.Y-1),SEA_Y-1.6); diStripe(G,x,z,y0,D.Y+.5-y0,.17,.6); if(g<SEA_Y-1.6) wiAdd(G,cylG,wiMat('#e8333f'),x,(g+y0)/2,z,.17,y0-g+.05,.17); }   // v145: bajo el agua, un solo tramo
+  mergeStatic(G); yield; G=new THREE.Group(); scene.add(G);   // v145: en partes, para que no se trabe
   const cols=['#ff7ab8','#7fd3ff','#ffe066','#9df59d'];
   [D.s1-1,D.s1-16,D.s0+6].forEach((s,k)=>{ const [x,z]=diS(s,D.W-.25); diGumLamp(G,x,z,D.Y,cols[k%4]); });
   for(let s=D.s0-12, e=1, k=0;s>DI_PLAZA.su+DI_PLAZA.r;s-=20, e=-e, k++){ const [x,z]=diS(s,e*3.2); diGumLamp(G,x,z,terrainH(x,z)-.05,cols[k%4]); }
+  mergeStatic(G); yield; G=new THREE.Group(); scene.add(G);
   // el arco de caramelo: dos bastones gigantes y una media luna de rayas, con el letrero
   { const s=D.s0-3, [ax,az]=diS(s,0), y=terrainH(ax,az)-.05, R=3.4, H=4.6;
     for(const e of [-1,1]){ const [x,z]=diS(s,e*R); diStripe(G,x,z,y-.3,H+.3,.32); obstacles.push({x,z,r:.4,top:y+60,walk:false}); }
@@ -12043,12 +12054,12 @@ function diBuildDock(){ const D=DI_DOCK, G=new THREE.Group(); scene.add(G); cons
 function* diBuildCake(){ const C=DI_CAKE, base=C.base, G=new THREE.Group(), Y=i=>base+20*(i+1), GEO=DI_GEO(); scene.add(G);
   // betún que escurre por la orilla de cada piso
   const drips=[[],[],[]]; C.tiers.forEach((T,i)=>{ const n=Math.round(2*Math.PI*T.r/3.2); for(let k=0;k<n;k++){ const th=k/n*Math.PI*2, [x,z]=diCakeP(T.r-3.3,th); drips[i].push([x,z,1+.35*rlHash(k,i*7+1),rlHash(k*5,i)*6.28, Y(i)]); } });
-  const DG=[GEO.dripP,GEO.dripW,GEO.dripC]; drips.forEach((L,i)=>instanced(DG[i], VEG_GEO.mat, L, (o,[x,z,s,rot,yy])=>{ o.position.set(x,yy-.15,z); o.scale.setScalar(s); o.rotation.y=rot; }));
+  const DG=[GEO.dripP,GEO.dripW,GEO.dripC]; drips.forEach((L,i)=>instanced(DG[i], VEG_GEO.mat, L, (o,[x,z,s,rot,yy])=>{ o.position.set(x,yy-.15,z); o.scale.setScalar(s); o.rotation.y=rot; },{lo:[GEO.lo.dripP,GEO.lo.dripW,GEO.lo.dripC][i]}));
   yield;
   // chispas de colores arriba de cada piso
   { const L=[], q={min:.4, low:.65, mid:.85, high:1, max:1}[Q0]||.65; C.tiers.forEach((T,i)=>{ const rIn=i<2?C.tiers[i+1].r+8:0, n=Math.round((T.r*T.r-rIn*rIn)/90*q);
       for(let k=0;k<n;k++){ const a=rlHash(k,i*13+2)*Math.PI*2, r=Math.sqrt(rIn*rIn+(Math.pow(T.r-5,2)-rIn*rIn)*rlHash(k*3+1,i*5+9)), [x,z]=diCakeP(r,a); L.push([x,z,1+rlHash(k,i)*.6,a*3]); } });
-    instanced(GEO.sprinkles, VEG_GEO.mat, L, (o,[x,z,s,rot])=>{ o.position.set(x,terrainH(x,z)+.02,z); o.scale.setScalar(s); o.rotation.y=rot; }); }
+    instanced(GEO.sprinkles, VEG_GEO.mat, L, (o,[x,z,s,rot])=>{ o.position.set(x,terrainH(x,z)+.02,z); o.scale.setScalar(s); o.rotation.y=rot; },{lo:GEO.lo.sprinkles}); }
   yield;
   // las rampas de galleta (con barandal rojo y postes de bastón)
   const cook=wiMat('#d9a866','rgba(90,50,10,.2)'), cookD=wiMat('#b98448','rgba(60,30,5,.2)'), rail=wiMat('#e8333f'), W=1.8;
@@ -12075,25 +12086,26 @@ function* diBuildCake(){ const C=DI_CAKE, base=C.base, G=new THREE.Group(), Y=i=
     const st=wiMat('#5d8a2e'); let px=cx, py=top+12.6, pz=cz; for(let k=0;k<5;k++){ const nx=px+.5*k*DI.vx, nz=pz+.5*k*DI.vz, o=wiAdd(G3,cylG,st,nx,py+.9,nz,.28,1.9,.28); o.rotation.order='YXZ'; o.rotation.set(0,Math.atan2(DI.vx,DI.vz),-.18*k); py+=1.7; }
     const leaf=wiAdd(G3,sphereG,wiMat('#6cbf3a'),px+1.8*DI.vx,top+18,pz+1.8*DI.vz,1.6,.18,.8); leaf.rotation.y=.6;
     obstacles.push({x:cx,z:cz,r:7.2,top:top+13,walk:false}); DI.cherry={x:cx,z:cz,y:top+6.2}; }
+  mergeStatic(G3); yield; const G4=new THREE.Group(); scene.add(G4);
   // el mirador del pastel: en la orilla de arriba, del lado del muelle (banca, barandal de bastones, bandera y letrero)
   { const th=0, r=C.tiers[2].r-3.5, ry=Math.atan2(DI.ux,DI.uz);
-    for(let a=-.42;a<=.421;a+=.07){ const [x,z]=diCakeP(r-1.5,th+a); diStripe(G3,x,z,top-.1,1.25,.12,.35); }
-    for(let a=-.42;a<.42;a+=.07){ const [x0,z0]=diCakeP(r-1.5,th+a), [x1,z1]=diCakeP(r-1.5,th+a+.07), o=wiAdd(G3,cylG,rail,(x0+x1)/2,top+1.2,(z0+z1)/2,.08,Math.hypot(x1-x0,z1-z0)+.05,.08); o.rotation.order='YXZ'; o.rotation.set(Math.PI/2,Math.atan2(x1-x0,z1-z0),0); }
-    const [bx,bz]=diCakeP(r-7,th); wiAdd(G3,WI_BOXG,cook,bx,top+.55,bz,3.2,.18,.9,ry); wiAdd(G3,WI_BOXG,cookD,bx-DI.ux*.4,top+1,bz-DI.uz*.4,3.2,.7,.14,ry);
-    for(const e of [-1,1]){ wiAdd(G3,WI_BOXG,cookD,bx+DI.vx*e*1.4,top+.25,bz+DI.vz*e*1.4,.18,.5,.7,ry); }
+    for(let a=-.42;a<=.421;a+=.07){ const [x,z]=diCakeP(r-1.5,th+a); diStripe(G4,x,z,top-.1,1.25,.12,.35); }
+    for(let a=-.42;a<.42;a+=.07){ const [x0,z0]=diCakeP(r-1.5,th+a), [x1,z1]=diCakeP(r-1.5,th+a+.07), o=wiAdd(G4,cylG,rail,(x0+x1)/2,top+1.2,(z0+z1)/2,.08,Math.hypot(x1-x0,z1-z0)+.05,.08); o.rotation.order='YXZ'; o.rotation.set(Math.PI/2,Math.atan2(x1-x0,z1-z0),0); }
+    const [bx,bz]=diCakeP(r-7,th); wiAdd(G4,WI_BOXG,cook,bx,top+.55,bz,3.2,.18,.9,ry); wiAdd(G4,WI_BOXG,cookD,bx-DI.ux*.4,top+1,bz-DI.uz*.4,3.2,.7,.14,ry);
+    for(const e of [-1,1]){ wiAdd(G4,WI_BOXG,cookD,bx+DI.vx*e*1.4,top+.25,bz+DI.vz*e*1.4,.18,.5,.7,ry); }
     obstacles.push({x:bx,z:bz,r:1.2,top:top+.65,walk:true});
     DI.mirador={x:bx,z:bz,y:top};
-    { const [x,z]=diCakeP(r-4,th+.5); wiAdd(G3,cylG,wiMat('#ffffff'),x,top+2.4,z,.08,4.8,.08); const c=document.createElement('canvas'); c.width=224; c.height=128; const g=c.getContext('2d'); if(MX_FLAG) MX_FLAG(g,224,128);
+    { const [x,z]=diCakeP(r-4,th+.5); wiAdd(G4,cylG,wiMat('#ffffff'),x,top+2.4,z,.08,4.8,.08); const c=document.createElement('canvas'); c.width=224; c.height=128; const g=c.getContext('2d'); if(MX_FLAG) MX_FLAG(g,224,128);
       const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; const f=new THREE.Mesh(new THREE.PlaneGeometry(1.6,.92),new THREE.MeshStandardMaterial({map:t, side:THREE.DoubleSide, roughness:1})); f.position.set(x,top+4.2,z); f.userData.noBatch=true; scene.add(f); DI.flag=f; DI.flagAt=[x,z]; }
-    { const [x,z]=diCakeP(r-4,th-.42); wiAdd(G3,cylG,wiMat('#7a4a2b'),x,top+.8,z,.06,1.6,.06); jiSign(G3,x,z,top+1.6,ry,'Mirador del Pastel','#b03a6a',2.6,'#fff3f8'); } }
-  mergeStatic(G3); }
+    { const [x,z]=diCakeP(r-4,th-.42); wiAdd(G4,cylG,wiMat('#7a4a2b'),x,top+.8,z,.06,1.6,.06); jiSign(G4,x,z,top+1.6,ry,'Mirador del Pastel','#b03a6a',2.6,'#fff3f8'); } }
+  mergeStatic(G4); }
 // cada cuadro
 function diTick(dt,t){
   const d=Math.min(Math.hypot(camera.position.x-DI.x,camera.position.z-DI.z), Math.hypot(player.pos.x-DI.x,player.pos.z-DI.z));
   if(!DI.done && d<1450){ if(!DI.job) DI.job=diBuildGen(); const t0=performance.now(), budget=d<720?1e9:(MIN_Q?4:6);
     try{ while(performance.now()-t0<budget){ if(DI.job.next().done){ DI.job=null; break; } } }catch(e){ console.warn('isla dulce',e); DI.job=null; DI.done=true; } }
   if(DI.depth){ const near=Math.hypot(camera.position.x-DI.x,camera.position.z-DI.z)<DI.E+260, U=seaSurface.material.uniforms;
-    if(near!==!!DI.depthOn){ DI.depthOn=near; U.uDepth.value=near?DI.depth.tex:SEA_MAIN_DEPTH.tex; U.uRect.value=near?DI.depth.rect:SEA_MAIN_DEPTH.rect; } }
+    DI.depthOn=near; }   // v145: islandSeaDepth() decide cuál mar se ve
   if(d>DI.E+300) return;
   const night=1-(sky.dayK??1);
   for(const F of DI_FIRE){ if(F.f){ const k=.8+.25*Math.sin(t*9+F.f.userData.ph)+.12*Math.sin(t*23+F.f.userData.ph); F.f.scale.y=.9*k; } if(F.s) F.s.material.opacity=(.3+.6*night)*(.85+.15*Math.sin(t*11)); }
@@ -12215,6 +12227,7 @@ function* diBuild2(){ const ry0=Math.atan2(DI.ux,DI.uz);
     for(let i=n-1;i>=0;i--){ const g=terrainH(pts[i].x,pts[i].z), onTop=i<25 && g>top-1, clr=onTop?.3:i>n-14?.2:1.5; Y[i]=Math.max(Y[i], g+clr, Y[i+1]+(onTop?.02:.05)); }
     Y[0]=Math.max(Y[0],top+.45); const P=pts.map((p,i)=>[p.x,Y[i],p.z]), L=[0]; for(let i=1;i<P.length;i++) L.push(L[i-1]+Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1],P[i][2]-P[i-1][2]));
     DI2.slide={P, L, total:L[L.length-1], start:{x:P[0][0], z:P[0][2], y:top}}; DI2.slideL=P.filter((q,i)=>i%3===0).map(q=>diL(q[0],q[2]));
+    yield;   // v145: en partes
     // el canal: una "U" de helado con franjas de sabores
     const SEC=9, pos=[], col=[], idx=[], bands=['#ffb3c8','#fff4dc','#bff0d6','#9a5a33'].map(h=>new THREE.Color(h)), up=new THREE.Vector3(0,1,0), side=new THREE.Vector3(), dir=new THREE.Vector3();
     for(let i=0;i<P.length;i++){ const a=P[Math.max(0,i-1)], b=P[Math.min(P.length-1,i+1)]; dir.set(b[0]-a[0],0,b[2]-a[2]).normalize(); side.set(dir.z,0,-dir.x); const c=bands[Math.floor(L[i]/7)%4];
@@ -12240,7 +12253,7 @@ function* diBuild2(){ const ry0=Math.atan2(DI.ux,DI.uz);
   // pueblito de galleta: casitas de jengibre con betún y gomitas; la más grande es la Dulcería
   { const gum=['#ff5fa2','#ffd23f','#5ec8ff','#7be07b','#b07cff'].map(h=>wiMat(h)), ice=wiMat('#fffaf5','rgba(0,0,0,.04)'), door=wiMat('#6b3a1e','rgba(20,8,0,.25)');
     const glass=new THREE.MeshStandardMaterial({color:'#ffe9a6', emissive:new THREE.Color('#ffb648'), emissiveIntensity:0, roughness:.4}); fairGlow.push(glass);
-    const houseQ=[]; DI_HOUSES.forEach(([su,sv,w,d,h,wall,roof,shop],hi)=>{ const [x,z]=diS(su,sv), fu=DI_PC[0]-su, fv=DI_PC[1]-sv, fl=Math.hypot(fu,fv), fx=(fu*DI.ux+fv*DI.vx)/fl, fz=(fu*DI.uz+fv*DI.vz)/fl, ry=Math.atan2(fx,fz);
+    for(const [hi,[su,sv,w,d,h,wall,roof,shop]] of DI_HOUSES.entries()){ const [x,z]=diS(su,sv), fu=DI_PC[0]-su, fv=DI_PC[1]-sv, fl=Math.hypot(fu,fv), fx=(fu*DI.ux+fv*DI.vx)/fl, fz=(fu*DI.uz+fv*DI.vz)/fl, ry=Math.atan2(fx,fz);
       const y=groundMin(x,z,Math.max(w,d)*.5)-.1, G=new THREE.Group(); G.position.set(x,y,z); G.rotation.y=ry; scene.add(G); const W=wiMat(wall,'rgba(60,25,5,.22)'), Rf=wiMat(roof,'rgba(0,0,0,.05)');
       wiAdd(G,WI_BOXG,W,0,h/2,0,w,h,d);
       for(const e of [-1,1]){ wiAdd(G,WI_BOXG,ice,e*(w/2+.02),h/2,d/2+.02,.22,h,.22); wiAdd(G,WI_BOXG,ice,e*(w/2+.02),h/2,-d/2-.02,.22,h,.22); }
@@ -12258,8 +12271,7 @@ function* diBuild2(){ const ry0=Math.atan2(DI.ux,DI.uz);
       mergeStatic(G);
       DI2.boxes.push({x, z, ry, hw:w/2+.15, hd:d/2+.15, y1:y+h+rh});
       if(shop) DI2.shopDoor={x:x+fx*(d/2+1.3), z:z+fz*(d/2+1.3)};
-      if(hi===0) DI2.backShop=[x-fx*(d/2+2.2), z-fz*(d/2+2.2)]; houseQ.push(1); });
-    yield;
+      if(hi===0) DI2.backShop=[x-fx*(d/2+2.2), z-fz*(d/2+2.2)]; yield; }   // v145: una casita por paso
     // letrero del pueblito, faroles de bombón y una fuente de chocolate en medio de la plaza
     const G=new THREE.Group(); scene.add(G); const [cx,cz]=diS(DI_PC[0],DI_PC[1]), cy=terrainH(cx,cz)-.05, ch=wiMat('#6b3a1e','rgba(20,8,0,.2)'), chL=wiMat('#8a5232','rgba(20,8,0,.2)');
     wiAdd(G,cylG,chL,cx,cy+.3,cz,3.2,.6,3.2); wiAdd(G,cylG,ch,cx,cy+.62,cz,2.9,.08,2.9); wiAdd(G,cylG,chL,cx,cy+1.2,cz,.45,1.4,.45); wiAdd(G,cylG,chL,cx,cy+1.95,cz,1.6,.25,1.6); wiAdd(G,cylG,chL,cx,cy+2.4,cz,.3,.9,.3); wiAdd(G,cylG,chL,cx,cy+2.95,cz,.85,.2,.85); wiAdd(G,sphereG,wiMat('#d0102c'),cx,cy+3.35,cz,.3,.3,.3);
@@ -12341,6 +12353,9 @@ function di2Tick(dt,t){ if(!DI.done) return; const near=Math.hypot(camera.positi
 // en el mapa: las casitas y la rueda
 function diMapDraw2(g){ if(!DI.done) return; g.fillStyle='#8a4a1e'; for(const B of DI2.boxes){ const [px,py]=toMap(B.x,B.z); g.fillRect(px-2,py-2,4,4); }
   { const [x,z]=diS(DI_WHEEL.su,DI_WHEEL.sv), [px,py]=toMap(x,z); g.strokeStyle='#ff7ab8'; g.lineWidth=2; g.beginPath(); g.arc(px,py,3.5,0,Math.PI*2); g.stroke(); } }
+// v145: el mar cerca de cada isla usa su propio mapa de profundidad (orilla clara y espuma); lejos, el de la isla grande
+function islandSeaDepth(){ const U=seaSurface.material.uniforms; let want=SEA_MAIN_DEPTH; for(const I of [WI,JI,DI]) if(I.depth && I.depthOn) want=I.depth;
+  if(U.uRect.value!==want.rect){ U.uDepth.value=want.tex; U.uRect.value=want.rect; } }
 function wiMapDraw(g){ const E=WI.E, [x0,y0]=toMap(WI.x+E,WI.z+E), s=2*E/(2*MAP_E)*MAP_PX; g.imageSmoothingEnabled=true; g.drawImage(wiMapImage(),x0,y0,s,s);
   // el muelle y la cabaña
   const q=(pts,col)=>{ g.fillStyle=col; g.beginPath(); pts.forEach(([su,sv],i)=>{ const [px,py]=toMap(...wiS(su,sv)); i?g.lineTo(px,py):g.moveTo(px,py); }); g.closePath(); g.fill(); };
@@ -14041,6 +14056,7 @@ function update(dt,t){ myLabelUpdate();
   ji2Tick(dt,t);   // v142: sus actividades
   diTick(dt,t);   // v143: la Isla Dulce
   di2Tick(dt,t);   // v144: sus actividades
+  islandSeaDepth();   // v145: el mar de la isla donde estás (o el de la isla grande)
   pierUpdate(dt,t);
   trUpdate(dt,t);
   fiUpdate(dt,t); blUpdate(dt,t); farmUpdate(dt,t); caveUpdate(dt,t); reliefUpdate(dt);
