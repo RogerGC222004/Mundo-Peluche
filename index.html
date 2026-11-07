@@ -1114,7 +1114,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='141';
+const GAME_VERSION='142';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -1395,12 +1395,17 @@ const jiL=(x,z)=>{ const dx=x-JI.x, dz=z-JI.z; return [dx*JI.ux+dz*JI.uz, dx*JI.
 const JI_VOLC={su:-40, sv:30, h:132, r:170, crater:34, cdepth:26};   // el volcán dormido
 const JI_CAMP={su:JI.rcU-120, sv:42, r:20, b:16, h:null};          // el campamento
 const JI_PLAZA={su:JI.rcU-125, sv:-8, r:14, b:16, h:null};          // claro al llegar del muelle
-const JI_FLATS=[JI_CAMP, JI_PLAZA];
+const JI_TEMPLE={su:215, sv:-60, r:28, b:12, h:null};             // v142: el templo escondido
+const JI_ZIPB={su:JI.rcU-175, sv:22, r:6, b:8, h:null};             // v142: donde termina la tirolesa
+const JI_TREES={su:290, sv:112, r:0, b:0, h:null};                  // v142: los árboles con puentes (sin aplanar)
+const JI_FLATS=[JI_CAMP, JI_PLAZA, JI_TEMPLE, JI_ZIPB];
 const JI_DOCK={s1:JI.rcU*1.085, W:1.9, Y:SEA_Y+2.35, s0:0};
 // el río: nace en una poza en la falda del volcán, baja, cae en cascada a una laguna y sigue hasta el mar
 const JI_RIVER=(()=>{ const pts=[[-40,-180,40],[-22,-228,31],[-2,-262,23.5],[0,-265.5,11],[7,-278,11],[38,-342,8.5],[52,-405,5.2],[62,-470,1.4],[70,-520,-2.5]];   // su, sv, fondo
   const P=pts.map(([su,sv,b])=>{ const [x,z]=jiS(su,sv); return {su,sv,x,z,b}; }), L=[0]; for(let i=1;i<P.length;i++) L.push(L[i-1]+Math.hypot(P[i].su-P[i-1].su,P[i].sv-P[i-1].sv));
-  return {P, L, W:5, pond:{i:0, R:9, lvl:40.75}, lag:{su:7, sv:-278, R:19, lvl:11.75}, fallI:2}; })();
+  return {P, L, W:5, pond:{i:0, R:9, lvl:40.75}, lag:{su:7, sv:-278, R:19, lvl:11.75}, fallI:2, pool:{su:57, sv:-437, R:13, lvl:4.1}}; })();   // v142: poza ancha de las lianas
+const JI_GROTTO={su:30.5, sv:-264.5, r:7.5, b:6, h:JI_RIVER.lag.lvl+1.3};   // v142: la cueva junto a la cascada
+JI_FLATS.push(JI_GROTTO);
 function jiRiverNear(su,sv){ const P=JI_RIVER.P; let best=1e9, s=0, bed=0, seg=0;
   for(let i=0;i<P.length-1;i++){ const a=P[i], b=P[i+1], dx=b.su-a.su, dz=b.sv-a.sv, L2=dx*dx+dz*dz, t=Math.max(0,Math.min(1,((su-a.su)*dx+(sv-a.sv)*dz)/L2)), qx=a.su+dx*t-su, qz=a.sv+dz*t-sv, d=Math.hypot(qx,qz);
     if(d<best){ best=d; s=JI_RIVER.L[i]+t*Math.sqrt(L2); bed=a.b+(b.b-a.b)*t; seg=i; } }
@@ -1417,6 +1422,7 @@ function jiLand(su,sv,x,z){ let h=jiBase(su,sv,x,z);
   // el cauce del río (con su escalón de la cascada), la poza y la laguna
   const R=JI_RIVER, n=jiRiverNear(su,sv);
   if(n.d<R.W+22){ const w=R.W, chan=n.d<w ? n.bed+.75-1.5*(1-(n.d/w)*(n.d/w)) : n.bed+.9+(n.d-w)*.5, k=1-smooth(w+6,w+22,n.d); h=lerp(h,chan,k); }
+  { const C=R.pool, d=Math.hypot(su-C.su,sv-C.sv); if(d<C.R+14){ const bowl=d<C.R ? C.lvl-2.8*(1-(d/C.R)*(d/C.R)) : C.lvl+.4+(d-C.R)*.3; h=lerp(h,Math.min(h,bowl),1-smooth(C.R+3,C.R+14,d)); } }
   { const P=R.P[0], d=Math.hypot(su-P.su,sv-P.sv), C=R.pond; if(d<C.R+16){ const bowl=d<C.R ? C.lvl-2.2*(1-(d/C.R)*(d/C.R)) : C.lvl+.5+(d-C.R)*.35; h=lerp(h,Math.min(h,bowl),1-smooth(C.R+4,C.R+16,d)); } }
   { const C=R.lag, d=Math.hypot(su-C.su,sv-C.sv); if(d<C.R+70){ const A=R.P[R.fallI], B=R.P[R.fallI+1], fl=Math.hypot(B.su-A.su,B.sv-A.sv), tf=((su-B.su)*(B.su-A.su)+(sv-B.sv)*(B.sv-A.sv))/fl, vf=C.lvl+1.4+Math.max(0,d-C.R-6)*.08;
       h=lerp(h,Math.min(h,vf),(1-smooth(C.R+22,C.R+70,d))*smooth(-1.5,2.5,tf)); }   // un vallecito al pie de la cascada
@@ -1437,6 +1443,7 @@ function jiGridH(x,z){ const G=JI.grid; if(!G) return jiExact(x,z);
 // nivel del agua del río, la poza y la laguna (para nadar y para el agua que se ve); null si ahí no hay
 function jiWaterLevel(x,z){ if(x<JI_BOX[0]||x>JI_BOX[2]||z<JI_BOX[1]||z>JI_BOX[3]) return null; const [su,sv]=jiL(x,z), R=JI_RIVER;
   { const C=R.lag; if(Math.hypot(su-C.su,sv-C.sv)<C.R-.3) return C.lvl; }
+  { const C=R.pool; if(Math.hypot(su-C.su,sv-C.sv)<C.R-.3) return C.lvl; }
   { const P=R.P[0]; if(Math.hypot(su-P.su,sv-P.sv)<R.pond.R-.3) return R.pond.lvl; }
   const n=jiRiverNear(su,sv); if(n.seg===R.fallI) return null;   // en el escalón de la cascada no hay agua para nadar
   if(n.d<R.W && n.bed+.75>SEA_Y+.05) return n.bed+.75;
@@ -2843,7 +2850,7 @@ function groundAt(x,z,y){
   if(FI_GROUND){ const fg=FI_GROUND(x,z,y); if(fg!==null && fg>g) g=fg; }   // islas flotantes
   if(SHIP_GROUND){ const sg=SHIP_GROUND(x,z,y); if(sg!==null && sg>g) g=sg; }   // v138: la cubierta del barco
   if(WI_DOCK_GROUND){ const wg=WI_DOCK_GROUND(x,z,y); if(wg!==null && wg>g) g=wg; }   // v139: el muelle de la Isla Invierno
-  if(JI_DOCK_GROUND){ const jg=JI_DOCK_GROUND(x,z,y); if(jg!==null && jg>g) g=jg; const jd=JI_DECK_GROUND(x,z,y); if(jd!==null && jd>g) g=jd; }   // v141: muelle y mirador de la Isla Selva
+  if(JI_DOCK_GROUND){ const jg=JI_DOCK_GROUND(x,z,y); if(jg!==null && jg>g) g=jg; const jd=JI_DECK_GROUND(x,z,y); if(jd!==null && jd>g) g=jd; const jf=jiFloor(x,z,y); if(jf!==null && jf>g) g=jf; }   // v141: muelle y mirador de la Isla Selva
   for(const o of obsNear(x,z)){
     if(!o.walk) continue;
     const dx=x-o.x, dz=z-o.z;
@@ -3580,7 +3587,8 @@ tap(camChip,()=>{ const M=player.mg;
 hold(ui('tJump'),()=>{ touchHold.up=true; jump(); },()=>{ touchHold.up=false; });
 hold(ui('tDive'),()=>{ touchHold.down=true; startDive(); },()=>{ touchHold.down=false; });
 
-function jump(){ if(player.busy) return; if(player.mg || (typeof SP!=='undefined' && SP.on)) return; if(hook.mode>=2){ bowRelease(); return; } if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see')){ stopPlay(); return; } if(player.grounded && !player.dive && !player.swim && !player.car && !player.ac && !player.pg){ player.vy=trOnMat(player.pos.x,player.pos.z,player.pos.y)?9.5:7.2; player.grounded=false; audio.jump(); } }
+function jump(){ if(player.pg && player.pg.k==='vine'){ jiVineRelease(); return; }   // v142: soltar la liana
+  if(player.busy) return; if(player.mg || (typeof SP!=='undefined' && SP.on)) return; if(hook.mode>=2){ bowRelease(); return; } if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see')){ stopPlay(); return; } if(player.grounded && !player.dive && !player.swim && !player.car && !player.ac && !player.pg){ player.vy=trOnMat(player.pos.x,player.pos.z,player.pos.y)?9.5:7.2; player.grounded=false; audio.jump(); } }
 
 addEventListener('keydown',e=>{
   if(state!=='play'){ return; }
@@ -4881,6 +4889,7 @@ function scanActions(){
   if(SP.on){ const sa=spaceActions(); setActions(sa?sa[0]:null, sa?sa[1]:null); return; }
   if(iSteer() || (player.pg && player.pg.k==='sled')){ const [x,y]=pgActions(); setActions(x,y); return; }   // v138: en el timón · v140: en el trineo
   { const wa=wiActions(); if(wa){ setActions(wa[0],wa[1]); return; } }   // v140: Isla Invierno
+  { const ja=jiActions(); if(ja){ setActions(ja[0],ja[1]); return; } }   // v142: Isla Selva
   { const ra=rocketActions(); if(ra){ setActions(ra[0],ra[1]); return; } }
   { const la=blActions(); if(la){ setActions(la[0],la[1]); return; } }
   { const mv=mineActions(); if(mv){ setActions(mv[0],mv[1]); return; } }
@@ -5070,7 +5079,7 @@ function updateCarHud(){
 // Botones táctiles: a pie (saltar, tirarse…) o en coche (acelerar, frenar)
 function updateTouchMode(){
   const inCar=!!player.car, pilot=typeof iPilot==='function' && iPilot(), aboard=!!player.ac, seatedAir=aboard && player.ac.mode==='seated';
-  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && (player.pg.k==='cuco' || player.pg.k==='helm' || player.pg.k==='sled'));
+  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && (player.pg.k==='cuco' || player.pg.k==='helm' || player.pg.k==='sled' || player.pg.k==='zip'));
   ui('tcar').hidden=!((inCar && player.car.kind==='seated') || pilot);
   const drv=(inCar && player.car.seat===0) || pilot;
   ui('tGas').hidden=!drv; ui('tBrake').hidden=!drv; ui('tLights').hidden=!(inCar && player.car.seat===0);
@@ -5814,7 +5823,7 @@ function trRemotePose(r,t,dt){ if(r.tz && r.tz[2]) pgPoseLimbs(r.obj,{climb:(per
 let myPush={i:-1,t:0}; player.pushUntil=0;
 function pgOccupied(k,i){ if(player.pg && player.pg.k===k && player.pg.i===i) return 'me';
   for(const r of mp.remotes.values()) if(r.pl && r.pl[0]===PG_KINDS.indexOf(k) && r.pl[1]===i) return r; return null; }
-const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled'];
+const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled','zip','vine'];
 function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars' && k!=='cart') return;
   holding=false; applyHeld(); renderHotbar();
   player.pg={k,i,t0:performance.now()/1000, from:[player.pos.x,player.pos.y,player.pos.z]};
@@ -5841,6 +5850,7 @@ function playPose(k,i,v,dt){
   if(k==='cuco') return cucoSeatPose(i);
   if(k==='cart'){ const q=MC.at(v); return {pos:[q.x,q.y+.2,q.z], yaw:q.yaw, sit:1, grip:1}; }
   if(k==='helm') return helmPose();   // v138
+  if(k==='zip') return jiZipPose(v); if(k==='vine') return jiVinePose(i,v);   // v142
   if(k==='bench'){ const b=BENCHES[i]; if(!b) return null; const c=Math.cos(b.yaw), s=Math.sin(b.yaw); return {pos:[b.x-s*.12, b.y-.415, b.z-c*.12], yaw:b.yaw, sit:1}; }
   if(k==='swing'){ const e=PG_EQ.swings, [ry,rz]=rotX(-e.L-.415,-.06,-v);
     return {pos:eqToWorld(e,e.seats[i],e.pivot+ry,rz), yaw:e.yaw, tilt:-v, sit:1, holdUp:1}; }
@@ -5868,7 +5878,8 @@ function updateMyPlay(dt){
   if(P.k==='cuco') return cucoRide(P,el);
   if(P.k==='cart') return mcRide(P,dt);   // v137
   if(P.k==='helm'){ P.v=0; return helmPose(); }
-  if(P.k==='sled') return wiSledRide(P,dt);   // v140   // v138: el barco se mueve en shipUpdate
+  if(P.k==='sled') return wiSledRide(P,dt);   // v140
+  if(P.k==='zip') return jiZipRide(P,dt); if(P.k==='vine') return jiVineRide(P,dt);   // v142   // v138: el barco se mueve en shipUpdate
   if(P.k==='swing'){ const S=pgState.swing[P.i];
     S.w += (-(9.8/PG_EQ.swings.L)*Math.sin(S.a) - .12*S.w)*dt;
     if(inp>.1){ if(Math.abs(S.w)<.08 && Math.abs(S.a)<.05) S.w+=.6*inp; else S.w+=Math.sign(S.w)*1.25*inp*dt; }
@@ -5944,7 +5955,8 @@ function updateRemoteInPlay(r,dt,t){
   if(k==='sled') return wiRemoteSled(r,dt,t);   // v140: en su trineo
   if(k==='slide'||k==='bars'){ const key=d[0]+':'+d[1]; if(r.pgK!==key || Math.abs(r.pgEl-d[2])>.35) r.pgEl=d[2]; else r.pgEl+=dt; r.pgK=key; v=r.pgEl; }
   else if(k==='cart'){ r.pgK=null; if(r.mcS===undefined || Math.abs(r.mcS-d[2])>4) r.mcS=d[2]; else r.mcS+=dt*4.2+(d[2]-r.mcS)*Math.min(1,dt*3); v=r.mcS; }
-  else { r.pgK=null; v = k==='swing' ? pgState.swing[d[1]].a : k==='ride' ? pgState.rider[d[1]].a : 0; }
+  else if(k==='zip'){ r.pgK=null; if(r.zipS===undefined || Math.abs(r.zipS-d[2])>.08) r.zipS=d[2]; else r.zipS+=(d[2]-r.zipS)*Math.min(1,dt*6); v=r.zipS; }   // v142
+  else { r.pgK=null; v = k==='swing' ? pgState.swing[d[1]].a : k==='ride' ? pgState.rider[d[1]].a : k==='vine' ? d[2] : 0; }
   const pose=playPose(k,d[1],v,dt); if(!pose || pose.done) return false;
   if(k==='cart') mcRemoteCart(r,pose);
   placePlay(r.obj,pose); r.pos.set(...pose.pos); r.target.set(...pose.pos);
@@ -11498,7 +11510,7 @@ function* jiBuildGen(){
       if(cc>.84 && h<3.2){ const bk=smooth(.83,.9,cc)*(1-smooth(2,3.2,h)); c.lerp(SAND,bk); }   // playa de arena blanca
       if(cc<.9){ const pd=jiPathD(x,z); if(pd<3.6) c.lerp(pd<2.1?MUD:MUDE, 1-smooth(2.1,3.6,pd)); }   // caminos de tierra
       { const rn=jiRiverNear(su,sv); if(rn.d<JI_RIVER.W+4){ const bk=1-smooth(JI_RIVER.W,JI_RIVER.W+4,rn.d); c.lerp(PEB,bk*.8); if(rn.d<JI_RIVER.W) c.lerp(RBED,.7); } }
-      for(const C of [JI_RIVER.lag,{su:JI_RIVER.P[0].su,sv:JI_RIVER.P[0].sv,R:JI_RIVER.pond.R}]){ const d=Math.hypot(su-C.su,sv-C.sv); if(d<C.R+4) c.lerp(d<C.R?RBED:PEB, 1-smooth(C.R,C.R+4,d)); }
+      for(const C of [JI_RIVER.lag,JI_RIVER.pool,{su:JI_RIVER.P[0].su,sv:JI_RIVER.P[0].sv,R:JI_RIVER.pond.R}]){ const d=Math.hypot(su-C.su,sv-C.sv); if(d<C.R+4) c.lerp(d<C.R?RBED:PEB, 1-smooth(C.R,C.R+4,d)); }
       if(h<SEA_Y && cc>.95){ c.lerp(WET, smooth(SEA_Y,SEA_Y-1,h)); }
       if(cc>1){ c.lerp(SEAF, smooth(1,1.05,cc)); c.lerp(DEEP, smooth(-6,-40,h)); }
       const cv=(i>0&&i<N&&j>0&&j<N)?(h-(H[k-1]+H[k+1]+H[k-W]+H[k+W])/4)/CS:0, lum=THREE.MathUtils.clamp(.92+cv*2.6,.72,1.12);
@@ -11520,6 +11532,7 @@ function* jiBuildGen(){
   jiBuildDock(); yield;
   jiBuildCamp(); yield;
   jiBuildVolcano(); yield;
+  yield* jiBuild2();   // v142: las actividades
   { const N=MIN_Q?160:256, E=JI.E, data=new Uint8Array(N*N);
     for(let j=0;j<N;j++){ for(let i=0;i<N;i++){ const x=JI.x-E+2*E*(i+.5)/N, z=JI.z-E+2*E*(j+.5)/N; data[j*N+i]=Math.round(THREE.MathUtils.clamp((SEA_Y-terrainH(x,z)+2)/12,0,1)*255); } if(j%40===39) yield; }
     const t=new THREE.DataTexture(data,N,N,THREE.LuminanceFormat); t.magFilter=t.minFilter=THREE.LinearFilter; t.generateMipmaps=false; t.needsUpdate=true; JI.depth={tex:t, rect:new THREE.Vector4(JI.x-E,JI.z-E,2*E,2*E)}; }
@@ -11539,7 +11552,7 @@ function jiBuildWater(){ const R=JI_RIVER, P=R.P;
   const total=R.L[R.L.length-1];
   for(let s=0;s<=total;s+=2.5){ let i=0; while(i<P.length-2 && R.L[i+1]<s) i++; const a=P[i], b=P[i+1], t=(s-R.L[i])/(R.L[i+1]-R.L[i]), su=a.su+(b.su-a.su)*t, sv=a.sv+(b.sv-a.sv)*t, bed=a.b+(b.b-a.b)*t, lv=bed+.75;
     if(lv<=SEA_Y+.06) break;
-    if(i===R.fallI || Math.hypot(su-R.lag.su,sv-R.lag.sv)<R.lag.R-3 || Math.hypot(su-P[0].su,sv-P[0].sv)<R.pond.R-3){ prev=false; continue; }
+    if(i===R.fallI || Math.hypot(su-R.pool.su,sv-R.pool.sv)<R.pool.R-3 || Math.hypot(su-R.lag.su,sv-R.lag.sv)<R.lag.R-3 || Math.hypot(su-P[0].su,sv-P[0].sv)<R.pond.R-3){ prev=false; continue; }
     let dx=b.su-a.su, dz=b.sv-a.sv; const l=Math.hypot(dx,dz)||1; dx/=l; dz/=l; const sl=(a.b-b.b)/l, sp=.9+smooth(.05,.3,sl)*3.4;
     for(let k=0;k<K;k++){ const w=(-1+2*k/(K-1))*HW, [x,z]=jiS(su-dz*w, sv+dx*w); pos.push(x,lv,z); const [fx,fz]=[dx*JI.ux+dz*JI.vx, dx*JI.uz+dz*JI.vz]; fl.push(fx*sp,fz*sp,smooth(.05,.3,sl)*(1-Math.abs(w)/HW*.6)); }
     if(prev){ const r0=(rows-1)*K, r1=rows*K; for(let k=0;k<K-1;k++) idx.push(r0+k, r0+k+1, r1+k, r0+k+1, r1+k+1, r1+k); }
@@ -11548,7 +11561,7 @@ function jiBuildWater(){ const R=JI_RIVER, P=R.P;
   const rib=new THREE.Mesh(g,mat); rib.renderOrder=2; scene.add(rib);
   const disc=(su,sv,Rr,lv)=>{ const dg=ringGeometry(Rr+1.5,MIN_Q?10:18,MIN_Q?32:56,1.2), q=dg.attributes.position, f=new Float32Array(q.count*3); dg.setAttribute('aFlow',new THREE.BufferAttribute(f,3));
     const [x,z]=jiS(su,sv), m=new THREE.Mesh(dg,mat); m.position.set(x,lv,z); m.renderOrder=2; scene.add(m); return m; };
-  disc(P[0].su,P[0].sv,R.pond.R,R.pond.lvl); disc(R.lag.su,R.lag.sv,R.lag.R,R.lag.lvl);
+  disc(P[0].su,P[0].sv,R.pond.R,R.pond.lvl); disc(R.lag.su,R.lag.sv,R.lag.R,R.lag.lvl); disc(R.pool.su,R.pool.sv,R.pool.R,R.pool.lvl);
   // la cascada
   const a=P[R.fallI], b=P[R.fallI+1], top=a.b+.75, FH=top-R.lag.lvl+.3, FW=R.W*2-1; let dx=b.su-a.su, dz=b.sv-a.sv; { const l=Math.hypot(dx,dz)||1; dx/=l; dz/=l; }
   const cols=6, rws=Math.max(10,Math.round(FH/1.2)), fp=[], fu=[], fi=[];
@@ -11585,7 +11598,7 @@ function* jiBuildPlants(){ const q={min:.35, low:.6, mid:.8, high:1, max:1}[Q0]|
     const x=JI.x+gx+(r1-.5)*6, z=JI.z+gz+(r2-.5)*6, lx=x-JI.x, lz=z-JI.z, cc=Math.hypot(lx,lz)/jiCoastR(Math.atan2(lz,lx)); if(cc>.92) continue;
     const [su,sv]=jiL(x,z); if(near(su,sv,JI_CAMP,6) || near(su,sv,JI_PLAZA,4)) continue; if(su>JI_PLAZA.su && su<JI.rcU+5 && Math.abs(sv)<10) continue;
     const h=jiGridH(x,z); if(h<1.2 || jiWaterLevel(x,z)!==null) continue; const pd=jiPathD(x,z); if(pd<3.5) continue;
-    const rn=jiRiverNear(su,sv); if(rn.d<JI_RIVER.W+2) continue; if(Math.hypot(su-JI_RIVER.lag.su,sv-JI_RIVER.lag.sv)<JI_RIVER.lag.R+4) continue;
+    const rn=jiRiverNear(su,sv); if(rn.d<JI_RIVER.W+2) continue; if(jiNoTree(su,sv,x,z)) continue;   // v142: tirolesa, puentes, templo, cueva, lianas, frutas if(Math.hypot(su-JI_RIVER.lag.su,sv-JI_RIVER.lag.sv)<JI_RIVER.lag.R+4) continue;
     const sl=Math.hypot(jiGridH(x+2,z)-jiGridH(x-2,z), jiGridH(x,z+2)-jiGridH(x,z-2))/4;
     if(sl>.6 || h>95){ if(r3<.05) rocks.push([x,z,1+r2*1.6,r1*6.28]); continue; }
     if(cc>.8 || h<3){ if(r3<.22*q) palms.push([x,z,.85+r1*.4,r2*6.28]); else if(r3>.96) ferns.push([x,z,.7+r1*.5,r2*6.28]); continue; }   // en la playa: palmeras
@@ -11694,6 +11707,234 @@ function jiMapImage(){ if(JI.mapImg) return JI.mapImg; const N=MIN_Q?160:240, E=
   g.putImageData(im,0,0); JI.mapImg=c; return c; }
 function jiMapDraw(g){ const E=JI.E, [x0,y0]=toMap(JI.x+E,JI.z+E), s=2*E/(2*MAP_E)*MAP_PX; g.imageSmoothingEnabled=true; g.drawImage(jiMapImage(),x0,y0,s,s);
   const D=JI_DOCK; g.fillStyle='#8a6a3e'; g.beginPath(); [[D.s0,-D.W-.6],[D.s1,-D.W-.6],[D.s1,D.W+.6],[D.s0,D.W+.6]].forEach(([su,sv],i)=>{ const [px,py]=toMap(...jiS(su,sv)); i?g.lineTo(px,py):g.moveTo(px,py); }); g.closePath(); g.fill(); }
+// ======================================================================================
+// ---------- v142: Isla Selva Aventura, parte 2 (las actividades) ----------
+// ======================================================================================
+// Tirolesa · puentes colgantes con casitas · templo con palancas y cofre · cueva junto a la cascada · lianas sobre la poza
+// · tucanes, monitos, ranitas y mariposas · frutas para juntar y un puestito para venderlas
+const JI2={zip:null, vines:[], gates:[false,false], gateM:[], lev:[], chest:null, gems:null, fruit:{coco:0,mango:0,platano:0}, spots:[], animals:[], fire:[], butter:null};
+{ const f=wiSave().fruta; if(f && typeof f==='object') for(const k of ['coco','mango','platano']) JI2.fruit[k]=Math.max(0,Math.min(99,f[k]|0)); }
+const JI_TH=(()=>{ const C=JI_TREES; return [[C.su+10,C.sv-17,8.5],[C.su-2,C.sv+10,9.5],[C.su-26,C.sv-2,9],[C.su-12,C.sv-26,8.2]]; })();   // árboles gigantes con plataforma (su, sv, altura)
+const JI_POOLX=(()=>{ const P=JI_RIVER.P, a=P[6], b=P[7], l=Math.hypot(b.su-a.su,b.sv-a.sv), dx=(b.su-a.su)/l, dz=(b.sv-a.sv)/l; return {dx, dz, px:dz, pz:-dx}; })();   // dirección del río en la poza y la de cruzar
+JI_PATHS.push([[JI_PLAZA.su-JI_PLAZA.r+2,-14],[JI_TEMPLE.su+40,JI_TEMPLE.sv+6],[JI_TEMPLE.su+31,JI_TEMPLE.sv]].map(([su,sv])=>jiS(su,sv)));   // al templo
+JI_PATHS.push([[JI_CAMP.su-4,JI_CAMP.sv+JI_CAMP.r-2],[JI_TREES.su+30,JI_TREES.sv-10],[JI_TH[0][0]+12,JI_TH[0][1]-6]].map(([su,sv])=>jiS(su,sv)));   // a los puentes
+JI_PATHS.push([[JI_PLAZA.su-JI_PLAZA.r,4],[JI_ZIPB.su+4,JI_ZIPB.sv]].map(([su,sv])=>jiS(su,sv)));   // a la tirolesa
+JI_PATHS.push([[150,-235],[110,-330],[JI_RIVER.pool.su+18,JI_RIVER.pool.sv+6]].map(([su,sv])=>jiS(su,sv)));   // a la poza de las lianas
+const JI_ZIPLINE={a:null, b:null, L:0, sag:7};   // a: arriba (el mirador del volcán), b: abajo; se calcula al armar
+function jiNoTree(su,sv,x,z){
+  if(Math.hypot(su-JI_TEMPLE.su,sv-JI_TEMPLE.sv)<JI_TEMPLE.r+14) return true;
+  if(Math.hypot(su-JI_TREES.su,sv-JI_TREES.sv)<40) return true;
+  if(Math.hypot(su-JI_GROTTO.su,sv-JI_GROTTO.sv)<16) return true;
+  if(Math.hypot(su-JI_RIVER.pool.su,sv-JI_RIVER.pool.sv)<JI_RIVER.pool.R+14) return true;
+  if(Math.hypot(su-JI_ZIPB.su,sv-JI_ZIPB.sv)<14) return true;
+  { const ax=JI_VOLC.su+JI_VOLC.crater, ay=JI_VOLC.sv, bx=JI_ZIPB.su, by=JI_ZIPB.sv, dx=bx-ax, dy=by-ay, t=Math.max(0,Math.min(1,((su-ax)*dx+(sv-ay)*dy)/(dx*dx+dy*dy))); if(Math.hypot(ax+dx*t-su,ay+dy*t-sv)<9) return true; }   // debajo del cable
+  for(const F of JI_FRUITS) if(Math.hypot(su-F.su,sv-F.sv)<5) return true;
+  return false; }
+// frutas: árboles de mango, matas de plátano y palmeras con cocos (se vuelven a llenar en 5 minutos)
+const JI_FRUITS=(()=>{ const C=JI_CAMP, out=[];
+  [[18,30],[26,22],[30,36],[12,42]].forEach(([a,b])=>out.push({k:'mango', su:C.su+a, sv:C.sv+b}));
+  [[-14,30],[-20,22],[-8,38]].forEach(([a,b])=>out.push({k:'platano', su:C.su+a, sv:C.sv+b}));
+  [[48,58],[52,74],[44,90],[50,104]].forEach(([a,b])=>out.push({k:'coco', su:JI.rcU-a, sv:b}));
+  return out; })();
+const JI_FRUIT_N={coco:'cocos', mango:'mangos', platano:'plátanos'}, JI_FRUIT_P={coco:5, mango:4, platano:3}, JI_STAND={su:JI_CAMP.su+14, sv:JI_CAMP.sv-14};
+const JI_BOXES=[];   // paredes del templo (en coordenadas de la isla)
+function jiCollide(p){ if(Math.abs(p.x-JI.x)>JI.E || Math.abs(p.z-JI.z)>JI.E || !JI.done) return; let [su,sv]=jiL(p.x,p.z);
+  for(const B of JI_BOXES){ if(B.gate!==undefined && JI2.gates[B.gate]) continue; if(p.y>B.y1) continue; const ex=.38, du=su-B.su, dv=sv-B.sv; if(Math.abs(du)<B.hd+ex && Math.abs(dv)<B.hw+ex){ const pu=B.hd+ex-Math.abs(du), pv=B.hw+ex-Math.abs(dv);
+      if(pu<pv) su=B.su+Math.sign(du||1)*(B.hd+ex); else sv=B.sv+Math.sign(dv||1)*(B.hw+ex); const [x,z]=jiS(su,sv); p.x=x; p.z=z; } }
+  if(JI2.grotto){ const G=JI2.grotto, dx=p.x-G.x, dz=p.z-G.z, d=Math.hypot(dx,dz); if(d>G.R-1.2 && d<G.R+1.2 && p.y<G.y+4){ const a=Math.atan2(dx,dz), off=Math.abs(Math.atan2(Math.sin(a-G.face),Math.cos(a-G.face))); if(off>.42){ const k=(d<G.R?G.R-1.2:G.R+1.2)/d; p.x=G.x+dx*k; p.z=G.z+dz*k; } } } }
+// pisos: plataformas de los árboles, puentes, rampa, pirámide del templo y piso de la cueva
+let JI_TREE_PL=[], JI_BRIDGES=[];
+function jiFloor(x,z,y){ if(!JI.done || x<JI_BOX[0]||x>JI_BOX[2]||z<JI_BOX[1]||z>JI_BOX[3]) return null; let best=null;
+  for(const P of JI_TREE_PL){ const d=Math.hypot(x-P.x,z-P.z); if(d<P.R && y>=P.y-.9 && (best===null||P.y>best)) best=P.y; }
+  for(const B of JI_BRIDGES){ const dx=B.bx-B.ax, dz=B.bz-B.az, L2=dx*dx+dz*dz, t=((x-B.ax)*dx+(z-B.az)*dz)/L2; if(t<0||t>1) continue; const qx=B.ax+dx*t-x, qz=B.az+dz*t-z; if(qx*qx+qz*qz>B.W*B.W) continue;
+    const yy=B.ay+(B.by-B.ay)*t-B.sag*4*t*(1-t); if(y>=yy-.9 && (best===null||yy>best)) best=yy; }
+  const T=JI2.pyr; if(T){ const [su,sv]=jiL(x,z), lx=sv-T.sv, lz=su-T.su, m=Math.max(Math.abs(lx),Math.abs(lz)); if(m<T.half){ let yy=T.y+Math.min(T.steps,Math.floor((T.half-m)/T.sw)+1)*T.sh;
+      if(lz>0 && Math.abs(lx)<T.stairW) yy=Math.max(T.y+.05, Math.min(T.y+T.steps*T.sh, T.y+(T.half-lz)/(T.half-T.top)*T.steps*T.sh));   // escalinata
+      if(y>=yy-1.8 && (best===null||yy>best)) best=yy; } }
+  if(JI2.grotto){ const G=JI2.grotto; if(Math.hypot(x-G.x,z-G.z)<G.R && y>=G.y-1 && (best===null||G.y>best)) best=G.y; }
+  return best; }
+// ---- tirolesa ----
+function jiZipPt(s){ const Z=JI_ZIPLINE, a=Z.a, b=Z.b; return [a[0]+(b[0]-a[0])*s, a[1]+(b[1]-a[1])*s-Z.sag*4*s*(1-s), a[2]+(b[2]-a[2])*s]; }
+function jiZipPose(s){ const p=jiZipPt(s), Z=JI_ZIPLINE; return {pos:[p[0],p[1]-2.05,p[2]], yaw:Math.atan2(Z.b[0]-Z.a[0],Z.b[2]-Z.a[2]), armsUp:1, sit:.35}; }
+function jiZipStart(){ startPlay('zip',0); const P=player.pg; P.zip={s:0, v:2, t0:performance.now()/1000}; yaw=Math.atan2(JI_ZIPLINE.b[0]-JI_ZIPLINE.a[0],JI_ZIPLINE.b[2]-JI_ZIPLINE.a[2])+Math.PI; flashNote('¡Agárrate fuerte! 🪢'); try{ audio.slide(); }catch(e){} }
+function jiZipRide(P,dt){ const Z=P.zip, L=JI_ZIPLINE.L, e=.002, p0=jiZipPt(Math.max(0,Z.s-e)), p1=jiZipPt(Math.min(1,Z.s+e)), slope=(p0[1]-p1[1])/(2*e*L);
+  Z.v+=(9.8*slope*.9-.06*Z.v-.012*Z.v*Z.v)*dt; if(Z.s>.93) Z.v=Math.max(2.5,Z.v-dt*14); Z.v=Math.max(1.5,Math.min(21,Z.v)); Z.s+=Z.v*dt/L; P.v=Math.round(Z.s*1000)/1000;
+  if(performance.now()-lastLookT>1500) yaw=lerpAng(yaw, Math.atan2(JI_ZIPLINE.b[0]-JI_ZIPLINE.a[0],JI_ZIPLINE.b[2]-JI_ZIPLINE.a[2])+Math.PI, 1-Math.exp(-dt*2));
+  if(Z.s>=1){ Z.s=1; setTimeout(()=>{ if(player.pg===P){ stopPlay(); const [x,z]=jiS(JI_ZIPB.su+3,JI_ZIPB.sv+2); player.pos.set(x,terrainH(x,z)+.05,z); try{ audio.land(.6); }catch(e){} } },0); }
+  return jiZipPose(Z.s); }
+// ---- lianas ----
+function jiVinePivot(i){ const C=JI_RIVER.pool, X=JI_POOLX, off=(i-1)*8.5, [x,z]=jiS(C.su+X.px*off, C.sv+X.pz*off); return [x, C.lvl+10.5, z]; }
+function jiVinePose(i,a){ const [x,y,z]=jiVinePivot(i), X=JI_POOLX, L=8.2, wx=X.px*JI.ux+X.pz*JI.vx, wz=X.px*JI.uz+X.pz*JI.vz;
+  return {pos:[x+wx*Math.sin(a)*L, y-Math.cos(a)*L-1.9, z+wz*Math.sin(a)*L], yaw:Math.atan2(wx,wz), armsUp:1, tilt:-a*.6}; }
+function jiVineStart(){ startPlay('vine',0); const P=player.pg; P.vine={i:0, a:-.55, w:1.6}; flashNote(isTouch?'Toca «Soltar» cuando vayas hacia adelante y llegues arriba':'Suelta (E o el botón) cuando vayas hacia adelante y llegues arriba'); try{ audio.jump(); }catch(e){} }
+function jiVineRide(P,dt){ const V=P.vine, L=8.2; V.w+=(-9.8/L*Math.sin(V.a))*dt; if(Math.abs(V.a)<.62) V.w+=Math.sign(V.w||1)*.35*dt; V.a+=V.w*dt; P.i=V.i; P.v=Math.round(V.a*100)/100;
+  if(JI2.vines[V.i]) JI2.vines[V.i].rotation.set(0,0,0);
+  return jiVinePose(V.i,V.a); }
+function jiVineRelease(){ const P=player.pg; if(!P || P.k!=='vine') return; const V=P.vine;
+  if(V.w>.4 && V.a>.32){ if(V.i<2){ V.i++; P.i=V.i; V.a=-.5; V.w=1.4; try{ audio.jump(); }catch(e){} flashNote(V.i===1?'¡Bien! Una más…':'¡Ya casi!'); try{ sendPresence(true); }catch(e){} }
+    else { stopPlay(); const C=JI_RIVER.pool, X=JI_POOLX, [x,z]=jiS(C.su+X.px*(C.R+3.5), C.sv+X.pz*(C.R+3.5)); player.pos.set(x,terrainH(x,z)+.05,z); try{ audio.land(.7); }catch(e){} bigText('¡Cruzaste!',1800,'Lianas'); } }
+  else { const p=jiVinePose(V.i,V.a).pos; stopPlay(); player.pos.set(p[0],JI_RIVER.pool.lvl-.6,p[2]); player.vy=0; player.swim=true; player.grounded=false; try{ audio.splash(1); }catch(e){} flashNote('¡Splash! Suelta cuando vayas subiendo hacia adelante'); } }
+// ---- armar todo (dentro del armado poco a poco) ----
+function* jiBuild2(){
+  const stone=wiMat('#9c958a','rgba(30,30,20,.22)'), stoneD=wiMat('#837c72','rgba(30,30,20,.25)'), moss=wiMat('#6f9a46','rgba(20,50,10,.2)'), wood=wiMat('#9a6a3e','rgba(50,25,5,.25)'), woodD=wiMat('#6b4a2e','rgba(40,20,5,.25)'), rope=wiMat('#c9a86a','rgba(80,60,20,.2)'), leaf=wiMat('#4fa843','rgba(20,60,10,.15)');
+  // tirolesa: poste alto en el mirador, cable, estación abajo
+  { const M=JI.mirador, G=new THREE.Group(); scene.add(G); const [bx,bz]=jiS(JI_ZIPB.su,JI_ZIPB.sv), by=terrainH(bx,bz);
+    const dd=Math.hypot(bx-M.x,bz-M.z), ax=M.x+(bx-M.x)/dd*2.6, az=M.z+(bz-M.z)/dd*2.6, ay=M.y+5.6;
+    JI_ZIPLINE.a=[ax,ay,az]; JI_ZIPLINE.b=[bx,by+5.2,bz]; JI_ZIPLINE.L=Math.hypot(bx-ax,by+5.2-ay,bz-az);
+    for(const [x,y,z,h] of [[ax,M.y,az,6.2],[bx,by-.05,bz,5.8]]){ wiAdd(G,cylG,woodD,x,y+h/2,z,.2,h,.2); wiAdd(G,WI_BOXG,woodD,x,y+h-.3,z,1.4,.18,.18,Math.atan2(bx-ax,bz-az)+Math.PI/2); obstacles.push({x,z,r:.3,top:y+60,walk:false}); }
+    const N=40, pts=[]; for(let i=0;i<=N;i++){ const p=jiZipPt(i/N); pts.push(new THREE.Vector3(p[0],p[1],p[2])); }
+    const cable=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),80,.05,5,false), wiMat('#3a3d44')); G.add(cable);
+    jiSign(G,bx+JI.vx*1.5,bz+JI.vz*1.5,by+1.9,Math.atan2(JI.ux,JI.uz),'Tirolesa ⬆','#2f7a3a',2.4);
+    const pul=new THREE.Group(); wiAdd(pul,cylG,wiMat('#e5534b'),0,0,0,.18,.12,.18).rotation.x=Math.PI/2; wiAdd(pul,cylG,rope,0,-1,0,.03,2,.03); wiAdd(pul,WI_BOXG,wiMat('#e5534b'),0,-2.05,0,.5,.08,.08); pul.userData.noBatch=true; pul.visible=false; scene.add(pul); JI2.pulley=pul;
+    JI2.zipTop={x:M.x, z:M.z}; JI2.zipBot={x:bx, z:bz};
+    mergeStatic(G); }
+  yield;
+  // árboles gigantes con plataformas, casitas y puentes colgantes
+  { const G=new THREE.Group(); scene.add(G); JI_TREE_PL=[]; JI_BRIDGES=[];
+    JI_TH.forEach(([su,sv,hh],k)=>{ const [x,z]=jiS(su,sv), g=terrainH(x,z), y=g+hh;
+      wiAdd(G,cylG,wiMat('#7d5d3c','rgba(40,20,5,.25)'),x,g+9,z,1,18,1); wiAdd(G,WI_CONEG,wiMat('#7d5d3c','rgba(40,20,5,.25)'),x,g+.8,z,2,1.8,2);
+      wiAdd(G,sphereG,wiMat('#4c9a3b','rgba(20,60,10,.15)'),x,g+19,z,6.5,3.6,6.5); wiAdd(G,sphereG,wiMat('#5aad45','rgba(20,60,10,.15)'),x+3,g+17.5,z+1.5,4.2,2.6,4.2); wiAdd(G,sphereG,wiMat('#43893a','rgba(20,60,10,.15)'),x-2.6,g+18,z-2,4.4,2.8,4.4);
+      wiAdd(G,cylG,wood,x,y-.12,z,3.4,.24,3.4); for(let q=0;q<10;q++){ const a=q/10*Math.PI*2; wiAdd(G,cylG,woodD,x+Math.cos(a)*3.2,y+.45,z+Math.sin(a)*3.2,.06,.9,.06); }
+      for(let q=0;q<6;q++){ const a=q/6*Math.PI*2+.3, b=wiAdd(G,cylG,woodD,x+Math.cos(a)*2.2,y-1.2,z+Math.sin(a)*2.2,.1,2.6,.1); b.rotation.set(Math.sin(a)*.6,0,-Math.cos(a)*.6); }
+      if(k===1||k===3){ wiAdd(G,WI_CONEG,wiMat('#c9a35a','rgba(80,60,20,.2)'),x+1.4,y+3.2,z,2.2,1.6,2.2); for(const [a,b] of [[2.6,1],[2.6,-1],[.2,1],[.2,-1]]) wiAdd(G,cylG,woodD,x+a*.9,y+1.2,z+b*1.4,.07,2.4,.07); }
+      JI_TREE_PL.push({x, z, y:y+.01, R:3.3}); obstacles.push({x,z,r:1.05,top:g+40,walk:false}); });
+    const pl=JI_TREE_PL; [[0,1],[1,2],[2,3],[3,0]].forEach(([i,j])=>{ const A=pl[i], B=pl[j], d=Math.hypot(B.x-A.x,B.z-A.z), ux=(B.x-A.x)/d, uz=(B.z-A.z)/d;
+      const br={ax:A.x+ux*3, az:A.z+uz*3, ay:A.y, bx:B.x-ux*3, bz:B.z-uz*3, by:B.y, W:.75, sag:.9}; JI_BRIDGES.push(br);
+      const L=Math.hypot(br.bx-br.ax,br.bz-br.az), n=Math.max(6,Math.round(L/.6)), ry=Math.atan2(ux,uz);
+      for(let q=0;q<=n;q++){ const t=q/n, x=br.ax+(br.bx-br.ax)*t, z=br.az+(br.bz-br.az)*t, yy=br.ay+(br.by-br.ay)*t-br.sag*4*t*(1-t); wiAdd(G,WI_BOXG,q%2?wood:woodD,x,yy-.06,z,1.6,.08,.42,ry); }
+      for(const e of [-1,1]){ const pts=[]; for(let q=0;q<=12;q++){ const t=q/12; pts.push(new THREE.Vector3(br.ax+(br.bx-br.ax)*t-uz*e*.85, br.ay+(br.by-br.ay)*t-br.sag*4*t*(1-t)*.8+.95, br.az+(br.bz-br.az)*t+ux*e*.85)); }
+        G.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),24,.035,4,false),rope)); } });
+    // rampa desde el suelo a la primera plataforma
+    { const A=pl[0], [sx,sz]=jiS(JI_TH[0][0]+15,JI_TH[0][1]-6), g=terrainH(sx,sz), d=Math.hypot(A.x-sx,A.z-sz), ux=(A.x-sx)/d, uz=(A.z-sz)/d;
+      const br={ax:sx, az:sz, ay:g+.05, bx:A.x-ux*3, bz:A.z-uz*3, by:A.y, W:.85, sag:0}; JI_BRIDGES.push(br); const L=Math.hypot(br.bx-br.ax,br.bz-br.az), n=Math.round(L/.5), ry=Math.atan2(ux,uz);
+      for(let q=0;q<=n;q++){ const t=q/n, x=br.ax+(br.bx-br.ax)*t, z=br.az+(br.bz-br.az)*t, yy=br.ay+(br.by-br.ay)*t; wiAdd(G,WI_BOXG,q%2?wood:woodD,x,yy-.06,z,1.8,.1,.48,ry); if(q%4===0) for(const e of [-1,1]) wiAdd(G,cylG,woodD,x-uz*e*.95,(yy+terrainH(x-uz*e*.95,z+ux*e*.95))/2+.45,z+ux*e*.95,.06,yy-terrainH(x-uz*e*.95,z+ux*e*.95)+.9,.06); }
+      jiSign(G,sx-uz*1.6,sz+ux*1.6,g+1.6,Math.atan2(-ux,-uz),'Puentes colgantes','#2f7a3a',2.8); }
+    mergeStatic(G); }
+  yield;
+  // templo escondido: pirámide de escalones, patio con muros, dos puertas de piedra con palanca y el cofre
+  { const T=JI_TEMPLE, [tx,tz]=jiS(T.su,T.sv), y0=terrainH(tx,tz)-.05, G=new THREE.Group(); scene.add(G); const ry=Math.atan2(JI.ux,JI.uz);
+    const L=(lx,lz)=>jiS(T.su+lz, T.sv+lx);   // x de lado, z hacia la plaza
+    const box=(lx,lz,w,d,h,m=stone,y=y0)=>{ const [x,z]=L(lx,lz); wiAdd(G,WI_BOXG,m,x,y+h/2,z,w,h,d,ry); };
+    const P={su:T.su-8, sv:T.sv, y:y0, half:11, steps:5, sh:1.6, sw:1.7, top:2.5, stairW:1.6}; JI2.pyr=P;
+    for(let k=0;k<P.steps;k++){ const hw=P.half-k*P.sw; box(0,-8,hw*2,hw*2,P.sh*(k+1),k%2?stone:stoneD); }
+    { const [x,z]=L(0,-8); wiAdd(G,WI_BOXG,stoneD,x,y0+P.steps*P.sh+1.2,z,3.2,2.4,3.2,ry); wiAdd(G,WI_BOXG,moss,x,y0+P.steps*P.sh+2.5,z,3.6,.25,3.6,ry); obstacles.push({x,z,r:1.75,top:y0+P.steps*P.sh+2.6,walk:true}); }
+    for(let k=0;k<14;k++){ const t=k/14, lz=-8+P.half-(P.half-P.top)*t, yy=y0+P.steps*P.sh*t; box(0,lz,P.stairW*2,.8,yy-y0+.25,k%2?stone:stoneD); }   // escalinata
+    const W=(x0,x1,z0,z1,h=2.8,gate)=>{ box((x0+x1)/2,(z0+z1)/2,Math.abs(x1-x0),Math.abs(z1-z0),h,stoneD); const b={su:T.su+(z0+z1)/2, sv:T.sv+(x0+x1)/2, hd:Math.abs(z1-z0)/2, hw:Math.abs(x1-x0)/2, y1:y0+h-.2}; JI_BOXES.push(b);
+      for(let q=0;q<2;q++){ const [x,z]=L(x0+(x1-x0)*(.2+.6*q),(z0+z1)/2); wiAdd(G,sphereG,moss,x,y0+h+.05,z,Math.max(.6,Math.abs(x1-x0)*.18),.18,.6); } };
+    W(-12,-1.6,23.7,24.3); W(1.6,12,23.7,24.3); W(-12.3,-11.7,10,24.3); W(11.7,12.3,10,24.3);   // muro de enfrente (con entrada) y lados
+    W(-12,-1.6,18.7,19.3); W(1.6,12,18.7,19.3);   // muro 1 (con puerta 1)
+    W(-12,7.4,13.7,14.3); W(10.6,12,13.7,14.3);   // muro 2 (con puerta 2, a un lado)
+    const gate=(lx0,lx1,lz,i)=>{ const [x,z]=L((lx0+lx1)/2,lz), g=new THREE.Mesh(WI_BOXG,stone); g.position.set(x,y0+1.3,z); g.scale.set(Math.abs(lx1-lx0),2.6,.5); g.rotation.y=ry; g.userData.noBatch=true; g.userData.y0=y0; scene.add(g); JI2.gateM[i]=g;
+      JI_BOXES.push({su:T.su+lz, sv:T.sv+(lx0+lx1)/2, hd:.3, hw:Math.abs(lx1-lx0)/2, y1:y0+2.4, gate:i}); };
+    gate(-1.6,1.6,19,0); gate(7.4,10.6,14,1);
+    const lever=(lx,lz,i)=>{ const [x,z]=L(lx,lz); box(lx,lz,.6,.6,1,stoneD); const h=new THREE.Group(); h.position.set(x,y0+1,z); h.rotation.y=ry; const s=new THREE.Mesh(cylG,woodD); s.scale.set(.07,1,.07); s.position.y=.45; h.add(s); const k=new THREE.Mesh(sphereG,wiMat('#e5534b')); k.scale.setScalar(.15); k.position.y=.95; h.add(k); h.rotation.x=-.5; h.userData.noBatch=true; scene.add(h); JI2.lev[i]={g:h,x,z}; };
+    lever(3.2,25.6,0); lever(-9.5,16.5,1);
+    // el cofre del tesoro
+    { const [x,z]=L(-8.5,11.6), c=new THREE.Group(); c.position.set(x,y0,z); c.rotation.y=ry; scene.add(c); c.userData.noBatch=true; const bw=wiMat('#9a6a3e','rgba(50,25,5,.25)'), gold=wiMat('#f2c94c');
+      const b=new THREE.Mesh(WI_BOXG,bw); b.scale.set(1.2,.7,.8); b.position.y=.35; c.add(b); const lid=new THREE.Group(); lid.position.set(0,.7,-.4); c.add(lid); const l=new THREE.Mesh(WI_BOXG,bw); l.scale.set(1.25,.3,.85); l.position.set(0,.15,.4); lid.add(l);
+      [-1,1].forEach(e=>{ const s=new THREE.Mesh(WI_BOXG,gold); s.scale.set(.08,.72,.84); s.position.set(e*.45,.36,0); c.add(s); }); const coins=new THREE.Mesh(sphereG,gold); coins.scale.set(.5,.12,.3); coins.position.y=.72; c.add(coins);
+      JI2.chest={c, lid, coins, x, z, open:0}; obstacles.push({x,z,r:.75,top:y0+.75,walk:true}); }
+    for(const e of [-1,1]){ const [x,z]=L(e*2.6,25.4); jiTorch(G,x,z,y0); }
+    { const [x,z]=L(5.5,27.5); wiAdd(G,cylG,woodD,x,y0+.8,z,.07,1.6,.07); jiSign(G,x,z,y0+1.7,ry,'Templo Escondido','#7a3b20',2.8); }
+    // enredaderas sobre los muros
+    for(let k=0;k<18;k++){ const lx=-11+rlHash(k,7)*22, lz=[24,19,14,10][k%4]+.35, [x,z]=L(lx,lz); const v=wiAdd(G,cylG,leaf,x,y0+1.8,z,.05,1.6+rlHash(k,9),.05); }
+    mergeStatic(G); }
+  yield;
+  // cueva junto a la cascada: domo de roca con la entrada detrás de una cortina de agua y gemas que brillan
+  { const C=JI_GROTTO, [cx,cz]=jiS(C.su,C.sv), y=C.h+.02, R=6.5, L=JI_RIVER.lag, [lx,lz]=jiS(L.su,L.sv), face=Math.atan2(lx-cx,lz-cz), open=.75, G=new THREE.Group(); scene.add(G);
+    const rockM=new THREE.MeshStandardMaterial({color:'#7b7470', roughness:1, side:THREE.DoubleSide}), dome=new THREE.Mesh(new THREE.SphereGeometry(R,32,14,face+Math.PI/2+open/2,Math.PI*2-open,0,Math.PI/2),rockM); dome.position.set(cx,y-.2,cz); dome.scale.y=.75; G.add(dome);
+    for(let k=0;k<14;k++){ const a=k/14*Math.PI*2+face+.3; if(Math.abs(Math.atan2(Math.sin(a-face),Math.cos(a-face)))<.55) continue; wiAdd(G,sphereG,wiMat('#857d77','rgba(30,30,30,.2)'),cx+Math.sin(a)*R*1.02,y+.5+rlHash(k,2)*1.5,cz+Math.cos(a)*R*1.02,1.6+rlHash(k,4),1.4,1.6); wiAdd(G,sphereG,moss,cx+Math.sin(a)*R*.8,y+R*.62,cz+Math.cos(a)*R*.8,1.4,.4,1.4); }
+    // cortinita de agua sobre la entrada
+    { const H=4.6, W=3.4, fg=new THREE.PlaneGeometry(W,H,1,8), f=new THREE.Mesh(fg,fallMats[1]); f.position.set(cx+Math.sin(face)*(R+.15),y+H/2,cz+Math.cos(face)*(R+.15)); f.rotation.y=face; f.renderOrder=3; f.userData.noBatch=true; scene.add(f); }
+    const gemM=[['#3ad6ff','#1aa6ff'],['#ff5fa2','#ff2f7a'],['#5dff8f','#2fcf6a'],['#ffd23f','#ffb000']].map(([c,e])=>new THREE.MeshStandardMaterial({color:c, emissive:new THREE.Color(e), emissiveIntensity:.9, roughness:.2}));
+    const oct=new THREE.OctahedronGeometry(1,0); JI2.gemList=[];
+    for(let k=0;k<16;k++){ const a=face+Math.PI+(rlHash(k,11)-.5)*3.6, d=R*(.6+rlHash(k,13)*.28), s=.25+rlHash(k,17)*.35, m=new THREE.Mesh(oct,gemM[k%4]); m.position.set(cx+Math.sin(a)*d,y+.3+rlHash(k,19)*2.8,cz+Math.cos(a)*d); m.scale.set(s*.6,s,s*.6); m.rotation.set(rlHash(k,23),a,rlHash(k,29)); G.add(m); }
+    { const px=cx-Math.sin(face)*R*.42, pz=cz-Math.cos(face)*R*.42; wiAdd(G,cylG,stone,px,y+.45,pz,.5,.9,.5); const gm=new THREE.Mesh(oct,gemM[1]); gm.position.set(px,y+1.55,pz); gm.scale.set(.32,.52,.32); gm.userData.noBatch=true; scene.add(gm); JI2.gems={m:gm,x:px,z:pz,y:y+1.55}; obstacles.push({x:px,z:pz,r:.55,top:y+.9,walk:true}); }
+    JI2.grotto={x:cx, z:cz, y, R, face}; G.userData.noBatch=true; }
+  yield;
+  // lianas: un tronco atravesado arriba de la poza, sostenido por dos árboles, y tres lianas que se columpian
+  { const C=JI_RIVER.pool, X=JI_POOLX, G=new THREE.Group(); scene.add(G); const wx=X.px*JI.ux+X.pz*JI.vx, wz=X.px*JI.uz+X.pz*JI.vz;
+    const [ax,az]=jiS(C.su-X.px*(C.R+4),C.sv-X.pz*(C.R+4)), [bx,bz]=jiS(C.su+X.px*(C.R+4),C.sv+X.pz*(C.R+4)), top=C.lvl+11;
+    for(const [x,z] of [[ax,az],[bx,bz]]){ const g=terrainH(x,z); wiAdd(G,cylG,wiMat('#7d5d3c','rgba(40,20,5,.25)'),x,(g+top+3)/2,z,.8,top+3-g,.8); wiAdd(G,sphereG,wiMat('#4c9a3b'),x,top+4,z,5,3,5); obstacles.push({x,z,r:.9,top:top+20,walk:false}); }
+    const beam=wiAdd(G,cylG,woodD,(ax+bx)/2,top,(az+bz)/2,.45,Math.hypot(bx-ax,bz-az),.45); beam.rotation.order='YXZ'; beam.rotation.set(Math.PI/2,Math.atan2(bx-ax,bz-az),0);
+    mergeStatic(G);
+    for(let i=0;i<3;i++){ const [x,y,z]=jiVinePivot(i), v=new THREE.Group(); v.position.set(x,y,z); v.rotation.y=Math.atan2(wx,wz)-Math.PI/2; const m=new THREE.Mesh(cylG,leaf); m.scale.set(.06,8.2,.06); m.position.y=-4.1; v.add(m);
+      for(let q=0;q<5;q++){ const l=new THREE.Mesh(sphereG,leaf); l.scale.set(.25,.12,.18); l.position.set(.1,-1-q*1.5,0); v.add(l); } v.userData.noBatch=true; scene.add(v); JI2.vines.push(v); }
+    { const [sx,sz]=jiS(C.su-X.px*(C.R+2.5),C.sv-X.pz*(C.R+2.5)); JI2.vineStart={x:sx,z:sz}; const G2=new THREE.Group(); scene.add(G2); const g=terrainH(sx,sz); wiAdd(G2,sphereG,wiMat('#8f8a86'),sx,g+.2,sz,1.6,.6,1.6);
+      jiSign(G2,sx-wz*2.2,sz+wx*2.2,g+1.6,Math.atan2(wx,wz),'Paso de lianas','#2f7a3a',2.4); wiAdd(G2,cylG,woodD,sx-wz*2.2,g+.7,sz+wx*2.2,.06,1.4,.06); mergeStatic(G2); } }
+  yield;
+  // frutas y el puestito
+  { const G=new THREE.Group(); scene.add(G); const orange=wiMat('#ffa23a'), yellow=wiMat('#ffd23f'), brown=wiMat('#7a5232');
+    JI_FRUITS.forEach((F,i)=>{ const [x,z]=jiS(F.su,F.sv), g=terrainH(x,z)-.05, fr=new THREE.Group(); fr.userData.noBatch=true; scene.add(fr);
+      if(F.k==='mango'){ wiAdd(G,cylG,wiMat('#7d5d3c'),x,g+1.3,z,.22,2.6,.22); wiAdd(G,sphereG,wiMat('#4c9a3b'),x,g+3.3,z,2.1,1.6,2.1); for(let q=0;q<5;q++){ const a=q/5*6.28; wiAdd(fr,sphereG,orange,x+Math.cos(a)*1.5,g+2.6,z+Math.sin(a)*1.5,.2,.26,.2); } }
+      else if(F.k==='platano'){ wiAdd(G,cylG,wiMat('#7aa843'),x,g+1.2,z,.18,2.4,.18); for(let q=0;q<5;q++){ const a=q/5*6.28, l=wiAdd(G,sphereG,wiMat('#5cb84c'),x+Math.cos(a)*1,g+2.5,z+Math.sin(a)*1,1.3,.08,.35,-a); l.rotation.z=-.4; } for(let q=0;q<6;q++) wiAdd(fr,cylG,yellow,x+.3,g+1.7-q*.12,z+(q%2?.1:-.1),.06,.35,.06); }
+      else { for(let q=0;q<3;q++) wiAdd(fr,sphereG,brown,x+(q-1)*.35,g+.2,z+(q%2)*.3,.22,.22,.22); }
+      obstacles.push({x,z,r:F.k==='coco'?0:.3,top:g+60,walk:false}); F.x=x; F.z=z; F.g=fr; F.until=0; });
+    const [sx,sz]=jiS(JI_STAND.su,JI_STAND.sv), sy=terrainH(sx,sz)-.05, ry=Math.atan2(JI.ux,JI.uz);
+    wiAdd(G,WI_BOXG,wood,sx,sy+.5,sz,2.6,1,1.1,ry); for(const [a,b] of [[-1.2,-.5],[1.2,-.5],[-1.2,.5],[1.2,.5]]){ const [x,z]=jiS(JI_STAND.su+b,JI_STAND.sv+a); wiAdd(G,cylG,woodD,x,sy+1.4,z,.07,2.8,.07); }
+    wiAdd(G,WI_CONEG,wiMat('#e5534b','rgba(0,0,0,.15)'),sx,sy+3.1,sz,2.3,.9,2.3).geometry=new THREE.ConeGeometry(1,1,4);
+    for(let q=0;q<6;q++){ const [x,z]=jiS(JI_STAND.su+.2,JI_STAND.sv-.9+q*.36); wiAdd(G,sphereG,[orange,yellow,brown][q%3],x,sy+1.12,z,.16,.16,.16); }
+    jiSign(G,...jiS(JI_STAND.su+.6,JI_STAND.sv),sy+2.3,ry,'Frutas tropicales','#c8453a',2.4); JI2.stand={x:sx,z:sz}; obstacles.push({x:sx,z:sz,r:1.2,top:sy+1,walk:false});
+    mergeStatic(G); }
+  yield;
+  // animalitos: tucanes que vuelan, monitos en los árboles grandes, ranitas en la laguna y mariposas
+  { const black=wiMat('#22252c'), yel=wiMat('#ffd23f'), ora=wiMat('#ff8a2a'), white=wiMat('#fbfbfd'), brown=wiMat('#8a5a34','rgba(40,20,5,.2)'), tan=wiMat('#e8c08a'), frogM=wiMat('#5fd04a','rgba(20,60,10,.15)');
+    for(let i=0;i<5;i++){ const G=new THREE.Group(); wiAdd(G,sphereG,black,0,0,0,.28,.26,.45); wiAdd(G,sphereG,yel,0,-.02,.28,.2,.18,.14); const bk=wiAdd(G,WI_CONEG,ora,0,.04,.62,.11,.45,.11); bk.rotation.x=Math.PI/2; wiAdd(G,sphereG,white,.12,.1,.36,.05,.05,.05);
+      const wl=[-1,1].map(e=>{ const w=new THREE.Group(); w.position.set(e*.22,.05,0); G.add(w); wiAdd(w,sphereG,black,e*.35,0,0,.4,.05,.2); return w; });
+      G.userData.noBatch=true; scene.add(G); JI2.animals.push({t:'tucan', G, wl, c:jiS(80+i*40,-60+((i*53)%120)), r:22+i*6, h:16+i*3, ph:i*1.3, sp:.35+i*.05}); }
+    JI_TH.forEach(([su,sv],k)=>{ for(let q=0;q<(k%2?2:1);q++){ const G=new THREE.Group(); wiAdd(G,sphereG,brown,0,.45,0,.32,.4,.28); wiAdd(G,sphereG,brown,0,.95,.05,.26,.26,.26); wiAdd(G,sphereG,tan,0,.92,.24,.17,.15,.08);
+      [-1,1].forEach(e=>wiAdd(G,sphereG,tan,e*.26,1,.02,.09,.11,.05)); const tail=wiAdd(G,cylG,brown,0,.3,-.35,.04,.7,.04); tail.rotation.x=.9; G.userData.noBatch=true; scene.add(G);
+      const P=JI_TREE_PL[k], a=q*2.6+k; JI2.animals.push({t:'mono', G, x:P.x+Math.cos(a)*2.4, z:P.z+Math.sin(a)*2.4, y:P.y, ph:k+q*1.7}); } });
+    for(let i=0;i<8;i++){ const G=new THREE.Group(); wiAdd(G,sphereG,frogM,0,.12,0,.18,.12,.22); [-1,1].forEach(e=>{ wiAdd(G,sphereG,white,e*.09,.22,.12,.05,.05,.05); wiAdd(G,sphereG,black,e*.09,.23,.15,.025,.025,.02); }); G.userData.noBatch=true; scene.add(G);
+      const L=JI_RIVER.lag, a=i/8*Math.PI*2, [x,z]=jiS(L.su+Math.cos(a)*(L.R+1.5),L.sv+Math.sin(a)*(L.R+1.5)); JI2.animals.push({t:'rana', G, x, z, ph:i*.9, hop:0, h:a}); }
+    // mariposas: puntitos de colores que revolotean (un solo dibujo)
+    { const N=MIN_Q?24:48, pos=new Float32Array(N*3), col=new Float32Array(N*3), cols=['#ff5fa2','#ffd23f','#3ad6ff','#ff8a2a','#b06bff'].map(c=>new THREE.Color(c)), base=[];
+      for(let i=0;i<N;i++){ const F=JI_FRUITS[i%JI_FRUITS.length], [x,z]=jiS(F.su+(rlHash(i,3)-.5)*30, F.sv+(rlHash(i,5)-.5)*30); base.push([x,terrainH(x,z)+1.2+rlHash(i,7)*1.5,z,rlHash(i,9)*6]); const c=cols[i%5]; col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b; }
+      const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setAttribute('color',new THREE.BufferAttribute(col,3));
+      const m=new THREE.Points(g,new THREE.PointsMaterial({size:.35, vertexColors:true, map:glowTex, transparent:true, depthWrite:false})); m.frustumCulled=false; m.userData.noBatch=true; scene.add(m); JI2.butter={m, base, pos}; } }
+}
+// ---- acciones ----
+function jiActions(){ if(!JI.done || player.car||player.ac||player.mg||player.balloon||player.rk||SP.on||player.busy) return null;
+  const p=player.pos; if(Math.abs(p.x-JI.x)>JI.E || Math.abs(p.z-JI.z)>JI.E) return null;
+  if(player.pg && player.pg.k==='vine') return [{label:'Soltar la liana', run:jiVineRelease}, null];
+  if(player.pg && player.pg.k==='zip') return [null,null];
+  if(player.pg || player.dive) return null;
+  const near=(o,r)=>o && Math.hypot(p.x-o.x,p.z-o.z)<r;
+  if(near(JI2.zipTop,4) && Math.abs(p.y-JI.mirador.y)<3) return [{label:'Bajar en tirolesa', run:jiZipStart}, null];
+  if(near(JI2.zipBot,5)) return [{label:'Subir al mirador (tirolesa)', run:()=>{ const M=JI.mirador; try{ splashBurst(p.x,p.y+1.2,p.z,.3); audio.teleport(); }catch(e){} player.pos.set(M.x,M.y+.15,M.z); player.vel.set(0,0,0); player.vy=0; player.grounded=true; }}, null];
+  if(near(JI2.vineStart,3)) return [{label:'Agarrar la liana', run:jiVineStart}, null];
+  for(let i=0;i<2;i++){ const L=JI2.lev[i]; if(near(L,1.8)) return [JI2.gates[i]?{label:'La puerta ya está abierta', disabled:true, run:()=>{}}:{label:'Jalar la palanca', run:()=>{ JI2.gates[i]=true; try{ audio.door(true); }catch(e){} flashNote(i?'¡Se abrió la puerta del tesoro!':'¡Se abrió la primera puerta del templo!'); }}, null]; }
+  if(near(JI2.chest,2)) return [jiChestDone()?{label:'Cofre vacío: vuelve mañana', disabled:true, run:()=>{}}:{label:'Abrir el cofre del templo', run:jiChestOpen}, null];
+  if(near(JI2.gems,2)) return [jiGemDone()?{label:'Gema: vuelve mañana', disabled:true, run:()=>{}}:{label:'Tomar la gema de la cueva', run:jiGem}, null];
+  if(near(JI2.stand,3)){ const n=JI2.fruit.coco+JI2.fruit.mango+JI2.fruit.platano, m=JI2.fruit.coco*5+JI2.fruit.mango*4+JI2.fruit.platano*3; return [n?{label:'Vender '+n+' frutas (+'+m+' monedas)', run:jiSell}:{label:'Junta frutas para vender', disabled:true, run:()=>{}}, null]; }
+  for(const F of JI_FRUITS) if(near(F,2.6)){ const ok=performance.now()>F.until; return [ok?{label:'Juntar '+JI_FRUIT_N[F.k], run:()=>jiPick(F)}:{label:'Ya no hay '+JI_FRUIT_N[F.k]+' (vuelven pronto)', disabled:true, run:()=>{}}, null]; }
+  return null; }
+const jiChestDone=()=>wiSave().temple===today(), jiGemDone=()=>wiSave().gem===today();
+function jiChestOpen(){ if(jiChestDone()) return; wiSaveSet('temple',today()); addCoins(70); try{ adOffer(70); audio.wave(); }catch(e){} bigText('+70',1600,'¡Tesoro del templo!'); flashNote('¡70 monedas! Vuelve mañana por más'); }
+function jiGem(){ if(jiGemDone()) return; wiSaveSet('gem',today()); addCoins(40); try{ adOffer(40); audio.wave(); }catch(e){} flashNote('¡La gema de la cueva vale 40 monedas! Mañana vuelve a brillar'); }
+function jiPick(F){ const n=F.k==='coco'?3:F.k==='mango'?5:6; JI2.fruit[F.k]=Math.min(99,JI2.fruit[F.k]+n); F.until=performance.now()+300000; wiSaveSet('fruta',JI2.fruit); try{ audio.wave(); }catch(e){}
+  flashNote('+'+n+' '+JI_FRUIT_N[F.k]+' · llevas 🥥'+JI2.fruit.coco+' 🥭'+JI2.fruit.mango+' 🍌'+JI2.fruit.platano+' · véndelas en el puestito del campamento'); }
+function jiSell(){ const F=JI2.fruit, m=F.coco*5+F.mango*4+F.platano*3; if(!m) return; addCoins(m); F.coco=F.mango=F.platano=0; wiSaveSet('fruta',F); try{ adOffer(m); audio.wave(); }catch(e){} flashNote('¡Vendiste tus frutas por '+m+' monedas!'); }
+// ---- cada cuadro ----
+function ji2Tick(dt,t){ if(!JI.done) return; const near=Math.hypot(camera.position.x-JI.x,camera.position.z-JI.z)<JI.E+300; if(!near) return;
+  const night=1-(sky.dayK??1);
+  // puertas del templo y el cofre
+  JI2.gateM.forEach((g,i)=>{ if(!g) return; const want=g.userData.y0+(JI2.gates[i]?-1.4:1.3); g.position.y+=(want-g.position.y)*Math.min(1,dt*2.5); });
+  JI2.lev.forEach((L,i)=>{ if(L) L.g.rotation.x+=((JI2.gates[i]?.5:-.5)-L.g.rotation.x)*Math.min(1,dt*6); });
+  if(JI2.chest){ const C=JI2.chest, w=jiChestDone()?1:0; C.open+=(w-C.open)*Math.min(1,dt*4); C.lid.rotation.x=-C.open*1.7; C.coins.visible=C.open<.5; }
+  if(JI2.gems){ const G=JI2.gems; G.m.rotation.y=t; G.m.position.y=G.y+Math.sin(t*1.7)*.1; G.m.material.emissiveIntensity=jiGemDone()?.15:.9+.4*Math.sin(t*3); }
+  // la polea de la tirolesa
+  if(JI2.pulley){ const on=player.pg && player.pg.k==='zip'; JI2.pulley.visible=!!on; if(on){ const p=jiZipPt(player.pg.zip.s); JI2.pulley.position.set(p[0],p[1]-.1,p[2]); JI2.pulley.rotation.y=Math.atan2(JI_ZIPLINE.b[0]-JI_ZIPLINE.a[0],JI_ZIPLINE.b[2]-JI_ZIPLINE.a[2]); } }
+  // las lianas se mecen (la mía y las de los demás siguen al que va colgado)
+  JI2.vines.forEach((v,i)=>{ let a=Math.sin(t*.8+i)*.12; if(player.pg && player.pg.k==='vine' && player.pg.vine.i===i) a=player.pg.vine.a; for(const r of mp.remotes.values()) if(r.pl && PG_KINDS[r.pl[0]]==='vine' && r.pl[1]===i) a=r.pl[2]; v.rotation.z+=(a-v.rotation.z)*Math.min(1,dt*12); });
+  // frutas que ya juntaste no se ven hasta que vuelven
+  for(const F of JI_FRUITS) if(F.g) F.g.visible=performance.now()>F.until;
+  // animalitos
+  for(const A of JI2.animals){ if(A.t==='tucan'){ const a=t*A.sp+A.ph, x=A.c[0]+Math.cos(a)*A.r, z=A.c[1]+Math.sin(a)*A.r; A.G.position.set(x,terrainH(x,z)+A.h+Math.sin(t*1.3+A.ph)*1.5,z); A.G.rotation.y=Math.atan2(-Math.sin(a),Math.cos(a)); A.wl.forEach((w,i)=>w.rotation.z=(i?-1:1)*Math.sin(t*14+A.ph)*.6); }
+    else if(A.t==='mono'){ const b=Math.abs(Math.sin(t*2.2+A.ph)); A.G.position.set(A.x,A.y+b*.35,A.z); A.G.rotation.y=Math.sin(t*.4+A.ph)*1.2; }
+    else if(A.t==='rana'){ A.hop-=dt; if(A.hop<=0 && Math.random()<dt*.6){ A.hop=.45; A.h+=(Math.random()-.5)*1.5; const nx=A.x+Math.sin(A.h)*.9, nz=A.z+Math.cos(A.h)*.9; if(jiWaterLevel(nx,nz)===null && terrainH(nx,nz)>JI_RIVER.lag.lvl-.2){ A.x=nx; A.z=nz; } }
+      const k=A.hop>0?Math.sin((.45-A.hop)/.45*Math.PI):0; A.G.position.set(A.x,terrainH(A.x,A.z)+k*.5,A.z); A.G.rotation.y=A.h; } }
+  if(JI2.butter){ const B=JI2.butter, P=B.pos; B.base.forEach(([x,y,z,ph],i)=>{ P[i*3]=x+Math.sin(t*.7+ph)*2.5+Math.sin(t*5+ph)*.15; P[i*3+1]=y+Math.sin(t*3.1+ph)*.4; P[i*3+2]=z+Math.cos(t*.6+ph)*2.5; }); B.m.geometry.attributes.position.needsUpdate=true; B.m.visible=night<.6; } }
 function wiMapDraw(g){ const E=WI.E, [x0,y0]=toMap(WI.x+E,WI.z+E), s=2*E/(2*MAP_E)*MAP_PX; g.imageSmoothingEnabled=true; g.drawImage(wiMapImage(),x0,y0,s,s);
   // el muelle y la cabaña
   const q=(pts,col)=>{ g.fillStyle=col; g.beginPath(); pts.forEach(([su,sv],i)=>{ const [px,py]=toMap(...wiS(su,sv)); i?g.lineTo(px,py):g.moveTo(px,py); }); g.closePath(); g.fill(); };
@@ -13391,6 +13632,7 @@ function update(dt,t){ myLabelUpdate();
   wiTick(dt,t);   // v139: la Isla Invierno
   wi2Tick(dt,t);   // v140: sus actividades
   jiTick(dt,t);   // v141: la Isla Selva
+  ji2Tick(dt,t);   // v142: sus actividades
   pierUpdate(dt,t);
   trUpdate(dt,t);
   fiUpdate(dt,t); blUpdate(dt,t); farmUpdate(dt,t); caveUpdate(dt,t); reliefUpdate(dt);
@@ -13490,6 +13732,7 @@ function update(dt,t){ myLabelUpdate();
     }
     shipCollide(player.pos);   // v138: barandal, mástil y casco del barco
     wiCollide(player.pos);   // v139: la cabaña de la Isla Invierno
+    jiCollide(player.pos);   // v142: el templo y la cueva de la Isla Selva
     const g=groundAt(player.pos.x, player.pos.z, player.pos.y);
     if(player.swim){
       player.pos.y += player.vy*dt;
