@@ -409,6 +409,7 @@ body.in-mg #hint{display:none!important;}
 .room-empty{font-weight:700;font-size:14px;opacity:.7;padding:4px 2px;}
 .room-diag{margin:0;width:100%;font-size:12px;font-weight:700;opacity:.75;font-variant-numeric:tabular-nums;}
 .install-btn{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:3;font-family:var(--display);font-weight:800;font-size:17px;color:#5a4426;background:#fffaf0;border:none;border-radius:16px;padding:12px 18px;box-shadow:0 4px 0 #d9cba8, inset 0 0 0 2px #fffaf0, inset 0 0 0 4px rgba(201,168,119,.0);outline:2px dashed #c9a877;outline-offset:-7px;cursor:pointer;}
+.install-btn.nuevo{background:#ffe27a;animation:mpHop 1.3s ease-in-out infinite;} @keyframes mpHop{0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-7px)}}   /* v147 */
 .install-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #d9cba8;}
 .diag-card{max-width:620px;width:100%;display:flex;flex-direction:column;gap:10px;} .diag-card h2{margin:0;font-size:22px;}
 #diagTxt{margin:0;white-space:pre-wrap;word-break:break-word;font:700 13px/1.45 ui-monospace,Menlo,Consolas,monospace;background:#fff;border-radius:12px;padding:10px 12px;max-height:60vh;overflow:auto;text-align:left;}
@@ -953,7 +954,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='146';
+const GAME_VERSION='147';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -14555,10 +14556,28 @@ try{ const gl=renderer.getContext(), ext=gl.getExtension('WEBGL_debug_renderer_i
       fetch('https://api.github.com/repos/RogerGC222004/Mundo-Peluche/releases/latest',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{ const v=d && String(d.tag_name||'').replace(/^app-v/,''); if(v && /^\d+$/.test(v)) showVer(v, +v<+GAME_VERSION); }).catch(()=>{}); };
     ui('installClose').onclick=()=>{ ui('installOv').hidden=true; };
     ui('installOv').addEventListener('click',e=>{ if(e.target===ui('installOv')) ui('installOv').hidden=true; });
-    ui('installLink').addEventListener('click',()=>{ flashNote&&flashNote('Descargando el juego… ábrelo cuando termine para instalarlo'); }); } }
+    ui('installLink').addEventListener('click',()=>{ flashNote&&flashNote('Descargando el juego… ábrelo cuando termine para instalarlo'); }); }
+  // v147: en la app, el mismo botón sirve para actualizar (siempre está; cuando hay versión nueva lo dice y brinca)
+  else if(window.__MP_APP){ const b=ui('installBtn'); b.hidden=false; b.textContent='Actualizar el juego'; let latest=null;
+    const check=()=>fetch('https://api.github.com/repos/RogerGC222004/Mundo-Peluche/releases/latest',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{ const v=d && String(d.tag_name||'').replace(/^app-v/,''); if(v && /^\d+$/.test(v)) latest=+v;
+        const nueva=latest!==null && latest>+GAME_VERSION; b.textContent=nueva?'¡Hay versión nueva!':'Actualizar el juego'; b.classList.toggle('nuevo',nueva); }).catch(()=>{});
+    const show=()=>{ const ve=ui('installVer'), nota=document.querySelector('#installOv .install-note'), chica=document.querySelector('#installOv .install-small'), nueva=latest!==null && latest>+GAME_VERSION;
+      ui('installTitle').textContent=nueva?'¡Actualiza tu juego!':latest===null?'Actualizar el juego':'Tu juego está al día';
+      ui('installLink').hidden=!nueva && latest!==null; ve.textContent='';
+      if(nueva){ ve.textContent='Versión nueva: '+latest; const sm=document.createElement('small'); sm.textContent='Tú tienes la versión '+GAME_VERSION; ve.appendChild(sm);
+        nota.textContent='Toca el ícono para descargarla y luego ábrela para instalarla encima: no pierdes tu progreso.'; chica.textContent='Android te preguntará si quieres actualizar la app: dile que sí.'; }
+      else if(latest===null){ ve.textContent='Tienes la versión '+GAME_VERSION; const sm=document.createElement('small'); sm.textContent='No se pudo revisar si hay una nueva (¿estás sin internet?)'; ve.appendChild(sm);
+        nota.textContent='Si sabes que hay una nueva, toca el ícono para descargarla e instálala encima: no pierdes tu progreso.'; chica.textContent=''; }
+      else { ve.textContent='Ya tienes la última versión ('+GAME_VERSION+')'; nota.textContent='Cuando salga una nueva, este botón te avisará.'; chica.textContent=''; } };
+    check(); b.onclick=()=>{ ui('installOv').hidden=false; show(); check().then(show); };
+    ui('installClose').onclick=()=>{ ui('installOv').hidden=true; };
+    ui('installOv').addEventListener('click',e=>{ if(e.target===ui('installOv')) ui('installOv').hidden=true; });
+    ui('installLink').addEventListener('click',()=>{ flashNote&&flashNote('Descargando la versión nueva… ábrela cuando termine para instalarla'); });
+    addEventListener('visibilitychange',()=>{ if(!document.hidden) check(); }); } }
 window.mundoAtras=()=>{ const vis=id=>{ const e=ui(id); return !!e && !e.hidden; }, esc=()=>dispatchEvent(new KeyboardEvent('keydown',{key:'Escape', code:'Escape'}));
   if(document.getElementById('loader') || vis('adScreen')) return true;
   if(vis('diagOv')){ ui('diagOv').hidden=true; return true; }
+  if(vis('installOv')){ ui('installOv').hidden=true; return true; }   // v147
   if(vis('options')){ optionsEl.hidden=true; return true; }
   if(vis('saveOv')){ ui('saveClose').click(); return true; }
   if(vis('controls')){ ui('closeControls').click(); return true; }
