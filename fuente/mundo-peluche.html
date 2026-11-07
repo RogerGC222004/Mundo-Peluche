@@ -953,7 +953,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='142';
+const GAME_VERSION='143';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -1287,9 +1287,61 @@ function jiWaterLevel(x,z){ if(x<JI_BOX[0]||x>JI_BOX[2]||z<JI_BOX[1]||z>JI_BOX[3
   const n=jiRiverNear(su,sv); if(n.seg===R.fallI) return null;   // en el escalón de la cascada no hay agua para nadar
   if(n.d<R.W && n.bed+.75>SEA_Y+.05) return n.bed+.75;
   return null; }
+// ---------- v143: la Isla Dulce (1 km, al oeste, más allá del aeropuerto; se llega en barco) ----------
+// Igual que las otras dos islas: su propia malla, que se arma poco a poco al acercarte. su = hacia la isla grande (su muelle), sv = de lado.
+const DI=(()=>{ const a=2.8, d=2350, x=Math.cos(a)*d, z=Math.sin(a)*d, ux=-Math.cos(a), uz=-Math.sin(a);
+  return {a, d, x, z, ux, uz, vx:-uz, vz:ux, R:500, E:790, grid:null, done:false, job:null}; })();
+DI.segs=[];   // los pisos de las rampas del pastel
+const DI_BOX=[DI.x-DI.E, DI.z-DI.E, DI.x+DI.E, DI.z+DI.E];
+function diCoastR(a){ return DI.R + 38*Math.sin(3*a+1.2) + 25*Math.sin(5*a+2.7) + 12*Math.sin(8*a+.2); }
+DI.rcU=diCoastR(Math.atan2(DI.uz,DI.ux));
+const diS=(su,sv)=>[DI.x+su*DI.ux+sv*DI.vx, DI.z+su*DI.uz+sv*DI.vz];
+const diL=(x,z)=>{ const dx=x-DI.x, dz=z-DI.z; return [dx*DI.ux+dz*DI.uz, dx*DI.vx+dz*DI.vz]; };
+// la Montaña de Pastel: tres pisos (pan con betún), con rampas de galleta para subir; arriba, la cereza
+const DI_CAKE={su:-70, sv:-30, tiers:[{r:150,h:20},{r:104,h:20},{r:60,h:20}], wall:9};
+const DI_PLAZA={su:DI.rcU-125, sv:-6, r:16, b:16, h:null};
+const DI_LAKE={su:170, sv:200, R:52, lvl:2.6};   // el lago de limonada
+const DI_FLATS=[DI_PLAZA];
+const DI_DOCK={s1:DI.rcU*1.085, W:1.9, Y:SEA_Y+2.35, s0:0};
+// el río de chocolate: nace al pie del pastel y baja al mar
+const DI_RIVER=(()=>{ const pts=[[-20,-205,4.2],[10,-260,3.4],[30,-320,2.3],[38,-385,1.1],[44,-450,-.6],[48,-520,-3]];
+  const P=pts.map(([su,sv,b])=>{ const [x,z]=diS(su,sv); return {su,sv,x,z,b}; }), L=[0]; for(let i=1;i<P.length;i++) L.push(L[i-1]+Math.hypot(P[i].su-P[i-1].su,P[i].sv-P[i-1].sv));
+  return {P, L, W:5, pond:{R:11, lvl:4.95}}; })();
+function diCakeH(su,sv){ const C=DI_CAKE, r=Math.hypot(su-C.su,sv-C.sv); let h=0; for(const T of C.tiers) h+=T.h*smooth(T.r+C.wall*.6, T.r-C.wall*.4, r); return h; }
+function diRiverNear(su,sv){ const P=DI_RIVER.P; let best=1e9, s=0, bed=0;
+  for(let i=0;i<P.length-1;i++){ const a=P[i], b=P[i+1], dx=b.su-a.su, dz=b.sv-a.sv, L2=dx*dx+dz*dz, t=Math.max(0,Math.min(1,((su-a.su)*dx+(sv-a.sv)*dz)/L2)), qx=a.su+dx*t-su, qz=a.sv+dz*t-sv, d=Math.hypot(qx,qz);
+    if(d<best){ best=d; s=DI_RIVER.L[i]+t*Math.sqrt(L2); bed=a.b+(b.b-a.b)*t; } }
+  return {d:best, s, bed}; }
+function diBase(su,sv,x,z){ return Math.max(1.6, 4+9*(rlFbm(x/150+61,z/150-17,3)-.42)+4*(rlFbm(x/48-21,z/48+5,2)-.5)); }   // lomitas suaves
+function diLand(su,sv,x,z){ let h=diBase(su,sv,x,z);
+  { const C=DI_CAKE, r=Math.hypot(su-C.su,sv-C.sv); if(r<C.tiers[0].r+40){ if(C.base===undefined) C.base=diBase(C.su,C.sv,...diS(C.su,C.sv)); const base=C.base; h=lerp(h,base,1-smooth(C.tiers[0].r+8,C.tiers[0].r+40,r)); h+=diCakeH(su,sv); } }   // el pastel, sobre un piso parejo
+  { const F=DI_PLAZA; if(su>F.su-10 && su<DI.rcU+20 && Math.abs(sv+6)<40){ const k=1-smooth(7,30,Math.abs(sv)); if(F.h===null){ const [fx,fz]=diS(F.su,F.sv); F.h=diBase(F.su,F.sv,fx,fz); } h=lerp(h, lerp(F.h,1.25,smooth(F.su+F.r,DI.rcU*.93,su)), k); } }
+  for(const F of DI_FLATS){ const d=Math.hypot(su-F.su,sv-F.sv); if(d<F.r+F.b){ if(F.h===null){ const [fx,fz]=diS(F.su,F.sv); F.h=diBase(F.su,F.sv,fx,fz); } h=lerp(h,F.h,1-smooth(F.r,F.r+F.b,d)); } }
+  { const L=DI_LAKE, d=Math.hypot(su-L.su,sv-L.sv); if(d<L.R+40){ const bowl=d<L.R ? L.lvl-3*(1-(d/L.R)*(d/L.R)) : L.lvl+.5+(d-L.R)*.12; h=lerp(h,d<L.R?bowl:Math.max(Math.min(h,bowl),L.lvl+.45),1-smooth(L.R+8,L.R+40,d)); } }   // la orilla nunca queda más baja que el agua
+  const R=DI_RIVER, n=diRiverNear(su,sv);
+  if(n.d<R.W+18){ const w=R.W, chan=n.d<w ? n.bed+.75-1.4*(1-(n.d/w)*(n.d/w)) : n.bed+.9+(n.d-w)*.45; h=lerp(h,Math.min(h+(n.d<w?0:99),chan),1-smooth(w+5,w+18,n.d)); }
+  { const P=R.P[0], d=Math.hypot(su-P.su,sv-P.sv), C=R.pond; if(d<C.R+14){ const bowl=d<C.R ? C.lvl-2.2*(1-(d/C.R)*(d/C.R)) : C.lvl+.5+(d-C.R)*.35; h=lerp(h,d<C.R?Math.min(h,bowl):Math.max(Math.min(h,bowl),C.lvl+.4),1-smooth(C.R+4,C.R+14,d)); } }
+  return h; }
+function diExact(x,z){ const lx=x-DI.x, lz=z-DI.z, d=Math.hypot(lx,lz); if(d>DI.E*1.42) return DEEP_Y;
+  const c=d/diCoastR(Math.atan2(lz,lx));
+  const base = c<.9?0 : c<1 ? lerp(0,-1.9,smooth(.9,1,c)) : c<1.06 ? lerp(-1.9,-8,smooth(1,1.06,c)) : c<1.2 ? lerp(-8,-25,smooth(1.06,1.2,c)) : c<1.34 ? lerp(-25,DEEP_Y,smooth(1.2,1.34,c)) : DEEP_Y;
+  if(c>=.95) return base;
+  const su=lx*DI.ux+lz*DI.uz, sv=lx*DI.vx+lz*DI.vz;
+  return base + diLand(su,sv,x,z)*(1-smooth(.8,.95,c)); }
+function diGridH(x,z){ const G=DI.grid; if(!G) return diExact(x,z);
+  const fx0=(x-G.x0)/G.CS, fz0=(z-G.z0)/G.CS, i=Math.floor(fx0), j=Math.floor(fz0); if(i<0||j<0||i>=G.W-1||j>=G.W-1) return diExact(x,z);
+  const fx=fx0-i, fz=fz0-j, W=G.W, H=G.H, a=H[j*W+i], d=H[j*W+i+1], b=H[(j+1)*W+i], c=H[(j+1)*W+i+1];
+  return fx+fz<=1 ? a+(d-a)*fx+(b-a)*fz : c+(b-c)*(1-fx)+(d-c)*(1-fz); }
+// agua dulce: el río de chocolate, su poza y el lago de limonada (para nadar); null si ahí no hay
+function diWaterLevel(x,z){ if(x<DI_BOX[0]||x>DI_BOX[2]||z<DI_BOX[1]||z>DI_BOX[3]) return null; const [su,sv]=diL(x,z), R=DI_RIVER;
+  { const L=DI_LAKE; if(Math.hypot(su-L.su,sv-L.sv)<L.R-.3) return L.lvl; }
+  { const P=R.P[0]; if(Math.hypot(su-P.su,sv-P.sv)<R.pond.R-.3) return R.pond.lvl; }
+  const n=diRiverNear(su,sv); if(n.d<R.W && n.bed+.75>SEA_Y+.05) return n.bed+.75;
+  return null; }
 let TMESH=null;
 function terrainH(x,z){ if(x>WI_BOX[0]&&x<WI_BOX[2]&&z>WI_BOX[1]&&z<WI_BOX[3]){ const w=wiGridH(x,z); if(w>DEEP_Y+.01) return Math.max(w, terrainMainH(x,z)); }
   if(x>JI_BOX[0]&&x<JI_BOX[2]&&z>JI_BOX[1]&&z<JI_BOX[3]){ const w=jiGridH(x,z); if(w>DEEP_Y+.01) return Math.max(w, terrainMainH(x,z)); }   // v141: la Isla Selva
+  if(x>DI_BOX[0]&&x<DI_BOX[2]&&z>DI_BOX[1]&&z<DI_BOX[3]){ const w=diGridH(x,z); if(w>DEEP_Y+.01) return Math.max(w, terrainMainH(x,z)); }   // v143: la Isla Dulce
   return terrainMainH(x,z); }   // v139: primero la Isla Invierno
 function terrainMainH(x,z){ const M=TMESH; if(!M) return terrainExact(x,z);
   const xs=M.xs, zs=M.zs, n=M.GW-1; if(!(x>xs[0]&&x<xs[n]&&z>zs[0]&&z<zs[n])) return terrainExact(x,z);
@@ -1432,6 +1484,7 @@ const RL_RBOX=(()=>{ let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9; for(const [x,z] of RL_RI
 const RLN={d:0,s:0,i:0};
 function riverLevelAt(x,z){   // nivel del agua del río (o del estanque, o de la poza) en ese punto; null si ahí no hay río
   if(x>JI_BOX[0]&&x<JI_BOX[2]&&z>JI_BOX[1]&&z<JI_BOX[3]) return jiWaterLevel(x,z);   // v141: el río, la poza y la laguna de la Isla Selva
+  if(x>DI_BOX[0]&&x<DI_BOX[2]&&z>DI_BOX[1]&&z<DI_BOX[3]) return diWaterLevel(x,z);   // v143: el río de chocolate y el lago de limonada
   if(x<RL_RBOX[0]||x>RL_RBOX[2]||z<RL_RBOX[1]||z>RL_RBOX[3]) return null;
   if(Math.hypot(x-RL_POND.x,z-RL_POND.z)<RL_POND.R) return RL_POND.lvl;
   if(Math.hypot(x-RL_PLUNGE.x,z-RL_PLUNGE.z)<RL_PLUNGE.R) return RL_PLUNGE.lvl;
@@ -2672,7 +2725,7 @@ function updateBubbles(dt, emitter){
 }
 
 // Altura del suelo donde está el jugador: terreno, o la cima de una roca/botón/cofre si está encima
-var PIER_GROUND=null, TRAMP_GROUND=null, FI_GROUND=null, CAVE_GROUND=null, SHIP_GROUND=null, JI_DOCK_GROUND=null, JI_DECK_GROUND=null;   // (MX_FLAG y VEG_GEO se declaran antes: aquí las borraba)   // (la mina: más abajo de CAVE_TOP)
+var PIER_GROUND=null, TRAMP_GROUND=null, FI_GROUND=null, CAVE_GROUND=null, SHIP_GROUND=null, JI_DOCK_GROUND=null, JI_DECK_GROUND=null, DI_DOCK_GROUND=null;   // (MX_FLAG y VEG_GEO se declaran antes: aquí las borraba)   // (la mina: más abajo de CAVE_TOP)
 const CAVE_TOP=-150;   // el muelle y la casita de Tortu (se define más abajo)
 function groundAt(x,z,y){
   if(CAVE_GROUND && y!==undefined && y<CAVE_TOP) return CAVE_GROUND(x,z,y);   // dentro de la mina
@@ -2690,6 +2743,7 @@ function groundAt(x,z,y){
   if(SHIP_GROUND){ const sg=SHIP_GROUND(x,z,y); if(sg!==null && sg>g) g=sg; }   // v138: la cubierta del barco
   if(WI_DOCK_GROUND){ const wg=WI_DOCK_GROUND(x,z,y); if(wg!==null && wg>g) g=wg; }   // v139: el muelle de la Isla Invierno
   if(JI_DOCK_GROUND){ const jg=JI_DOCK_GROUND(x,z,y); if(jg!==null && jg>g) g=jg; const jd=JI_DECK_GROUND(x,z,y); if(jd!==null && jd>g) g=jd; const jf=jiFloor(x,z,y); if(jf!==null && jf>g) g=jf; }   // v141: muelle y mirador de la Isla Selva
+  if(DI_DOCK_GROUND){ const dg=DI_DOCK_GROUND(x,z,y); if(dg!==null && dg>g) g=dg; const df=diFloor(x,z,y); if(df!==null && df>g) g=df; }   // v143: muelle y rampas de la Isla Dulce
   for(const o of obsNear(x,z)){
     if(!o.walk) continue;
     const dx=x-o.x, dz=z-o.z;
@@ -4220,7 +4274,7 @@ function mapGesturing(){ return mapPtrs.size>0 || performance.now()-mapWheelT<18
 function renderMapCache(){ const z=mapView.z;
   mcc.setTransform(1,0,0,1,0,0); mcc.fillStyle=MAP_SEA; mcc.fillRect(0,0,MC_S,MC_S);
   mcc.setTransform(z,0,0,z, MC_S/2-mapView.cx*z, MC_S/2-mapView.cy*z);
-  mcc.imageSmoothingEnabled=true; mcc.drawImage(mapTerrain,0,0,MAP_PX,MAP_PX); try{ wiMapDraw(mcc); jiMapDraw(mcc); }catch(e){ console.warn(e); } drawMapDetails(mcc,z); mcc.setTransform(1,0,0,1,0,0);
+  mcc.imageSmoothingEnabled=true; mcc.drawImage(mapTerrain,0,0,MAP_PX,MAP_PX); try{ wiMapDraw(mcc); jiMapDraw(mcc); diMapDraw(mcc); }catch(e){ console.warn(e); } drawMapDetails(mcc,z); mcc.setTransform(1,0,0,1,0,0);
   mcView.z=z; mcView.cx=mapView.cx; mcView.cy=mapView.cy; }
 function mapCacheOK(sharp){ if(!mcView.z) return false; const r=mapView.z/mcView.z;
   if(sharp ? Math.abs(r-1)>1e-4 : (r<.67 || r>2.2)) return false;
@@ -11771,6 +11825,279 @@ function ji2Tick(dt,t){ if(!JI.done) return; const near=Math.hypot(camera.positi
     else if(A.t==='rana'){ A.hop-=dt; if(A.hop<=0 && Math.random()<dt*.6){ A.hop=.45; A.h+=(Math.random()-.5)*1.5; const nx=A.x+Math.sin(A.h)*.9, nz=A.z+Math.cos(A.h)*.9; if(jiWaterLevel(nx,nz)===null && terrainH(nx,nz)>JI_RIVER.lag.lvl-.2){ A.x=nx; A.z=nz; } }
       const k=A.hop>0?Math.sin((.45-A.hop)/.45*Math.PI):0; A.G.position.set(A.x,terrainH(A.x,A.z)+k*.5,A.z); A.G.rotation.y=A.h; } }
   if(JI2.butter){ const B=JI2.butter, P=B.pos; B.base.forEach(([x,y,z,ph],i)=>{ P[i*3]=x+Math.sin(t*.7+ph)*2.5+Math.sin(t*5+ph)*.15; P[i*3+1]=y+Math.sin(t*3.1+ph)*.4; P[i*3+2]=z+Math.cos(t*.6+ph)*2.5; }); B.m.geometry.attributes.position.needsUpdate=true; B.m.visible=night<.6; } }
+// ======================================================================================
+// ---------- v143: Isla Dulce, parte 1 (Montaña de Pastel, río de chocolate, lago de limonada, bosque de dulces, playa de azúcar, muelle de galleta) ----------
+// ======================================================================================
+// las rampas de galleta del pastel: cada piso tiene una rampa que da vuelta pegada a la pared y un descanso que llega arriba
+const DI_RAMPS=(()=>{ const C=DI_CAKE, out=[]; let th=-.55;
+  C.tiers.forEach((T,i)=>{ const rho=T.r+9, span=57/rho, n=Math.max(6,Math.ceil(span*rho/6)); out.push({i, rho, th0:th, th1:th+span, n, r:T.r}); th+=span+.1; });
+  return out; })();
+function diCakeP(rho,th){ return diS(DI_CAKE.su+rho*Math.cos(th), DI_CAKE.sv+rho*Math.sin(th)); }
+const DI_PATHS=(()=>{ const P=DI_PLAZA, L=DI_LAKE, R0=DI_RIVER.P[0], A=DI_RAMPS[0], C=DI_CAKE;
+  const foot=[C.su+(A.rho+1)*Math.cos(A.th0-.07), C.sv+(A.rho+1)*Math.sin(A.th0-.07)];
+  return [
+    [[DI_DOCK.s1-40,0],[P.su+P.r-2,-4]],                                              // del muelle a la plaza de galleta
+    [[P.su-P.r+2,-8],[230,-60],[130,-118],foot],                                       // a la Montaña de Pastel
+    [[P.su-4,P.r-2],[285,80],[L.su+22,L.sv-L.R-5]],                                    // al lago de limonada
+    [[230,-60],[150,-170],[60,-200],[R0.su+DI_RIVER.pond.R+4,R0.sv]]                  // a la fuente del río de chocolate
+  ].map(l=>l.map(([su,sv])=>diS(su,sv))); })();
+function diPathD(x,z){ let best=1e9; for(const l of DI_PATHS) for(let i=0;i<l.length-1;i++){ const [ax,az]=l[i], [bx,bz]=l[i+1], dx=bx-ax, dz=bz-az, L2=dx*dx+dz*dz, t=Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/L2)), qx=ax+dx*t-x, qz=az+dz*t-z, d=qx*qx+qz*qz; if(d<best) best=d; } return Math.sqrt(best); }
+function diVisited(){ return !!wiSave().dulce; }
+TELEPORTS.push((([x,z])=>({id:'dulce', name:'Isla Dulce', x, z, noPortal:true, lock:()=>!diVisited()}))(diS(DI_PLAZA.su+DI_PLAZA.r-4, -2)));
+{ let s=DI.rcU*.97; while(s>DI.rcU*.6 && diExact(...diS(s,0))<DI_DOCK.Y-.15) s-=1; DI_DOCK.s0=s-1.5; }
+DI_DOCK_GROUND=function(x,z,y){ if(x<DI_BOX[0]||x>DI_BOX[2]||z<DI_BOX[1]||z>DI_BOX[3]) return null; const [su,sv]=diL(x,z); return Math.abs(sv)<=DI_DOCK.W && su>=DI_DOCK.s0 && su<=DI_DOCK.s1 && y>=DI_DOCK.Y-.75 ? DI_DOCK.Y : null; };
+// pisos: las rampas del pastel (segmentos rectos, como puentes sin comba)
+function diFloor(x,z,y){ if(!DI.done || x<DI_BOX[0]||x>DI_BOX[2]||z<DI_BOX[1]||z>DI_BOX[3]) return null; let best=null;
+  for(const B of DI.segs){ const dx=B.bx-B.ax, dz=B.bz-B.az, L2=dx*dx+dz*dz, t=((x-B.ax)*dx+(z-B.az)*dz)/L2; if(t<-.02||t>1.02) continue; const qx=B.ax+dx*t-x, qz=B.az+dz*t-z; if(qx*qx+qz*qz>B.W*B.W) continue;
+    const yy=B.ay+(B.by-B.ay)*Math.max(0,Math.min(1,t)); if(y>=yy-.9 && (best===null||yy>best)) best=yy; }
+  return best; }
+// ---- silueta de lejos ----
+(function diFar(){ const E=DI.E, N=ULTRA?40:MIN_Q?52:72, geo=new THREE.PlaneGeometry(2*E,2*E,N,N); geo.rotateX(-Math.PI/2);
+  const pos=geo.attributes.position, n=pos.count, col=new Float32Array(n*3), W=N+1, st=2*E/N, H=new Float32Array(n);
+  for(let i=0;i<n;i++){ const x=pos.getX(i)+DI.x, z=pos.getZ(i)+DI.z, o=st*.35; pos.setX(i,x); pos.setZ(i,z); H[i]=Math.max(SEA_Y,(2*diExact(x,z)+diExact(x-o,z-o)+diExact(x+o,z-o)+diExact(x-o,z+o)+diExact(x+o,z+o))/6); }
+  const MINT=hexLin('#7fcf98'), MINT2=hexLin('#9bdcae'), PINK=hexLin('#ffb7d2'), CAKE=hexLin('#e9c690'), SEA=hexLin('#6fb0d8'), SAND=hexLin('#fbf3ea'), c=new THREE.Color();
+  for(let j=0;j<W;j++) for(let i=0;i<W;i++){ const k=j*W+i, x=pos.getX(k), z=pos.getZ(k), h=H[k], [su,sv]=diL(x,z), cr=Math.hypot(su-DI_CAKE.su,sv-DI_CAKE.sv);
+    c.copy(MINT).lerp(MINT2,.5*rlNoise(x/60,z/60));
+    if(cr<DI_CAKE.tiers[0].r+6){ const sl=Math.hypot(H[j*W+Math.min(N,i+1)]-H[j*W+Math.max(0,i-1)], H[Math.min(N,j+1)*W+i]-H[Math.max(0,j-1)*W+i])/(2*st); c.copy(PINK).lerp(CAKE,smooth(.4,.9,sl)); }
+    if(h<=SEA_Y+.01) c.copy(SEA); else if(h<2) c.lerp(SAND,.75);
+    pos.setY(k,h); col[k*3]=c.r; col[k*3+1]=c.g; col[k*3+2]=c.b; }
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3)); geo.computeVertexNormals();
+  const mesh=new THREE.Mesh(geo,farRelief.material); mesh.frustumCulled=false; mesh.renderOrder=-.55; mesh.matrixAutoUpdate=false; mesh.userData.noBatch=true;
+  mesh.onBeforeRender=farRelief.onBeforeRender; scene.add(mesh); DI.far=mesh; })();
+// ---- armar la isla poco a poco ----
+function* diBuildGen(){
+  const E=DI.E, CS=ULTRA?9:({min:8, low:6.5, mid:5.5, high:5, max:4.5}[Q0]||6.5), N=Math.ceil(2*E/CS), W=N+1, x0=DI.x-E, z0=DI.z-E, H=new Float32Array(W*W);
+  for(let j=0;j<W;j++){ for(let i=0;i<W;i++) H[j*W+i]=diExact(x0+i*CS, z0+j*CS); if(j%6===5) yield; }
+  DI.grid={x0, z0, CS, W, H};
+  const pos=new Float32Array(W*W*3), nor=new Float32Array(W*W*3), uv=new Float32Array(W*W*2), col=new Float32Array(W*W*3);
+  const GR=[hexLin('#86d39c'),hexLin('#7cc994'),hexLin('#92dba6')], DARK=hexLin('#5fb47e'), PINKG=hexLin('#f4b6cf'), LILAC=hexLin('#c9b5ee'),
+    SPONGE=hexLin('#ecc68c'), JAM=hexLin('#e2557d'), FROST=[hexLin('#ffbcd6'),hexLin('#fff6ee'),hexLin('#bdeed3')],
+    SAND=hexLin('#fcefd6'), SANDW=hexLin('#efe2d2'), CHOC=hexLin('#7b4a2b'), CHOCE=hexLin('#9a643c'), RBED=hexLin('#4e2c1a'), BANK=hexLin('#c99a6a'), LEMB=hexLin('#f1dc7a'),
+    COOK=hexLin('#d9a866'), CHIP=hexLin('#5a3420'), WET=hexLin('#e6d6c2'), SEAF=hexLin('#e9dccb'), DEEP=hexLin('#4f86a3'), SPR=['#ff5fa2','#ffd23f','#5ec8ff','#7be07b','#b07cff'].map(hexLin), c=new THREE.Color();
+  const C=DI_CAKE; if(C.base===undefined) C.base=diBase(C.su,C.sv,...diS(C.su,C.sv));
+  for(let j=0;j<W;j++){ for(let i=0;i<W;i++){ const k=j*W+i, x=x0+i*CS, z=z0+j*CS, h=H[k];
+      const hx=(H[j*W+Math.min(N,i+1)]-H[j*W+Math.max(0,i-1)])/(2*CS), hz=(H[Math.min(N,j+1)*W+i]-H[Math.max(0,j-1)*W+i])/(2*CS), sl=Math.hypot(hx,hz);
+      pos[k*3]=x; pos[k*3+1]=h; pos[k*3+2]=z; const nl=1/Math.hypot(hx,1,hz); nor[k*3]=-hx*nl; nor[k*3+1]=nl; nor[k*3+2]=-hz*nl; uv[k*2]=x/16; uv[k*2+1]=-z/16;
+      const lx=x-DI.x, lz=z-DI.z, cc=Math.hypot(lx,lz)/diCoastR(Math.atan2(lz,lx)), [su,sv]=diL(x,z), cr=Math.hypot(su-C.su,sv-C.sv);
+      c.copy(GR[((Math.floor(x/16)+Math.floor(z/16))%3+3)%3]).lerp(DARK,.35*smooth(.45,.7,rlFbm(x/90+4,z/90-6,2)));
+      { const f=rlFbm(x/70-13,z/70+8,2); c.lerp(PINKG,.4*smooth(.64,.74,f)); }   // manchitas rosas y lila en el pasto
+      if(cr<C.tiers[0].r+8){ const hc=h-C.base, wall=smooth(.5,1.1,sl);
+        if(wall>0){ const ph=((hc%20)+20)%20; c.lerp(SPONGE,wall); if(ph>8.5 && ph<11.5) c.lerp(JAM,wall*.9); }   // el pan, con su rayita de mermelada
+        if(hc>17 && wall<1){ const ti=Math.max(0,Math.min(2,Math.round(hc/20)-1)); c.lerp(FROST[ti],1-wall); } }
+      if(cc>.84 && h<3.2){ const bk=smooth(.83,.9,cc)*(1-smooth(2,3.2,h)); c.lerp(SAND,bk); const q=rlHash(Math.floor(x/2.2)+7,Math.floor(z/2.2)-3); if(q<.06) c.lerp(SPR[(q*97|0)%5],.45*bk); }   // playa de azúcar con chispitas
+      if(cc<.9){ const pd=diPathD(x,z); if(pd<3.6) c.lerp(pd<2.1?CHOC:CHOCE, 1-smooth(2.1,3.6,pd)); }   // caminos de chocolate
+      { const P=DI_PLAZA, d=Math.hypot(su-P.su,sv-P.sv); if(d<P.r){ c.lerp(COOK,1-smooth(P.r-1.5,P.r,d)); if(rlHash(Math.floor(x/2.4)-5,Math.floor(z/2.4)+9)<.16) c.lerp(CHIP,.8); } }   // la plaza: una galleta gigante
+      { const rn=diRiverNear(su,sv); if(rn.d<DI_RIVER.W+4){ const bk=1-smooth(DI_RIVER.W,DI_RIVER.W+4,rn.d); c.lerp(BANK,bk*.8); if(rn.d<DI_RIVER.W) c.lerp(RBED,.85); } }
+      { const P0=DI_RIVER.P[0], d=Math.hypot(su-P0.su,sv-P0.sv), Rr=DI_RIVER.pond.R; if(d<Rr+4) c.lerp(d<Rr?RBED:BANK, 1-smooth(Rr,Rr+4,d)); }
+      { const L=DI_LAKE, d=Math.hypot(su-L.su,sv-L.sv); if(d<L.R+5) c.lerp(d<L.R?LEMB:SAND, 1-smooth(L.R,L.R+5,d)); }
+      if(h<SEA_Y && cc>.95){ c.lerp(WET, smooth(SEA_Y,SEA_Y-1,h)); }
+      if(cc>1){ c.lerp(SEAF, smooth(1,1.05,cc)); c.lerp(DEEP, smooth(-6,-40,h)); }
+      const cv=(i>0&&i<N&&j>0&&j<N)?(h-(H[k-1]+H[k+1]+H[k-W]+H[k+W])/4)/CS:0, lum=THREE.MathUtils.clamp(.95+cv*2.2,.78,1.12);
+      col[k*3]=c.r*lum; col[k*3+1]=c.g*lum; col[k*3+2]=c.b*lum; }
+    if(j%5===4) yield; }
+  const A={position:new THREE.BufferAttribute(pos,3), normal:new THREE.BufferAttribute(nor,3), uv:new THREE.BufferAttribute(uv,2), color:new THREE.BufferAttribute(col,3)};
+  const step=40, G=new THREE.Group(); G.userData.noBatch=true; scene.add(G); DI.tiles=G;
+  for(let ty=0;ty<N;ty+=step){ for(let tx=0;tx<N;tx+=step){ const idx=[]; let y0=1e9,y1=-1e9;
+      for(let iy=ty;iy<Math.min(N,ty+step);iy++) for(let ix=tx;ix<Math.min(N,tx+step);ix++){ const a=ix+W*iy, b=ix+W*(iy+1), cc=ix+1+W*(iy+1), d=ix+1+W*iy;
+        if(Math.max(H[a],H[b],H[cc],H[d])<DEEP_Y+.6) continue; idx.push(a,b,d, b,cc,d); for(const q of [a,b,cc,d]){ if(H[q]<y0) y0=H[q]; if(H[q]>y1) y1=H[q]; } }
+      if(!idx.length) continue;
+      const g=new THREE.BufferGeometry(); for(const k in A) g.setAttribute(k,A[k]); g.setIndex(idx);
+      const xa=x0+tx*CS, xb=x0+Math.min(N,tx+step)*CS, za=z0+ty*CS, zb=z0+Math.min(N,ty+step)*CS;
+      g.boundingSphere=new THREE.Sphere(new THREE.Vector3((xa+xb)/2,(y0+y1)/2,(za+zb)/2), Math.hypot(xb-xa,y1-y0,zb-za)/2+.5);
+      const m=new THREE.Mesh(g,GROUND_MAT); m.receiveShadow=true; m.matrixAutoUpdate=false; G.add(m); }
+    yield; }
+  diBuildWater(); yield;
+  yield* diBuildPlants(); yield;
+  diBuildDock(); yield;
+  yield* diBuildCake(); yield;
+  { const N=MIN_Q?160:256, E=DI.E, data=new Uint8Array(N*N);
+    for(let j=0;j<N;j++){ for(let i=0;i<N;i++){ const x=DI.x-E+2*E*(i+.5)/N, z=DI.z-E+2*E*(j+.5)/N; data[j*N+i]=Math.round(THREE.MathUtils.clamp((SEA_Y-terrainH(x,z)+2)/12,0,1)*255); } if(j%40===39) yield; }
+    const t=new THREE.DataTexture(data,N,N,THREE.LuminanceFormat); t.magFilter=t.minFilter=THREE.LinearFilter; t.generateMipmaps=false; t.needsUpdate=true; DI.depth={tex:t, rect:new THREE.Vector4(DI.x-E,DI.z-E,2*E,2*E)}; }
+  DI.done=true;
+}
+// ---- el agua: el río de chocolate (que corre), su poza y el lago de limonada ----
+function diBuildWater(){ const R=DI_RIVER, P=R.P, L=DI_LAKE;
+  let bx0=1e9,bz0=1e9,bx1=-1e9,bz1=-1e9; const ext=(x,z,m)=>{ bx0=Math.min(bx0,x-m); bz0=Math.min(bz0,z-m); bx1=Math.max(bx1,x+m); bz1=Math.max(bz1,z+m); };
+  for(const p of P) ext(p.x,p.z,40); { const [x,z]=diS(L.su,L.sv); ext(x,z,L.R+20); }
+  const Wd=Math.ceil((bx1-bx0)/2.5), Hd=Math.ceil((bz1-bz0)/2.5), data=new Uint8Array(Wd*Hd);
+  for(let j=0;j<Hd;j++) for(let i=0;i<Wd;i++){ const x=bx0+(i+.5)*(bx1-bx0)/Wd, z=bz0+(j+.5)*(bz1-bz0)/Hd, lv=diWaterLevel(x,z); data[j*Wd+i]=lv===null?0:Math.round(THREE.MathUtils.clamp((lv-terrainH(x,z)+2)/12,0,1)*255); }
+  const tex=new THREE.DataTexture(data,Wd,Hd,THREE.LuminanceFormat); tex.magFilter=tex.minFilter=THREE.LinearFilter; tex.generateMipmaps=false; tex.needsUpdate=true;
+  const depth={tex, rect:new THREE.Vector4(bx0,bz0,bx1-bx0,bz1-bz0)};
+  const choc=makeWaterMat({A:WATER.lakeA, depth, shallow:'#9a5a2e', deep:'#6a3519', deepD:1.0, detail:waterTex, tile:8, foam:.12, opacity:1, flow:true});
+  const lemon=makeWaterMat({A:WATER.lakeA, depth, shallow:'#fff3a6', deep:'#f3cf3e', deepD:2.2, detail:waterTex, tile:8, foam:.6, opacity:1, flow:true});
+  for(const m of [choc,lemon]){ m.userData.lake=true; waterMats.push(m); } DI.waterMats=[choc,lemon];
+  // la cinta del río
+  const K=MIN_Q?4:6, HW=R.W+1.2, pos=[], fl=[], idx=[]; let rows=0, prev=false; const total=R.L[R.L.length-1];
+  for(let s=0;s<=total;s+=2.5){ let i=0; while(i<P.length-2 && R.L[i+1]<s) i++; const a=P[i], b=P[i+1], t=(s-R.L[i])/(R.L[i+1]-R.L[i]), su=a.su+(b.su-a.su)*t, sv=a.sv+(b.sv-a.sv)*t, bed=a.b+(b.b-a.b)*t, lv=bed+.75;
+    if(lv<=SEA_Y+.06) break;
+    if(Math.hypot(su-P[0].su,sv-P[0].sv)<R.pond.R-3){ prev=false; continue; }
+    let dx=b.su-a.su, dz=b.sv-a.sv; const l=Math.hypot(dx,dz)||1; dx/=l; dz/=l; const sl=(a.b-b.b)/l, sp=.7+smooth(.01,.05,sl)*1.2;
+    for(let k=0;k<K;k++){ const w=(-1+2*k/(K-1))*HW, [x,z]=diS(su-dz*w, sv+dx*w); pos.push(x,lv,z); const fx=dx*DI.ux+dz*DI.vx, fz=dx*DI.uz+dz*DI.vz; fl.push(fx*sp,fz*sp,.05*(1-Math.abs(w)/HW*.6)); }
+    if(prev){ const r0=(rows-1)*K, r1=rows*K; for(let k=0;k<K-1;k++) idx.push(r0+k, r0+k+1, r1+k, r0+k+1, r1+k+1, r1+k); }
+    rows++; prev=true; }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('aFlow',new THREE.Float32BufferAttribute(fl,3)); g.setIndex(idx); g.computeBoundingSphere();
+  const rib=new THREE.Mesh(g,choc); rib.renderOrder=2; scene.add(rib);
+  const disc=(su,sv,Rr,lv,mat)=>{ const dg=ringGeometry(Rr+1.5,MIN_Q?10:18,MIN_Q?32:56,1.2), q=dg.attributes.position, f=new Float32Array(q.count*3); dg.setAttribute('aFlow',new THREE.BufferAttribute(f,3));
+    const [x,z]=diS(su,sv), m=new THREE.Mesh(dg,mat); m.position.set(x,lv,z); m.renderOrder=2; scene.add(m); return m; };
+  disc(P[0].su,P[0].sv,R.pond.R,R.pond.lvl,choc); disc(L.su,L.sv,L.R,L.lvl,lemon);
+  // la fuente del río: un chorro de chocolate que sale de una piedra de chocolate
+  const [px,pz]=diS(P[0].su-R.pond.R-1,P[0].sv), G=new THREE.Group(); scene.add(G); const cm=wiMat('#5a3420','rgba(20,8,0,.25)');
+  wiAdd(G,sphereG,cm,px,R.pond.lvl+1,pz,3.4,3,3.4); obstacles.push({x:px,z:pz,r:3.2,top:R.pond.lvl+3.8,walk:true});
+  { const fp=[], fu=[], fi=[], rws=8, cols=4, [dx,dz]=[DI.ux,DI.uz];
+    for(let r=0;r<=rws;r++){ const t=r/rws, fwd=1.8+t*2.4, y=R.pond.lvl+3.2-t*t*3.3; for(let c=0;c<=cols;c++){ const w=(c/cols-.5)*1.6, [x,z]=diS(P[0].su-R.pond.R-1+fwd, P[0].sv+w); fp.push(x,y,z); fu.push(c/cols,1-t); } }
+    for(let r=0;r<rws;r++) for(let c=0;c<cols;c++){ const q=r*(cols+1)+c, w=q+cols+1; fi.push(q,w,q+1, q+1,w,w+1); }
+    const fg=new THREE.BufferGeometry(); fg.setAttribute('position',new THREE.Float32BufferAttribute(fp,3)); fg.setAttribute('uv',new THREE.Float32BufferAttribute(fu,2)); fg.setIndex(fi); fg.computeVertexNormals(); fg.computeBoundingSphere();
+    const fmat=new THREE.MeshStandardMaterial({color:'#6b3a1e', roughness:.35, side:THREE.DoubleSide}); const fm=new THREE.Mesh(fg,fmat); fm.userData.noBatch=true; scene.add(fm); DI.spout=fm; }
+  // una piedrita de azúcar en el lago... y patitos de goma
+  DI.ducks=[]; for(let k=0;k<4;k++){ const d=new THREE.Group(), y=wiMat('#ffd23f'), o=wiMat('#ff8a2a'); wiAdd(d,sphereG,y,0,.35,0,.55,.4,.7); wiAdd(d,sphereG,y,0,.85,.3,.32,.32,.32); wiAdd(d,WI_CONEG,o,0,.82,.68,.12,.25,.12).rotation.x=Math.PI/2;
+    d.userData.ph=k*1.7; d.userData.noBatch=true; scene.add(d); DI.ducks.push(d); }
+  mergeStatic(G); }
+// ---- plantas: el bosque de dulces ----
+const DI_GEO=(()=>{ let G=null; return ()=>{ if(G) return G;
+  const M=(x,y,z,sx,sy,sz,rx=0,ry=0,rz=0)=>new THREE.Matrix4().compose(new THREE.Vector3(x,y,z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)), new THREE.Vector3(sx,sy,sz));
+  const lo=MIN_Q||ULTRA, cyl=new THREE.CylinderGeometry(1,1,1,lo?6:10), ball=new THREE.SphereGeometry(1,lo?7:10,lo?5:7), cone=new THREE.ConeGeometry(1,1,lo?6:9), ring=new THREE.TorusGeometry(1,.14,lo?4:6,lo?12:20);
+  const lolli=col=>vegMerge([[cyl,'#fff6f2',M(0,2.2,0,.13,4.4,.13)], [cyl,col,M(0,5.4,0,1.7,.5,1.7,Math.PI/2)], [ring,'#ffffff',M(0,5.4,.27,1.05,1.05,1,0)], [ring,'#ffffff',M(0,5.4,-.27,1.05,1.05,1,0)], [ring,'#ffffff',M(0,5.4,.27,.5,.5,1,0)], [ring,'#ffffff',M(0,5.4,-.27,.5,.5,1,0)], [cyl,'#fff6f2',M(0,5.4,0,.22,.56,.22,Math.PI/2)]]);
+  const cotton=(c1,c2,c3)=>vegMerge([[cyl,'#fff3f8',M(0,2.8,0,.32,5.6,.32)], [cyl,'#ff8fb8',M(0,1.4,0,.34,.5,.34)], [cyl,'#ff8fb8',M(0,3.2,0,.34,.5,.34)], [cyl,'#ff8fb8',M(0,5,0,.34,.5,.34)],
+    [ball,c1,M(0,7.2,0,2.9,2.3,2.9)], [ball,c2,M(1.7,6.6,.6,2.1,1.8,2.1)], [ball,c3,M(-1.5,6.8,-.9,2.2,1.8,2.2)], [ball,c2,M(.2,8.6,-.4,2,1.6,2)], [ball,c3,M(-.3,6.2,1.6,1.7,1.4,1.7)]]);
+  const caneP=[]; for(let k=0;k<7;k++) caneP.push([cyl,k%2?'#ffffff':'#e8333f',M(0,.35+k*.7,0,.24,.7,.24)]);
+  for(let k=0;k<4;k++){ const tg=new THREE.TorusGeometry(.65,.24,lo?5:7,lo?3:4,Math.PI/4); caneP.push([tg,k%2?'#ffffff':'#e8333f',M(.65,4.9,0,1,1,1,0,0,k*Math.PI/4)]); }
+  caneP.push([cyl,'#e8333f',M(1.3,4.6,0,.24,.6,.24)]);
+  const cane=vegMerge(caneP);
+  const mush=(cap)=>vegMerge([[cyl,'#fff1d6',M(0,.8,0,.5,1.6,.5)], [ball,cap,M(0,1.75,0,1.9,1.05,1.9)], ...[[.9,.9,.3],[-.8,1,.5],[.2,1.25,-.9],[-.3,.95,1.2],[1.1,.55,-.6],[-1.2,.5,-.4]].map(([x,y,z])=>[ball,'#ffffff',M(x,1.75+y*.8,z,.26,.12,.26)])]);
+  const drops=vegMerge([[ball,'#ff5fa2',M(0,.15,0,.5,.55,.5)], [ball,'#ffd23f',M(.9,.12,.4,.42,.48,.42)], [ball,'#5ec8ff',M(-.6,.12,.7,.4,.45,.4)], [ball,'#7be07b',M(.3,.12,-.8,.45,.5,.45)]]);
+  const shells=vegMerge([[cone,'#ff9ec4',M(0,.08,0,.32,.16,.42,Math.PI/2.2)], [cone,'#c7a6ff',M(.7,.07,.3,.26,.14,.34,Math.PI/2.2,1.2)], [cone,'#ffe27a',M(-.4,.07,.6,.24,.13,.3,Math.PI/2.2,2.4)], [ball,'#8fe3d8',M(.3,.05,-.5,.2,.09,.2)]]);
+  const sprinkles=vegMerge(['#ff5fa2','#ffd23f','#5ec8ff','#7be07b','#b07cff','#ff8a2a','#ffffff','#ff5fa2'].map((c,k)=>{ const a=k*2.4, r=.4+(k%3)*.45; return [cyl,c,M(Math.cos(a)*r,.08,Math.sin(a)*r,.09,.5,.09,Math.PI/2,a*1.7,0)]; }));
+  const drip=col=>vegMerge([[ball,col,M(0,0,0,1.6,.7,1.6)], [ball,col,M(.2,-.8,.05,.6,1.1,.6)], [ball,col,M(-.9,-.5,0,.45,.8,.45)]]);
+  return G={lol:['#ff4f7b','#9b5de5','#ffa630','#3ab0ff','#4cd07a'].map(lolli), cotP:cotton('#ffb3d9','#ff9ccc','#ffc8e4'), cotB:cotton('#a9d8ff','#8cc8ff','#c9e6ff'), cane, mushR:mush('#ff4d5e'), mushV:mush('#a66bff'), drops, shells, sprinkles, dripW:drip('#fff7f2'), dripP:drip('#ff9cc5'), dripC:drip('#9fe3c0')}; }; })();
+function diNoPlant(su,sv,x,z){ const C=DI_CAKE; if(Math.hypot(su-C.su,sv-C.sv)<C.tiers[0].r+12) return true;
+  const P=DI_PLAZA; if(Math.hypot(su-P.su,sv-P.sv)<P.r+5) return true; if(su>P.su && su<DI.rcU+5 && Math.abs(sv)<10) return true;
+  const L=DI_LAKE; if(Math.hypot(su-L.su,sv-L.sv)<L.R+6) return true; const P0=DI_RIVER.P[0]; if(Math.hypot(su-P0.su,sv-P0.sv)<DI_RIVER.pond.R+8) return true;
+  return false; }
+function* diBuildPlants(){ const q={min:.35, low:.6, mid:.8, high:1, max:1}[Q0]||.6, lol=[[],[],[],[],[]], cotP=[], cotB=[], canes=[], mR=[], mV=[], drops=[], shells=[];
+  for(let gx=-DI.E;gx<DI.E;gx+=8){ if(((gx+DI.E)/8|0)%20===19) yield; for(let gz=-DI.E;gz<DI.E;gz+=8){ const r1=rlHash(gx*3-7,gz*7+5), r2=rlHash(gx+23,gz-31), r3=rlHash(gx*5-3,gz*3+9), r4=rlHash(gx+71,gz*2-13);
+    const x=DI.x+gx+(r1-.5)*6.5, z=DI.z+gz+(r2-.5)*6.5, lx=x-DI.x, lz=z-DI.z, cc=Math.hypot(lx,lz)/diCoastR(Math.atan2(lz,lx)); if(cc>.93) continue;
+    const [su,sv]=diL(x,z); if(diNoPlant(su,sv,x,z)) continue;
+    const h=diGridH(x,z); if(h<1 || diWaterLevel(x,z)!==null) continue; const pd=diPathD(x,z); if(pd<3.5) continue;
+    const rn=diRiverNear(su,sv); if(rn.d<DI_RIVER.W+2.5) continue;
+    if(cc>.83 || h<2.6){ if(r3<.3*q) shells.push([x,z,.8+r1*.6,r2*6.28]); else if(r3>.985) canes.push([x,z,.9+r1*.3,r2*6.28]); continue; }   // la playa de azúcar: conchitas
+    const forest=rlFbm(x/110-9,z/110+15,3), p=(forest>.5?.5:forest>.42?.26:.1)*q;
+    if(r3<p){ (r4<.5?cotP:cotB).push([x,z,.8+r1*.55,r2*6.28]); }
+    else if(r3<p+.06*q) lol[(r4*5)|0].push([x,z,.75+r1*.6,r2*6.28]);
+    else if(r3<p+.09*q) canes.push([x,z,.8+r1*.5,r2*6.28]);
+    else if(r3<p+.12*q) (r4<.5?mR:mV).push([x,z,.8+r1*.8,r2*6.28]);
+    if(r4>.55 && r4<.55+.3*q && pd>4.5) drops.push([x+(r2-.5)*3,z+(r1-.5)*3,.8+r3*.6,r1*6.28]); } }
+  yield;
+  const G=DI_GEO(), put=(L,geo,obs)=>{ if(!L.length) return; instanced(geo, VEG_GEO.mat, L, (o,[x,z,s,rot])=>{ o.position.set(x,groundMin(x,z,.25*s)-.1,z); o.scale.setScalar(s); o.rotation.y=rot; }); if(obs) L.forEach(([x,z,s])=>obstacles.push({x,z,r:obs*s,top:terrainH(x,z)+60,walk:false})); };
+  put(cotP,G.cotP,.5); put(cotB,G.cotB,.5); yield; lol.forEach((L,i)=>put(L,G.lol[i],.25)); put(canes,G.cane,.3); yield;
+  if(mR.length||mV.length){ put(mR,G.mushR,0); put(mV,G.mushV,0); [...mR,...mV].forEach(([x,z,s])=>{ obstacles.push({x,z,r:.55*s,top:terrainH(x,z)+1.6*s,walk:false}); }); }
+  put(drops,G.drops,0); put(shells,G.shells,0);
+  DI.nTrees=cotP.length+cotB.length+lol.reduce((a,L)=>a+L.length,0)+canes.length; }
+// ---- letreros y faroles de bombón ----
+const DI_FIRE=[];
+function diGumLamp(G,x,z,y,col){ wiAdd(G,cylG,wiMat('#ffffff'),x,y+1.4,z,.08,2.8,.08); for(let k=0;k<4;k++) wiAdd(G,cylG,wiMat('#e8333f'),x,y+.3+k*.7,z,.085,.25,.085);
+  const m=new THREE.MeshStandardMaterial({color:col, emissive:new THREE.Color(col), emissiveIntensity:0, roughness:.25}); fairGlow.push(m); wiAdd(G,sphereG,m,x,y+3.1,z,.42,.42,.42); wiAdd(G,cylG,wiMat('#e8333f'),x,y+2.75,z,.2,.12,.2);
+  obstacles.push({x,z,r:.18,top:y+60,walk:false}); }
+function diStripe(G,x,z,y0,h,r,seg=.7){ for(let k=0,yy=y0;yy<y0+h-.01;k++,yy+=seg){ const hh=Math.min(seg,y0+h-yy); wiAdd(G,cylG,wiMat(k%2?'#ffffff':'#e8333f','rgba(0,0,0,.06)'),x,yy+hh/2,z,r,hh,r); } }
+// ---- el muelle de galleta y el arco de caramelo ----
+function diBuildDock(){ const D=DI_DOCK, G=new THREE.Group(); scene.add(G); const cook=wiMat('#d9a866','rgba(90,50,10,.2)'), cookD=wiMat('#b98448','rgba(60,30,5,.2)'), chip=wiMat('#4e2c1a');
+  const len=D.s1-D.s0, mid=(D.s0+D.s1)/2, [mx,mz]=diS(mid,0), ry=Math.atan2(DI.ux,DI.uz);
+  wiAdd(G,WI_BOXG,cook,mx,D.Y-.14,mz,D.W*2,.28,len,ry);
+  for(let s=D.s0+1.5;s<D.s1;s+=3){ const [x,z]=diS(s,0); wiAdd(G,WI_BOXG,cookD,x,D.Y+.003,z,D.W*2-.1,.012,.08,ry); }   // las galletas, una tras otra
+  for(let s=D.s0+.5;s<D.s1;s+=.9){ const q=rlHash(s*7|0,3), [x,z]=diS(s,(q-.5)*D.W*1.6); wiAdd(G,sphereG,chip,x,D.Y,z,.12,.05,.1); }   // chispas de chocolate
+  for(let s=D.s0+2;s<=D.s1;s+=4) for(const e of [-1,1]){ const [x,z]=diS(s,e*(D.W-.15)), g=terrainH(x,z); diStripe(G,x,z,Math.min(g,D.Y-1),D.Y+.5-Math.min(g,D.Y-1),.17,.5); }
+  const cols=['#ff7ab8','#7fd3ff','#ffe066','#9df59d'];
+  [D.s1-1,D.s1-16,D.s0+6].forEach((s,k)=>{ const [x,z]=diS(s,D.W-.25); diGumLamp(G,x,z,D.Y,cols[k%4]); });
+  for(let s=D.s0-12, e=1, k=0;s>DI_PLAZA.su+DI_PLAZA.r;s-=20, e=-e, k++){ const [x,z]=diS(s,e*3.2); diGumLamp(G,x,z,terrainH(x,z)-.05,cols[k%4]); }
+  // el arco de caramelo: dos bastones gigantes y una media luna de rayas, con el letrero
+  { const s=D.s0-3, [ax,az]=diS(s,0), y=terrainH(ax,az)-.05, R=3.4, H=4.6;
+    for(const e of [-1,1]){ const [x,z]=diS(s,e*R); diStripe(G,x,z,y-.3,H+.3,.32); obstacles.push({x,z,r:.4,top:y+60,walk:false}); }
+    for(let k=0;k<12;k++){ const tg=new THREE.TorusGeometry(R,.34,8,3,Math.PI/12), o=new THREE.Mesh(tg,wiMat(k%2?'#ffffff':'#e8333f','rgba(0,0,0,.06)')); o.position.set(ax,y+H,az); o.rotation.order='YXZ'; o.rotation.set(0,ry,k*Math.PI/12); o.castShadow=true; G.add(o); }
+    for(const e of [-1,1]){ const [x,z]=diS(s,e*R); wiAdd(G,sphereG,wiMat('#ff9ccc'),x,y+H+.05,z,.45,.45,.45); }
+    const tops=[[0,'#ff4f7b'],[-.7,'#ffd23f'],[.7,'#3ab0ff']]; tops.forEach(([o,col])=>{ const [x,z]=diS(s,o*R), yy=y+H+R*Math.sqrt(1-o*o)+.5; wiAdd(G,cylG,wiMat('#ffffff'),x,yy-.2,z,.06,.8,.06); const l=wiAdd(G,cylG,wiMat(col),x,yy+.5,z,.6,.2,.6,ry); l.rotation.order='YXZ'; l.rotation.set(Math.PI/2,ry,0); });
+    const sg1=jiSign(G,ax,az,y+H-.9,ry,'🍭 Isla Dulce 🍭','#d63a7a',5.2,'#fff3f8'), sg2=jiSign(G,ax-DI.ux*.03,az-DI.uz*.03,y+H-.9,ry+Math.PI,'🍭 Isla Dulce 🍭','#d63a7a',5.2,'#fff3f8');
+    for(const e of [-1,1]){ const [x,z]=diS(s,e*2.3); wiAdd(G,cylG,wiMat('#ffffff'),x,y+H-.25,z,.04,.7,.04); } }
+  mergeStatic(G); }
+// ---- la Montaña de Pastel: betún que escurre, chispas, rampas de galleta, velas, la cereza y el mirador ----
+function* diBuildCake(){ const C=DI_CAKE, base=C.base, G=new THREE.Group(), Y=i=>base+20*(i+1), GEO=DI_GEO(); scene.add(G);
+  // betún que escurre por la orilla de cada piso
+  const drips=[[],[],[]]; C.tiers.forEach((T,i)=>{ const n=Math.round(2*Math.PI*T.r/3.2); for(let k=0;k<n;k++){ const th=k/n*Math.PI*2, [x,z]=diCakeP(T.r-3.3,th); drips[i].push([x,z,1+.35*rlHash(k,i*7+1),rlHash(k*5,i)*6.28, Y(i)]); } });
+  const DG=[GEO.dripP,GEO.dripW,GEO.dripC]; drips.forEach((L,i)=>instanced(DG[i], VEG_GEO.mat, L, (o,[x,z,s,rot,yy])=>{ o.position.set(x,yy-.15,z); o.scale.setScalar(s); o.rotation.y=rot; }));
+  yield;
+  // chispas de colores arriba de cada piso
+  { const L=[], q={min:.4, low:.65, mid:.85, high:1, max:1}[Q0]||.65; C.tiers.forEach((T,i)=>{ const rIn=i<2?C.tiers[i+1].r+8:0, n=Math.round((T.r*T.r-rIn*rIn)/90*q);
+      for(let k=0;k<n;k++){ const a=rlHash(k,i*13+2)*Math.PI*2, r=Math.sqrt(rIn*rIn+(Math.pow(T.r-5,2)-rIn*rIn)*rlHash(k*3+1,i*5+9)), [x,z]=diCakeP(r,a); L.push([x,z,1+rlHash(k,i)*.6,a*3]); } });
+    instanced(GEO.sprinkles, VEG_GEO.mat, L, (o,[x,z,s,rot])=>{ o.position.set(x,terrainH(x,z)+.02,z); o.scale.setScalar(s); o.rotation.y=rot; }); }
+  yield;
+  // las rampas de galleta (con barandal rojo y postes de bastón)
+  const cook=wiMat('#d9a866','rgba(90,50,10,.2)'), cookD=wiMat('#b98448','rgba(60,30,5,.2)'), rail=wiMat('#e8333f'), W=1.8;
+  const seg=(ax,az,ay,bx,bz,by)=>{ DI.segs.push({ax,az,ay,bx,bz,by,W});
+    const L=Math.hypot(bx-ax,bz-az), ryy=Math.atan2(bx-ax,bz-az), pitch=Math.atan2(by-ay,L), Lr=Math.hypot(L,by-ay)+.08;
+    const mk=(m,w,h,off,dy)=>{ const o=new THREE.Mesh(WI_BOXG,m); o.position.set((ax+bx)/2+Math.cos(ryy)*off,(ay+by)/2+dy,(az+bz)/2-Math.sin(ryy)*off); o.scale.set(w,h,Lr); o.rotation.order='YXZ'; o.rotation.set(-pitch,ryy,0); o.castShadow=true; o.receiveShadow=true; G.add(o); };
+    mk(cook,W*2,.3,0,-.16); mk(cookD,W*2+.12,.08,0,-.33); for(const e of [-1,1]) mk(rail,.1,.1,e*(W-.05),.9); };
+  for(const A of DI_RAMPS){ const y0=A.i===0?base:Y(A.i-1), y1=Y(A.i);
+    for(let k=0;k<A.n;k++){ const t0=k/A.n, t1=(k+1)/A.n, [ax,az]=diCakeP(A.rho,A.th0+(A.th1-A.th0)*t0), [bx,bz]=diCakeP(A.rho,A.th0+(A.th1-A.th0)*t1); seg(ax,az,y0+(y1-y0)*t0+.05,bx,bz,y0+(y1-y0)*t1+.05);
+      if(k>0){ const g=terrainH(ax,az), yy=y0+(y1-y0)*t0; diStripe(G,ax,az,g-.2,yy-g-.1,.22,.9); obstacles.push({x:ax,z:az,r:.3,top:yy-.4,walk:false}); } }
+    { const [ax,az]=diCakeP(A.rho,A.th1), [bx,bz]=diCakeP(A.r-11,A.th1); seg(ax,az,y1+.05,bx,bz,y1+.05); }   // el descanso que llega arriba
+    if(A.i===0){ const [x,z]=diCakeP(A.rho+3.2,A.th0-.03), y=terrainH(x,z); wiAdd(G,cylG,wiMat('#7a4a2b'),x,y+.8,z,.07,1.6,.07); jiSign(G,x,z,y+1.6,Math.atan2(DI.ux,DI.uz),'Montaña de Pastel','#b03a6a',2.8,'#fff3f8'); }
+    yield; }
+  mergeStatic(G); yield; const G2=new THREE.Group(); scene.add(G2);
+  // velas en el último piso
+  const top=Y(2), [cx,cz]=diCakeP(0,0); DI.candles=[];
+  ['#ff9ccc','#8fd3ff','#ffe066','#a8f0a8','#c7a6ff','#ffb27a'].forEach((col,k)=>{ const a=k/6*Math.PI*2+.3, [x,z]=diCakeP(32,a); wiAdd(G2,cylG,wiMat(col,'rgba(0,0,0,.05)'),x,top+3,z,.8,6,.8); for(let q=0;q<4;q++) wiAdd(G2,cylG,wiMat('#ffffff'),x,top+.9+q*1.4,z,.82,.3,.82);
+    wiAdd(G2,cylG,wiMat('#3a2a1c'),x,top+6.2,z,.05,.4,.05); obstacles.push({x,z,r:.95,top:top+6,walk:true});
+    const f=new THREE.Mesh(WI_CONEG,new THREE.MeshBasicMaterial({color:'#ffb23a'})); f.position.set(x,top+6.75,z); f.scale.set(.32,.9,.32); f.userData.noBatch=true; f.userData.ph=k*1.9; scene.add(f);
+    const s=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex, color:'#ffb050', transparent:true, opacity:.6, depthWrite:false, blending:THREE.AdditiveBlending})); s.position.set(x,top+6.8,z); s.scale.setScalar(3); s.userData.noBatch=true; scene.add(s); DI_FIRE.push({f,s}); });
+  mergeStatic(G2); yield; const G3=new THREE.Group(); scene.add(G3);
+  // la cereza gigante
+  { const ch=new THREE.MeshStandardMaterial({color:'#d0102c', roughness:.25, metalness:0}); wiAdd(G3,sphereG,ch,cx,top+6.2,cz,7,6.8,7); wiAdd(G3,sphereG,new THREE.MeshStandardMaterial({color:'#ffffff', roughness:.2, transparent:true, opacity:.55}),cx-2.4,top+9.6,cz+2.2,1.2,.8,1.2);
+    const st=wiMat('#5d8a2e'); let px=cx, py=top+12.6, pz=cz; for(let k=0;k<5;k++){ const nx=px+.5*k*DI.vx, nz=pz+.5*k*DI.vz, o=wiAdd(G3,cylG,st,nx,py+.9,nz,.28,1.9,.28); o.rotation.order='YXZ'; o.rotation.set(0,Math.atan2(DI.vx,DI.vz),-.18*k); py+=1.7; }
+    const leaf=wiAdd(G3,sphereG,wiMat('#6cbf3a'),px+1.8*DI.vx,top+18,pz+1.8*DI.vz,1.6,.18,.8); leaf.rotation.y=.6;
+    obstacles.push({x:cx,z:cz,r:7.2,top:top+13,walk:false}); DI.cherry={x:cx,z:cz,y:top+6.2}; }
+  // el mirador del pastel: en la orilla de arriba, del lado del muelle (banca, barandal de bastones, bandera y letrero)
+  { const th=0, r=C.tiers[2].r-3.5, ry=Math.atan2(DI.ux,DI.uz);
+    for(let a=-.42;a<=.421;a+=.07){ const [x,z]=diCakeP(r-1.5,th+a); diStripe(G3,x,z,top-.1,1.25,.12,.35); }
+    for(let a=-.42;a<.42;a+=.07){ const [x0,z0]=diCakeP(r-1.5,th+a), [x1,z1]=diCakeP(r-1.5,th+a+.07), o=wiAdd(G3,cylG,rail,(x0+x1)/2,top+1.2,(z0+z1)/2,.08,Math.hypot(x1-x0,z1-z0)+.05,.08); o.rotation.order='YXZ'; o.rotation.set(Math.PI/2,Math.atan2(x1-x0,z1-z0),0); }
+    const [bx,bz]=diCakeP(r-7,th); wiAdd(G3,WI_BOXG,cook,bx,top+.55,bz,3.2,.18,.9,ry); wiAdd(G3,WI_BOXG,cookD,bx-DI.ux*.4,top+1,bz-DI.uz*.4,3.2,.7,.14,ry);
+    for(const e of [-1,1]){ wiAdd(G3,WI_BOXG,cookD,bx+DI.vx*e*1.4,top+.25,bz+DI.vz*e*1.4,.18,.5,.7,ry); }
+    obstacles.push({x:bx,z:bz,r:1.2,top:top+.65,walk:true});
+    DI.mirador={x:bx,z:bz,y:top};
+    { const [x,z]=diCakeP(r-4,th+.5); wiAdd(G3,cylG,wiMat('#ffffff'),x,top+2.4,z,.08,4.8,.08); const c=document.createElement('canvas'); c.width=224; c.height=128; const g=c.getContext('2d'); if(MX_FLAG) MX_FLAG(g,224,128);
+      const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; const f=new THREE.Mesh(new THREE.PlaneGeometry(1.6,.92),new THREE.MeshStandardMaterial({map:t, side:THREE.DoubleSide, roughness:1})); f.position.set(x,top+4.2,z); f.userData.noBatch=true; scene.add(f); DI.flag=f; DI.flagAt=[x,z]; }
+    { const [x,z]=diCakeP(r-4,th-.42); wiAdd(G3,cylG,wiMat('#7a4a2b'),x,top+.8,z,.06,1.6,.06); jiSign(G3,x,z,top+1.6,ry,'Mirador del Pastel','#b03a6a',2.6,'#fff3f8'); } }
+  mergeStatic(G3); }
+// cada cuadro
+function diTick(dt,t){
+  const d=Math.min(Math.hypot(camera.position.x-DI.x,camera.position.z-DI.z), Math.hypot(player.pos.x-DI.x,player.pos.z-DI.z));
+  if(!DI.done && d<1450){ if(!DI.job) DI.job=diBuildGen(); const t0=performance.now(), budget=d<720?1e9:(MIN_Q?4:6);
+    try{ while(performance.now()-t0<budget){ if(DI.job.next().done){ DI.job=null; break; } } }catch(e){ console.warn('isla dulce',e); DI.job=null; DI.done=true; } }
+  if(DI.depth){ const near=Math.hypot(camera.position.x-DI.x,camera.position.z-DI.z)<DI.E+260, U=seaSurface.material.uniforms;
+    if(near!==!!DI.depthOn){ DI.depthOn=near; U.uDepth.value=near?DI.depth.tex:SEA_MAIN_DEPTH.tex; U.uRect.value=near?DI.depth.rect:SEA_MAIN_DEPTH.rect; } }
+  if(d>DI.E+300) return;
+  const night=1-(sky.dayK??1);
+  for(const F of DI_FIRE){ if(F.f){ const k=.8+.25*Math.sin(t*9+F.f.userData.ph)+.12*Math.sin(t*23+F.f.userData.ph); F.f.scale.y=.9*k; } if(F.s) F.s.material.opacity=(.3+.6*night)*(.85+.15*Math.sin(t*11)); }
+  if(DI.flag){ const [x,z]=DI.flagAt; DI.flag.position.set(x+.82*Math.cos(Math.sin(t*1.3)*.25),DI.flag.position.y,z-.82*Math.sin(Math.sin(t*1.3)*.25)); DI.flag.rotation.y=Math.sin(t*1.3)*.25; }
+  if(DI.ducks){ const L=DI_LAKE; DI.ducks.forEach((D,k)=>{ const a=t*.08*(k%2?1:-1)+D.userData.ph, r=L.R*(.35+.12*k), [x,z]=diS(L.su+Math.cos(a)*r, L.sv+Math.sin(a)*r); D.position.set(x,L.lvl-.15+.05*Math.sin(t*2+k),z); const a2=a+.02*(k%2?1:-1), [nx,nz]=diS(L.su+Math.cos(a2)*r, L.sv+Math.sin(a2)*r); D.rotation.y=Math.atan2(nx-x,nz-z); }); }
+  if(state==='play' && !SP.on && !diVisited()){ const lx=player.pos.x-DI.x, lz=player.pos.z-DI.z, cc=Math.hypot(lx,lz)/diCoastR(Math.atan2(lz,lx));
+    if((cc<.93 || DI_DOCK_GROUND(player.pos.x,player.pos.z,player.pos.y+.5)!==null) && player.pos.y>SEA_Y-.2 && !player.ac && !player.balloon){ wiSaveSet('dulce',1); try{ bigText('Isla Dulce',2800,'¡Llegaste a la isla'); }catch(e){} flashNote('Ya puedes volver aquí desde el mapa'); try{ requestMapDraw(); }catch(e){} } } }
+// el mapa
+function diMapImage(){ if(DI.mapImg) return DI.mapImg; const N=MIN_Q?160:240, E=DI.E, st=2*E/N, c=document.createElement('canvas'); c.width=c.height=N; const g=c.getContext('2d'), im=g.createImageData(N,N), Hm=new Float32Array(N*N);
+  for(let j=0;j<N;j++) for(let i=0;i<N;i++) Hm[j*N+i]=diGridH(DI.x+E-(i+.5)*st, DI.z+E-(j+.5)*st);
+  const at=(i,j)=>Hm[Math.min(N-1,Math.max(0,j))*N+Math.min(N-1,Math.max(0,i))], C=DI_CAKE;
+  for(let j=0;j<N;j++) for(let i=0;i<N;i++){ const x=DI.x+E-(i+.5)*st, z=DI.z+E-(j+.5)*st, h=Hm[j*N+i], [su,sv]=diL(x,z); let r,gg,b;
+    const wl=diWaterLevel(x,z), cr=Math.hypot(su-C.su,sv-C.sv);
+    if(h<SEA_Y){ const t=Math.min(1,(SEA_Y-h)/30); r=150-95*t; gg=212-90*t; b=238-70*t; }
+    else if(wl!==null && h<wl){ if(Math.hypot(su-DI_LAKE.su,sv-DI_LAKE.sv)<DI_LAKE.R+2){ r=250; gg=226; b=110; } else { r=120; gg=70; b=40; } }
+    else { r=140; gg=214; b=160; const sl=Math.hypot(at(i+1,j)-at(i-1,j),at(i,j+1)-at(i,j-1))/(2*st);
+      if(rlFbm(x/110-9,z/110+15,3)>.5){ r=246; gg=176; b=210; }   // el bosque de algodón de azúcar
+      if(cr<C.tiers[0].r+4){ const ti=Math.max(0,Math.min(2,Math.round((h-(C.base||0))/20)-1)); [r,gg,b]=[[255,184,212],[255,246,238],[190,238,211]][ti]; if(sl>.5){ r=236; gg=198; b=140; } }
+      if(h<2.6){ r=251; gg=245; b=236; }
+      if(diPathD(x,z)<3.6){ r=130; gg=80; b=46; }
+      const sh=Math.max(-50,Math.min(50,(at(i-1,j-1)-at(i+1,j+1))*10/st)); r+=sh; gg+=sh; b+=sh; }
+    const k=(j*N+i)*4; im.data[k]=r; im.data[k+1]=gg; im.data[k+2]=b; im.data[k+3]=255; }
+  g.putImageData(im,0,0); DI.mapImg=c; return c; }
+function diMapDraw(g){ const E=DI.E, [x0,y0]=toMap(DI.x+E,DI.z+E), s=2*E/(2*MAP_E)*MAP_PX; g.imageSmoothingEnabled=true; g.drawImage(diMapImage(),x0,y0,s,s);
+  const D=DI_DOCK; g.fillStyle='#d9a866'; g.beginPath(); [[D.s0,-D.W-.6],[D.s1,-D.W-.6],[D.s1,D.W+.6],[D.s0,D.W+.6]].forEach(([su,sv],i)=>{ const [px,py]=toMap(...diS(su,sv)); i?g.lineTo(px,py):g.moveTo(px,py); }); g.closePath(); g.fill();
+  if(DI.cherry){ const [px,py]=toMap(DI.cherry.x,DI.cherry.z); g.fillStyle='#d0102c'; g.beginPath(); g.arc(px,py,Math.max(2,7*s/(2*E)),0,Math.PI*2); g.fill(); } }
 function wiMapDraw(g){ const E=WI.E, [x0,y0]=toMap(WI.x+E,WI.z+E), s=2*E/(2*MAP_E)*MAP_PX; g.imageSmoothingEnabled=true; g.drawImage(wiMapImage(),x0,y0,s,s);
   // el muelle y la cabaña
   const q=(pts,col)=>{ g.fillStyle=col; g.beginPath(); pts.forEach(([su,sv],i)=>{ const [px,py]=toMap(...wiS(su,sv)); i?g.lineTo(px,py):g.moveTo(px,py); }); g.closePath(); g.fill(); };
@@ -13469,6 +13796,7 @@ function update(dt,t){ myLabelUpdate();
   wi2Tick(dt,t);   // v140: sus actividades
   jiTick(dt,t);   // v141: la Isla Selva
   ji2Tick(dt,t);   // v142: sus actividades
+  diTick(dt,t);   // v143: la Isla Dulce
   pierUpdate(dt,t);
   trUpdate(dt,t);
   fiUpdate(dt,t); blUpdate(dt,t); farmUpdate(dt,t); caveUpdate(dt,t); reliefUpdate(dt);
