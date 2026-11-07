@@ -953,7 +953,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='137';
+const GAME_VERSION='138';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -2053,6 +2053,7 @@ function vegMerge(parts){ let n=0; const nn=parts.map(([g])=>{ const q=g.index?g
     E(-7,-15,5,4.5,0,'#7a4a1e'); g.fillStyle='#f2b630'; g.beginPath(); g.moveTo(-11,-16); g.lineTo(-17,-14); g.lineTo(-11,-12.5); g.closePath(); g.fill(); E(-8,-16.5,1,1,0,'#ffffff');   // cabeza y pico
     g.strokeStyle='#3f9b4a'; g.lineWidth=2.4; g.lineCap='round'; g.beginPath(); g.moveTo(-15,-13.5); g.bezierCurveTo(-24,-8,-11,-3,-21,3); g.stroke();   // serpiente
     g.restore(); };
+  MX_FLAG=mxFlag;   // v138: también la usa el barco
   const flag=(par,x,z,y,h,cols)=>{ add(par,cyl,woodD,x,y+h/2,z,.09,h,.09); add(par,sphereG,felt('#ffd23f'),x,y+h+.1,z,.16,.16,.16);
     const mx=cols==='mx', FW=mx?1.75:1.6, hw=FW/2;
     const cv=document.createElement('canvas'); cv.width=mx?224:64; cv.height=mx?128:40; const g=cv.getContext('2d'); if(mx) mxFlag(g,cv.width,cv.height); else cols.forEach((c,i)=>{ g.fillStyle=c; g.fillRect(0,i*40/cols.length,64,40/cols.length+1); });
@@ -2562,7 +2563,7 @@ function updateBubbles(dt, emitter){
 }
 
 // Altura del suelo donde está el jugador: terreno, o la cima de una roca/botón/cofre si está encima
-var PIER_GROUND=null, TRAMP_GROUND=null, FI_GROUND=null, CAVE_GROUND=null;   // (la mina: más abajo de CAVE_TOP)
+var PIER_GROUND=null, TRAMP_GROUND=null, FI_GROUND=null, CAVE_GROUND=null, SHIP_GROUND=null, MX_FLAG=null;   // (la mina: más abajo de CAVE_TOP)
 const CAVE_TOP=-150;   // el muelle y la casita de Tortu (se define más abajo)
 function groundAt(x,z,y){
   if(CAVE_GROUND && y!==undefined && y<CAVE_TOP) return CAVE_GROUND(x,z,y);   // dentro de la mina
@@ -2577,6 +2578,7 @@ function groundAt(x,z,y){
   if(PIER_GROUND){ const pg=PIER_GROUND(x,z,y); if(pg!==null && pg>g) g=pg; }
   if(TRAMP_GROUND){ const tg=TRAMP_GROUND(x,z,y); if(tg!==null && tg>g) g=tg; }
   if(FI_GROUND){ const fg=FI_GROUND(x,z,y); if(fg!==null && fg>g) g=fg; }   // islas flotantes
+  if(SHIP_GROUND){ const sg=SHIP_GROUND(x,z,y); if(sg!==null && sg>g) g=sg; }   // v138: la cubierta del barco
   for(const o of obsNear(x,z)){
     if(!o.walk) continue;
     const dx=x-o.x, dz=z-o.z;
@@ -3600,7 +3602,7 @@ function roomEnded(){ leaveRoom(); flashNote('Se perdió la conexión con la sal
 function sendPresence(force){
   if(!mp.room) return;
   const now=performance.now();
-  if(!force && now-mp.lastSent<(iDrive()||iPilot()||player.balloon||player.mg||AR.me.a>=0||(SP.on&&SP.mode==='fly')?66:100)) return;
+  if(!force && now-mp.lastSent<(iDrive()||iPilot()||iSteer()||(shipOnDeck&&SH.v)||player.balloon||player.mg||AR.me.a>=0||(SP.on&&SP.mode==='fly')?66:100)) return;
   const playing=state==='play';
   const payload={
     n: cleanName(profile.name)||'Peluche', c: profile.color,
@@ -3618,7 +3620,7 @@ function sendPresence(force){
     sd: aircraft.map(a=>[a.stairs, a.door, a.sdT]),
     id: myUid, bw: bowPresence(), ...mgPresence(), ou: outfitList(wardrobe.eq), ...arenaPresence(), ...spacePresence(),
     pl: player.pg ? [PG_KINDS.indexOf(player.pg.k), player.pg.i, r2(player.pg.v||0)] : null,
-    pu: myPush.i>=0 ? [myPush.i, myPush.t] : null, cu: cucoPresence(), pz: pierPresence(), tz: trPresence(), pt: petPresence(), bl: blPresence(), bs: blStates(), ...minePresence(),
+    pu: myPush.i>=0 ? [myPush.i, myPush.t] : null, cu: cucoPresence(), sh: shipPresence(), dk: deckPresence(), pz: pierPresence(), tz: trPresence(), pt: petPresence(), bl: blPresence(), bs: blStates(), ...minePresence(),
     ai: player.ac && player.acPose ? (A=>[A.i, A.mode==='seated'||A.mode==='sitting'?A.seat:-1, r2(player.acPose.l[0]), r2(player.acPose.l[1]), r2(player.acPose.l[2]), r2(player.acPose.f||0), r2(player.acPose.sit||0), r2(player.acPose.walk?(player.acPose.mv||1):0), r2(player.acPose.armsUp||0), player.acPose.air?1:0])(player.ac) : null
   };
   const key=presFit(payload);
@@ -3728,7 +3730,7 @@ function onPeers({peers}){
     // aviones y helicópteros: quién pilota, dónde quedaron, escaleras y puertas, y quién va a bordo
     { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<(PG_KINDS[pl[0]]==='bench'?BENCHES.length:PG_KINDS[pl[0]]==='cuco'?5:3) ? pl : null;
       if(pr.pu) pgCheckPush(r,pr.pu); }
-    parseCuco(r,pr,cuDrv); parsePier(r,pr); trParse(r,pr); parsePet(r,pr); blParse(r,pr,p.peer,blSeen);   // Cuco: dónde está y si lo guía esta persona
+    parseCuco(r,pr,cuDrv); parseShip(r,pr,cuDrv); parsePier(r,pr); trParse(r,pr); parsePet(r,pr); blParse(r,pr,p.peer,blSeen);   // Cuco: dónde está y si lo guía esta persona
     const ai=pr.ai;
     r.ai = Array.isArray(ai) && ai.length===10 && ai.every(Number.isFinite) && aircraft[ai[0]] && Math.abs(ai[2])<20 && Math.abs(ai[4])<20 ? ai : null;
     const ap=pr.ap;
@@ -3751,6 +3753,7 @@ function onPeers({peers}){
     });
   }
   if(!cuDrv.v) CU.drv=null;
+  if(!cuDrv.sh) SH.drv=null;   // v138: nadie lleva el timón
   BL.forEach(b=>{ if(b.remote && !blSeen.has(b.i)){ b.remote=null; b.net=null; b.t=now1(); } });   // globos que ya nadie maneja
   cars.forEach(c=>{ if(!drivenNow.has(c.i) && c.remote){ c.remote=null; c.t=now1(); } });
   aircraft.forEach(a=>{ if(!flownNow.has(a.i) && a.remote){ a.remote=null; a.sim=true; } });
@@ -3768,6 +3771,7 @@ function updateRemotes(dt,t){
     if(r.pl && updateRemoteInPlay(r,dt,t)) continue;
     if(r.wasAir){ r.wasAir=false; r.al=null; }
     if(r.bl) blRemote(r);   // va en su globo
+    if(r.dk) shipRemote(r);   // v138: va en la cubierta del barco
     if(r.carAnim && updateRemoteInCar(r,dt,t)) continue;
     r.pos.lerp(r.target,k);
     if(!r.swim && !r.air && r.pos.y>CAVE_TOP){ const g=groundAt(r.pos.x,r.pos.z,r.pos.y+.6); if(Math.abs(r.pos.y-g)<1.5) r.pos.y=g; }   // pegado a MI suelo (con otra calidad la malla del suelo cambia un poquito) (v123)
@@ -3906,9 +3910,10 @@ addEventListener('keydown',e=>{
 
 // Mapa: el relieve se pinta una vez en alta resolución; caminos, árboles e íconos se dibujan encima
 // en cada cuadro, para que se vean nítidos al acercar.
-const MAP_E=1450, MAP_PX=640;
+const MAP_E=1450, MAP_W=2900, MAP_PX=640;   // v138: MAP_E = lo que cubre el relieve (la isla); MAP_W = hasta dónde llega el mapa (con mar para navegar)
 // Arriba del mapa es hacia donde miras al aparecer (+z); a la derecha queda -x, igual que en la cámara
 const toMap=(x,z)=>[(MAP_E-x)/(2*MAP_E)*MAP_PX, (MAP_E-z)/(2*MAP_E)*MAP_PX];
+const MAP_SEA='#377aa8';   // v138: el mar hondo del mapa (igual que el borde del relieve)
 const mapTerrain=document.createElement('canvas'); mapTerrain.width=mapTerrain.height=1280;
 (function buildMapTerrain(){
   const N=560, step=2*MAP_E/N, img=document.createElement('canvas'); img.width=img.height=N;
@@ -3931,6 +3936,7 @@ const mapTerrain=document.createElement('canvas'); mapTerrain.width=mapTerrain.h
         const sz=h>60?rlSnowZone(x,z):0; if(sz>0){ const sk=sz*smooth(100,124,h); r=lerp(r,246,sk); g=lerp(g,248,sk); b=lerp(b,252,sk); } }   // nieve
       const sh=Math.max(-60,Math.min(60,(at(i-1,j-1)-at(i+1,j+1))*14/step)); r+=sh; g+=sh; b+=sh;
     }
+    { const e=Math.min(i,j,N-1-i,N-1-j)/(N*.05); if(e<1 && h<SEA_Y){ const f=1-e*e*(3-2*e); r=lerp(r,55,f); g=lerp(g,122,f); b=lerp(b,168,f); } }   // v138: el borde se funde con el mar del mapa
     const k=(j*N+i)*4; d.data[k]=r; d.data[k+1]=g; d.data[k+2]=b; d.data[k+3]=255;
   }
   ic.putImageData(d,0,0);
@@ -3966,6 +3972,9 @@ function drawMapDetails(g,z){
   // aeropuerto: plataforma, pista y terminal
   { const quad=(u0,u1,v0,v1,col)=>{ g.fillStyle=col; g.beginPath(); [[u0,v0],[u1,v0],[u1,v1],[u0,v1]].forEach(([u,v],i)=>{ const [px,py]=toMap(...airportXZ(u,v)); i?g.lineTo(px,py):g.moveTo(px,py); }); g.closePath(); g.fill(); };
     quad(20,195,-95,-12,'#9a9daa'); quad(5,245,-12,12,'#5b5e68'); quad(30,120,-126,-110,'#f3ead6'); quad(149,155,-121,-115,'#4f86c6'); }
+  // v138: el muelle de Tortu y su plataforma (donde espera el barco)
+  try{ const P=PIER, q=(x0,x1,z0,z1,col)=>{ g.fillStyle=col; g.beginPath(); [[x0,z0],[x1,z0],[x1,z1],[x0,z1]].forEach(([u,v],i)=>{ const [px,py]=toMap(...pW(u,v)); i?g.lineTo(px,py):g.moveTo(px,py); }); g.closePath(); g.fill(); };
+    q(-P.W-.5,P.W+.5,P.Z0,P.PZ0+.5,'#7a5634'); q(-P.PW-.5,P.PW+.5,P.PZ0-.5,P.PZ1+.5,'#7a5634'); q(-P.W,P.W,P.Z0+.5,P.PZ0+.5,'#c99a62'); q(-P.PW,P.PW,P.PZ0,P.PZ1,'#c99a62'); q(-P.HW,P.HW,P.HZ-P.HW,P.HZ+P.HW,'#e3bf63'); }catch(e){}   // (al cargar, el muelle todavía no existe)
   // pista de carreras y estacionamiento
   const sc=MAP_PX/(2*MAP_E);
   g.beginPath(); mapTrackPts.forEach(([px,py],i)=> i?g.lineTo(px,py):g.moveTo(px,py)); g.closePath();
@@ -4070,15 +4079,15 @@ const mapCv=ui('mapCanvas'), mctx=mapCv.getContext('2d');
 const mapView={z:1, cx:MAP_PX/2, cy:MAP_PX/2};
 const MAP_ZMAX=12;   // v119: la isla es el doble, se puede acercar más
 function clampView(){
-  const half=MAP_PX/2/mapView.z;
-  mapView.cx=Math.min(MAP_PX-half, Math.max(half, mapView.cx));
-  mapView.cy=Math.min(MAP_PX-half, Math.max(half, mapView.cy));
+  const half=MAP_PX/2/mapView.z, ex=(MAP_W-MAP_E)/(2*MAP_E)*MAP_PX;   // v138: también el mar de alrededor
+  mapView.cx=Math.min(MAP_PX+ex-half, Math.max(half-ex, mapView.cx));
+  mapView.cy=Math.min(MAP_PX+ex-half, Math.max(half-ex, mapView.cy));
 }
 const toScreen=(mx,my)=>[(mx-mapView.cx)*mapView.z+MAP_PX/2, (my-mapView.cy)*mapView.z+MAP_PX/2];
 const fromScreen=(sx,sy)=>[(sx-MAP_PX/2)/mapView.z+mapView.cx, (sy-MAP_PX/2)/mapView.z+mapView.cy];
 function zoomAt(sx,sy,f){
   const [mx,my]=fromScreen(sx,sy);
-  mapView.z=Math.min(MAP_ZMAX, Math.max(1, mapView.z*f));
+  mapView.z=Math.min(MAP_ZMAX, Math.max(MAP_E/MAP_W, mapView.z*f));   // v138: se puede alejar para ver todo el mar
   mapView.cx=mx-(sx-MAP_PX/2)/mapView.z; mapView.cy=my-(sy-MAP_PX/2)/mapView.z;
   clampView(); requestMapDraw();
 }
@@ -4097,7 +4106,7 @@ let mapRaf=0, mapWheelT=0, mapSharpT=0;
 function requestMapDraw(){ if(!mapRaf) mapRaf=requestAnimationFrame(()=>{ mapRaf=0; drawMap(true); }); }
 function mapGesturing(){ return mapPtrs.size>0 || performance.now()-mapWheelT<180; }
 function renderMapCache(){ const z=mapView.z;
-  mcc.setTransform(1,0,0,1,0,0); mcc.fillStyle='#3d7aa8'; mcc.fillRect(0,0,MC_S,MC_S);
+  mcc.setTransform(1,0,0,1,0,0); mcc.fillStyle=MAP_SEA; mcc.fillRect(0,0,MC_S,MC_S);
   mcc.setTransform(z,0,0,z, MC_S/2-mapView.cx*z, MC_S/2-mapView.cy*z);
   mcc.imageSmoothingEnabled=true; mcc.drawImage(mapTerrain,0,0,MAP_PX,MAP_PX); drawMapDetails(mcc,z); mcc.setTransform(1,0,0,1,0,0);
   mcView.z=z; mcView.cx=mapView.cx; mcView.cy=mapView.cy; }
@@ -4129,7 +4138,7 @@ function drawMap(force){
   if(!mapCacheOK(!gest)) renderMapCache();
   if(gest){ clearTimeout(mapSharpT); mapSharpT=setTimeout(requestMapDraw,200); }   // al terminar el gesto, una pasada nítida
   const k=z/mcView.z;
-  mctx.setTransform(1,0,0,1,0,0); mctx.fillStyle='#3d7aa8'; mctx.fillRect(0,0,MAP_PX,MAP_PX);
+  mctx.setTransform(1,0,0,1,0,0); mctx.fillStyle=MAP_SEA; mctx.fillRect(0,0,MAP_PX,MAP_PX);
   mctx.imageSmoothingEnabled=true;
   let ox=MAP_PX/2+(mcView.cx-mapView.cx)*z-MC_S/2*k, oy=MAP_PX/2+(mcView.cy-mapView.cy)*z-MC_S/2*k;
   if(k===1){ ox=Math.round(ox); oy=Math.round(oy); }   // sin estirar: copia exacta, píxel por píxel (lo más rápido)
@@ -4163,6 +4172,13 @@ function drawMap(force){
     mctx.fillStyle='#4f6b2c'; mctx.beginPath(); mctx.ellipse(0,0,sz*.95,sz*.72,0,0,7); mctx.fill(); mctx.stroke();
     mctx.strokeStyle='#e0b43c'; mctx.beginPath(); mctx.ellipse(0,0,sz*.62,sz*.42,0,0,7); mctx.stroke();
     mctx.restore(); pillPlace('Cuco', [[px,py+sz*mk+12*mk],[px,py-sz*mk-12*mk],[px+sz*mk+4*mk,py,1],[px-sz*mk-4*mk,py,-1]], 'rgba(251,248,239,.92)', '#2c3a1a'); }
+  try{ // v138: el barco
+    const [px,py]=clampEdge(toScreen(...toMap(SH.x,SH.z))), ang=Math.atan2(-Math.cos(SH.h),-Math.sin(SH.h)), L=Math.max(26, (SH.L1-SH.L0)/(2*MAP_E)*MAP_PX*mapView.z);
+    mctx.save(); mctx.translate(px,py); mctx.rotate(ang); mctx.scale(mk,mk); mctx.strokeStyle='#3a2a1c'; mctx.lineWidth=2/mk; mctx.lineJoin='round';
+    mctx.fillStyle='#8a5a34'; mctx.beginPath(); mctx.moveTo(L*.58,0); mctx.quadraticCurveTo(L*.25,-L*.2,-L*.42,-L*.17); mctx.lineTo(-L*.42,L*.17); mctx.quadraticCurveTo(L*.25,L*.2,L*.58,0); mctx.fill(); mctx.stroke();
+    mctx.fillStyle='#fbf6ee'; mctx.beginPath(); mctx.ellipse(L*.06,0,L*.09,L*.3,0,0,7); mctx.fill(); mctx.stroke();
+    mctx.fillStyle='#e5534b'; mctx.fillRect(L*.02,-L*.3,L*.06,L*.6);
+    mctx.restore(); const r=L*.4*mk; pillPlace('Barco', [[px,py+r+12*mk],[px,py-r-12*mk],[px+r+4*mk,py,1],[px-r-4*mk,py,-1]], 'rgba(251,248,239,.92)', '#3a2a1c'); }catch(e){}
   mp.remotes.forEach(r=>{
     const [px,py]=clampEdge(toScreen(...toMap(r.pos.x,r.pos.z)));
     mctx.fillStyle=PLUSH_COLORS[r.color].hex; mctx.strokeStyle='#2c3a1a'; mctx.lineWidth=2.5; mctx.beginPath(); mctx.arc(px,py,7*mk,0,7); mctx.fill(); mctx.stroke();
@@ -4594,6 +4610,7 @@ function scanActions(){
   if(state!=='play'){ setActions(null,null); return; }
   { const [x,y]=airActions(); if(x||y||player.ac){ setActions(x,y); return; } }
   if(SP.on){ const sa=spaceActions(); setActions(sa?sa[0]:null, sa?sa[1]:null); return; }
+  if(iSteer()){ const [x,y]=pgActions(); setActions(x,y); return; }   // v138: en el timón
   { const ra=rocketActions(); if(ra){ setActions(ra[0],ra[1]); return; } }
   { const la=blActions(); if(la){ setActions(la[0],la[1]); return; } }
   { const mv=mineActions(); if(mv){ setActions(mv[0],mv[1]); return; } }
@@ -4601,7 +4618,9 @@ function scanActions(){
   { const aa=arenaActions(); if(aa){ setActions(aa[0],aa[1]); return; } }
   if(heldItem()==='flag' && !player.car && !player.ac && !player.pg && !player.mg){ setActions({label:'Plantar bandera', run:plantFlag}, null); return; }
   { const ma=mgActions(); if(ma){ setActions(ma[0],ma[1]); return; } }
-  { const pa=pierActions(); if(pa){ setActions(pa[0],pa[1]); return; } }
+  { const sa=shipActions(); if(sa && shipOnDeck){ setActions(sa[0],sa[1]); return; }   // v138: el barco (junto al muelle comparte los botones)
+    const pa=pierActions(); if(pa){ if(sa){ const b=sa[0]||sa[1]; if(!pa[1]) pa[1]=b; else if(!pa[0]) pa[0]=b; } setActions(pa[0],pa[1]); return; }
+    if(sa){ setActions(sa[0],sa[1]); return; } }
   { const ta=trActions(); if(ta){ setActions(ta[0],ta[1]); return; } }
   { const fa=fiActions(); if(fa){ setActions(fa[0],fa[1]); return; } }
   { const [x,y]=pgActions(); if(x||y||player.pg){ setActions(x,y); return; } }
@@ -4781,7 +4800,7 @@ function updateCarHud(){
 // Botones táctiles: a pie (saltar, tirarse…) o en coche (acelerar, frenar)
 function updateTouchMode(){
   const inCar=!!player.car, pilot=typeof iPilot==='function' && iPilot(), aboard=!!player.ac, seatedAir=aboard && player.ac.mode==='seated';
-  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && player.pg.k==='cuco');
+  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && (player.pg.k==='cuco' || player.pg.k==='helm'));
   ui('tcar').hidden=!((inCar && player.car.kind==='seated') || pilot);
   const drv=(inCar && player.car.seat===0) || pilot;
   ui('tGas').hidden=!drv; ui('tBrake').hidden=!drv; ui('tLights').hidden=!(inCar && player.car.seat===0);
@@ -5525,7 +5544,7 @@ function trRemotePose(r,t,dt){ if(r.tz && r.tz[2]) pgPoseLimbs(r.obj,{climb:(per
 let myPush={i:-1,t:0}; player.pushUntil=0;
 function pgOccupied(k,i){ if(player.pg && player.pg.k===k && player.pg.i===i) return 'me';
   for(const r of mp.remotes.values()) if(r.pl && r.pl[0]===PG_KINDS.indexOf(k) && r.pl[1]===i) return r; return null; }
-const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart'];
+const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm'];
 function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars' && k!=='cart') return;
   holding=false; applyHeld(); renderHotbar();
   player.pg={k,i,t0:performance.now()/1000, from:[player.pos.x,player.pos.y,player.pos.z]};
@@ -5540,9 +5559,10 @@ function stopPlay(){ const P=player.pg; if(!P) return; const pose=player.pgPose;
   else if(P.k==='ride'){ const e=PG_EQ.riders[P.i]; out=eqToWorld(e,.9,0,0); }
   else if(P.k==='see'){ const e=PG_EQ.seesaw; out=eqToWorld(e,.9,0,(P.i?1:-1)*e.half); }
   else if(P.k==='bench'){ const b=BENCHES[P.i]; out=[b.x+Math.sin(b.yaw)*.95,0,b.z+Math.cos(b.yaw)*.95]; }
+  else if(P.k==='helm'){ const [x,z]=shipW(.95,HELM_Z-.9); out=[x,SH.DECK,z]; }   // v138: al soltar el timón te quedas en la cubierta
   else if(P.k==='cart'){ const q=MC.at(P.s||0); out=[q.x+Math.cos(q.yaw)*1.3, q.y, q.z-Math.sin(q.yaw)*1.3]; MC.s=P.s||0; }   // v137: te bajas a un lado del carrito
   else out=pose?pose.pos:[player.pos.x,player.pos.y,player.pos.z];
-  player.pos.set(out[0], groundAt(out[0],out[2],(P.k==='bench'?BENCHES[P.i].y:P.k==='cart'?out[1]:0)+.3), out[2]); if(pose) player.facing=pose.yaw;
+  player.pos.set(out[0], groundAt(out[0],out[2],(P.k==='bench'?BENCHES[P.i].y:P.k==='cart'||P.k==='helm'?out[1]:0)+.3), out[2]); if(pose) player.facing=pose.yaw;
   player.pg=null; player.grounded=true; player.vy=0; audio.getup(); updateTouchMode(); try{ sendPresence(true); }catch(e){} }
 const pgIn=()=>{ let f=0; if(keys.KeyW||keys.ArrowUp) f+=1; if(keys.KeyS||keys.ArrowDown) f-=1; f-=stick.y; return Math.min(1,Math.abs(f)+Math.hypot(stick.x,0)*.5); };
 // Pose de un peluche en cada juego (la misma para mí y para los demás). Devuelve pos en el mundo, giro y postura.
@@ -5550,6 +5570,7 @@ const rotX=(y,z,a)=>[y*Math.cos(a)-z*Math.sin(a), y*Math.sin(a)+z*Math.cos(a)];
 function playPose(k,i,v,dt){
   if(k==='cuco') return cucoSeatPose(i);
   if(k==='cart'){ const q=MC.at(v); return {pos:[q.x,q.y+.2,q.z], yaw:q.yaw, sit:1, grip:1}; }
+  if(k==='helm') return helmPose();   // v138
   if(k==='bench'){ const b=BENCHES[i]; if(!b) return null; const c=Math.cos(b.yaw), s=Math.sin(b.yaw); return {pos:[b.x-s*.12, b.y-.415, b.z-c*.12], yaw:b.yaw, sit:1}; }
   if(k==='swing'){ const e=PG_EQ.swings, [ry,rz]=rotX(-e.L-.415,-.06,-v);
     return {pos:eqToWorld(e,e.seats[i],e.pivot+ry,rz), yaw:e.yaw, tilt:-v, sit:1, holdUp:1}; }
@@ -5576,6 +5597,7 @@ function updateMyPlay(dt){
   const P=player.pg, el=performance.now()/1000-P.t0, inp=pgIn();
   if(P.k==='cuco') return cucoRide(P,el);
   if(P.k==='cart') return mcRide(P,dt);   // v137
+  if(P.k==='helm'){ P.v=0; return helmPose(); }   // v138: el barco se mueve en shipUpdate
   if(P.k==='swing'){ const S=pgState.swing[P.i];
     S.w += (-(9.8/PG_EQ.swings.L)*Math.sin(S.a) - .12*S.w)*dt;
     if(inp>.1){ if(Math.abs(S.w)<.08 && Math.abs(S.a)<.05) S.w+=.6*inp; else S.w+=Math.sign(S.w)*1.25*inp*dt; }
@@ -5630,7 +5652,7 @@ function pgActions(){
   if(!player.pg && !player.car && !player.ac && !player.dive && cucoNear()){ const s=cucoFreeSeat(); return [s<0 ? {label:'Cuco está lleno', disabled:true, run:()=>{}} : {label:'Subirse a Cuco', run:cucoBoard}, null]; }
   if(!player.pg && !player.car && !player.ac && !player.dive && !player.swim && !player.mg && mcNear()) return [{label:'Subir al carrito', run:mcBoard}, null];   // v137
   if(player.pg){ const k=player.pg.k; if(k==='slide'||k==='bars') return [null,null];
-    return [{label: k==='cart'?'Bajar del carrito': k==='swing'?'Bajarse del columpio': k==='ride'?'Bajarse': k==='bench'?'Levantarse':'Bajarse del sube y baja', run:stopPlay}, null]; }
+    return [{label: k==='helm'?'Soltar el timón': k==='cart'?'Bajar del carrito': k==='swing'?'Bajarse del columpio': k==='ride'?'Bajarse': k==='bench'?'Levantarse':'Bajarse del sube y baja', run:stopPlay}, null]; }
   if(player.car || player.ac || player.swim || player.dive) return [null,null];
   for(let i=0;i<BENCHES.length;i++){ const b=BENCHES[i]; if(Math.hypot(player.pos.x-b.x,player.pos.z-b.z)<1.5 && Math.abs(player.pos.y-(b.y-.5))<1 && !pgOccupied('bench',i)) return [{label:'Sentarse', run:()=>startPlay('bench',i)}, null]; }
   const px=player.pos.x, pz=player.pos.z; if(Math.hypot(px-PG.x,pz-PG.z)>PG.R+2) return [null,null];
@@ -5995,6 +6017,164 @@ const pL=(x,z)=>{ const dx=x-PIER.bx, dz=z-PIER.bz; return [dx*PIER.c-dz*PIER.s,
 const pV=(lx,y,lz)=>{ const [x,z]=pW(lx,lz); return new THREE.Vector3(x,y,z); };
 PIER.y0=terrainH(...pW(0,PIER.Z0));
 TELEPORTS.push((([x,z])=>({id:'muelle', name:'Muelle', x, z, noPortal:true}))(pW(5,-36)));   // en el mapa: la playa junto al muelle
+const SHIP_DOCK=[11.8,78], SHIP_NAME='El Peluche Marinero';   // v138: dónde espera el barco (junto al muelle) y su nombre
+// ---------- v138: el barco de vela (sale del muelle de Tortu; caben muchos; uno lo maneja desde el timón) ----------
+// Coordenadas del barco: +z = proa (adelante), +x = babor. La cubierta es plana (no se mece para caminar bien).
+const SH=(()=>{ const L0=-10.5, L1=11.8, DECK=SEA_Y+2.2;
+  const hw=z=>z<L0||z>L1?0 : z<5 ? 3.25-Math.max(0,(L0+1.4-z))*.35 : 3.25*Math.max(0,1-Math.pow((z-5)/(L1-5),1.7));   // medio ancho de la cubierta
+  const dock=(()=>{ const [x,z]=pW(SHIP_DOCK[0],SHIP_DOCK[1]); return {x, z, h:PIER.th}; })();
+  return {L0, L1, DECK, hw, dock, x:dock.x, z:dock.z, h:dock.h, v:0, sail:0, t:0, drv:null, net:null, mine:false, prev:{x:dock.x,z:dock.z,h:dock.h}, emptyT:0, edgeT:0, g:null, parts:{}}; })();
+TELEPORTS.push((([x,z])=>({id:'barco', name:'Embarcadero', x, z, noPortal:true}))(pW(6.2,78)));   // en el mapa: la orilla de la plataforma, junto al barco
+const SHIP_MAX=15, SHIP_LIM=MAP_W-80;   // rapidez máxima (m/s) y hasta dónde se puede navegar (la orilla del mapa)
+const shipW=(lx,lz)=>{ const c=Math.cos(SH.h), s=Math.sin(SH.h); return [SH.x+lx*c+lz*s, SH.z-lx*s+lz*c]; };
+const shipL=(x,z)=>{ const c=Math.cos(SH.h), s=Math.sin(SH.h), dx=x-SH.x, dz=z-SH.z; return [dx*c-dz*s, dx*s+dz*c]; };
+const shipInDeck=(lx,lz,m=0)=>lz>SH.L0+m && lz<SH.L1-m && Math.abs(lx)<SH.hw(lz)-m;
+const HELM_Z=-5.0;
+const SHIP_OBS=[{t:'c', x:0, z:1.2, r:.42}, {t:'c', x:0, z:HELM_Z, r:.32}, {t:'b', x0:-2.05, x1:2.05, z0:SH.L0-.3, z1:-7.2}];   // mástil, timón, camarote
+// ---- el barco que se ve ----
+(function shipBuild(){
+  const G=new THREE.Group(); scene.add(G); SH.g=G; const B=new THREE.Group(); G.add(B); SH.parts.body=B;
+  const D=SH.DECK, hull=felt('#8a5a34','rgba(40,20,5,.25)'), shell=felt('#8a5a34','rgba(40,20,5,.25)'), hullD=felt('#6b4226','rgba(30,15,5,.25)'), deckM=felt('#c9a26b','rgba(90,60,25,.18)'), trim=felt('#e5534b','rgba(80,10,10,.18)'),
+    white=felt('#fbf6ee','rgba(80,60,40,.10)'), dark=felt('#3a2a1c','rgba(0,0,0,.2)'), gold=felt('#f2c94c','rgba(120,80,0,.2)'), box=new THREE.BoxGeometry(1,1,1);
+  shell.side=THREE.DoubleSide; deckM.side=THREE.DoubleSide;
+  const add=(par,geo,m,x,y,z,sx,sy,sz,ry=0)=>{ const o=new THREE.Mesh(geo,m); o.position.set(x,y,z); o.scale.set(sx,sy,sz); o.rotation.y=ry; o.castShadow=true; o.receiveShadow=true; par.add(o); return o; };
+  // casco: secciones en forma de U a lo largo del barco, de la cubierta a la quilla
+  { const NZ=28, NS=10, pos=[], uv=[], idx=[], zs=[]; for(let i=0;i<=NZ;i++) zs.push(SH.L0+(SH.L1-SH.L0)*i/NZ);
+    zs.forEach((z,i)=>{ const w=Math.max(.04,SH.hw(Math.min(SH.L1-.001,z))), keel=SEA_Y-.8+Math.max(0,(z-6)/6)*.6;
+      for(let k=0;k<=NS;k++){ const a=k/NS*Math.PI, d=Math.sin(a); pos.push(Math.cos(a)*w*(1-.35*d*d), D-.05-(D-keel)*Math.pow(d,1.6), z); uv.push(k/NS*3, i/NZ*6); } });
+    for(let i=0;i<NZ;i++) for(let k=0;k<NS;k++){ const a=i*(NS+1)+k, b=a+NS+1; idx.push(a,b,a+1, a+1,b,b+1); }
+    const st=pos.length/3; pos.push(0,(D+SEA_Y-.8)/2,SH.L0); uv.push(1.5,0); for(let k=0;k<NS;k++) idx.push(st,k+1,k);   // tapa de atrás (popa)
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); g.setIndex(idx); g.computeVertexNormals();
+    add(B,g,shell,0,0,0,1,1,1); }
+  // franja roja, borde y barandal
+  { const pts=[]; for(let i=0;i<=40;i++){ const z=SH.L0+(SH.L1-SH.L0)*i/40; pts.push([SH.hw(Math.min(SH.L1-.001,z)),z]); }
+    const side=(sd,y,mat,h,t)=>{ for(let i=0;i<pts.length-1;i++){ const [w0,z0]=pts[i], [w1,z1]=pts[i+1], L=Math.hypot(w1-w0,z1-z0); if(L<.01) continue; add(B,box,mat,sd*(w0+w1)/2,y,(z0+z1)/2,t,h,L+.03,Math.atan2(sd*(w1-w0),z1-z0)); } };
+    [-1,1].forEach(sd=>{ side(sd,D-.45,trim,.28,.08); side(sd,D+.55,hullD,.12,.13); });
+    [-1,1].forEach(sd=>{ for(let i=0;i<pts.length-1;i+=3){ const [w,z]=pts[i]; if(w<.35) continue; add(B,box,hullD,sd*w,D+.27,z,.1,.55,.1); } });
+    const ws=SH.hw(SH.L0); add(B,box,hullD,0,D+.55,SH.L0+.05,ws*2,.12,.13); for(const x of [-ws+.05,-ws/2,0,ws/2,ws-.05]) add(B,box,hullD,x,D+.27,SH.L0+.05,.1,.55,.1); }
+  // cubierta con tablones
+  { const sh=new THREE.Shape(); for(let i=0;i<=40;i++){ const z=SH.L0+(SH.L1-SH.L0)*i/40, w=SH.hw(Math.min(SH.L1-.001,z)); i?sh.lineTo(w,z):sh.moveTo(w,z); } for(let i=40;i>=0;i--){ const z=SH.L0+(SH.L1-SH.L0)*i/40; sh.lineTo(-SH.hw(Math.min(SH.L1-.001,z)),z); }
+    const g=new THREE.ShapeGeometry(sh,2); g.rotateX(Math.PI/2); const m=add(B,g,deckM,0,D,0,1,1,1); m.castShadow=false;
+    for(let x=-2.8;x<=2.81;x+=.7){ let z1=SH.L0; while(z1<SH.L1 && SH.hw(z1+.1)>Math.abs(x)+.12) z1+=.1; const z0=SH.L0+.1; if(z1-z0>1) add(B,box,dark,x,D+.012,(z0+z1)/2,.03,.01,z1-z0); } }
+  // mástil, vergas, bandera y bauprés
+  add(B,new THREE.CylinderGeometry(.2,.26,13,10),hullD,0,D+6.5,1.2,1,1,1);
+  add(B,new THREE.CylinderGeometry(.11,.11,7.6,8),hullD,0,D+10.6,1.4,1,1,1).rotation.z=Math.PI/2;
+  add(B,new THREE.CylinderGeometry(.09,.09,6.4,8),hullD,0,D+3.4,1.4,1,1,1).rotation.z=Math.PI/2;
+  add(B,new THREE.CylinderGeometry(.04,.05,1.2,6),hullD,0,D+13.55,1.2,1,1,1); add(B,sphereG,gold,0,D+14.2,1.2,.13,.13,.13);
+  add(B,new THREE.CylinderGeometry(.09,.13,4.2,8),hullD,0,D+.9,SH.L1+1.2,1,1,1).rotation.x=Math.PI/2-.32;
+  // la vela (se infla más con la rapidez)
+  { const c=document.createElement('canvas'); c.width=256; c.height=256; const g=c.getContext('2d'); g.fillStyle='#fbf6ee'; g.fillRect(0,0,256,256);
+    g.strokeStyle='rgba(150,120,80,.35)'; g.lineWidth=3; g.setLineDash([10,8]); for(let x=32;x<256;x+=48){ g.beginPath(); g.moveTo(x,0); g.lineTo(x,256); g.stroke(); } g.setLineDash([]);
+    g.fillStyle='#e5534b'; g.fillRect(0,92,256,36); g.fillStyle='#f6c445'; g.beginPath(); g.arc(128,186,30,0,7); g.fill();
+    g.strokeStyle='#f6c445'; g.lineWidth=6; g.lineCap='round'; for(let k=0;k<8;k++){ const a=k*Math.PI/4; g.beginPath(); g.moveTo(128+Math.cos(a)*38,186+Math.sin(a)*38); g.lineTo(128+Math.cos(a)*50,186+Math.sin(a)*50); g.stroke(); }
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding;
+    const geo=new THREE.PlaneGeometry(7,7,8,6), q=geo.attributes.position; for(let i=0;i<q.count;i++){ const x=q.getX(i), y=q.getY(i); q.setZ(i,(1-Math.pow(x/3.5,2))*(1-Math.pow(y/3.6,2)*.5)*.9); } geo.computeVertexNormals(); geo.userData.base=Float32Array.from(q.array);
+    const sail=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:t, side:THREE.DoubleSide, roughness:1})); sail.position.set(0,D+7,1.55); sail.castShadow=true; G.add(sail); SH.parts.sail=sail; }
+  { const c=document.createElement('canvas'); c.width=224; c.height=128; const g=c.getContext('2d'); if(MX_FLAG) MX_FLAG(g,224,128); else ['#006847','#ffffff','#ce1126'].forEach((col,i)=>{ g.fillStyle=col; g.fillRect(i*75,0,76,128); });
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; const f=new THREE.Mesh(new THREE.PlaneGeometry(1.6,.92,6,1),new THREE.MeshStandardMaterial({map:t, side:THREE.DoubleSide, roughness:1}));
+    f.position.set(0,D+13.65,1.2-.82); f.rotation.y=-Math.PI/2; G.add(f); SH.parts.flag=f; }
+  // camarote al fondo, con puerta, ventanas y letrero
+  add(B,box,hull,0,D+1.15,-8.9,4,2.3,3.3); add(B,box,trim,0,D+2.42,-8.9,4.4,.26,3.7); add(B,box,dark,0,D+.8,-7.24,1,1.6,.06); add(B,sphereG,gold,.35,D+.8,-7.2,.06,.06,.06);
+  [-1.35,1.35].forEach(x=>{ add(B,box,white,x,D+1.35,-7.24,.6,.6,.05); add(B,box,white,x*1.49,D+1.35,-8.9,.05,.6,.6); });
+  { const c=document.createElement('canvas'); c.width=256; c.height=64; const g=c.getContext('2d'); g.fillStyle='#f6ead0'; g.fillRect(0,0,256,64); g.strokeStyle='#8a6a3e'; g.lineWidth=5; g.strokeRect(3,3,250,58);
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; const sm=new THREE.MeshStandardMaterial({map:t, roughness:1});
+    const draw=()=>{ g.fillStyle='#f6ead0'; g.fillRect(8,8,240,48); g.fillStyle='#5a4426'; g.textAlign='center'; g.textBaseline='middle'; let fs=30; do{ g.font='800 '+fs+'px Sniglet, Nunito, sans-serif'; fs--; }while(g.measureText(SHIP_NAME).width>228 && fs>12); g.fillText(SHIP_NAME,128,34); t.needsUpdate=true; };
+    draw(); try{ document.fonts.ready.then(draw); }catch(e){}
+    const s=new THREE.Mesh(new THREE.PlaneGeometry(2.6,.65),sm); s.position.set(0,D+1.95,-7.2); G.add(s);
+    const s2=new THREE.Mesh(new THREE.PlaneGeometry(2.6,.65),sm); s2.position.set(0,D-.25,SH.L0-.08); s2.rotation.y=Math.PI; G.add(s2); SH.parts.signs=[s,s2]; }
+  // timón: rueda con rayos sobre un poste
+  { const W=new THREE.Group(); W.position.set(0,D+1.35,HELM_Z); B.add(W); add(W,new THREE.TorusGeometry(.55,.05,6,20),hullD,0,0,0,1,1,1);
+    for(let k=0;k<4;k++){ const sp=add(W,box,hullD,0,0,0,.05,1.5,.05); sp.rotation.z=k*Math.PI/4; } add(W,sphereG,gold,0,0,.03,.1,.1,.1); SH.parts.wheel=W;
+    add(B,box,hullD,0,D+.65,HELM_Z-.15,.22,1.3,.22); }
+  // cajas y barril en la cubierta
+  add(B,box,hull,2.1,D+.35,5.5,.7,.7,.7); add(B,box,hull,2.15,D+.95,5.5,.5,.5,.5); add(B,new THREE.CylinderGeometry(.35,.35,.8,10),hullD,-2.2,D+.4,-3.5,1,1,1);
+  SHIP_OBS.push({t:'b', x0:1.75, x1:2.45, z0:5.15, z1:5.85}, {t:'c', x:-2.2, z:-3.5, r:.36});
+  const W=SH.parts.wheel; B.remove(W); mergeStatic(B); B.children.forEach(o=>{ o.castShadow=true; o.receiveShadow=true; }); B.add(W);
+})();
+function shipPlace(t){ const G=SH.g; G.position.set(SH.x,0,SH.z); G.rotation.set(0,SH.h,0);
+  if(Math.hypot(SH.x-camera.position.x,SH.z-camera.position.z)>240) return;
+  SH.parts.body.rotation.set(Math.sin(t*.9)*.012, 0, Math.sin(t*.7+1)*.02); SH.parts.body.position.y=Math.sin(t*1.1)*.06;
+  const q=SH.parts.sail.geometry.attributes.position, b=SH.parts.sail.geometry.userData.base, k=.35+Math.min(1,Math.abs(SH.v)/10)*.9;
+  for(let i=0;i<q.count;i++) q.setZ(i,b[i*3+2]*k+Math.sin(t*2+b[i*3]*.8)*.05); q.needsUpdate=true; SH.parts.sail.geometry.computeVertexNormals();
+  SH.parts.flag.rotation.x=Math.sin(t*4)*.12; }
+// ---- quién está a bordo ----
+let shipOnDeck=false;
+SHIP_GROUND=function(x,z,y){ if(y===undefined || y<SH.DECK-.75) return null; const [lx,lz]=shipL(x,z); return shipInDeck(lx,lz,-.05) ? SH.DECK : null; };
+const iSteer=()=>!!(player.pg && player.pg.k==='helm');
+function shipAnyoneAboard(){ if(shipOnDeck || iSteer()) return true; for(const r of mp.remotes.values()) if(r.dk || (r.pl && PG_KINDS[r.pl[0]]==='helm')) return true; return false; }
+// barandal, mástil y camarote no se atraviesan; y nadando no te metes debajo del casco
+function shipCollide(p){ let [lx,lz]=shipL(p.x,p.z); if(lz<SH.L0-2 || lz>SH.L1+2 || Math.abs(lx)>5) return;
+  if(p.y<SH.DECK-.6){ if(!shipInDeck(lx,lz,-.45)) return;   // por fuera del casco (en el agua): te empuja hacia un lado
+    const w=SH.hw(Math.max(SH.L0,Math.min(SH.L1,lz)));
+    if(lz<SH.L0+.4) lz=SH.L0-.5; else if(lz>SH.L1-.6 && w<.8) lz=SH.L1+.5; else lx=Math.sign(lx||1)*(w+.5);
+    const [x,z]=shipW(lx,lz); p.x=x; p.z=z; return; }
+  if(!shipOnDeck || (!player.grounded && p.y>SH.DECK+.06)) return;   // brincando pasas por encima del barandal (y caes al agua)
+  if(!shipInDeck(lx,lz,.45)){ const m=.45; lz=Math.max(SH.L0+m,Math.min(SH.L1-1.4,lz)); const w=Math.max(0,SH.hw(lz)-m); lx=Math.max(-w,Math.min(w,lx)); }
+  for(const o of SHIP_OBS){ if(o.t==='c'){ const dx=lx-o.x, dz=lz-o.z, d=Math.hypot(dx,dz), m=o.r+.38; if(d<m){ const k=m/(d||1); lx=o.x+(d?dx:1)*k; lz=o.z+dz*k; } }
+    else { const ex=.38; if(lx>o.x0-ex && lx<o.x1+ex && lz>o.z0-ex && lz<o.z1+ex){ const c=[[lx-(o.x0-ex),0],[(o.x1+ex)-lx,1],[lz-(o.z0-ex),2],[(o.z1+ex)-lz,3]].sort((a,b)=>a[0]-b[0])[0][1];
+      if(c===0) lx=o.x0-ex; else if(c===1) lx=o.x1+ex; else if(c===2) lz=o.z0-ex; else lz=o.z1+ex; } } }
+  const [x,z]=shipW(lx,lz); p.x=x; p.z=z; }
+// ---- manejar: adelante sube la vela (se queda así), atrás la baja o va en reversa; a los lados gira ----
+function shipDrive(dt){ const fwd=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-stick.y, st=(keys.KeyA||keys.ArrowLeft?1:0)-(keys.KeyD||keys.ArrowRight?1:0)-stick.x;
+  const f=Math.max(-1,Math.min(1,fwd)), s=Math.max(-1,Math.min(1,st));
+  SH.sail=Math.max(-.25,Math.min(1,SH.sail+f*dt*.5));
+  SH.v+=(SH.sail*SHIP_MAX-SH.v)*Math.min(1,dt*.35);
+  SH.h+=s*dt*(.14+Math.min(1,Math.abs(SH.v)/8)*.3)*(SH.v<-.3?-1:1);
+  SH.parts.wheel.rotation.z+=(s*1.8-SH.parts.wheel.rotation.z)*Math.min(1,dt*5);
+  SH.t=now1(); SH.mine=true; }
+// ¿choca con tierra o con el muelle? (puntos del casco)
+function shipHits(x,z,h){ const c=Math.cos(h), s=Math.sin(h);
+  for(const [lx,lz] of [[0,SH.L1+.6],[1.6,9],[-1.6,9],[2.9,4],[-2.9,4],[3.1,-2],[-3.1,-2],[2.7,SH.L0+.4],[-2.7,SH.L0+.4],[0,SH.L0-.2]]){ const wx=x+lx*c+lz*s, wz=z-lx*s+lz*c;
+    if(terrainH(wx,wz)>SEA_Y-.6) return 'tierra';   // el barco es de poco fondo: llega cerca de la playa
+    const [px,pz]=pL(wx,wz); if(pz>PIER.Z0 && pz<PIER.PZ1+.6 && (Math.abs(px)<PIER.W+.45 || (pz>PIER.PZ0-.6 && Math.abs(px)<PIER.PW+.45))) return 'muelle';
+    if(Math.abs(wx)>SHIP_LIM || Math.abs(wz)>SHIP_LIM) return 'orilla'; }
+  return null; }
+function shipUpdate(dt,t){
+  const S=SH; S.prev.x=S.x; S.prev.z=S.z; S.prev.h=S.h;
+  if(iSteer()) shipDrive(dt);
+  else if(S.drv){ const d=S.drv, age=Math.min(.5,(performance.now()-d.at)/1000), tx=d.x+Math.sin(d.h)*d.v*age, tz=d.z+Math.cos(d.h)*d.v*age;
+    if(Math.hypot(tx-S.x,tz-S.z)>40){ S.x=tx; S.z=tz; S.h=d.h; } const k=1-Math.exp(-dt*6); S.x+=(tx-S.x)*k; S.z+=(tz-S.z)*k; S.h=lerpAng(S.h,d.h,k); S.v=d.v; }
+  else { S.sail=0; const was=Math.abs(S.v)>.05; S.v*=Math.exp(-dt*.6); if(Math.abs(S.v)<.05){ S.v=0; if(was && S.mine) S.t=now1(); }   // sin timonel se va frenando; quien lo manejó avisa dónde quedó
+    if(S.net && !S.v){ const k=1-Math.exp(-dt*2); if(Math.hypot(S.net.x-S.x,S.net.z-S.z)>60){ S.x=S.net.x; S.z=S.net.z; S.h=S.net.h; } S.x+=(S.net.x-S.x)*k; S.z+=(S.net.z-S.z)*k; S.h=lerpAng(S.h,S.net.h,k); } }
+  if(!S.drv && (iSteer() || Math.abs(S.v)>.01)){ const nx=S.x+Math.sin(S.h)*S.v*dt, nz=S.z+Math.cos(S.h)*S.v*dt;
+    const stuck=shipHits(S.prev.x,S.prev.z,S.prev.h), hit=!stuck && (shipHits(nx,nz,S.h) || (S.h!==S.prev.h && shipHits(S.x,S.z,S.h)));
+    if(hit){ if(Math.abs(S.v)>2 && hit!=='orilla') audio.bump();
+      if(iSteer() && performance.now()-S.edgeT>4000 && (Math.abs(S.v)>1 || hit==='orilla')){ S.edgeT=performance.now(); flashNote(hit==='orilla'?'Más allá todavía no hay nada… ¡pronto habrá islas! Da la vuelta':'¡Encallamos! Gira o ve hacia atrás (S)'); }
+      S.v*=-.25; S.sail=Math.min(S.sail,0); if(shipHits(S.x,S.z,S.h)) S.h=S.prev.h; }
+    else { S.x=nx; S.z=nz; } }
+  // sin nadie a bordo un buen rato y lejos del muelle: regresa solito al muelle
+  if(!S.drv && !shipAnyoneAboard()){ S.emptyT+=dt; if(S.emptyT>150 && Math.hypot(S.x-S.dock.x,S.z-S.dock.z)>15){ S.x=S.dock.x; S.z=S.dock.z; S.h=S.dock.h; S.v=0; S.sail=0; S.t=now1(); S.net=null; S.emptyT=0; } } else S.emptyT=0;
+  // quien va en la cubierta se mueve y gira con el barco
+  const p=player.pos; if(state==='play' && !player.pg && !player.car && !player.ac && !player.balloon && !player.rk && !SP.on){ const c0=Math.cos(S.prev.h), s0=Math.sin(S.prev.h), dx=p.x-S.prev.x, dz=p.z-S.prev.z, lx=dx*c0-dz*s0, lz=dx*s0+dz*c0;
+    shipOnDeck = shipInDeck(lx,lz) && p.y>S.DECK-.6 && p.y<S.DECK+4.5;
+    if(shipOnDeck){ const [x,z]=shipW(lx,lz); p.x=x; p.z=z; const dh=S.h-S.prev.h; if(dh){ yaw+=dh; player.facing=(player.facing||0)+dh; } } }
+  else shipOnDeck=false;
+  if(iSteer()) yaw+=S.h-S.prev.h;   // la cámara gira con el barco
+  shipPlace(t); }
+// ---- acciones ----
+function shipActions(){ if(player.car||player.ac||player.mg||player.balloon||player.dive||player.rk||SP.on||player.pg) return null; const p=player.pos;
+  if(shipOnDeck){ const [lx,lz]=shipL(p.x,p.z);
+    if(Math.hypot(lx,lz-(HELM_Z-.8))<1.3 && !pgOccupied('helm',0)) return [{label:'Tomar el timón', run:()=>{ startPlay('helm',0); flashNote(isTouch?'Joystick arriba: subir la vela · a los lados: girar · abajo: bajarla':'W: subir la vela · A/D: girar · S: bajarla o ir hacia atrás'); }}, null];
+    if(Math.abs(SH.v)<2.5){ const L=shipLandSpot(); if(L) return [null,{label:'Bajar del barco', run:()=>{ player.pos.set(L[0],L[1]+.1,L[2]); player.vel.set(0,0,0); player.vy=0; shipOnDeck=false; try{ audio.jump(); }catch(e){} }}]; }
+    return null; }
+  if(Math.abs(SH.v)<2.5 && p.y<SH.DECK+3 && p.y>SEA_Y-3){ const [lx,lz]=shipL(p.x,p.z); if(lz>SH.L0-3 && lz<SH.L1+2 && Math.abs(lx)<SH.hw(Math.max(SH.L0,Math.min(SH.L1-.001,lz)))+3.2)
+    return [{label:'Subir al barco', run:shipBoard}, null]; }
+  return null; }
+function shipBoard(){ const [lx]=shipL(player.pos.x,player.pos.z), sd=lx<0?-1:1, [x,z]=shipW(sd*(SH.hw(-1)-.9),-1);
+  player.pos.set(x,SH.DECK+.05,z); player.vel.set(0,0,0); player.vy=0; player.swim=false; player.dive=null; player.diveAngle=0; player.grounded=true; shipOnDeck=true; try{ audio.jump(); }catch(e){} }
+function shipLandSpot(){ let best=null, bd=1e9; for(const r of [5,7,9,12,15,19,24,30,36,42]){ for(let k=0;k<24;k++){ const a=k/24*Math.PI*2, x=SH.x+Math.cos(a)*r, z=SH.z+Math.sin(a)*r;
+    if(shipInDeck(...shipL(x,z),-.8)) continue; const g=groundAt(x,z,5); if(g>SEA_Y+.25 && g<9){ const d=Math.hypot(x-player.pos.x,z-player.pos.z); if(d<bd){ bd=d; best=[x,g,z]; } } } if(best) return best; } return null; }
+// ---- multijugador ----
+function shipPresence(){ return [Math.round(SH.x*10)/10, Math.round(SH.z*10)/10, Math.round(SH.h*100)/100, SH.t, iSteer()?1:0, iSteer()?Math.round(SH.v*100)/100:0]; }
+function deckPresence(){ if(!shipOnDeck) return null; const [lx,lz]=shipL(player.pos.x,player.pos.z); return [Math.round(lx*100)/100, Math.round((player.pos.y-SH.DECK)*100)/100, Math.round(lz*100)/100, Math.round(((player.facing||0)-SH.h)*100)/100]; }
+function parseShip(r,pr,drvNow){ const d=pr.dk; r.dk=Array.isArray(d)&&d.length===4&&d.every(Number.isFinite)&&Math.abs(d[0])<5&&Math.abs(d[2])<14&&d[1]>-1&&d[1]<5 ? d : null; if(!r.dk) r.dkS=null;
+  const c=pr.sh; if(!Array.isArray(c) || c.length!==6 || !c.every(Number.isFinite) || iSteer()) return;
+  const x=clampN(c[0],-SHIP_LIM,SHIP_LIM,SH.x), z=clampN(c[1],-SHIP_LIM,SHIP_LIM,SH.z);
+  if(c[4]===1 && r.pl && PG_KINDS[r.pl[0]]==='helm'){ SH.drv={x,z,h:c[2],v:clampN(c[5],-6,SHIP_MAX+1,0),at:performance.now()}; SH.net={x,z,h:c[2]}; SH.t=Math.max(SH.t,c[3]); SH.mine=false; drvNow.sh=true; return; }
+  if(c[3]>SH.t+.05){ SH.t=c[3]; SH.net={x,z,h:c[2]}; SH.mine=false; } }
+function shipRemote(r){ const d=r.dk; if(!r.dkS || Math.hypot(r.dkS[0]-d[0],r.dkS[2]-d[2])>4) r.dkS=d.slice(); else for(let i=0;i<3;i++) r.dkS[i]+=(d[i]-r.dkS[i])*.2;
+  const [x,z]=shipW(r.dkS[0],r.dkS[2]); r.target.set(x,SH.DECK+r.dkS[1],z); r.pos.copy(r.target); r.facing=SH.h+d[3]; }
+function helmPose(){ const [x,z]=shipW(0,HELM_Z-.75); return {pos:[x,SH.DECK,z], yaw:SH.h, sit:0, grip:1}; }
 function pierDeckY(lz){ const P=PIER; if(lz<P.ZR) return P.y0+.06+(P.Y-P.y0-.06)*Math.max(0,(lz-P.Z0)/(P.ZR-P.Z0)); return P.Y; }
 function pierOn(lx,lz){ const P=PIER; return (Math.abs(lx)<=P.W+.05 && lz>=P.Z0 && lz<=P.PZ0+.2) || (Math.abs(lx)<=P.PW && lz>=P.PZ0 && lz<=P.PZ1); }
 PIER_GROUND=function(x,z,y){ const [lx,lz]=pL(x,z); if(!pierOn(lx,lz)) return null; const h=pierDeckY(lz); return y>=h-.75 ? h : null; };
@@ -12202,6 +12382,7 @@ function update(dt,t){ myLabelUpdate();
   player.acPose=acPose;
   let pgPose=null;
   cucoUpdate(dt,t);
+  shipUpdate(dt,t);   // v138
   pierUpdate(dt,t);
   trUpdate(dt,t);
   fiUpdate(dt,t); blUpdate(dt,t); farmUpdate(dt,t); caveUpdate(dt,t); reliefUpdate(dt);
@@ -12299,6 +12480,7 @@ function update(dt,t){ myLabelUpdate();
         player.pos.x=c.x+lx*ch+lz*sh; player.pos.z=c.z-lx*sh+lz*ch;
       }
     }
+    shipCollide(player.pos);   // v138: barandal, mástil y casco del barco
     const g=groundAt(player.pos.x, player.pos.z, player.pos.y);
     if(player.swim){
       player.pos.y += player.vy*dt;
@@ -12474,6 +12656,16 @@ function update(dt,t){ myLabelUpdate();
     if(iDriveCuco() && Math.abs(CU.v)>2 && performance.now()-lastLookT>1500) yaw=lerpAng(yaw, CU.h+Math.PI, 1-Math.exp(-dt*2));
     const p=THREE.MathUtils.clamp(.32 - pitch, -.05, 1.35), dist=Math.max(camDist*1.6,19);
     const target=_camT.set(CU.x, CU.y+7.2, CU.z);
+    const off=_camO.set(Math.sin(yaw)*Math.cos(p), Math.sin(p), Math.cos(yaw)*Math.cos(p)).multiplyScalar(dist);
+    const want=_camW.copy(target).add(off); const fy=Math.max(terrainH(want.x,want.z),SEA_Y)+.8; if(want.y<fy) want.y=fy;
+    if(camera.position.distanceTo(want)>60) camera.position.copy(want);
+    camera.position.lerp(want, 1-Math.exp(-dt*8)); camera.lookAt(target);
+  } else if(camMode==='third' && pgPose && iSteer()){
+    // v138: en el timón la cámara se aleja para ver el barco completo y se pone detrás cuando navegas
+    plush.visible=true;
+    if(Math.abs(SH.v)>2 && performance.now()-lastLookT>1500) yaw=lerpAng(yaw, SH.h+Math.PI, 1-Math.exp(-dt*1.6));
+    const p=THREE.MathUtils.clamp(.32 - pitch, -.05, 1.35), dist=Math.max(camDist*2.2,26), [tx,tz]=shipW(0,-1.5);
+    const target=_camT.set(tx, SH.DECK+4.2, tz);
     const off=_camO.set(Math.sin(yaw)*Math.cos(p), Math.sin(p), Math.cos(yaw)*Math.cos(p)).multiplyScalar(dist);
     const want=_camW.copy(target).add(off); const fy=Math.max(terrainH(want.x,want.z),SEA_Y)+.8; if(want.y<fy) want.y=fy;
     if(camera.position.distanceTo(want)>60) camera.position.copy(want);
