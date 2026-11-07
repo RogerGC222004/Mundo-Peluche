@@ -953,7 +953,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='140';
+const GAME_VERSION='141';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -1222,8 +1222,68 @@ function wiGridH(x,z){ const G=WI.grid; if(!G) return wiExact(x,z);
   const fx0=(x-G.x0)/G.CS, fz0=(z-G.z0)/G.CS, i=Math.floor(fx0), j=Math.floor(fz0); if(i<0||j<0||i>=G.W-1||j>=G.W-1) return wiExact(x,z);
   const fx=fx0-i, fz=fz0-j, W=G.W, H=G.H, a=H[j*W+i], d=H[j*W+i+1], b=H[(j+1)*W+i], c=H[(j+1)*W+i+1];
   return fx+fz<=1 ? a+(d-a)*fx+(b-a)*fz : c+(b-c)*(1-fx)+(d-c)*(1-fz); }
+// ---------- v141: la Isla Selva Aventura (1 km, al este; se llega en barco) ----------
+// Igual que la Isla Invierno: su propia malla, que se arma poco a poco al acercarte. su = hacia la isla grande (su muelle), sv = de lado.
+const JI=(()=>{ const a=.2, d=2300, x=Math.cos(a)*d, z=Math.sin(a)*d, ux=-Math.cos(a), uz=-Math.sin(a);
+  return {a, d, x, z, ux, uz, vx:-uz, vz:ux, R:500, E:790, grid:null, done:false, job:null}; })();
+const JI_BOX=[JI.x-JI.E, JI.z-JI.E, JI.x+JI.E, JI.z+JI.E];
+function jiCoastR(a){ return JI.R + 36*Math.sin(3*a+2.1) + 27*Math.sin(5*a+.4) + 13*Math.sin(8*a+1.3); }
+JI.rcU=jiCoastR(Math.atan2(JI.uz,JI.ux));
+const jiS=(su,sv)=>[JI.x+su*JI.ux+sv*JI.vx, JI.z+su*JI.uz+sv*JI.vz];
+const jiL=(x,z)=>{ const dx=x-JI.x, dz=z-JI.z; return [dx*JI.ux+dz*JI.uz, dx*JI.vx+dz*JI.vz]; };
+const JI_VOLC={su:-40, sv:30, h:132, r:170, crater:34, cdepth:26};   // el volcán dormido
+const JI_CAMP={su:JI.rcU-120, sv:42, r:20, b:16, h:null};          // el campamento
+const JI_PLAZA={su:JI.rcU-125, sv:-8, r:14, b:16, h:null};          // claro al llegar del muelle
+const JI_FLATS=[JI_CAMP, JI_PLAZA];
+const JI_DOCK={s1:JI.rcU*1.085, W:1.9, Y:SEA_Y+2.35, s0:0};
+// el río: nace en una poza en la falda del volcán, baja, cae en cascada a una laguna y sigue hasta el mar
+const JI_RIVER=(()=>{ const pts=[[-40,-180,40],[-22,-228,31],[-2,-262,23.5],[0,-265.5,11],[7,-278,11],[38,-342,8.5],[52,-405,5.2],[62,-470,1.4],[70,-520,-2.5]];   // su, sv, fondo
+  const P=pts.map(([su,sv,b])=>{ const [x,z]=jiS(su,sv); return {su,sv,x,z,b}; }), L=[0]; for(let i=1;i<P.length;i++) L.push(L[i-1]+Math.hypot(P[i].su-P[i-1].su,P[i].sv-P[i-1].sv));
+  return {P, L, W:5, pond:{i:0, R:9, lvl:40.75}, lag:{su:7, sv:-278, R:19, lvl:11.75}, fallI:2}; })();
+function jiRiverNear(su,sv){ const P=JI_RIVER.P; let best=1e9, s=0, bed=0, seg=0;
+  for(let i=0;i<P.length-1;i++){ const a=P[i], b=P[i+1], dx=b.su-a.su, dz=b.sv-a.sv, L2=dx*dx+dz*dz, t=Math.max(0,Math.min(1,((su-a.su)*dx+(sv-a.sv)*dz)/L2)), qx=a.su+dx*t-su, qz=a.sv+dz*t-sv, d=Math.hypot(qx,qz);
+    if(d<best){ best=d; s=JI_RIVER.L[i]+t*Math.sqrt(L2); bed=a.b+(b.b-a.b)*t; seg=i; } }
+  return {d:best, s, bed, seg}; }
+function jiBase(su,sv,x,z){
+  let h=4+15*(rlFbm(x/140-21,z/140+37,3)-.42)+5*(rlFbm(x/50+9,z/50-4,2)-.5);   // lomas de la selva
+  const V=JI_VOLC, r=Math.hypot(su-V.su,sv-V.sv);
+  if(r<V.r*3.2){ h+=V.h*Math.exp(-Math.pow(r/V.r,1.25))*(1+.12*(rlFbm(x/34+5,z/34-2,3)-.5)) + 8*Math.exp(-Math.pow(r/V.r,1.25))*(1-Math.abs(2*rlFbm(x/22-7,z/22+3,3)-1));
+    if(r<V.crater+12){ const rim=V.h*Math.exp(-Math.pow((V.crater)/V.r,1.25)); h=Math.min(h, rim+2-(V.cdepth)*(1-smooth(V.crater*.45,V.crater+8,r))); } }   // el cráter
+  return Math.max(h,1.6); }
+function jiLand(su,sv,x,z){ let h=jiBase(su,sv,x,z);
+  { const F=JI_PLAZA; if(su>F.su-10 && su<JI.rcU+20 && Math.abs(sv+8)<40){ const k=1-smooth(7,30,Math.abs(sv)); if(F.h===null){ const [fx,fz]=jiS(F.su,F.sv); F.h=jiBase(F.su,F.sv,fx,fz); } h=lerp(h, lerp(F.h,1.25,smooth(F.su+F.r,JI.rcU*.93,su)), k); } }   // la bajada al muelle
+  for(const F of JI_FLATS){ const d=Math.hypot(su-F.su,sv-F.sv); if(d<F.r+F.b){ if(F.h===null){ const [fx,fz]=jiS(F.su,F.sv); F.h=jiBase(F.su,F.sv,fx,fz); } h=lerp(h,F.h,1-smooth(F.r,F.r+F.b,d)); } }
+  // el cauce del río (con su escalón de la cascada), la poza y la laguna
+  const R=JI_RIVER, n=jiRiverNear(su,sv);
+  if(n.d<R.W+22){ const w=R.W, chan=n.d<w ? n.bed+.75-1.5*(1-(n.d/w)*(n.d/w)) : n.bed+.9+(n.d-w)*.5, k=1-smooth(w+6,w+22,n.d); h=lerp(h,chan,k); }
+  { const P=R.P[0], d=Math.hypot(su-P.su,sv-P.sv), C=R.pond; if(d<C.R+16){ const bowl=d<C.R ? C.lvl-2.2*(1-(d/C.R)*(d/C.R)) : C.lvl+.5+(d-C.R)*.35; h=lerp(h,Math.min(h,bowl),1-smooth(C.R+4,C.R+16,d)); } }
+  { const C=R.lag, d=Math.hypot(su-C.su,sv-C.sv); if(d<C.R+70){ const A=R.P[R.fallI], B=R.P[R.fallI+1], fl=Math.hypot(B.su-A.su,B.sv-A.sv), tf=((su-B.su)*(B.su-A.su)+(sv-B.sv)*(B.sv-A.sv))/fl, vf=C.lvl+1.4+Math.max(0,d-C.R-6)*.08;
+      h=lerp(h,Math.min(h,vf),(1-smooth(C.R+22,C.R+70,d))*smooth(-1.5,2.5,tf)); }   // un vallecito al pie de la cascada
+    if(d<C.R+20){ const A=R.P[R.fallI], B=R.P[R.fallI+1], fl=Math.hypot(B.su-A.su,B.sv-A.sv), tf=((su-B.su)*(B.su-A.su)+(sv-B.sv)*(B.sv-A.sv))/fl;
+      if(d<C.R) h=lerp(h,C.lvl-3.4*(1-Math.pow(d/C.R,2)),1-smooth(C.R-3,C.R,d)*(1-smooth(-2.5,.5,tf)));   // el fondo de la laguna (del lado de la cascada queda la pared)
+      else h=lerp(h,Math.min(h,C.lvl+.6+(d-C.R)*.3),(1-smooth(C.R+5,C.R+20,d))*smooth(-1.5,2.5,tf)); } }
+  return h; }
+function jiExact(x,z){ const lx=x-JI.x, lz=z-JI.z, d=Math.hypot(lx,lz); if(d>JI.E*1.42) return DEEP_Y;
+  const c=d/jiCoastR(Math.atan2(lz,lx));
+  const base = c<.9?0 : c<1 ? lerp(0,-1.9,smooth(.9,1,c)) : c<1.06 ? lerp(-1.9,-8,smooth(1,1.06,c)) : c<1.2 ? lerp(-8,-25,smooth(1.06,1.2,c)) : c<1.34 ? lerp(-25,DEEP_Y,smooth(1.2,1.34,c)) : DEEP_Y;
+  if(c>=.95) return base;
+  const su=lx*JI.ux+lz*JI.uz, sv=lx*JI.vx+lz*JI.vz;
+  return base + jiLand(su,sv,x,z)*(1-smooth(.8,.95,c)); }
+function jiGridH(x,z){ const G=JI.grid; if(!G) return jiExact(x,z);
+  const fx0=(x-G.x0)/G.CS, fz0=(z-G.z0)/G.CS, i=Math.floor(fx0), j=Math.floor(fz0); if(i<0||j<0||i>=G.W-1||j>=G.W-1) return jiExact(x,z);
+  const fx=fx0-i, fz=fz0-j, W=G.W, H=G.H, a=H[j*W+i], d=H[j*W+i+1], b=H[(j+1)*W+i], c=H[(j+1)*W+i+1];
+  return fx+fz<=1 ? a+(d-a)*fx+(b-a)*fz : c+(b-c)*(1-fx)+(d-c)*(1-fz); }
+// nivel del agua del río, la poza y la laguna (para nadar y para el agua que se ve); null si ahí no hay
+function jiWaterLevel(x,z){ if(x<JI_BOX[0]||x>JI_BOX[2]||z<JI_BOX[1]||z>JI_BOX[3]) return null; const [su,sv]=jiL(x,z), R=JI_RIVER;
+  { const C=R.lag; if(Math.hypot(su-C.su,sv-C.sv)<C.R-.3) return C.lvl; }
+  { const P=R.P[0]; if(Math.hypot(su-P.su,sv-P.sv)<R.pond.R-.3) return R.pond.lvl; }
+  const n=jiRiverNear(su,sv); if(n.seg===R.fallI) return null;   // en el escalón de la cascada no hay agua para nadar
+  if(n.d<R.W && n.bed+.75>SEA_Y+.05) return n.bed+.75;
+  return null; }
 let TMESH=null;
-function terrainH(x,z){ if(x>WI_BOX[0]&&x<WI_BOX[2]&&z>WI_BOX[1]&&z<WI_BOX[3]){ const w=wiGridH(x,z); if(w>DEEP_Y+.01) return Math.max(w, terrainMainH(x,z)); } return terrainMainH(x,z); }   // v139: primero la Isla Invierno
+function terrainH(x,z){ if(x>WI_BOX[0]&&x<WI_BOX[2]&&z>WI_BOX[1]&&z<WI_BOX[3]){ const w=wiGridH(x,z); if(w>DEEP_Y+.01) return Math.max(w, terrainMainH(x,z)); }
+  if(x>JI_BOX[0]&&x<JI_BOX[2]&&z>JI_BOX[1]&&z<JI_BOX[3]){ const w=jiGridH(x,z); if(w>DEEP_Y+.01) return Math.max(w, terrainMainH(x,z)); }   // v141: la Isla Selva
+  return terrainMainH(x,z); }   // v139: primero la Isla Invierno
 function terrainMainH(x,z){ const M=TMESH; if(!M) return terrainExact(x,z);
   const xs=M.xs, zs=M.zs, n=M.GW-1; if(!(x>xs[0]&&x<xs[n]&&z>zs[0]&&z<zs[n])) return terrainExact(x,z);
   let lo=0, hi=n; while(hi-lo>1){ const m=(lo+hi)>>1; if(xs[m]<=x) lo=m; else hi=m; } const i=lo;
@@ -1364,6 +1424,7 @@ const RL_POND=(()=>{ const [x,z]=RL_RIVER.pts[0]; return {x,z,R:17, lvl:RL_BED[0
 const RL_RBOX=(()=>{ let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9; for(const [x,z] of RL_RIVER.pts){ x0=Math.min(x0,x); x1=Math.max(x1,x); z0=Math.min(z0,z); z1=Math.max(z1,z); } return [x0-40,z0-40,x1+40,z1+40]; })();
 const RLN={d:0,s:0,i:0};
 function riverLevelAt(x,z){   // nivel del agua del río (o del estanque, o de la poza) en ese punto; null si ahí no hay río
+  if(x>JI_BOX[0]&&x<JI_BOX[2]&&z>JI_BOX[1]&&z<JI_BOX[3]) return jiWaterLevel(x,z);   // v141: el río, la poza y la laguna de la Isla Selva
   if(x<RL_RBOX[0]||x>RL_RBOX[2]||z<RL_RBOX[1]||z>RL_RBOX[3]) return null;
   if(Math.hypot(x-RL_POND.x,z-RL_POND.z)<RL_POND.R) return RL_POND.lvl;
   if(Math.hypot(x-RL_PLUNGE.x,z-RL_PLUNGE.z)<RL_PLUNGE.R) return RL_PLUNGE.lvl;
@@ -2604,7 +2665,7 @@ function updateBubbles(dt, emitter){
 }
 
 // Altura del suelo donde está el jugador: terreno, o la cima de una roca/botón/cofre si está encima
-var PIER_GROUND=null, TRAMP_GROUND=null, FI_GROUND=null, CAVE_GROUND=null, SHIP_GROUND=null;   // (MX_FLAG y VEG_GEO se declaran antes: aquí las borraba)   // (la mina: más abajo de CAVE_TOP)
+var PIER_GROUND=null, TRAMP_GROUND=null, FI_GROUND=null, CAVE_GROUND=null, SHIP_GROUND=null, JI_DOCK_GROUND=null, JI_DECK_GROUND=null;   // (MX_FLAG y VEG_GEO se declaran antes: aquí las borraba)   // (la mina: más abajo de CAVE_TOP)
 const CAVE_TOP=-150;   // el muelle y la casita de Tortu (se define más abajo)
 function groundAt(x,z,y){
   if(CAVE_GROUND && y!==undefined && y<CAVE_TOP) return CAVE_GROUND(x,z,y);   // dentro de la mina
@@ -2621,6 +2682,7 @@ function groundAt(x,z,y){
   if(FI_GROUND){ const fg=FI_GROUND(x,z,y); if(fg!==null && fg>g) g=fg; }   // islas flotantes
   if(SHIP_GROUND){ const sg=SHIP_GROUND(x,z,y); if(sg!==null && sg>g) g=sg; }   // v138: la cubierta del barco
   if(WI_DOCK_GROUND){ const wg=WI_DOCK_GROUND(x,z,y); if(wg!==null && wg>g) g=wg; }   // v139: el muelle de la Isla Invierno
+  if(JI_DOCK_GROUND){ const jg=JI_DOCK_GROUND(x,z,y); if(jg!==null && jg>g) g=jg; const jd=JI_DECK_GROUND(x,z,y); if(jd!==null && jd>g) g=jd; }   // v141: muelle y mirador de la Isla Selva
   for(const o of obsNear(x,z)){
     if(!o.walk) continue;
     const dx=x-o.x, dz=z-o.z;
@@ -4150,7 +4212,7 @@ function mapGesturing(){ return mapPtrs.size>0 || performance.now()-mapWheelT<18
 function renderMapCache(){ const z=mapView.z;
   mcc.setTransform(1,0,0,1,0,0); mcc.fillStyle=MAP_SEA; mcc.fillRect(0,0,MC_S,MC_S);
   mcc.setTransform(z,0,0,z, MC_S/2-mapView.cx*z, MC_S/2-mapView.cy*z);
-  mcc.imageSmoothingEnabled=true; mcc.drawImage(mapTerrain,0,0,MAP_PX,MAP_PX); try{ wiMapDraw(mcc); }catch(e){ console.warn(e); } drawMapDetails(mcc,z); mcc.setTransform(1,0,0,1,0,0);
+  mcc.imageSmoothingEnabled=true; mcc.drawImage(mapTerrain,0,0,MAP_PX,MAP_PX); try{ wiMapDraw(mcc); jiMapDraw(mcc); }catch(e){ console.warn(e); } drawMapDetails(mcc,z); mcc.setTransform(1,0,0,1,0,0);
   mcView.z=z; mcView.cx=mapView.cx; mcView.cy=mapView.cy; }
 function mapCacheOK(sharp){ if(!mcView.z) return false; const r=mapView.z/mcView.z;
   if(sharp ? Math.abs(r-1)>1e-4 : (r<.67 || r>2.2)) return false;
@@ -10914,7 +10976,7 @@ function wiTick(dt,t){
     try{ while(performance.now()-t0<budget){ if(WI.job.next().done){ WI.job=null; break; } } }catch(e){ console.warn('isla invierno',e); WI.job=null; WI.done=true; } }
   // el color del agua (bajito y espuma) usa la profundidad de esta isla cuando estás cerca
   if(WI.depth){ const near=Math.hypot(camera.position.x-WI.x,camera.position.z-WI.z)<WI.E+260, U=seaSurface.material.uniforms;
-    if(!WI.mainDepth) WI.mainDepth={tex:U.uDepth.value, rect:U.uRect.value};
+    if(!WI.mainDepth) WI.mainDepth=SEA_MAIN_DEPTH;
     if(near!==!!WI.depthOn){ WI.depthOn=near; U.uDepth.value=near?WI.depth.tex:WI.mainDepth.tex; U.uRect.value=near?WI.depth.rect:WI.mainDepth.rect; } }
   if(d>WI.E+300) return;
   if(WI.flag) WI.flag.rotation.y=Math.sin(t*1.3)*.25;
@@ -11223,6 +11285,251 @@ function wi2Tick(dt,t){ if(!WI.done) return;
     const G=q.G, walk=q.wait<=0; G.position.set(q.x,terrainH(q.x,q.z),q.z); G.rotation.set(0,q.h,walk?Math.sin(q.ph)*.14:0);
     q.fl.forEach((f,i)=>{ f.rotation.z=(i?-1:1)*(.15+q.flap*(.6+.5*Math.sin(t*14))); }); } }
 const _wiV=new THREE.Vector3();
+// ======================================================================================
+// ---------- v141: Isla Selva Aventura, parte 1 (volcán dormido, río con cascada y laguna, selva, playa blanca, muelle tiki, campamento) ----------
+// ======================================================================================
+const SEA_MAIN_DEPTH={tex:seaSurface.material.uniforms.uDepth.value, rect:seaSurface.material.uniforms.uRect.value};   // la profundidad del mar de la isla grande (para regresar a ella)
+const JI_PATHS=(()=>{ const P=JI_PLAZA, C=JI_CAMP, G=JI_RIVER.lag, V=JI_VOLC;
+  return [
+    [[JI_DOCK.s1-40,0],[P.su+P.r-2,-4]],                                                   // del muelle al claro
+    [[P.su-4,P.r-2],[C.su+6,C.sv-C.r+2]],                                                   // al campamento
+    [[P.su-P.r+2,-16],[P.su-60,-110],[150,-235],[G.su+30,G.sv+8]],                         // a la laguna de la cascada
+    [[P.su-P.r+2,0],[200,10],[150,-15],[115,52],[75,8],[48,56],[V.su+V.crater+10,V.sv+10]],  // sube al mirador del volcán (en zigzag)
+    [[G.su-8,G.sv+20],[-12,-238],[-30,-196]]                                                 // de la laguna a la poza donde nace el río
+  ].map(l=>l.map(([su,sv])=>jiS(su,sv))); })();
+function jiPathD(x,z){ let best=1e9; for(const l of JI_PATHS) for(let i=0;i<l.length-1;i++){ const [ax,az]=l[i], [bx,bz]=l[i+1], dx=bx-ax, dz=bz-az, L2=dx*dx+dz*dz, t=Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/L2)), qx=ax+dx*t-x, qz=az+dz*t-z, d=qx*qx+qz*qz; if(d<best) best=d; } return Math.sqrt(best); }
+function jiVisited(){ return !!wiSave().selva; }
+TELEPORTS.push((([x,z])=>({id:'selva', name:'Selva Aventura', x, z, noPortal:true, lock:()=>!jiVisited()}))(jiS(JI_PLAZA.su+JI_PLAZA.r-4, -2)));
+{ let s=JI.rcU*.97; while(s>JI.rcU*.6 && jiExact(...jiS(s,0))<JI_DOCK.Y-.15) s-=1; JI_DOCK.s0=s-1.5; }
+JI_DOCK_GROUND=function(x,z,y){ if(x<JI_BOX[0]||x>JI_BOX[2]||z<JI_BOX[1]||z>JI_BOX[3]) return null; const [su,sv]=jiL(x,z); return Math.abs(sv)<=JI_DOCK.W && su>=JI_DOCK.s0 && su<=JI_DOCK.s1 && y>=JI_DOCK.Y-.75 ? JI_DOCK.Y : null; };
+// ---- silueta de lejos ----
+(function jiFar(){ const E=JI.E, N=ULTRA?40:MIN_Q?52:72, geo=new THREE.PlaneGeometry(2*E,2*E,N,N); geo.rotateX(-Math.PI/2);
+  const pos=geo.attributes.position, n=pos.count, col=new Float32Array(n*3), W=N+1, st=2*E/N, H=new Float32Array(n);
+  for(let i=0;i<n;i++){ const x=pos.getX(i)+JI.x, z=pos.getZ(i)+JI.z, o=st*.35; pos.setX(i,x); pos.setZ(i,z); H[i]=Math.max(SEA_Y,(2*jiExact(x,z)+jiExact(x-o,z-o)+jiExact(x+o,z-o)+jiExact(x-o,z+o)+jiExact(x+o,z+o))/6); }
+  const JG=hexLin('#3f7f34'), JG2=hexLin('#4f9a3c'), ROCK=hexLin('#6e6460'), SEA=hexLin('#6fb0d8'), SAND=hexLin('#efe0b8'), c=new THREE.Color();
+  for(let j=0;j<W;j++) for(let i=0;i<W;i++){ const k=j*W+i, x=pos.getX(k), z=pos.getZ(k), h=H[k];
+    const sl=Math.hypot(H[j*W+Math.min(N,i+1)]-H[j*W+Math.max(0,i-1)], H[Math.min(N,j+1)*W+i]-H[Math.max(0,j-1)*W+i])/(2*st);
+    c.copy(JG).lerp(JG2,.5*rlNoise(x/60,z/60)); c.lerp(ROCK,smooth(70,110,h)); c.lerp(ROCK,smooth(.6,1,sl)*.7);
+    if(h<=SEA_Y+.01) c.copy(SEA); else if(h<2) c.lerp(SAND,.7);
+    pos.setY(k,h); col[k*3]=c.r; col[k*3+1]=c.g; col[k*3+2]=c.b; }
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3)); geo.computeVertexNormals();
+  const mesh=new THREE.Mesh(geo,farRelief.material); mesh.frustumCulled=false; mesh.renderOrder=-.55; mesh.matrixAutoUpdate=false; mesh.userData.noBatch=true;
+  mesh.onBeforeRender=farRelief.onBeforeRender; scene.add(mesh); JI.far=mesh; })();
+// ---- armar la isla poco a poco ----
+function* jiBuildGen(){
+  const E=JI.E, CS=ULTRA?9:({min:8, low:6.5, mid:5.5, high:5, max:4.5}[Q0]||6.5), N=Math.ceil(2*E/CS), W=N+1, x0=JI.x-E, z0=JI.z-E, H=new Float32Array(W*W);
+  for(let j=0;j<W;j++){ for(let i=0;i<W;i++) H[j*W+i]=jiExact(x0+i*CS, z0+j*CS); if(j%6===5) yield; }
+  JI.grid={x0, z0, CS, W, H};
+  const pos=new Float32Array(W*W*3), nor=new Float32Array(W*W*3), uv=new Float32Array(W*W*2), col=new Float32Array(W*W*3);
+  const GR=[hexLin('#5c9e3c'),hexLin('#4f9136'),hexLin('#66a842')], DARK=hexLin('#3e7a2e'), MOSS=hexLin('#7aa843'), ROCK=[hexLin('#6e6460'),hexLin('#5f5754'),hexLin('#7a6f69')], ASH=hexLin('#8a7d72'), CRAT=hexLin('#4a403c'),
+    SAND=hexLin('#f3e6c4'), SANDW=hexLin('#e3d1a4'), MUD=hexLin('#a07a4e'), MUDE=hexLin('#8f6d45'), RBED=hexLin('#6f7f63'), PEB=hexLin('#b7aa8e'), WET=hexLin('#d6c49a'), SEAF=hexLin('#e2d3a6'), DEEP=hexLin('#4f86a3'), c=new THREE.Color(), c2=new THREE.Color();
+  for(let j=0;j<W;j++){ for(let i=0;i<W;i++){ const k=j*W+i, x=x0+i*CS, z=z0+j*CS, h=H[k];
+      const hx=(H[j*W+Math.min(N,i+1)]-H[j*W+Math.max(0,i-1)])/(2*CS), hz=(H[Math.min(N,j+1)*W+i]-H[Math.max(0,j-1)*W+i])/(2*CS), sl=Math.hypot(hx,hz);
+      pos[k*3]=x; pos[k*3+1]=h; pos[k*3+2]=z; const nl=1/Math.hypot(hx,1,hz); nor[k*3]=-hx*nl; nor[k*3+1]=nl; nor[k*3+2]=-hz*nl; uv[k*2]=x/16; uv[k*2+1]=-z/16;
+      const lx=x-JI.x, lz=z-JI.z, cc=Math.hypot(lx,lz)/jiCoastR(Math.atan2(lz,lx)), [su,sv]=jiL(x,z), V=JI_VOLC, vr=Math.hypot(su-V.su,sv-V.sv);
+      c.copy(GR[((Math.floor(x/16)+Math.floor(z/16))%3+3)%3]).lerp(DARK,.5*smooth(.45,.7,rlFbm(x/90+4,z/90-6,2))).lerp(MOSS,.3*smooth(.6,.8,rlNoise(x/30,z/30)));
+      c.lerp(ASH, smooth(65,105,h)*(1-.3*rlNoise(x/25,z/25)));   // arriba del volcán: ceniza y piedra
+      const rk=smooth(.6,1.05,sl+.25*(rlNoise(x/30,z/30)-.5)); if(rk>0) c.lerp(c2.copy(ROCK[(rlHash(x/9|0,z/9|0)*3)|0]).multiplyScalar(.85+.3*rlNoise(x/12,z/12)), rk*.9);
+      if(vr<V.crater+4) c.lerp(CRAT, 1-smooth(V.crater-6,V.crater+4,vr));
+      if(cc>.84 && h<3.2){ const bk=smooth(.83,.9,cc)*(1-smooth(2,3.2,h)); c.lerp(SAND,bk); }   // playa de arena blanca
+      if(cc<.9){ const pd=jiPathD(x,z); if(pd<3.6) c.lerp(pd<2.1?MUD:MUDE, 1-smooth(2.1,3.6,pd)); }   // caminos de tierra
+      { const rn=jiRiverNear(su,sv); if(rn.d<JI_RIVER.W+4){ const bk=1-smooth(JI_RIVER.W,JI_RIVER.W+4,rn.d); c.lerp(PEB,bk*.8); if(rn.d<JI_RIVER.W) c.lerp(RBED,.7); } }
+      for(const C of [JI_RIVER.lag,{su:JI_RIVER.P[0].su,sv:JI_RIVER.P[0].sv,R:JI_RIVER.pond.R}]){ const d=Math.hypot(su-C.su,sv-C.sv); if(d<C.R+4) c.lerp(d<C.R?RBED:PEB, 1-smooth(C.R,C.R+4,d)); }
+      if(h<SEA_Y && cc>.95){ c.lerp(WET, smooth(SEA_Y,SEA_Y-1,h)); }
+      if(cc>1){ c.lerp(SEAF, smooth(1,1.05,cc)); c.lerp(DEEP, smooth(-6,-40,h)); }
+      const cv=(i>0&&i<N&&j>0&&j<N)?(h-(H[k-1]+H[k+1]+H[k-W]+H[k+W])/4)/CS:0, lum=THREE.MathUtils.clamp(.92+cv*2.6,.72,1.12);
+      col[k*3]=c.r*lum; col[k*3+1]=c.g*lum; col[k*3+2]=c.b*lum; }
+    if(j%5===4) yield; }
+  const A={position:new THREE.BufferAttribute(pos,3), normal:new THREE.BufferAttribute(nor,3), uv:new THREE.BufferAttribute(uv,2), color:new THREE.BufferAttribute(col,3)};
+  const step=40, G=new THREE.Group(); G.userData.noBatch=true; scene.add(G); JI.tiles=G;
+  for(let ty=0;ty<N;ty+=step){ for(let tx=0;tx<N;tx+=step){ const idx=[]; let y0=1e9,y1=-1e9;
+      for(let iy=ty;iy<Math.min(N,ty+step);iy++) for(let ix=tx;ix<Math.min(N,tx+step);ix++){ const a=ix+W*iy, b=ix+W*(iy+1), cc=ix+1+W*(iy+1), d=ix+1+W*iy;
+        if(Math.max(H[a],H[b],H[cc],H[d])<DEEP_Y+.6) continue; idx.push(a,b,d, b,cc,d); for(const q of [a,b,cc,d]){ if(H[q]<y0) y0=H[q]; if(H[q]>y1) y1=H[q]; } }
+      if(!idx.length) continue;
+      const g=new THREE.BufferGeometry(); for(const k in A) g.setAttribute(k,A[k]); g.setIndex(idx);
+      const xa=x0+tx*CS, xb=x0+Math.min(N,tx+step)*CS, za=z0+ty*CS, zb=z0+Math.min(N,ty+step)*CS;
+      g.boundingSphere=new THREE.Sphere(new THREE.Vector3((xa+xb)/2,(y0+y1)/2,(za+zb)/2), Math.hypot(xb-xa,y1-y0,zb-za)/2+.5);
+      const m=new THREE.Mesh(g,GROUND_MAT); m.receiveShadow=true; m.matrixAutoUpdate=false; G.add(m); }
+    yield; }
+  jiBuildWater(); yield;
+  yield* jiBuildPlants(); yield;
+  jiBuildDock(); yield;
+  jiBuildCamp(); yield;
+  jiBuildVolcano(); yield;
+  { const N=MIN_Q?160:256, E=JI.E, data=new Uint8Array(N*N);
+    for(let j=0;j<N;j++){ for(let i=0;i<N;i++){ const x=JI.x-E+2*E*(i+.5)/N, z=JI.z-E+2*E*(j+.5)/N; data[j*N+i]=Math.round(THREE.MathUtils.clamp((SEA_Y-terrainH(x,z)+2)/12,0,1)*255); } if(j%40===39) yield; }
+    const t=new THREE.DataTexture(data,N,N,THREE.LuminanceFormat); t.magFilter=t.minFilter=THREE.LinearFilter; t.generateMipmaps=false; t.needsUpdate=true; JI.depth={tex:t, rect:new THREE.Vector4(JI.x-E,JI.z-E,2*E,2*E)}; }
+  JI.done=true;
+}
+// ---- el agua: río que corre, poza, laguna y la cascada ----
+function jiBuildWater(){ const R=JI_RIVER, P=R.P;
+  // profundidad del agua dulce (para el color, la espuma y la corriente)
+  let bx0=1e9,bz0=1e9,bx1=-1e9,bz1=-1e9; for(const p of P){ bx0=Math.min(bx0,p.x); bz0=Math.min(bz0,p.z); bx1=Math.max(bx1,p.x); bz1=Math.max(bz1,p.z); } bx0-=40; bz0-=40; bx1+=40; bz1+=40;
+  const Wd=Math.ceil((bx1-bx0)/2.5), Hd=Math.ceil((bz1-bz0)/2.5), data=new Uint8Array(Wd*Hd);
+  for(let j=0;j<Hd;j++) for(let i=0;i<Wd;i++){ const x=bx0+(i+.5)*(bx1-bx0)/Wd, z=bz0+(j+.5)*(bz1-bz0)/Hd, lv=jiWaterLevel(x,z); data[j*Wd+i]=lv===null?0:Math.round(THREE.MathUtils.clamp((lv-terrainH(x,z)+2)/12,0,1)*255); }
+  const tex=new THREE.DataTexture(data,Wd,Hd,THREE.LuminanceFormat); tex.magFilter=tex.minFilter=THREE.LinearFilter; tex.generateMipmaps=false; tex.needsUpdate=true;
+  const mat=makeWaterMat({A:WATER.lakeA, depth:{tex, rect:new THREE.Vector4(bx0,bz0,bx1-bx0,bz1-bz0)}, shallow:'#7fd6c8', deep:'#2f8f9a', deepD:1.6, detail:waterTex, tile:8, foam:.7, opacity:1, flow:true});
+  mat.userData.lake=true; waterMats.push(mat); JI.waterMat=mat;
+  // la cinta del río (sin el escalón de la cascada, sin la poza y sin la laguna)
+  const K=MIN_Q?4:6, HW=R.W+1.2, pos=[], fl=[], idx=[]; let rows=0, prev=false;
+  const total=R.L[R.L.length-1];
+  for(let s=0;s<=total;s+=2.5){ let i=0; while(i<P.length-2 && R.L[i+1]<s) i++; const a=P[i], b=P[i+1], t=(s-R.L[i])/(R.L[i+1]-R.L[i]), su=a.su+(b.su-a.su)*t, sv=a.sv+(b.sv-a.sv)*t, bed=a.b+(b.b-a.b)*t, lv=bed+.75;
+    if(lv<=SEA_Y+.06) break;
+    if(i===R.fallI || Math.hypot(su-R.lag.su,sv-R.lag.sv)<R.lag.R-3 || Math.hypot(su-P[0].su,sv-P[0].sv)<R.pond.R-3){ prev=false; continue; }
+    let dx=b.su-a.su, dz=b.sv-a.sv; const l=Math.hypot(dx,dz)||1; dx/=l; dz/=l; const sl=(a.b-b.b)/l, sp=.9+smooth(.05,.3,sl)*3.4;
+    for(let k=0;k<K;k++){ const w=(-1+2*k/(K-1))*HW, [x,z]=jiS(su-dz*w, sv+dx*w); pos.push(x,lv,z); const [fx,fz]=[dx*JI.ux+dz*JI.vx, dx*JI.uz+dz*JI.vz]; fl.push(fx*sp,fz*sp,smooth(.05,.3,sl)*(1-Math.abs(w)/HW*.6)); }
+    if(prev){ const r0=(rows-1)*K, r1=rows*K; for(let k=0;k<K-1;k++) idx.push(r0+k, r0+k+1, r1+k, r0+k+1, r1+k+1, r1+k); }
+    rows++; prev=true; }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('aFlow',new THREE.Float32BufferAttribute(fl,3)); g.setIndex(idx); g.computeBoundingSphere();
+  const rib=new THREE.Mesh(g,mat); rib.renderOrder=2; scene.add(rib);
+  const disc=(su,sv,Rr,lv)=>{ const dg=ringGeometry(Rr+1.5,MIN_Q?10:18,MIN_Q?32:56,1.2), q=dg.attributes.position, f=new Float32Array(q.count*3); dg.setAttribute('aFlow',new THREE.BufferAttribute(f,3));
+    const [x,z]=jiS(su,sv), m=new THREE.Mesh(dg,mat); m.position.set(x,lv,z); m.renderOrder=2; scene.add(m); return m; };
+  disc(P[0].su,P[0].sv,R.pond.R,R.pond.lvl); disc(R.lag.su,R.lag.sv,R.lag.R,R.lag.lvl);
+  // la cascada
+  const a=P[R.fallI], b=P[R.fallI+1], top=a.b+.75, FH=top-R.lag.lvl+.3, FW=R.W*2-1; let dx=b.su-a.su, dz=b.sv-a.sv; { const l=Math.hypot(dx,dz)||1; dx/=l; dz/=l; }
+  const cols=6, rws=Math.max(10,Math.round(FH/1.2)), fp=[], fu=[], fi=[];
+  for(let r=0;r<=rws;r++){ const ft=FH*r/rws, fwd=4*Math.sqrt(Math.min(ft,3)/3)+ft*.04;
+    for(let c=0;c<=cols;c++){ const u=c/cols, w=(u-.5)*FW*(1+.06*ft/FH), [px,pz]=jiS(a.su+dx*fwd-dz*w, a.sv+dz*fwd+dx*w); fp.push(px, top-ft, pz); fu.push(u,1-r/rws); } }
+  for(let r=0;r<rws;r++) for(let c=0;c<cols;c++){ const q=r*(cols+1)+c, w=q+cols+1; fi.push(q,w,q+1, q+1,w,w+1); }
+  const fg=new THREE.BufferGeometry(); fg.setAttribute('position',new THREE.Float32BufferAttribute(fp,3)); fg.setAttribute('uv',new THREE.Float32BufferAttribute(fu,2)); fg.setIndex(fi); fg.computeVertexNormals(); fg.computeBoundingSphere();
+  const fm=new THREE.Mesh(fg,fallMats[1]); fm.renderOrder=3; scene.add(fm);
+  const [fx,fz]=jiS(a.su+dx*4.6, a.sv+dz*4.6);
+  { const m=new THREE.Mesh(new THREE.CircleGeometry(4.5,28), new THREE.MeshBasicMaterial({map:foamTex, transparent:true, depthWrite:false, opacity:.85})); m.rotation.x=-Math.PI/2; m.position.set(fx,R.lag.lvl+.06,fz); m.renderOrder=3; m.userData.noBatch=true; scene.add(m);
+    FI_SPLASH.push({x:fx, z:fz, y:R.lag.lvl, t:0, I:null, m}); }
+  for(let k=0;k<3;k++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:mistTex, transparent:true, depthWrite:false, opacity:.55})); const sz=7+k*2; s.scale.set(sz,sz*.6,1); const [sx,sz2]=jiS(a.su+dx*(4+k)-dz*(k-1)*3, a.sv+dz*(4+k)+dx*(k-1)*3); s.position.set(sx,R.lag.lvl+1+k*.8,sz2); s.userData.noBatch=true; scene.add(s); }
+  // piedras en la orilla de arriba de la cascada
+  const G=new THREE.Group(); scene.add(G); for(const e of [-1,1]) for(let k=0;k<3;k++){ const [x,z]=jiS(a.su-dz*e*(R.W+.8+k*1.1)+dx*(k-1), a.sv+dx*e*(R.W+.8+k*1.1)+dz*(k-1)), s=1.2+k*.4; wiAdd(G,sphereG,rockMat,x,terrainH(x,z)+s*.2,z,s*1.2,s*.8,s); }
+  mergeStatic(G); JI.fall={x:fx, z:fz, top, dir:[dx,dz]}; }
+// ---- plantas: árboles gigantes con lianas, palmeras, helechos y flores ----
+const JI_GEO=(()=>{ let G=null; return ()=>{ if(G) return G;
+  const M=(x,y,z,sx,sy,sz,rx=0,ry=0,rz=0)=>new THREE.Matrix4().compose(new THREE.Vector3(x,y,z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)), new THREE.Vector3(sx,sy,sz));
+  const lo=MIN_Q||ULTRA, cyl=new THREE.CylinderGeometry(1,1,1,lo?5:7), ball=new THREE.SphereGeometry(1,lo?6:9,lo?4:6), cone=new THREE.ConeGeometry(1,1,lo?5:7);
+  const tree=vegMerge([[cyl,'#8a6a46',M(0,3.6,0,.5,7.2,.5)], [cone,'#7d5d3c',M(0,.5,0,1.1,1.2,1.1)],
+    [ball,'#4c9a3b',M(0,8.2,0,3.4,2.2,3.4)], [ball,'#5aad45',M(1.8,7.4,.8,2.4,1.7,2.4)], [ball,'#43893a',M(-1.6,7.6,-1,2.5,1.8,2.5)], [ball,'#62b84b',M(.3,9.4,-.6,2.2,1.6,2.2)],
+    ...[[1.9,.4],[-1.4,1.6],[.6,-2],[-2,-.6],[1,1.9]].map(([x,z],k)=>[cyl,'#4f8a3a',M(x,5.6-k*.25,z,.05,3.2+k*.3,.05)])]);
+  const palmParts=[]; let px=0, py=0; for(let i=0;i<6;i++){ palmParts.push([cyl,'#a57c52',M(px,py+.55,0,.24-i*.015,1.1,.24-i*.015,0,0,-.07*i)]); px+=.08*i; py+=1.05; }
+  for(let k=0;k<7;k++){ const a=k/7*Math.PI*2; palmParts.push([ball,k%2?'#4fa843':'#5cb84c',M(px+Math.cos(a)*1.5,py-.25,Math.sin(a)*1.5,1.8,.1,.42,0,-a,-.35)]); }
+  [[.25,0],[-.15,.22],[-.1,-.25]].forEach(([dx,dz])=>palmParts.push([ball,'#7a5232',M(px+dx,py-.15,dz,.2,.2,.2)]));
+  const palm=vegMerge(palmParts);
+  const fern=vegMerge([[ball,'#3f8f3a',M(0,.35,0,1.1,.5,1.1)], [ball,'#4c9e45',M(.6,.45,.3,.7,.45,.7)], [ball,'#45963f',M(-.5,.4,-.4,.75,.5,.75)]]);
+  const flowerP=vegMerge([[ball,'#3f8f3a',M(0,.45,0,.9,.6,.9)], [ball,'#ff5fa2',M(.45,.85,.2,.24,.18,.24)], [ball,'#ff5fa2',M(-.35,.8,.3,.22,.17,.22)], [ball,'#ffd23f',M(0,1,-.35,.2,.15,.2)]]);
+  const flowerY=vegMerge([[ball,'#3f8f3a',M(0,.45,0,.9,.6,.9)], [ball,'#ffd23f',M(.45,.85,.2,.24,.18,.24)], [ball,'#ff7a3a',M(-.35,.8,.3,.22,.17,.22)], [ball,'#ffffff',M(0,1,-.35,.2,.15,.2)]]);
+  return G={tree, palm, fern, flowerP, flowerY}; }; })();
+function* jiBuildPlants(){ const q={min:.35, low:.6, mid:.8, high:1, max:1}[Q0]||.6, trees=[], palms=[], ferns=[], fl1=[], fl2=[], rocks=[];
+  const near=(su,sv,F,m)=>Math.hypot(su-F.su,sv-F.sv)<F.r+m;
+  for(let gx=-JI.E;gx<JI.E;gx+=7){ if(((gx+JI.E)/7|0)%22===21) yield; for(let gz=-JI.E;gz<JI.E;gz+=7){ const r1=rlHash(gx*3-7,gz*7+5), r2=rlHash(gx+23,gz-31), r3=rlHash(gx*5-3,gz*3+9), r4=rlHash(gx+71,gz*2-13);
+    const x=JI.x+gx+(r1-.5)*6, z=JI.z+gz+(r2-.5)*6, lx=x-JI.x, lz=z-JI.z, cc=Math.hypot(lx,lz)/jiCoastR(Math.atan2(lz,lx)); if(cc>.92) continue;
+    const [su,sv]=jiL(x,z); if(near(su,sv,JI_CAMP,6) || near(su,sv,JI_PLAZA,4)) continue; if(su>JI_PLAZA.su && su<JI.rcU+5 && Math.abs(sv)<10) continue;
+    const h=jiGridH(x,z); if(h<1.2 || jiWaterLevel(x,z)!==null) continue; const pd=jiPathD(x,z); if(pd<3.5) continue;
+    const rn=jiRiverNear(su,sv); if(rn.d<JI_RIVER.W+2) continue; if(Math.hypot(su-JI_RIVER.lag.su,sv-JI_RIVER.lag.sv)<JI_RIVER.lag.R+4) continue;
+    const sl=Math.hypot(jiGridH(x+2,z)-jiGridH(x-2,z), jiGridH(x,z+2)-jiGridH(x,z-2))/4;
+    if(sl>.6 || h>95){ if(r3<.05) rocks.push([x,z,1+r2*1.6,r1*6.28]); continue; }
+    if(cc>.8 || h<3){ if(r3<.22*q) palms.push([x,z,.85+r1*.4,r2*6.28]); else if(r3>.96) ferns.push([x,z,.7+r1*.5,r2*6.28]); continue; }   // en la playa: palmeras
+    const forest=rlFbm(x/120-9,z/120+15,3), p=(h>70?.08:forest>.48?.62:forest>.4?.3:.1)*q;
+    if(r3<p) trees.push([x,z,.8+r1*.6,r2*6.28]);
+    else if(r3<p+.12*q && cc<.78) palms.push([x,z,.8+r1*.4,r2*6.28]);
+    if(r4<.65*q && pd>4.5) ferns.push([x+(r2-.5)*3,z+(r1-.5)*3,.7+r3*.7,r1*6.28]);
+    else if(r4>.9) (r1<.5?fl1:fl2).push([x+(r3-.5)*3,z+(r2-.5)*3,.8+r1*.5,r2*6.28]); } }
+  yield;
+  const G=JI_GEO(), put=(L,geo,obs)=>{ if(!L.length) return; instanced(geo, VEG_GEO.mat, L, (o,[x,z,s,rot])=>{ o.position.set(x,groundMin(x,z,.25*s)-.1,z); o.scale.setScalar(s); o.rotation.y=rot; }); if(obs) L.forEach(([x,z,s])=>obstacles.push({x,z,r:obs*s,top:terrainH(x,z)+60,walk:false})); };
+  put(trees,G.tree,.6); yield; put(palms,G.palm,.32); yield; put(ferns,G.fern,0); put(fl1,G.flowerP,0); put(fl2,G.flowerY,0);
+  if(rocks.length){ instanced(sphereG, rockMat, rocks, (o,[x,z,s,rot])=>{ const b=groundMin(x,z,.8*s)-.15*s; o.position.set(x,b+s*.35,z); o.scale.set(s*1.2,s*.7,s); o.rotation.y=rot; });
+    rocks.forEach(([x,z,s])=>{ const b=groundMin(x,z,.8*s)-.15*s; obstacles.push({x,z,r:s*1.05,top:b+s*1.05,walk:true}); }); }
+  JI.nTrees=trees.length+palms.length; }
+// ---- antorchas (con fuego que se mueve) ----
+const JI_FIRE=[];
+function jiTorch(G,x,z,y,h=2.4){ const wood=wiMat('#6b4a2e','rgba(40,20,5,.2)'); wiAdd(G,cylG,wood,x,y+h/2,z,.07,h,.07); wiAdd(G,WI_CONEG,wiMat('#3a2a1c'),x,y+h+.08,z,.18,-.3,.18); obstacles.push({x,z,r:.15,top:y+60,walk:false});
+  const fm=new THREE.MeshBasicMaterial({color:'#ffb23a'}), f=new THREE.Mesh(WI_CONEG,fm); f.position.set(x,y+h+.35,z); f.scale.set(.13,.4,.13); f.userData.noBatch=true; f.userData.ph=x*.7+z; scene.add(f);
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex, color:'#ffb050', transparent:true, opacity:.6, depthWrite:false, blending:THREE.AdditiveBlending})); s.position.set(x,y+h+.4,z); s.scale.setScalar(1.6); s.userData.noBatch=true; scene.add(s);
+  JI_FIRE.push({f,s}); }
+function jiSign(G,x,z,y,ry,txt,col,w=3.4,bg='#f3ead8'){ const c=document.createElement('canvas'); c.width=512; c.height=128; const g=c.getContext('2d'), t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding;
+  const draw=()=>{ g.fillStyle=bg; g.fillRect(0,0,512,128); g.strokeStyle='#6b4a2e'; g.lineWidth=10; g.strokeRect(5,5,502,118); g.fillStyle=col; g.textAlign='center'; g.textBaseline='middle'; let fs=60; do{ g.font='800 '+fs+'px Sniglet, Nunito, sans-serif'; fs-=2; }while(g.measureText(txt).width>470 && fs>20); g.fillText(txt,256,68); t.needsUpdate=true; };
+  draw(); try{ document.fonts.ready.then(draw); }catch(e){}
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,w/4),new THREE.MeshStandardMaterial({map:t, roughness:1, side:THREE.DoubleSide})); m.position.set(x,y,z); m.rotation.y=ry; G.add(m); return m; }
+// ---- muelle tiki ----
+function jiBuildDock(){ const D=JI_DOCK, G=new THREE.Group(); scene.add(G); const wood=wiMat('#b58a55','rgba(60,35,10,.22)'), woodD=wiMat('#7a5532','rgba(40,20,5,.22)'), bam=wiMat('#c9b06a','rgba(80,60,10,.2)');
+  const len=D.s1-D.s0, mid=(D.s0+D.s1)/2, [mx,mz]=jiS(mid,0), ry=Math.atan2(JI.ux,JI.uz);
+  wiAdd(G,WI_BOXG,wood,mx,D.Y-.12,mz,D.W*2,.24,len,ry);
+  for(let s=D.s0+.6;s<D.s1;s+=1.2){ const [x,z]=jiS(s,0); wiAdd(G,WI_BOXG,woodD,x,D.Y+.002,z,D.W*2-.1,.012,.05,ry); }
+  for(let s=D.s0+2;s<=D.s1;s+=4) for(const e of [-1,1]){ const [x,z]=jiS(s,e*(D.W-.15)), g=terrainH(x,z); wiAdd(G,cylG,bam,x,(D.Y+g)/2-.1,z,.17,D.Y-g+.4,.17); }
+  for(const s of [D.s1-1,D.s1-20,D.s0+8]) for(const e of [-1,1]){ const [x,z]=jiS(s,e*(D.W-.2)); jiTorch(G,x,z,D.Y); }
+  for(let s=D.s0-14, e=1;s>JI_PLAZA.su+JI_PLAZA.r;s-=18, e=-e){ const [x,z]=jiS(s,e*3); jiTorch(G,x,z,terrainH(x,z)-.05); }
+  // arco tiki: dos postes tallados con caras y un letrero
+  { const s=D.s0-3, [ax,az]=jiS(s,0), y=terrainH(ax,az)-.05, face=wiMat('#8a5a34','rgba(40,20,5,.25)'), dark=wiMat('#2c1d12'), red=wiMat('#c8453a'), leaf=wiMat('#4fa843','rgba(20,60,10,.15)');
+    for(const e of [-1,1]){ const [x,z]=jiS(s,e*3); for(let k=0;k<3;k++){ wiAdd(G,cylG,k%2?face:woodD,x,y+.75+k*1.4,z,.45,1.4,.45);
+        const [fx,fz]=jiS(s+.42,e*3); [-1,1].forEach(q=>{ const [ex,ez]=jiS(s+.43,e*3+q*.17); wiAdd(G,WI_BOXG,dark,ex,y+1+k*1.4,ez,.12,.16,.06,ry); }); wiAdd(G,WI_BOXG,k===1?red:dark,fx,y+.55+k*1.4,fz,.3,.1,.06,ry); }
+      wiAdd(G,WI_CONEG,leaf,x,y+4.6,z,.9,.6,.9); obstacles.push({x,z,r:.5,top:y+60,walk:false}); }
+    wiAdd(G,WI_BOXG,woodD,ax,y+4.1,az,6.8,.3,.4,ry+Math.PI/2);
+    for(let k=-3;k<=3;k++){ const [x,z]=jiS(s,k*1.05); const l=wiAdd(G,WI_BOXG,leaf,x,y+4.32,z,1.1,.08,.9,ry+.3*k); l.rotation.z=.15*(k%2?1:-1); }
+    jiSign(G,ax,az,y+3.35,ry,'🌴 Selva Aventura 🌴','#2f7a3a',4.8); const b=jiSign(G,ax-JI.ux*.02,az-JI.uz*.02,y+3.35,ry+Math.PI,'🌴 Selva Aventura 🌴','#2f7a3a',4.8); }
+  mergeStatic(G); }
+// ---- campamento: casas de campaña, fogata y troncos para sentarse ----
+function jiBuildCamp(){ const C=JI_CAMP, [cx,cz]=jiS(C.su,C.sv), y=terrainH(cx,cz)-.05, G=new THREE.Group(); scene.add(G); const logM=wiMat('#7a5532','rgba(40,20,5,.22)'), stone=wiMat('#8f8a86','rgba(30,30,30,.2)');
+  for(let k=0;k<9;k++){ const a=k/9*Math.PI*2; wiAdd(G,sphereG,stone,cx+Math.cos(a)*1.3,y+.12,cz+Math.sin(a)*1.3,.32,.22,.3); }
+  for(let k=0;k<4;k++){ const l=wiAdd(G,cylG,logM,cx,y+.2,cz,.12,1.6,.12); l.rotation.z=Math.PI/2; l.rotation.y=k*Math.PI/4; }
+  obstacles.push({x:cx,z:cz,r:1.4,top:y+.5,walk:false});
+  for(let k=0;k<4;k++){ const a=k/4*Math.PI*2+.4, x=cx+Math.cos(a)*4, z=cz+Math.sin(a)*4, l=wiAdd(G,cylG,logM,x,y+.28,z,.3,2.4,.3); l.rotation.z=Math.PI/2; l.rotation.y=-a+Math.PI/2; }
+  [['#e5534b',-9,6],['#3d8bd9',-8,-7],['#f2c94c',8,-9]].forEach(([col,a,b])=>{ const [x,z]=jiS(C.su+a,C.sv+b), yy=terrainH(x,z)-.05, t=wiAdd(G,WI_CONEG,wiMat(col,'rgba(0,0,0,.15)'),x,yy+1.2,z,2.1,2.4,2.1); t.geometry=new THREE.ConeGeometry(1,1,4); t.rotation.y=Math.atan2(cx-x,cz-z)+Math.PI/4;
+    wiAdd(G,WI_BOXG,wiMat('#3a2a1c'),x+(cx-x)*.17,yy+.6,z+(cz-z)*.17,.7,1.1,.05,Math.atan2(cx-x,cz-z)); obstacles.push({x,z,r:1.6,top:yy+60,walk:false}); });
+  // fuego de la fogata
+  const fm=[new THREE.MeshBasicMaterial({color:'#ff8a2a'}), new THREE.MeshBasicMaterial({color:'#ffd04a'})];
+  for(let k=0;k<5;k++){ const f=new THREE.Mesh(WI_CONEG,fm[k%2]); const a=k/5*Math.PI*2; f.position.set(cx+Math.cos(a)*.3,y+.55,cz+Math.sin(a)*.3); f.scale.set(.22,.7,.22); f.userData.noBatch=true; f.userData.ph=k*1.3; scene.add(f); JI_FIRE.push({f}); }
+  { const s=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex, color:'#ffa040', transparent:true, opacity:.7, depthWrite:false, blending:THREE.AdditiveBlending})); s.position.set(cx,y+1,cz); s.scale.setScalar(4); s.userData.noBatch=true; scene.add(s); JI_FIRE.push({s}); }
+  { const [x,z]=jiS(C.su+C.r-3,C.sv-C.r+3), yy=terrainH(x,z)-.05; wiAdd(G,cylG,logM,x-JI.vx*1.3,yy+1,z-JI.vz*1.3,.08,2,.08); wiAdd(G,cylG,logM,x+JI.vx*1.3,yy+1,z+JI.vz*1.3,.08,2,.08); jiSign(G,x,z,yy+1.75,Math.atan2(JI.ux,JI.uz),'Campamento','#7a3b20',2.8); }
+  mergeStatic(G); }
+// ---- el volcán: humito en el cráter y el mirador en la orilla ----
+function jiBuildVolcano(){ const V=JI_VOLC, [cx,cz]=jiS(V.su,V.sv), G=new THREE.Group(); scene.add(G);
+  JI.steam=[]; const sm=new THREE.SpriteMaterial({map:glowTex, color:'#eef0f2', transparent:true, opacity:.4, depthWrite:false});
+  const cy=jiGridH(cx,cz); for(let i=0;i<10;i++){ const s=new THREE.Sprite(sm.clone()); s.userData.ph=i/10; s.userData.o=[(rlHash(i,3)-.5)*20,(rlHash(i,5)-.5)*20]; s.userData.noBatch=true; scene.add(s); JI.steam.push(s); } JI.steamAt=[cx,cy,cz];
+  // mirador en la orilla del cráter, del lado del muelle
+  let best=null; for(let r=V.crater;r<V.crater+20;r+=1){ const [x,z]=jiS(V.su+r,V.sv), h=jiGridH(x,z); if(!best || h>best[2]) best=[x,z,h,r]; }
+  const [mx,mz,mh,mr]=best, [ox,oz]=jiS(V.su+mr+3,V.sv), y=Math.max(mh,jiGridH(ox,oz))+.2, wood=wiMat('#9a6a3e','rgba(50,25,5,.25)'), woodD=wiMat('#6b4a2e','rgba(40,20,5,.25)'), ry=Math.atan2(JI.ux,JI.uz);
+  const pc=jiS(V.su+mr+1.5,V.sv); wiAdd(G,WI_BOXG,wood,pc[0],y,pc[1],5,.25,5,ry);
+  for(const [a,b] of [[-1,-1],[-1,1],[1,-1],[1,1]]){ const [x,z]=jiS(V.su+mr+1.5+a*2.3,V.sv+b*2.3), g=jiGridH(x,z); wiAdd(G,cylG,woodD,x,(g+y)/2,z,.14,Math.max(.3,y-g+.3),.14); }
+  for(const e of [-1,1]){ const [x,z]=jiS(V.su+mr+1.5,V.sv+e*2.45); wiAdd(G,WI_BOXG,woodD,x,y+.9,z,5,.1,.1,ry); for(let k=-2;k<=2;k++){ const [px,pz]=jiS(V.su+mr+1.5+k*1.15,V.sv+e*2.45); wiAdd(G,cylG,woodD,px,y+.5,pz,.06,.9,.06); } }
+  { const [x,z]=jiS(V.su+mr-.95,V.sv); wiAdd(G,WI_BOXG,woodD,x,y+.9,z,.1,.1,5,ry); }
+  JI.mirador={x:pc[0], z:pc[1], y};
+  JI_DECK.push({su:V.su+mr+1.5, sv:V.sv, hs:2.5, y});
+  // bandera y letrero
+  { const [x,z]=jiS(V.su+mr+3.6,V.sv+2.2); wiAdd(G,cylG,woodD,x,y+2.1,z,.07,4.2,.07); const c=document.createElement('canvas'); c.width=224; c.height=128; const g=c.getContext('2d'); if(MX_FLAG) MX_FLAG(g,224,128);
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; const f=new THREE.Mesh(new THREE.PlaneGeometry(1.6,.92),new THREE.MeshStandardMaterial({map:t, side:THREE.DoubleSide, roughness:1})); f.position.set(x+.82,y+3.6,z); scene.add(f); JI.flag=f; }
+  { const [x,z]=jiS(V.su+mr+3.8,V.sv-1.6); wiAdd(G,cylG,woodD,x,y+.8,z,.06,1.6,.06); jiSign(G,x,z,y+1.6,ry,'Mirador del Volcán','#7a3b20',2.6); }
+  mergeStatic(G); }
+const JI_DECK=[];   // pisos de madera (el mirador)
+JI_DECK_GROUND=function(x,z,y){ if(!JI_DECK.length || x<JI_BOX[0]||x>JI_BOX[2]||z<JI_BOX[1]||z>JI_BOX[3]) return null; const [su,sv]=jiL(x,z); for(const D of JI_DECK) if(Math.abs(su-D.su)<D.hs && Math.abs(sv-D.sv)<D.hs && y>=D.y-.9) return D.y+.12; return null; };
+// cada cuadro
+function jiTick(dt,t){
+  const d=Math.min(Math.hypot(camera.position.x-JI.x,camera.position.z-JI.z), Math.hypot(player.pos.x-JI.x,player.pos.z-JI.z));
+  if(!JI.done && d<1450){ if(!JI.job) JI.job=jiBuildGen(); const t0=performance.now(), budget=d<720?1e9:(MIN_Q?4:6);
+    try{ while(performance.now()-t0<budget){ if(JI.job.next().done){ JI.job=null; break; } } }catch(e){ console.warn('isla selva',e); JI.job=null; JI.done=true; } }
+  if(JI.depth){ const near=Math.hypot(camera.position.x-JI.x,camera.position.z-JI.z)<JI.E+260, U=seaSurface.material.uniforms;
+    if(near!==!!JI.depthOn){ JI.depthOn=near; U.uDepth.value=near?JI.depth.tex:SEA_MAIN_DEPTH.tex; U.uRect.value=near?JI.depth.rect:SEA_MAIN_DEPTH.rect; } }
+  if(d>JI.E+300) return;
+  const night=1-(sky.dayK??1);
+  for(const F of JI_FIRE){ if(F.f){ const k=.75+.3*Math.sin(t*9+F.f.userData.ph)+.15*Math.sin(t*23+F.f.userData.ph); F.f.scale.y=(F.f.scale.x>.2?.7:.4)*k; } if(F.s) F.s.material.opacity=(.25+.6*night)*(.85+.15*Math.sin(t*11)); }
+  if(JI.flag) JI.flag.rotation.y=Math.sin(t*1.3)*.25;
+  if(JI.steam){ const [x,y,z]=JI.steamAt; JI.steam.forEach(s=>{ const k=((t*.06+s.userData.ph)%1), o=s.userData.o; s.position.set(x+o[0]*(.3+k), y+2+k*28, z+o[1]*(.3+k)); s.scale.setScalar(6+k*16); s.material.opacity=.38*(1-k)*Math.min(1,k*6); }); }
+  if(state==='play' && !SP.on && !jiVisited()){ const lx=player.pos.x-JI.x, lz=player.pos.z-JI.z, cc=Math.hypot(lx,lz)/jiCoastR(Math.atan2(lz,lx));
+    if((cc<.93 || JI_DOCK_GROUND(player.pos.x,player.pos.z,player.pos.y+.5)!==null) && player.pos.y>SEA_Y-.2 && !player.ac && !player.balloon){ wiSaveSet('selva',1); try{ bigText('Selva Aventura',2800,'¡Llegaste a la isla'); }catch(e){} flashNote('Ya puedes volver aquí desde el mapa'); try{ requestMapDraw(); }catch(e){} } } }
+// el mapa
+function jiMapImage(){ if(JI.mapImg) return JI.mapImg; const N=MIN_Q?160:240, E=JI.E, st=2*E/N, c=document.createElement('canvas'); c.width=c.height=N; const g=c.getContext('2d'), im=g.createImageData(N,N), Hm=new Float32Array(N*N);
+  for(let j=0;j<N;j++) for(let i=0;i<N;i++) Hm[j*N+i]=jiGridH(JI.x+E-(i+.5)*st, JI.z+E-(j+.5)*st);
+  const at=(i,j)=>Hm[Math.min(N-1,Math.max(0,j))*N+Math.min(N-1,Math.max(0,i))];
+  for(let j=0;j<N;j++) for(let i=0;i<N;i++){ const x=JI.x+E-(i+.5)*st, z=JI.z+E-(j+.5)*st, h=Hm[j*N+i]; let r,gg,b;
+    const wl=jiWaterLevel(x,z);
+    if(h<SEA_Y){ const t=Math.min(1,(SEA_Y-h)/30); r=150-95*t; gg=212-90*t; b=238-70*t; }
+    else if(wl!==null && h<wl){ r=112; gg=196; b=210; }
+    else { r=118; gg=176; b=84; const sl=Math.hypot(at(i+1,j)-at(i-1,j),at(i,j+1)-at(i,j-1))/(2*st);
+      if(h<70 && rlFbm(x/120-9,z/120+15,3)>.48){ r=78; gg=140; b=62; }   // selva espesa
+      if(h>70){ const k=smooth(70,105,h); r=lerp(r,140,k); gg=lerp(gg,125,k); b=lerp(b,114,k); }
+      if(sl>.62){ r=120; gg=110; b=104; }
+      if(h<2.8){ r=243; gg=230; b=196; }
+      if(jiPathD(x,z)<3.6){ r=170; gg=128; b=84; }
+      const sh=Math.max(-50,Math.min(50,(at(i-1,j-1)-at(i+1,j+1))*10/st)); r+=sh; gg+=sh; b+=sh; }
+    const k=(j*N+i)*4; im.data[k]=r; im.data[k+1]=gg; im.data[k+2]=b; im.data[k+3]=255; }
+  g.putImageData(im,0,0); JI.mapImg=c; return c; }
+function jiMapDraw(g){ const E=JI.E, [x0,y0]=toMap(JI.x+E,JI.z+E), s=2*E/(2*MAP_E)*MAP_PX; g.imageSmoothingEnabled=true; g.drawImage(jiMapImage(),x0,y0,s,s);
+  const D=JI_DOCK; g.fillStyle='#8a6a3e'; g.beginPath(); [[D.s0,-D.W-.6],[D.s1,-D.W-.6],[D.s1,D.W+.6],[D.s0,D.W+.6]].forEach(([su,sv],i)=>{ const [px,py]=toMap(...jiS(su,sv)); i?g.lineTo(px,py):g.moveTo(px,py); }); g.closePath(); g.fill(); }
 function wiMapDraw(g){ const E=WI.E, [x0,y0]=toMap(WI.x+E,WI.z+E), s=2*E/(2*MAP_E)*MAP_PX; g.imageSmoothingEnabled=true; g.drawImage(wiMapImage(),x0,y0,s,s);
   // el muelle y la cabaña
   const q=(pts,col)=>{ g.fillStyle=col; g.beginPath(); pts.forEach(([su,sv],i)=>{ const [px,py]=toMap(...wiS(su,sv)); i?g.lineTo(px,py):g.moveTo(px,py); }); g.closePath(); g.fill(); };
@@ -12919,6 +13226,7 @@ function update(dt,t){ myLabelUpdate();
   shipUpdate(dt,t);   // v138
   wiTick(dt,t);   // v139: la Isla Invierno
   wi2Tick(dt,t);   // v140: sus actividades
+  jiTick(dt,t);   // v141: la Isla Selva
   pierUpdate(dt,t);
   trUpdate(dt,t);
   fiUpdate(dt,t); blUpdate(dt,t); farmUpdate(dt,t); caveUpdate(dt,t); reliefUpdate(dt);
