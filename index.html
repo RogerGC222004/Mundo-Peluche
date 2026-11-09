@@ -1123,7 +1123,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='155';
+const GAME_VERSION='156';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -2758,7 +2758,7 @@ function stainStep(o,now,x,y,z,gY,grounded,flat,facing,stepped,side){
   else if(!flat){ o.sx=1e9; }
   return {feet:feetS, front:frontS};
 }
-function showStains(obj,st){ const S=obj.userData.stains; if(!S) return; if(obj.userData.av==='c' && st.front) st={feet:st.feet, front:false};
+function showStains(obj,st){ const S=obj.userData.stains; if(!S) return; if(obj.userData.av && obj.userData.av!=='f' && st.front) st={feet:st.feet, front:false};
   S.feet.forEach(m=>{ if(m.visible!==st.feet) m.visible=st.feet; }); S.front.forEach(m=>{ if(m.visible!==st.front) m.visible=st.front; }); }
 const myStain=newStain();
 
@@ -3221,14 +3221,77 @@ function chibiParts(u){ if(u.ch) return u.ch; const G=chGeos(), g=new THREE.Grou
   const torso=M(G.torso,0,.34,0,1,1,.85), head=M(G.head,0,CH.HY,0,CH.RX,CH.RY,CH.RZ), ears=[-1,1].map(s=>M(sphereG,s*CH.RX*.99,CH.HY-.06,-.02,.08,.13,.07));
   const face=new THREE.Mesh(G.face,chEyeMat('cafe')); face.position.set(0,CH.HY,0); face.scale.set(CH.RX*1.012,CH.RY*1.012,CH.RZ*1.02); face.visible=false; g.add(face);
   u.body.add(g); return u.ch={g, skinned:[torso,head,...ears], face}; }
+// ---------- v156: el Amigurumi (parte 1): muñequito tejido de estambre, más alto y delgado, con cuello y naricita ----------
+// Igual que el Chibi, usa los mismos brazos y piernas del peluche (cambian de forma), así le sirven todas las poses.
+const AM={HY:1.96, HR:.5, armRest:.13};
+AM.RX=AM.HR*1.04; AM.RY=AM.HR*.98; AM.RZ=AM.HR;
+// el tejido: hileras de puntos en "V" (se usa de color y de relieve)
+let amStitch=null;
+function amStitchTex(){ if(amStitch) return amStitch; const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d'); g.fillStyle='#c4c4c4'; g.fillRect(0,0,128,128);
+  for(let r=0;r<8;r++) for(let k=0;k<8;k++){ const x=k*16+(r%2?8:0), y=r*16; for(const s of [-1,1]){ const gr=g.createLinearGradient(x,y,x+s*7,y+14); gr.addColorStop(0,'#ffffff'); gr.addColorStop(1,'#b0b0b0');
+      g.fillStyle=gr; g.beginPath(); g.ellipse(x+s*3.6,y+8,3.6,7.2,-s*.45,0,Math.PI*2); g.fill(); } }
+  return amStitch=c; }
+const AM_KNIT={};
+function amKnit(hex,rx,ry){ const k=hex+'|'+rx+'|'+ry; if(AM_KNIT[k]) return AM_KNIT[k];
+  const t=new THREE.CanvasTexture(amStitchTex()); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(rx,ry); t.anisotropy=4;
+  return AM_KNIT[k]=new THREE.MeshStandardMaterial({color:new THREE.Color(hex).convertSRGBToLinear(), map:t, bumpMap:t, bumpScale:.02, roughness:1}); }
+const AM_GEO={};
+function amGeos(){ if(AM_GEO.head) return AM_GEO;
+  const prof=[[0,0],[.19,.02],[.215,.14],[.205,.34],[.19,.5],[.15,.58],[.08,.62],[0,.63]], c=new THREE.SplineCurve(prof.map(p=>new THREE.Vector2(p[0],p[1]))), P=c.getPoints(30); P[0].x=0; P[P.length-1].x=0;
+  AM_GEO.torso=new THREE.LatheGeometry(P,24); AM_GEO.neck=new THREE.CylinderGeometry(.075,.085,.14,16); AM_GEO.head=new THREE.SphereGeometry(1,28,20);
+  AM_GEO.face=new THREE.SphereGeometry(1,28,18,Math.PI/2-.95,1.9,1.15,.85);   // frente de la cabeza, para lo bordado
+  return AM_GEO; }
+// ojos: de botón (bolitas brillantes, de verdad) o bordados con hilo (en una calcomanía)
+const AM_EYES={
+  negro:{btn:'#0d0d10'}, cafe:{btn:'#3a2112'}, felices:{st:'felices'}, dormidos:{st:'dormidos'}, azul:{btn:'#1d4fa8'}, verde:{btn:'#1f7a43'},
+  grandes:{btn:'#0d0d10', big:1}, estrella:{star:'#f2c230'}, corazon:{st:'corazon'}, guino:{btn:'#0d0d10', wink:1} };
+const AM_BTN={}, amBtnMat=hex=>AM_BTN[hex]||(AM_BTN[hex]=new THREE.MeshStandardMaterial({color:new THREE.Color(hex).convertSRGBToLinear(), roughness:.12, metalness:.1}));
+const amWhite=new THREE.MeshBasicMaterial({color:0xffffff});
+// lo bordado se pinta en un lienzo de 512×256: ojos en x=256±90, y=151; cejas arriba; mejillas abajo
+function amEyeDraw(g,st,only){ g.strokeStyle='#2c1c16'; g.fillStyle='#2c1c16'; g.lineCap='round'; g.lineJoin='round'; g.lineWidth=8;
+  for(const s of [-1,1]){ if(only && s!==only) continue; const cx=256+s*90, cy=151;
+    if(st==='felices'){ g.beginPath(); g.moveTo(cx-24,cy+8); g.quadraticCurveTo(cx,cy-24,cx+24,cy+8); g.stroke(); }
+    else if(st==='dormidos'){ g.beginPath(); g.moveTo(cx-24,cy-4); g.quadraticCurveTo(cx,cy+20,cx+24,cy-4); g.stroke(); g.lineWidth=4; for(const d of [-16,0,16]){ g.beginPath(); g.moveTo(cx+d,cy+8); g.lineTo(cx+d*1.2,cy+18); g.stroke(); } g.lineWidth=8; }
+    else if(st==='corazon'){ g.fillStyle='#e0406a'; g.beginPath(); g.moveTo(cx,cy+22); g.bezierCurveTo(cx-34,cy,cx-18,cy-26,cx,cy-10); g.bezierCurveTo(cx+18,cy-26,cx+34,cy,cx,cy+22); g.fill();
+      g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=2; g.setLineDash([4,4]); g.stroke(); g.setLineDash([]); g.strokeStyle='#2c1c16'; g.lineWidth=8; } } }
+function amFaceCanvas(F){ const c=document.createElement('canvas'); c.width=512; c.height=256; const g=c.getContext('2d');
+  if(F.eye){ const E=AM_EYES[F.eye]; if(E.st) amEyeDraw(g,E.st); else if(E.wink) amEyeDraw(g,'felices',-1); }
+  return c; }
+const AM_FACE={};
+function amFaceMat(F){ const k=JSON.stringify(F); if(AM_FACE[k]) return AM_FACE[k];
+  const t=new THREE.CanvasTexture(amFaceCanvas(F)); t.encoding=THREE.sRGBEncoding; t.anisotropy=4;
+  return AM_FACE[k]=new THREE.MeshStandardMaterial({map:t, transparent:true, alphaTest:.05, roughness:.95, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-2}); }
+function amiguParts(u){ if(u.am) return u.am; const G=amGeos(), g=new THREE.Group(); g.position.y=-BODY_Y; g.scale.z=1/.78;
+  const M=(geo,x,y,z,sx,sy,sz)=>{ const m=new THREE.Mesh(geo,chHideMat); m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.castShadow=true; m.receiveShadow=true; g.add(m); return m; };
+  const torso=M(G.torso,0,.76,0,1,1,.82), neck=M(G.neck,0,1.42,0,1,1,1), head=M(G.head,0,AM.HY,0,AM.RX,AM.RY,AM.RZ);
+  const ears=[-1,1].map(s=>M(sphereG,s*AM.HR*1.0,AM.HY-.04,-.02,.05,.09,.05)), nose=M(sphereG,0,AM.HY-.13,AM.HR*.985,.045,.038,.035);
+  const face=new THREE.Mesh(G.face,chHideMat); face.position.set(0,AM.HY,0); face.scale.set(AM.RX*1.01,AM.RY*1.01,AM.RZ*1.012); face.visible=false; g.add(face);
+  const eyes=[], hi=[]; for(const s of [-1,1]){ const x=s*.17, y=AM.HY-.04, z=Math.sqrt(Math.max(0,1-(x/AM.RX)**2-((y-AM.HY)/AM.RY)**2))*AM.RZ-.01;
+    const e=M(sphereG,x,y,z,.075,.075,.04); e.userData.base=[x,y,z]; eyes.push(e); const h=new THREE.Mesh(sphereG,amWhite); h.position.set(x-.02,y+.025,z+.035); h.scale.set(.016,.016,.008); g.add(h); hi.push(h); }
+  const hands=u.arms.map(a=>{ const h=new THREE.Mesh(sphereG,chHideMat); h.position.set(0,-.32,0); h.scale.set(.075,.08,.07); h.castShadow=true; a.userData.joint.add(h); h.visible=false; return h; });
+  u.body.add(g); return u.am={g, torso, neck, head, ears, nose, face, eyes, hi, hands}; }
+function amStarGeo(){ return CH_CG.amstar||(CH_CG.amstar=(()=>{ const s=new THREE.Shape(); for(let i=0;i<10;i++){ const a=Math.PI/2+i*Math.PI/5, r=i%2?.4:1; i?s.lineTo(Math.cos(a)*r,Math.sin(a)*r):s.moveTo(Math.cos(a)*r,Math.sin(a)*r); }
+  const g=new THREE.ExtrudeGeometry(s,{depth:.35, bevelEnabled:true, bevelThickness:.15, bevelSize:.12, bevelSegments:2}); g.center(); return g; })()); }
+// viste al Amigurumi: piel tejida y ojos
+function amiguDress(u,eq){ const A=amiguParts(u), B=x=>eq && SHOP_BY[eq[x]] ? SHOP_BY[eq[x]] : null, skin=(B('askin')||SHOP_BY.ap_durazno).c;
+  const mH=amKnit(skin,14,9), mB=amKnit(skin,10,6), mL=amKnit(skin,5,6), mN=amKnit(skin,3,2);
+  A.torso.material=mB; A.neck.material=mB; A.head.material=mH; A.ears.forEach(m=>m.material=mL); A.nose.material=mN; A.hands.forEach(h=>{ h.material=mL; h.visible=true; });
+  const eyeIt=B('aeyes'), E=eyeIt ? AM_EYES[eyeIt.eye] : null;
+  A.eyes.forEach((e,i)=>{ const s=i?1:-1, b=e.userData.base; let show=!!(E && (E.btn||E.star)); if(E && E.wink && s===-1) show=false;   // guiño: el ojo izquierdo va bordado
+    e.visible=show; A.hi[i].visible=show && !E.star;
+    if(show){ if(E.star){ e.geometry=amStarGeo(); e.material=amBtnMat(E.star); e.scale.set(.07,.07,.07); e.position.set(b[0],b[1],b[2]+.01); }
+      else { e.geometry=sphereG; e.material=amBtnMat(E.btn); const k=E.big?1.3:1; e.scale.set(.075*k,.075*k,.04); e.position.set(...b); A.hi[i].scale.set(.016*k,.016*k,.008); } } });
+  const F={eye:E && (E.st || E.wink) ? eyeIt.eye : null}; A.face.visible=!!F.eye; if(F.eye) A.face.material=amFaceMat(F);
+  return {mL}; }
 // cambia el peluche al cuerpo que trae puesto (eq.body), con su piel y sus ojos
 function avatarShape(o,eq){ const u=o.userData; if(!u.arms || !u.legs || !u.body) return;
-  const av=eq && eq.body==='av_chibi' ? 'c' : 'f';
+  const av=eq && eq.body==='av_chibi' ? 'c' : eq && eq.body==='av_amigu' ? 'a' : 'f';
   const skin=((eq && SHOP_BY[eq.cskin]) || SHOP_BY.cp_durazno).c, eye=eq && SHOP_BY[eq.ceyes] ? SHOP_BY[eq.ceyes].eye : null;
-  const key=av+'|'+(eq && av==='c' ? ['cskin','ceyes','chair','chcol','cbrows','cmouth','ccheeks','cears'].map(k=>eq[k]||'').join(',') : ''); if(key===u.avKey) return; u.avKey=key;
+  const key=av+'|'+(eq && av==='c' ? ['cskin','ceyes','chair','chcol','cbrows','cmouth','ccheeks','cears'].map(k=>eq[k]||'').join(',') : eq && av==='a' ? ['askin','aeyes'].map(k=>eq[k]||'').join(',') : ''); if(key===u.avKey) return; u.avKey=key;
   avSaveFrijol(u); const F=u.fj, tag=u.legs.map(l=>l.children.find(m=>m.isMesh && m.material===tagMat)).find(Boolean);
   if(av==='c'){ const C=chibiParts(u), sk=chSkinMat(skin);
     C.g.visible=true; C.skinned.forEach(m=>m.material=sk); chibiDress(u,eq);   // v153: cabello, cara y orejitas
+    if(u.am){ u.am.g.visible=false; u.am.hands.forEach(h=>h.visible=false); }
     u.body.material=chHideMat; (u.eyes||[]).forEach(e=>e.visible=false); if(tag) tag.visible=false;
     u.arms.forEach(a=>{ const s=a.userData.side, j=a.userData.joint, up=a.children.find(m=>m.isMesh);
       up.geometry=capsuleGeo(.1,.15); up.position.y=-.075; up.material=sk; j.position.y=-.15; a.userData.low.geometry=capsuleGeo(.105,.17); a.userData.low.position.y=-.085; a.userData.low.material=sk;
@@ -3237,7 +3300,16 @@ function avatarShape(o,eq){ const u=o.userData; if(!u.arms || !u.legs || !u.body
       l.position.set(s*.14,.4,0); up.geometry=capsuleGeo(.125,.13); up.position.y=-.065; up.material=sk; j.position.y=-.13; l.userData.low.geometry=capsuleGeo(.12,.13); l.userData.low.position.y=-.065; l.userData.low.material=sk;
       if(f){ f.scale.set(.14,.11,.18); f.position.set(0,-.16,.04); f.material=sk; } });
     u.armRest=CH.armRest; }
-  else { const pm=plushMatFor(u.colorIdx|0); if(u.ch) u.ch.g.visible=false;
+  else if(av==='a'){ const A=amiguParts(u); if(u.ch) u.ch.g.visible=false; A.g.visible=true; const {mL}=amiguDress(u,eq);   // v156: el Amigurumi
+    u.body.material=chHideMat; (u.eyes||[]).forEach(e=>e.visible=false); if(tag) tag.visible=false;
+    u.arms.forEach(a=>{ const s=a.userData.side, j=a.userData.joint, up=a.children.find(m=>m.isMesh);
+      up.geometry=capsuleGeo(.065,.3); up.position.y=-.15; up.material=mL; j.position.y=-.3; a.userData.low.geometry=capsuleGeo(.06,.3); a.userData.low.position.y=-.15; a.userData.low.material=mL;
+      a.userData.base.set(s*.2,1.31,0); a.position.copy(a.userData.base); });
+    u.legs.forEach(l=>{ const s=l.userData.side, j=l.userData.joint, up=l.children.find(m=>m.isMesh && m.material!==tagMat), f=l.userData.foot;
+      l.position.set(s*.11,.8,0); up.geometry=capsuleGeo(.085,.36); up.position.y=-.18; up.material=mL; j.position.y=-.36; l.userData.low.geometry=capsuleGeo(.08,.36); l.userData.low.position.y=-.18; l.userData.low.material=mL;
+      if(f){ f.scale.set(.1,.085,.135); f.position.set(0,-.38,.035); f.material=mL; } });
+    u.armRest=AM.armRest; }
+  else { const pm=plushMatFor(u.colorIdx|0); if(u.ch) u.ch.g.visible=false; if(u.am){ u.am.g.visible=false; u.am.hands.forEach(h=>h.visible=false); }
     u.body.material=pm; (u.eyes||[]).forEach(e=>e.visible=true); if(tag) tag.visible=true;
     u.arms.forEach((a,i)=>{ const L=F.arms[i]; L.up.geometry=L.upGeo; L.up.position.y=L.upY; L.up.material=pm; a.userData.joint.position.y=L.jy; L.low.geometry=L.lowGeo; L.low.position.y=L.lowY; L.low.material=pm;
       a.userData.base.copy(L.base); a.position.copy(L.base); });
@@ -3421,7 +3493,7 @@ function avPortrait(eq,view){ const key=JSON.stringify(eq)+(view||''); if(AV_POR
     if(!avPortraitRig){ const sc=new THREE.Scene(); sc.background=new THREE.Color('#fbf3ea'); sc.add(new THREE.HemisphereLight(0xffffff,0xd8d0c8,1.0)); const d=new THREE.DirectionalLight(0xffffff,.7); d.position.set(2,4,5); sc.add(d);
       const cam=new THREE.PerspectiveCamera(30,1,.1,20), rt=new THREE.WebGLRenderTarget(128,128); rt.texture.encoding=THREE.sRGBEncoding; const o=makePlush(0); sc.add(o); avPortraitRig={sc,cam,rt,o}; }
     const R=avPortraitRig; applyOutfit(R.o,eq); poseLimbs(R.o,0,.05,0,false,0,false,null,0,0,false);
-    R.o.rotation.y=.45; if(view==='espalda') R.o.rotation.y=Math.PI-.6; const V={cuerpo:[[0,1.05,4.3],[0,.72,0]], espalda:[[0,1.05,4.3],[0,.72,0]], pies:[[0,.62,2.3],[0,.2,0]], gorro:[[0,1.75,4.0],[0,1.5,0]]}[view]||[[0,1.62,3.6],[0,1.38,0]]; R.cam.position.set(...V[0]); R.cam.lookAt(...V[1]); R.o.updateMatrixWorld(true);
+    R.o.rotation.y=.45; if(view==='espalda') R.o.rotation.y=Math.PI-.6; const V={cuerpo:[[0,1.05,4.3],[0,.72,0]], espalda:[[0,1.05,4.3],[0,.72,0]], pies:[[0,.62,2.3],[0,.2,0]], gorro:[[0,1.75,4.0],[0,1.5,0]], acara:[[0,2.12,3.3],[0,1.92,0]]}[view]||[[0,1.62,3.6],[0,1.38,0]]; R.cam.position.set(...V[0]); R.cam.lookAt(...V[1]); R.o.updateMatrixWorld(true);
     const prev=renderer.getRenderTarget(), sm=renderer.shadowMap.enabled; renderer.shadowMap.enabled=false; renderer.setRenderTarget(R.rt); renderer.render(R.sc,R.cam); renderer.setRenderTarget(prev); renderer.shadowMap.enabled=sm;
     const px=new Uint8Array(128*128*4); renderer.readRenderTargetPixels(R.rt,0,0,128,128,px);
     const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d'), im=g.createImageData(128,128);
@@ -4423,7 +4495,7 @@ function myLabelUpdate(){
   if(!myLabel.spr){ myLabel.spr=new THREE.Sprite(new THREE.SpriteMaterial({transparent:true, depthWrite:false})); myLabel.spr.scale.set(1.7,.425,1); }
   const S=myLabel.spr; if(S.parent!==plush) plush.add(S);
   const nm=cleanName(profile.name)||'Peluche'; if(nm!==myLabel.name){ myLabel.name=nm; if(S.material.map) S.material.map.dispose(); S.material.map=labelTexture(nm); S.material.needsUpdate=true; }
-  const a=player.diveAngle||0, H=2.42-1.5*Math.sin(a)/Math.sin(DIVE_FLAT), F=.85*Math.sin(a);   // siempre arriba, aunque estés acostado
+  const a=player.diveAngle||0, H=(plush.userData.av==='a'?2.88:2.42)-1.5*Math.sin(a)/Math.sin(DIVE_FLAT), F=.85*Math.sin(a);   // siempre arriba, aunque estés acostado
   S.position.set(0, H*Math.cos(a)+F*Math.sin(a), -H*Math.sin(a)+F*Math.cos(a)); S.visible=true; }
 function makeRemote(color,name){
   const obj=makePlush(color); obj.userData.isPlushRoot=true;
@@ -4559,7 +4631,7 @@ function updateRemotes(dt,t){
       const st=stainStep(r.stain,now,r.pos.x,r.pos.y,r.pos.z,groundAt(r.pos.x,r.pos.z,r.pos.y+.3),!r.air && !r.swim,r.dive>1.15 && !r.swim,r.obj.rotation.y,stepped,ph&1);
       showStains(r.obj,st); }
     // Apodo siempre arriba del cuerpo, aunque el peluche esté acostado
-    { const a=r.dive, H=2.42-1.5*Math.sin(a)/Math.sin(DIVE_FLAT), F=.85*Math.sin(a);
+    { const a=r.dive, H=(r.obj.userData.av==='a'?2.88:2.42)-1.5*Math.sin(a)/Math.sin(DIVE_FLAT), F=.85*Math.sin(a);
       r.label.position.set(0, H*Math.cos(a)+F*Math.sin(a), -H*Math.sin(a)+F*Math.cos(a)); }
     if(r.bw && r.held==='bow') remoteBowPose(r);
     if(r.mg) remoteMgPose(r,t,dt);
@@ -7939,13 +8011,14 @@ function updateCoinFx(dt){
 // ======================================================================================
 // Lo que compras se guarda en este navegador. Lo que traes puesto viaja en tu presencia ("ou"),
 // así todos en la sala ven tu peluche vestido igual que tú.
-const SLOT_OF={cuerpo:'body', cpiel:'cskin', cojos:'ceyes', cpelo:'chair', ccolor:'chcol', ccejas:'cbrows', cboca:'cmouth', cmejillas:'ccheeks', corejas:'cears', carriba:'ctop', cabajo:'cbot', czapatos:'cshoe', cgorros:'chat', caccesorios:'cacc', sudaderas:'top', camisas:'top', sueteres:'top', gorras:'hat', guantes:'gloves', calcetines:'socks', zapatos:'shoes', gafas:'glasses', colores:'skin', texturas:'tex'};
+const SLOT_OF={apiel:'askin', aojos:'aeyes', cuerpo:'body', cpiel:'cskin', cojos:'ceyes', cpelo:'chair', ccolor:'chcol', ccejas:'cbrows', cboca:'cmouth', cmejillas:'ccheeks', corejas:'cears', carriba:'ctop', cabajo:'cbot', czapatos:'cshoe', cgorros:'chat', caccesorios:'cacc', sudaderas:'top', camisas:'top', sueteres:'top', gorras:'hat', guantes:'gloves', calcetines:'socks', zapatos:'shoes', gafas:'glasses', colores:'skin', texturas:'tex'};
 const SHOP_CATS=[
   {id:'cuerpo', name:'Cuerpo', ic:'🧸'}, {id:'cpiel', name:'Tono de piel', ic:'🎨', av:'c'}, {id:'cojos', name:'Ojos', ic:'👀', av:'c'},
   {id:'cpelo', name:'Peinado', ic:'💇', av:'c'}, {id:'ccolor', name:'Color de cabello', ic:'🖍️', av:'c'}, {id:'ccejas', name:'Cejas', ic:'🤨', av:'c'}, {id:'cboca', name:'Boca', ic:'👄', av:'c'},
   {id:'cmejillas', name:'Mejillas', ic:'😊', av:'c'}, {id:'corejas', name:'Orejitas', ic:'🐱', av:'c'},
   {id:'carriba', name:'Arriba', ic:'👕', av:'c'}, {id:'cabajo', name:'Abajo', ic:'👖', av:'c'}, {id:'czapatos', name:'Zapatos', ic:'👟', av:'c'},
   {id:'cgorros', name:'Gorros', ic:'🧢', av:'c'}, {id:'caccesorios', name:'Accesorios', ic:'🎀', av:'c'},
+  {id:'apiel', name:'Tono de piel', ic:'🧶', av:'a'}, {id:'aojos', name:'Ojos', ic:'👀', av:'a'},
   {id:'mascotas', name:'Mascotas', ic:'🐾'}, {id:'sudaderas', name:'Sudaderas', ic:'🧥'}, {id:'camisas', name:'Camisas', ic:'👕'}, {id:'sueteres', name:'Suéteres', ic:'🧶'},
   {id:'gorras', name:'Gorras', ic:'🧢'}, {id:'guantes', name:'Guantes', ic:'🧤'}, {id:'calcetines', name:'Calcetines', ic:'🧦'},
   {id:'zapatos', name:'Zapatos', ic:'👟'}, {id:'gafas', name:'Gafas', ic:'🕶️'}, {id:'colores', name:'Colores especiales', ic:'🌈'}, {id:'texturas', name:'Texturas', ic:'✨'}];
@@ -8223,7 +8296,7 @@ I('gorras','god_premio','Corona de caramelo dorada',0,{k:'crown',c:'#ffd23f',c2:
 // v152: los cuerpos (gratis) y lo del Chibi: tonos de piel y ojos (algunos gratis)
 I('cuerpo','av_frijol','Frijolito',0,{free:1, def:1, thumb:'frijol', plain:'#eef6dc'});
 I('cuerpo','av_chibi','Chibi',0,{free:1, thumb:'chibi', plain:'#fbeee4'});
-I('cuerpo','av_amigu','Amigurumi',0,{soon:1, thumb:'amigu', plain:'#f4efe6'});
+I('cuerpo','av_amigu','Amigurumi',0,{free:1, thumb:'amigu', plain:'#f4efe6'});
 [['porcelana','Porcelana','#f8e1d0'],['durazno','Durazno','#efc2a2'],['miel','Miel','#dba57c'],['canela','Canela','#b97c52'],['cacao','Cacao','#8a5634'],['chocolate','Chocolate','#5e3a24']]
   .forEach(([k,n,c])=>I('cpiel','cp_'+k,'Piel '+n,0,{free:1, c, def:k==='durazno'?1:0}));
 [['celeste','Celeste','#b8d9f7'],['lavanda','Lavanda','#cdb8f2'],['menta','Menta','#bfe9cc'],['chicle','Rosa chicle','#f7b6cf']].forEach(([k,n,c])=>I('cpiel','cp_'+k,'Piel '+n,12,{c}));
@@ -8265,13 +8338,19 @@ I('cuerpo','av_amigu','Amigurumi',0,{soon:1, thumb:'amigu', plain:'#f4efe6'});
  ['corazon','Lentes de corazón',14,{ak:'corazon',c:'#e8414f',c2:'#ff8fb0',view:'cara'}],['flores','Corona de flores',16,{ak:'flores',view:'gorro'}],['alitas','Alitas de hada',20,{ak:'alitas',c:'#bfe3ff',view:'espalda'}],
  ['audifonos','Audífonos',16,{ak:'audifonos',c:'#5a5f6e',c2:'#f49ac1',view:'gorro'}],['colita','Colita de gato',16,{ak:'colita',c:'#9aa0ae',c2:'#ffffff',view:'espalda'}],['estrella','Pasador de estrella',10,{ak:'estrella',c:'#ffd23f',view:'gorro'}]]
   .forEach(([k,n,p,o])=>I('caccesorios','rc_'+k,n,p,p?o:{...o, free:1}));
+// v156: el Amigurumi: tonos de piel tejidos (los 6 naturales, gratis) y ojos (4 gratis)
+[['porcelana','Porcelana','#f8e1d0'],['durazno','Durazno','#efc2a2'],['miel','Miel','#dba57c'],['canela','Canela','#b97c52'],['cacao','Cacao','#8a5634'],['chocolate','Chocolate','#5e3a24']]
+  .forEach(([k,n,c])=>I('apiel','ap_'+k,'Estambre '+n.toLowerCase(),0,{free:1, c, def:k==='durazno'?1:0}));
+[['celeste','Celeste','#b8d9f7'],['lavanda','Lavanda','#cdb8f2'],['menta','Menta','#bfe9cc'],['chicle','Rosa chicle','#f7b6cf']].forEach(([k,n,c])=>I('apiel','ap_'+k,'Estambre '+n.toLowerCase(),12,{c}));
+[['negro','Botones negros',0],['cafe','Botones cafés',0],['felices','Bordados felices',0],['dormidos','Bordados dormidos',0],['azul','Botones azules',12],['verde','Botones verdes',12],['grandes','Botones grandes',14],['estrella','Botones de estrella',16],['corazon','Corazones bordados',14],['guino','Guiño',14]]
+  .forEach(([k,n,p])=>I('aojos','ae_'+k,n,p,p?{eye:k, aeye:1}:{eye:k, aeye:1, free:1}));
 const SHOP_BY={}; SHOP.forEach(it=>{ it.slot=SLOT_OF[it.cat]; it.av=(SHOP_CATS.find(c=>c.id===it.cat)||{}).av||'f'; if(it.price>0) it.price=Math.max(15,it.price*5); SHOP_BY[it.id]=it; });   // v124: precios ×5 (economía más justa)
-const OUT_SLOTS=['top','hat','gloves','socks','shoes','glasses','skin','tex','body','cskin','ceyes','chair','chcol','cbrows','cmouth','ccheeks','cears','ctop','cbot','cshoe','chat','cacc'];
+const OUT_SLOTS=['top','hat','gloves','socks','shoes','glasses','skin','tex','body','cskin','ceyes','chair','chcol','cbrows','cmouth','ccheeks','cears','ctop','cbot','cshoe','chat','cacc','askin','aeyes'];
 // lo comprado y lo puesto
 const wardrobe=(()=>{ let w={own:[], eq:{}}; try{ const s=JSON.parse(localStorage.getItem('mundoPelucheRopa')||'null'); if(s){ w.own=(s.own||[]).filter(id=>SHOP_BY[id]); for(const k of OUT_SLOTS) if(s.eq && SHOP_BY[s.eq[k]] && (w.own.includes(s.eq[k]) || SHOP_BY[s.eq[k]].free)) w.eq[k]=s.eq[k]; } }catch(e){} return w; })();
 function saveWardrobe(){ try{ localStorage.setItem('mundoPelucheRopa', JSON.stringify(wardrobe)); }catch(e){} }
 const outfitList=eq=>OUT_SLOTS.map(k=>eq[k]).filter(Boolean);
-function parseOutfit(a){ const eq={}; if(Array.isArray(a)) a.slice(0,32).forEach(id=>{ const it=typeof id==='string' && SHOP_BY[id]; if(it) eq[it.slot]=id; }); return eq; }
+function parseOutfit(a){ const eq={}; if(Array.isArray(a)) a.slice(0,36).forEach(id=>{ const it=typeof id==='string' && SHOP_BY[id]; if(it) eq[it.slot]=id; }); return eq; }
 
 // ---- Telas (dibujadas en un lienzo, con pelusa de fieltro) ----
 function fuzz(g,w,h,n){ for(let i=0;i<n;i++){ const x=Math.random()*w, y=Math.random()*h, a=Math.random()*Math.PI, l=1+Math.random()*3; g.strokeStyle=Math.random()<.5?'rgba(0,0,0,.10)':'rgba(255,255,255,.10)'; g.lineWidth=.6; g.beginPath(); g.moveTo(x,y); g.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l); g.stroke(); } }
@@ -8763,18 +8842,18 @@ function buildItem(o,it,list){
 function applyOutfit(o,eq){ batchDropUnder(o); const u=o.userData; (u.cloth||[]).forEach(m=>m.parent&&m.parent.remove(m)); u.cloth=[]; u.outfit=eq||{};
   try{ avatarShape(o,u.outfit); }catch(e){ console.warn('avatar',e); }   // v152: Frijolito o Chibi
   if(u.av==='c') try{ chibiClothes(o,u.outfit,u.cloth); }catch(e){ console.warn('ropa chibi',e); }   // v154: su propia ropa
-  u.hatParts=[]; if(u.av!=='c') for(const k of ['top','hat','gloves','socks','shoes','glasses']){ const it=SHOP_BY[u.outfit[k]], n0=u.cloth.length; if(it) try{ buildItem(o,it,u.cloth); }catch(e){} if(k==='hat') u.hatParts=u.cloth.slice(n0); }   // la ropa del Frijolito es solo del Frijolito
+  u.hatParts=[]; if(u.av==='f') for(const k of ['top','hat','gloves','socks','shoes','glasses']){ const it=SHOP_BY[u.outfit[k]], n0=u.cloth.length; if(it) try{ buildItem(o,it,u.cloth); }catch(e){} if(k==='hat') u.hatParts=u.cloth.slice(n0); }   // la ropa del Frijolito es solo del Frijolito
   recolor(o, u.colorIdx|0); if(o===plush) try{ waveLabel(); }catch(e){} }
 applyOutfit(plush, wardrobe.eq);
 
 // ---- Tienda (menú principal → Personalizar) ----
 const shopEl=ui('shop'); let shopCat='sudaderas', shopTry=null;
 let shopOnly=null;   // v144: 'dulce' cuando abres la Dulcería
-const myAv=()=>wardrobe.eq.body==='av_chibi'?'c':'f', catAv=id=>(SHOP_CATS.find(c=>c.id===id)||{}).av||'f';
+const myAv=()=>wardrobe.eq.body==='av_chibi'?'c':wardrobe.eq.body==='av_amigu'?'a':'f', catAv=id=>(SHOP_CATS.find(c=>c.id===id)||{}).av||'f';
 const owns=it=>!!it.free || wardrobe.own.includes(it.id);
 const diShopVis=it=>shopOnly ? (it.dulce===1 || (!!it.dulce && wardrobe.own.includes(it.id))) : ((it.cat==='cuerpo' || it.av===myAv()) && (!it.dulce || wardrobe.own.includes(it.id)));   // v152: solo lo del cuerpo que traes
 // ---- Filtros de la tienda: buscar por nombre o color, lo nuevo, lo mío y lo que me alcanza ----
-const NEW_RE=/^(rg_|rc_|ra_|rb_|rz_|hp_|hc_|cj_|bo_|mj_|or_|cp_|co_|sdd_|cmd_|sud_|god_|gud_|cad_|hn_|gln_|gun_|zn_|zp_dino$|sdn_|pln_|cmn_|sun2_|can_|dg_(aurora|chicle|caribe|volcan)$|pa_(salmon|pistache)$|ne_(dorado|menta)$|fo_amarillo$|ar_rayas$|tx_(huellitas|mezclilla|vichy|hojas|notas|burbujas|fresas|sandia|cuadritos|metalazul)$)/;
+const NEW_RE=/^(ap_|ae_|rg_|rc_|ra_|rb_|rz_|hp_|hc_|cj_|bo_|mj_|or_|cp_|co_|sdd_|cmd_|sud_|god_|gud_|cad_|hn_|gln_|gun_|zn_|zp_dino$|sdn_|pln_|cmn_|sun2_|can_|dg_(aurora|chicle|caribe|volcan)$|pa_(salmon|pistache)$|ne_(dorado|menta)$|fo_amarillo$|ar_rayas$|tx_(huellitas|mezclilla|vichy|hojas|notas|burbujas|fresas|sandia|cuadritos|metalazul)$)/;
 const isNewItem=it=>NEW_RE.test(it.id), isNewPet=p=>p.i>=12;
 const shopF={q:'', new:false, mine:false, afford:false};
 // quita acentos y la terminación (roja/rojo/rojas → roj) para que «rojo» encuentre «Gorra roja»
@@ -8820,6 +8899,7 @@ function swatchCss(it){
 // v153: muestritas del Chibi (retrato con el peinado u orejitas; recorte de la cara para cejas, boca y mejillas)
 function chSwatch(it){ const e=wardrobe.eq, base={body:'av_chibi', cskin:e.cskin, chcol:e.chcol, ceyes:e.ceyes||'co_cafe'};
   try{
+    if(it.aeye) return `url(${canUrl(avPortrait({body:'av_amigu', askin:e.askin, aeyes:it.id},'acara'))}) center/cover`;
     if(it.hs) return `url(${canUrl(avPortrait({...base, chair:it.id}))}) center/cover`;
     if(it.ear) return `url(${canUrl(avPortrait({...base, chair:e.chair, cears:it.id}))}) center/cover`;
     if(it.tk||it.bk) return `url(${canUrl(avPortrait({...base, chair:e.chair, ctop:it.tk?it.id:e.ctop, cbot:it.bk?it.id:e.cbot, cshoe:e.cshoe},'cuerpo'))}) center/cover`;
