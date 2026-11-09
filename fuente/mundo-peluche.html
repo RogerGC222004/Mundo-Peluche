@@ -962,7 +962,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='166';
+const GAME_VERSION='167';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -11612,7 +11612,8 @@ const HOWTO=(()=>{ const F='Sniglet, Nunito, sans-serif', W=512, H=512;
 const HZ={H:22, ST:6, C:2, N:22, LV:3.2, RISE:1.0, T:.3};
 const HP_ABC='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 // tipos de pieza
-const HT={PISO:0, MURO:1, PUERTA:2, VENTANA:3, TEJA:4, HAST_A:5, HAST_B:6, CUMBRE:7, HAST_R:8, ESC:9};
+const HT={PISO:0, MURO:1, PUERTA:2, VENTANA:3, TEJA:4, HAST_A:5, HAST_B:6, CUMBRE:7, HAST_R:8, ESC:9, PUERTA2:10, PARCO:11, VGRANDE:12, VREDONDA:13, VENTANAL:14, PIRAMIDE:15, CONO:16, CUPULA:17};   // v167: más puertas, ventanas y techos
+const hIsCap=t=>t>=15&&t<=17, hIsHoleWall=t=>t>=10&&t<=14;
 // materiales (por ahora unos comunes; luego se agregan más)
 const HMAT=(()=>{ const can=(w,h,f)=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; f(c.getContext('2d'),w,h); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; return t; };
   const brick=can(128,128,(q,w,h)=>{ q.fillStyle='#e9dccb'; q.fillRect(0,0,w,h); for(let r=0;r<8;r++) for(let c=-1;c<4;c++){ const x=c*40+(r%2?20:0), y=r*16; q.fillStyle=['#c8553d','#b84a35','#d0634a'][(r*3+c+9)%3]; q.fillRect(x+2,y+2,36,12); } });
@@ -11621,14 +11622,15 @@ const HMAT=(()=>{ const can=(w,h,f)=>{ const c=document.createElement('canvas');
   return [ {n:'Madera', m:felt('#d9a46a','rgba(90,50,20,.18)')}, {n:'Ladrillo', m:std(brick)}, {n:'Piedra', m:felt('#b4b4bc','rgba(0,0,0,.18)')},
     {n:'Tela rosa', m:felt('#ffb3cf','rgba(120,30,60,.15)')}, {n:'Tela azul', m:felt('#9fd3ff','rgba(20,60,120,.15)')}, {n:'Crema', m:felt('#fff1d6','rgba(90,60,20,.12)')},
     {n:'Tejas rojas', m:std(tiles('#d8463a','#a8322a'))}, {n:'Tejas azules', m:std(tiles('#4a7fd0','#355fa8'))}, {n:'Madera oscura', m:felt('#8a5a3a','rgba(0,0,0,.2)')},
-    {n:'Vidrio', m:new THREE.MeshStandardMaterial({color:0xbfe6ff, roughness:.1, metalness:.1, transparent:true, opacity:.45, depthWrite:false})} ]; })();
+    {n:'Vidrio', m:new THREE.MeshStandardMaterial({color:0xbfe6ff, roughness:.1, metalness:.1, transparent:true, opacity:.45, depthWrite:false})},
+    {n:'Tejas verdes', m:std(tiles('#5fb35a','#3f8a3c'))}, {n:'Tejas moradas', m:std(tiles('#9b6bd6','#6f47a8'))}, {n:'Paja', m:std(can(128,128,(q,w,h)=>{ q.fillStyle='#e2c46a'; q.fillRect(0,0,w,h); for(let i=0;i<260;i++){ const x=(i*37)%w, y=(i*53)%h; q.strokeStyle=['#c9a84e','#f0d887','#b8973f'][i%3]; q.lineWidth=2; q.beginPath(); q.moveTo(x,y); q.lineTo(x+3,y+18); q.stroke(); } }))} ]; })();
 const HM_GLASS=9;
 // ---- codificar / decodificar ----
 function hpEnc(P){ let s=''; for(const p of P){ const v=(p.t&31)|((p.i&31)<<5)|((p.j&31)<<10)|((p.lv&7)<<15)|((p.r&3)<<18)|((p.m&31)<<20)|((p.k&7)<<25); for(let q=0;q<5;q++) s+=HP_ABC[(v>>>(q*6))&63]; } return s; }
 function hpDec(s){ const P=[]; if(typeof s!=='string' || s.length%5 || s.length>5*700 || !/^[A-Za-z0-9_-]*$/.test(s)) return P;
   for(let o=0;o<s.length;o+=5){ let v=0; for(let q=0;q<5;q++) v|=HP_ABC.indexOf(s[o+q])<<(q*6); v>>>=0;
     const p={t:v&31, i:(v>>5)&31, j:(v>>10)&31, lv:(v>>15)&7, r:(v>>18)&3, m:(v>>20)&31, k:(v>>25)&7};
-    if(p.t>9 || p.i>=HZ.N || p.j>=HZ.N || p.lv>4 || p.m>=HMAT.length) continue; P.push(p); } return P; }
+    if(p.t>17 || p.i>=HZ.N || p.j>=HZ.N || p.lv>4 || p.m>=HMAT.length) continue; P.push(p); } return P; }
 const hpHash=s=>{ let h=2166136261>>>0; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } return h.toString(36); };
 // ---- la casita inicial (gratis): 6×5 cuadros, puerta y ventanas, techo de dos aguas ----
 function starterHouse(){ const P=[], add=(t,i,j,r=0,m=0,k=0,lv=0)=>P.push({t,i,j,lv,r,m,k}), I0=8, I1=13, J0=9, J1=13, W=5, R=6;
@@ -11646,15 +11648,26 @@ const lotW=(L,lx,lz)=>[L.x+lx*L.c+lz*L.s, L.z-lx*L.s+lz*L.c], lotL=(L,x,z)=>{ co
 const lotPlate=L=>lotW(L,0,HZ.H-2.2);
 // piezas → cajas (en coordenadas del terreno) y figuras inclinadas
 function hpParts(p){ const C=HZ.C, T=HZ.T, LV=HZ.LV, R=HZ.RISE, cx=-HZ.H+C*p.i+C/2, cz=-HZ.H+C*p.j+C/2, y0=p.lv*LV, out=[];
-  const box=(x,y,z,sx,sy,sz,m,col=true)=>out.push({k:'b',x,y,z,sx,sy,sz,m,col});
+  const box=(x,y,z,sx,sy,sz,m,col=true,vis=true)=>out.push({k:'b',x,y,z,sx,sy,sz,m,col,nov:!vis});
   const edge=()=>{ const ax=p.r%2===0; const ex=p.r===1?cx+C/2:p.r===3?cx-C/2:cx, ez=p.r===0?cz+C/2:p.r===2?cz-C/2:cz; return {ax,ex,ez}; };   // ax: el muro va a lo largo de x
-  const wallBox=(e,s0,s1,yA,yB,m,col=true)=>{ const L=s1-s0, sm=(s0+s1)/2; if(L<=.01||yB-yA<=.01) return; if(e.ax) box(e.ex+sm,(yA+yB)/2,e.ez,L,yB-yA,T,m,col); else box(e.ex,(yA+yB)/2,e.ez+sm,T,yB-yA,L,m,col); };
+  const wallBox=(e,s0,s1,yA,yB,m,col=true,vis=true)=>{ const L=s1-s0, sm=(s0+s1)/2; if(L<=.01||yB-yA<=.01) return; if(e.ax) box(e.ex+sm,(yA+yB)/2,e.ez,L,yB-yA,T,m,col,vis); else box(e.ex,(yA+yB)/2,e.ez+sm,T,yB-yA,L,m,col,vis); };
+  const wallCol=(e,s0,s1,yA,yB)=>wallBox(e,s0,s1,yA,yB,0,true,false);
+  const frame=(e,s0,s1,yA,yB)=>{ const L=s1-s0, sm=(s0+s1)/2; if(e.ax) box(e.ex+sm,(yA+yB)/2,e.ez,L,yB-yA,T+.08,8,false); else box(e.ex,(yA+yB)/2,e.ez+sm,T+.08,yB-yA,L,8,false); };
+  const leaf=(e,hinge,w,h,dir,arch)=>out.push({k:'leaf',ex:e.ex,ez:e.ez,ax:e.ax,hinge,w,h,dir,arch,y0});
   const half=C/2+T/2;
   if(p.t===HT.PISO){ box(cx,y0+.125,cz,C,.25,C,p.m,false); out.push({k:'f',x:cx,z:cz,y:y0+.25}); }
   else if(p.t===HT.MURO){ const e=edge(); wallBox(e,-half,half,y0,y0+LV,p.m); }
   else if(p.t===HT.PUERTA){ const e=edge(), dw=.62; wallBox(e,-half,-dw,y0,y0+LV,p.m); wallBox(e,dw,half,y0,y0+LV,p.m); wallBox(e,-dw,dw,y0+2.45,y0+LV,p.m);
     const fr=(s0,s1,yA,yB)=>{ const L=s1-s0, sm=(s0+s1)/2; if(e.ax) box(e.ex+sm,(yA+yB)/2,e.ez,L,yB-yA,T+.08,8,false); else box(e.ex,(yA+yB)/2,e.ez+sm,T+.08,yB-yA,L,8,false); };
-    fr(-dw-.08,-dw+.02,y0,y0+2.5); fr(dw-.02,dw+.08,y0,y0+2.5); fr(-dw-.08,dw+.08,y0+2.42,y0+2.55); }
+    fr(-dw-.08,-dw+.02,y0,y0+2.5); fr(dw-.02,dw+.08,y0,y0+2.5); fr(-dw-.08,dw+.08,y0+2.42,y0+2.55); leaf(e,-dw,2*dw,2.42,1,false); }
+  else if(hIsHoleWall(p.t)){ const e=edge(); let holes;
+    if(p.t===HT.PUERTA2){ holes=[{r:[-.9,.9,0,2.45]}]; wallCol(e,-half,-.9,y0,y0+LV); wallCol(e,.9,half,y0,y0+LV); wallCol(e,-.9,.9,y0+2.45,y0+LV); frame(e,-.98,-.88,y0,y0+2.5); frame(e,.88,.98,y0,y0+2.5); frame(e,-.98,.98,y0+2.42,y0+2.55); leaf(e,-.9,.9,2.42,1,false); leaf(e,.9,.9,2.42,-1,false); }
+    else if(p.t===HT.PARCO){ holes=[{a:[-.62,.62,0,2.0]}]; wallCol(e,-half,-.62,y0,y0+LV); wallCol(e,.62,half,y0,y0+LV); wallCol(e,-.62,.62,y0+2.62,y0+LV); leaf(e,-.6,1.2,2.0,1,true); }
+    else if(p.t===HT.VGRANDE){ holes=[{r:[-.78,.78,.9,2.35],g:1}]; wallCol(e,-half,half,y0,y0+LV); frame(e,-.84,.84,y0+.84,y0+.94); frame(e,-.84,.84,y0+2.32,y0+2.42); frame(e,-.84,-.76,y0+.9,y0+2.35); frame(e,.76,.84,y0+.9,y0+2.35); frame(e,-.03,.03,y0+.9,y0+2.35); frame(e,-.78,.78,y0+1.6,y0+1.66); }
+    else if(p.t===HT.VREDONDA){ holes=[{c:[0,1.75,.55],g:1}]; wallCol(e,-half,half,y0,y0+LV); frame(e,-.03,.03,y0+1.2,y0+2.3); frame(e,-.55,.55,y0+1.72,y0+1.78); }
+    else { holes=[{r:[-.8,.8,.08,2.75],g:1}]; wallCol(e,-half,half,y0,y0+LV); frame(e,-.86,.86,y0+.02,y0+.1); frame(e,-.86,.86,y0+2.73,y0+2.83); frame(e,-.86,-.78,y0+.08,y0+2.75); frame(e,.78,.86,y0+.08,y0+2.75); frame(e,-.03,.03,y0+.08,y0+2.75); }
+    out.push({k:'x',ex:e.ex,ez:e.ez,ax:e.ax,y0,half,holes,m:p.m}); }
+  else if(hIsCap(p.t)){ out.push({k:'cap',t:p.t,x:cx,z:cz,y:y0+LV+.25+p.k*R,m:p.m}); }
   else if(p.t===HT.VENTANA){ const e=edge(), ww=.55; wallBox(e,-half,-ww,y0,y0+LV,p.m); wallBox(e,ww,half,y0,y0+LV,p.m); wallBox(e,-ww,ww,y0,y0+1.1,p.m); wallBox(e,-ww,ww,y0+2.15,y0+LV,p.m);
     { const fr=(s0,s1,yA,yB)=>{ const L=s1-s0, sm=(s0+s1)/2; if(e.ax) box(e.ex+sm,(yA+yB)/2,e.ez,L,yB-yA,T+.08,8,false); else box(e.ex,(yA+yB)/2,e.ez+sm,T+.08,yB-yA,L,8,false); };
       fr(-ww-.07,-ww+.02,y0+1.05,y0+2.2); fr(ww-.02,ww+.07,y0+1.05,y0+2.2); fr(-ww-.07,ww+.07,y0+1.02,y0+1.12); fr(-ww-.07,ww+.07,y0+2.12,y0+2.22); fr(-.025,.025,y0+1.1,y0+2.15); }
@@ -11675,12 +11688,28 @@ function hGable(h0,h1){ // trapecio extruido: ancho 2 (a lo largo de s), de y=0 
   tri(P(0,T),P(1,T),P(2,T)); tri(P(0,T),P(2,T),P(3,T)); tri(P(0,-T),P(2,-T),P(1,-T)); tri(P(0,-T),P(3,-T),P(2,-T));
   for(let i=0;i<4;i++){ const a=i, b=(i+1)%4; tri(P(a,T),P(a,-T),P(b,-T)); tri(P(a,T),P(b,-T),P(b,T)); }
   const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(V,3)); const uv=[]; for(let i=0;i<V.length;i+=3) uv.push(V[i]*.5+.5,V[i+1]/3); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); g.computeVertexNormals(); return g; }
-function hpBuild(L,P,opt={}){ const buckets=new Map(), cols=[], floors=new Map(), stairs=[], M=new THREE.Matrix4(), Q=new THREE.Quaternion(), E=new THREE.Euler(), S=new THREE.Vector3(), Tv=new THREE.Vector3();
+function hpBuild(L,P,opt={}){ const buckets=new Map(), cols=[], floors=new Map(), stairs=[], leaves=[], M=new THREE.Matrix4(), Q=new THREE.Quaternion(), E=new THREE.Euler(), S=new THREE.Vector3(), Tv=new THREE.Vector3();
   const push=(m,geo,mat)=>{ let b=buckets.get(m); if(!b){ b={p:[],n:[],u:[]}; buckets.set(m,b); } const g=geo.clone(); g.applyMatrix4(mat);
     b.p.push(...g.attributes.position.array); b.n.push(...g.attributes.normal.array); b.u.push(...g.attributes.uv.array); g.dispose(); };
   for(const p of P) for(const o of hpParts(p)){
-    if(o.k==='b'){ M.compose(Tv.set(o.x,o.y,o.z),Q.set(0,0,0,1),S.set(o.sx,o.sy,o.sz)); push(o.m,_hBox,M); if(o.col) cols.push([o.x-o.sx/2,o.y-o.sy/2,o.z-o.sz/2,o.x+o.sx/2,o.y+o.sy/2,o.z+o.sz/2]); }
+    if(o.k==='b'){ M.compose(Tv.set(o.x,o.y,o.z),Q.set(0,0,0,1),S.set(o.sx,o.sy,o.sz)); if(!o.nov) push(o.m,_hBox,M); if(o.col) cols.push([o.x-o.sx/2,o.y-o.sy/2,o.z-o.sz/2,o.x+o.sx/2,o.y+o.sy/2,o.z+o.sz/2]); }
     else if(o.k==='st') stairs.push(o);
+    else if(o.k==='x'){ const sh=new THREE.Shape(); sh.moveTo(-o.half,0); sh.lineTo(o.half,0); sh.lineTo(o.half,HZ.LV); sh.lineTo(-o.half,HZ.LV); sh.closePath();
+      const holeShapes=o.holes.map(hh=>{ const q=new THREE.Path(); if(hh.r){ const [a,b,y1,y2]=hh.r; q.moveTo(a,y1); q.lineTo(a,y2); q.lineTo(b,y2); q.lineTo(b,y1); q.closePath(); }
+        else if(hh.a){ const [a,b,y1,y2]=hh.a, rr=(b-a)/2; q.moveTo(a,y1); q.lineTo(a,y2); q.absarc((a+b)/2,y2,rr,Math.PI,0,true); q.lineTo(b,y1); q.closePath(); }
+        else { const [cx2,cy2,rr]=hh.c; q.absarc(cx2,cy2,rr,0,Math.PI*2,true); } return q; });
+      sh.holes.push(...holeShapes);
+      const place=(geo,depth,m)=>{ let g=geo.index?geo.toNonIndexed():geo; g.translate(0,0,-depth/2); const uv=g.attributes.uv; for(let i=0;i<uv.count;i++) uv.setXY(i,uv.getX(i)*.5,uv.getY(i)*.5);
+        E.set(0,o.ax?0:-Math.PI/2,0); Q.setFromEuler(E); M.compose(Tv.set(o.ex,o.y0,o.ez),Q,S.set(1,1,1)); push(m,g,M); g.dispose(); };
+      place(new THREE.ExtrudeGeometry(sh,{depth:HZ.T, bevelEnabled:false, curveSegments:14}),HZ.T,o.m);
+      for(const hh of o.holes) if(hh.g){ const gs=new THREE.Shape(holeShapes[o.holes.indexOf(hh)].getPoints(16)); place(new THREE.ExtrudeGeometry(gs,{depth:.05, bevelEnabled:false}),.05,HM_GLASS); } }
+    else if(o.k==='leaf'){ leaves.push(o); }
+    else if(o.k==='cap'){ const C=HZ.C; let geo, y=o.y;
+      if(o.t===HT.PIRAMIDE){ geo=new THREE.ConeGeometry(C*.8,1.7,4,1); geo.rotateY(Math.PI/4); geo.translate(0,.85,0); }
+      else if(o.t===HT.CONO){ geo=new THREE.ConeGeometry(C*.66,3.2,18,1); geo.translate(0,1.6,0); }
+      else { geo=new THREE.SphereGeometry(C*.66,18,9,0,Math.PI*2,0,Math.PI/2); }
+      const g2=geo.toNonIndexed(); geo.dispose(); M.compose(Tv.set(o.x,y,o.z),Q.set(0,0,0,1),S.set(1,1,1)); push(o.m,g2,M); g2.dispose();
+      const base=new THREE.CylinderGeometry(C*.7,C*.7,.2,o.t===HT.PIRAMIDE?4:18).toNonIndexed(); if(o.t===HT.PIRAMIDE) base.rotateY(Math.PI/4); M.compose(Tv.set(o.x,y-.02,o.z),Q.set(0,0,0,1),S.set(1,1,1)); push(8,base,M); base.dispose(); }
     else if(o.k==='f'){ const key=Math.round((o.x+HZ.H)/HZ.C-.5)+','+Math.round((o.z+HZ.H)/HZ.C-.5); const a=floors.get(key)||[]; a.push(o.y); floors.set(key,a); }
     else if(o.k==='s'){ const C=HZ.C, R=HZ.RISE, len=Math.hypot(C,R)+.08, ang=Math.atan2(R,C); const d=[[0,1],[1,0],[0,-1],[-1,0]][o.r];
       if(d[0]===0) E.set(-ang*d[1],0,0); else E.set(0,0,ang*d[0]); Q.setFromEuler(E);
@@ -11690,7 +11719,19 @@ function hpBuild(L,P,opt={}){ const buckets=new Map(), cols=[], floors=new Map()
   const g=new THREE.Group(); g.position.set(L.x,L.y,L.z); g.rotation.y=L.yaw;
   buckets.forEach((b,m)=>{ const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.Float32BufferAttribute(b.p,3)); geo.setAttribute('normal',new THREE.Float32BufferAttribute(b.n,3)); geo.setAttribute('uv',new THREE.Float32BufferAttribute(b.u,2)); geo.computeBoundingSphere();
     const mesh=new THREE.Mesh(geo,opt.mat||HMAT[m].m); mesh.castShadow=m!==HM_GLASS; mesh.receiveShadow=true; mesh.userData.noBatch=true; if(m===HM_GLASS) mesh.renderOrder=2; g.add(mesh); });
-  scene.add(g); return {g, cols, floors, stairs}; }
+  // hojas de puerta: cada una gira en su bisagra (se abren solas cuando alguien se acerca)
+  const doors=[]; for(const o of leaves){ const piv=new THREE.Group(), inner=new THREE.Group(); piv.add(inner); g.add(piv);
+    piv.position.set(o.ax?o.ex+o.hinge:o.ex, o.y0, o.ax?o.ez:o.ez+o.hinge); inner.rotation.y=o.ax?0:-Math.PI/2;
+    let geo; if(o.arch){ const sh=new THREE.Shape(), w=o.w, r=w/2; sh.moveTo(0,0); sh.lineTo(0,o.h); sh.absarc(r,o.h,r,Math.PI,0,true); sh.lineTo(w,0); sh.closePath(); geo=new THREE.ExtrudeGeometry(sh,{depth:.08,bevelEnabled:false,curveSegments:12}); geo.translate(0,0,-.04); const uv=geo.attributes.uv; for(let i=0;i<uv.count;i++) uv.setXY(i,uv.getX(i)*.5,uv.getY(i)*.5); if(o.dir<0) geo.translate(-w,0,0); }
+    else { geo=new THREE.BoxGeometry(o.w-.04,o.h-.04,.08); geo.translate(o.dir*o.w/2,o.h/2,0); }
+    const leafM=new THREE.Mesh(geo,opt.mat||HMAT[8].m); leafM.castShadow=!opt.mat; leafM.userData.noBatch=true; inner.add(leafM);
+    { const kn=new THREE.Mesh(sphereG,FM('#ffd34d','shiny')); kn.scale.setScalar(.06); kn.position.set(o.dir*(o.w-.14),1.05,.07); inner.add(kn); const kn2=kn.clone(); kn2.position.z=-.07; inner.add(kn2); }
+    const [wx,wz]=lotW(L,o.ax?o.ex+o.hinge+o.dir*o.w/2:o.ex, o.ax?o.ez:o.ez+o.hinge+o.dir*o.w/2); doors.push({piv:inner, base:inner.rotation.y, dir:o.dir, open:0, wx, wz, wy:L.y+o.y0}); }
+  scene.add(g); return {g, cols, floors, stairs, doors}; }
+// las puertas se abren solas cuando alguien (tú u otro jugador) está cerca
+function houseDoorsTick(dt){ if(!HS || !HS.shown.size) return; const who=[player.pos]; for(const r of mp.remotes.values()) who.push(r.pos);
+  for(const b of HS.shown.values()) for(const d of b.doors||[]){ const near=who.some(p=>Math.abs(p.x-d.wx)<2.4 && Math.abs(p.z-d.wz)<2.4 && Math.hypot(p.x-d.wx,p.z-d.wz)<2.2 && Math.abs(p.y-d.wy)<2.2);
+    d.open+=((near?1:0)-d.open)*Math.min(1,dt*6); d.piv.rotation.y=d.base-d.dir*d.open*1.45; } }
 // ---- lo fijo de cada barrio: calles, orillas de los terrenos, placas y letreros ----
 var HS={mine:null, claimT:0, str:'', hash:'', shown:new Map(), cache:new Map(), sendT:0, own:new Array(LOTS.length).fill(null), tick:0};
 (function buildBarrios(){ const street=felt('#e8d7b0','rgba(90,60,20,.12)'), line=felt('#ffe08a','rgba(120,80,0,.12)');
@@ -11726,7 +11767,7 @@ function lotOwners(){ const own=LOTS.map(()=>null), better=(a,b)=>!b || a.t<b.t 
   if(HS.mine!==null) own[HS.mine]={u:myUid, t:HS.claimT, me:true, name:cleanName(profile.name)||'Peluche', hash:HS.hash, str:HS.str};
   for(const r of mp.remotes.values()){ if(!r.hl || !r.hh) continue; const c={u:uidOf(r)||'', t:r.hl[1], me:false, name:r.name||'Peluche', hash:r.hh, r}; if(better(c,own[r.hl[0]])) own[r.hl[0]]=c; }
   return own; }
-function houseUpdate(dt){ HS.tick-=dt; if(HS.tick>0) return; HS.tick=.25;
+function houseUpdate(dt){ houseDoorsTick(dt); HS.tick-=dt; if(HS.tick>0) return; HS.tick=.25;
   { const now=performance.now(); if(HS.mine!==null && mp.room && (now-HS.sendT>4000 || (HS.dirty && now-HS.sendT>1000))){ HS.sendT=now; HS.dirty=false; sendPresence(true); } }   // la casa completa: cada 4 s, o al cambiarla
   const own=lotOwners(); HS.own=own;
   if(HS.mine!==null && own[HS.mine] && !own[HS.mine].me){ HS.mine=null; flashNote('Alguien cargó su casita en ese terreno antes que tú'); sendPresence(true); return; }
@@ -11772,23 +11813,34 @@ const HK=[
   {id:'plano', t:HT.CUMBRE, n:'Techo plano', w:'cell', mats:[6,7,0,8,5,2,3,4]},
   {id:'remate', t:-1, n:'Remate de techo', w:'edge', mats:[5,1,0,2,8,3,4]},
   {id:'escalera', t:HT.ESC, n:'Escalera', w:'cell', rot:true, mats:[0,8,2]},
+  {id:'puerta2', t:HT.PUERTA2, n:'Puerta doble', w:'edge', mats:[5,1,0,2,8,3,4]},
+  {id:'parco', t:HT.PARCO, n:'Puerta de arco', w:'edge', mats:[5,1,0,2,8,3,4]},
+  {id:'vgrande', t:HT.VGRANDE, n:'Ventana grande', w:'edge', mats:[5,1,0,2,8,3,4]},
+  {id:'vredonda', t:HT.VREDONDA, n:'Ventana redonda', w:'edge', mats:[5,1,0,2,8,3,4]},
+  {id:'ventanal', t:HT.VENTANAL, n:'Ventanal', w:'edge', mats:[5,1,0,2,8,3,4]},
+  {id:'piramide', t:HT.PIRAMIDE, n:'Techo de pirámide', w:'cell', mats:[6,7,10,11,12,0,8]},
+  {id:'cono', t:HT.CONO, n:'Techo de torre', w:'cell', mats:[6,7,10,11,12,0,8]},
+  {id:'cupula', t:HT.CUPULA, n:'Cúpula', w:'cell', mats:[6,7,10,11,12,5,2]},
 ];
+HK.find(k=>k.id==='teja').mats.push(10,11,12); HK.find(k=>k.id==='plano').mats.push(10,11,12);
+const HINV3={'puerta2:5':1,'parco:5':1,'vgrande:5':4,'vredonda:5':4,'ventanal:5':2,'piramide:7':2,'cono:11':2,'cupula:10':2,'teja:10':12,'teja:12':12};   // v167: piezas nuevas para probar
 const HK_BY={}; HK.forEach(k=>HK_BY[k.id]=k);
-const hkOf=p=>p.t===HT.PISO?'piso':p.t===HT.MURO?'muro':p.t===HT.PUERTA?'puerta':p.t===HT.VENTANA?'ventana':p.t===HT.TEJA?'teja':p.t===HT.CUMBRE?'plano':p.t===HT.ESC?'escalera':'remate';
+const hkOf=p=>(HK.find(k=>k.t===p.t)||{}).id && p.t!==HT.HAST_A && p.t!==HT.HAST_B && p.t!==HT.HAST_R ? HK.find(k=>k.t===p.t).id : p.t===HT.PISO?'piso':p.t===HT.MURO?'muro':p.t===HT.PUERTA?'puerta':p.t===HT.VENTANA?'ventana':p.t===HT.TEJA?'teja':p.t===HT.CUMBRE?'plano':p.t===HT.ESC?'escalera':'remate';
 const HOUSE_MAX=400;
 const HINV0={'piso:0':30,'piso:2':10,'muro:5':30,'muro:1':20,'muro:0':10,'puerta:5':2,'ventana:5':6,'teja:6':30,'teja:7':12,'plano:6':10,'remate:5':12,'escalera:0':2};
 // ---- guardar / cargar ----
 function hLoad(){ if(HS.loaded) return; HS.loaded=true; let o=null; try{ o=JSON.parse(localStorage.getItem('mundoPelucheCasa')||'null'); }catch(e){}
   HS.str = o && typeof o.p==='string' && hpDec(o.p).length ? o.p : hpEnc(starterHouse()); HS.hash=hpHash(HS.str);
-  HS.inv={}; const src=o && o.inv && typeof o.inv==='object' ? o.inv : HINV0; for(const k in src){ const n=src[k]|0, [kid,m]=k.split(':'); if(n>0 && HK_BY[kid] && HK_BY[kid].mats.includes(+m)) HS.inv[k]=Math.min(9999,n); } }
-function hSave(){ try{ localStorage.setItem('mundoPelucheCasa', JSON.stringify({v:1, p:HS.str, inv:HS.inv})); }catch(e){} }
+  HS.inv={}; const src=o && o.inv && typeof o.inv==='object' ? o.inv : HINV0; for(const k in src){ const n=src[k]|0, [kid,m]=k.split(':'); if(n>0 && HK_BY[kid] && HK_BY[kid].mats.includes(+m)) HS.inv[k]=Math.min(9999,n); }
+  HS.g3=!!(o && o.g3); if(!HS.g3){ for(const k in HINV3) HS.inv[k]=(HS.inv[k]|0)+HINV3[k]; HS.g3=true; } }
+function hSave(){ try{ localStorage.setItem('mundoPelucheCasa', JSON.stringify({v:1, p:HS.str, inv:HS.inv, g3:HS.g3?1:0})); }catch(e){} }
 function hSetPieces(P){ HS.str=hpEnc(P); HS.hash=hpHash(HS.str); HS.dirty=true; HS.tick=0; hSave(); }
 // ---- reglas: dónde va cada pieza y si cabe ----
 const HD=[[0,1],[1,0],[0,-1],[-1,0]];   // giro 0:+z, 1:+x, 2:-z, 3:-x (en el terreno)
 const hIsGable=t=>t===HT.HAST_A||t===HT.HAST_B||t===HT.HAST_R;
 const hEdgeKey=(i,j,r)=>r===0?'h'+i+','+(j+1):r===2?'h'+i+','+j:r===1?'v'+(i+1)+','+j:'v'+i+','+j;
 const hBlocked=(i,j)=>j>=21 || (j>=20 && i>=9 && i<=13);   // la placa y el letrero del terreno se quedan libres
-function hSlots(p){ const cls=p.t===HT.PISO?'f':(p.t===HT.TEJA||p.t===HT.CUMBRE)?'r':p.t===HT.ESC?'s':hIsGable(p.t)?'g':'w';
+function hSlots(p){ const cls=p.t===HT.PISO?'f':(p.t===HT.TEJA||p.t===HT.CUMBRE||hIsCap(p.t))?'r':p.t===HT.ESC?'s':hIsGable(p.t)?'g':'w';
   if(cls==='w'||cls==='g') return [p.lv+cls+hEdgeKey(p.i,p.j,p.r)];
   if(cls==='s'){ const d=HD[p.r]; return [p.lv+'s'+p.i+','+p.j, p.lv+'s'+(p.i+d[0])+','+(p.j+d[1])]; }
   return [p.lv+cls+p.i+','+p.j]; }
@@ -11796,7 +11848,7 @@ function hCellsOf(p){ if(p.t===HT.ESC){ const d=HD[p.r]; return [[p.i,p.j],[p.i+
 // el techo inclinado sube un escalón si atrás (abajo) ya hay otro igual; el plano va arriba de los que suben hacia él; el remate copia al techo de su cuadro
 function hAuto(P,p){ const at=(i,j,f)=>P.find(q=>q.lv===p.lv && q.i===i && q.j===j && f(q));
   if(p.t===HT.TEJA){ const d=HD[p.r], q=at(p.i-d[0],p.j-d[1],q=>q.t===HT.TEJA && q.r===p.r); p.k=q?Math.min(7,q.k+1):0; return true; }
-  if(p.t===HT.CUMBRE){ let k=0; HD.forEach((d,r)=>{ const q=at(p.i-d[0],p.j-d[1],q=>q.t===HT.TEJA && q.r===r); if(q) k=Math.max(k,q.k+1); }); p.k=Math.min(7,k); return true; }
+  if(p.t===HT.CUMBRE || hIsCap(p.t)){ let k=0; HD.forEach((d,r)=>{ const q=at(p.i-d[0],p.j-d[1],q=>q.t===HT.TEJA && q.r===r); if(q) k=Math.max(k,q.k+1); }); p.k=Math.min(7,k); return true; }
   if(p.kid==='remate'){ const roof=at(p.i,p.j,q=>q.t===HT.TEJA||q.t===HT.CUMBRE); if(!roof) return false;
     if(roof.t===HT.CUMBRE){ p.t=HT.HAST_R; p.k=roof.k; return true; }
     const alongX=p.r%2===0, d=HD[roof.r]; if(alongX ? d[0]===0 : d[1]===0) return false;   // el techo debe bajar a lo largo del muro
@@ -11811,7 +11863,7 @@ var ED={on:false, lv:0, roof:true, rot:0, sel:null, del:false, cam:{yaw:0, dist:
 const edGhostOK=new THREE.MeshBasicMaterial({color:0x5ee36a, transparent:true, opacity:.7, depthWrite:false}), edGhostBad=new THREE.MeshBasicMaterial({color:0xff5d5d, transparent:true, opacity:.55, depthWrite:false});
 function edLot(){ return HS.mine!==null ? LOTS[HS.mine] : null; }
 function edPieces(){ return hpDec(myHouseStr()); }
-function edFilter(P){ return P.filter(p=>p.lv<=ED.lv && (ED.roof || !(p.t===HT.TEJA||p.t===HT.CUMBRE||p.t===HT.HAST_A||p.t===HT.HAST_B||p.t===HT.HAST_R) || p.lv<ED.lv)); }
+function edFilter(P){ return P.filter(p=>p.lv<=ED.lv && (ED.roof || !(p.t===HT.TEJA||p.t===HT.CUMBRE||hIsCap(p.t)||p.t===HT.HAST_A||p.t===HT.HAST_B||p.t===HT.HAST_R) || p.lv<ED.lv)); }
 // ---- UI ----
 (function edUI(){ const st=document.createElement('style'); st.textContent=`
 #hedLayer{position:fixed;inset:0;z-index:40;touch-action:none;}
@@ -11884,8 +11936,8 @@ const edNearEdge=(fx,fz)=>{ const d=[1-fz,1-fx,fz,fx]; let r=0; for(let q=1;q<4;
 function edHover(cx,cy){ const h=edPick(cx,cy); if(!h){ ED.hov=null; edGhost(null); return; } edPreview(h.i,h.j,h.fx,h.fz); }
 function edPreview(i,j,fx,fz){ const P=edPieces(); let piece=null, ok=false, key='';
   if(ED.del){ const [r,d]=edNearEdge(fx,fz); const vis=edFilter(P).filter(q=>q.lv===ED.lv);
-    let hit=d<.3 ? vis.find(q=>(q.t===HT.MURO||q.t===HT.PUERTA||q.t===HT.VENTANA||hIsGable(q.t)) && hEdgeKey(q.i,q.j,q.r)===hEdgeKey(i,j,r)) : null;
-    if(!hit) for(const want of [q=>q.t===HT.TEJA||q.t===HT.CUMBRE, q=>q.t===HT.ESC, q=>q.t===HT.PISO]){ hit=vis.find(q=>want(q) && hCellsOf(q).some(([a,b])=>a===i&&b===j)); if(hit) break; }
+    let hit=d<.3 ? vis.find(q=>(q.t===HT.MURO||q.t===HT.PUERTA||q.t===HT.VENTANA||hIsHoleWall(q.t)||hIsGable(q.t)) && hEdgeKey(q.i,q.j,q.r)===hEdgeKey(i,j,r)) : null;
+    if(!hit) for(const want of [q=>q.t===HT.TEJA||q.t===HT.CUMBRE||hIsCap(q.t), q=>q.t===HT.ESC, q=>q.t===HT.PISO]){ hit=vis.find(q=>want(q) && hCellsOf(q).some(([a,b])=>a===i&&b===j)); if(hit) break; }
     if(hit){ piece=hit; ok=false; key='d'+hpEnc([hit]); } }
   else if(ED.sel){ const [kid,ms]=ED.sel.split(':'), K=HK_BY[kid]; const p={t:K.t, i, j, lv:ED.lv, r:ED.rot, m:+ms, k:0, kid, w:K.w};
     if(K.w==='edge') p.r=edNearEdge(fx,fz)[0];
