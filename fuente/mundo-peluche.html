@@ -962,7 +962,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='161';
+const GAME_VERSION='162';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -1183,7 +1183,8 @@ const smooth=(e0,e1,x)=>{ const t=Math.min(1,Math.max(0,(x-e0)/(e1-e0))); return
 // v160: claros en el bosque para los minijuegos nuevos: el suelo queda plano (cuadrado de lado 2R, con orilla suave de B) y sin árboles
 const MZ={x:360, z:-430, N:15, S:3.2, WH:4.2, WT:.45, h:1.8, seed:-1, t0:0, fp:false};   // setos altos: nadie ve por encima
 const CHOC={x:-550, z:-185, R:19, h:3.0};   // v161: la arena de los carritos chocones
-const MG_PADS=[{x:MZ.x, z:MZ.z, R:MZ.N*MZ.S/2+5, B:12, h:MZ.h}, {x:CHOC.x, z:CHOC.z, R:CHOC.R+5, B:14, h:CHOC.h}];
+const TM={x:240, z:520, W:14, L:30, h:3.2, Y:3.2+24};   // v162: la banda en el aire (flota 24 m arriba del claro)
+const MG_PADS=[{x:MZ.x, z:MZ.z, R:MZ.N*MZ.S/2+5, B:12, h:MZ.h}, {x:CHOC.x, z:CHOC.z, R:CHOC.R+5, B:14, h:CHOC.h}, {x:TM.x, z:TM.z, R:TM.L/2+6, B:12, h:TM.h}];
 function mgPad(x,z,v){ for(const P of MG_PADS){ const d=Math.max(Math.abs(x-P.x),Math.abs(z-P.z)); if(d<P.R+P.B) v+=(P.h-v)*(1-smooth(P.R,P.R+P.B,d)); } return v; }
 const lerp=(a,b,t)=>a+(b-a)*t;
 // Perfil de la costa según qué tan lejos estás del borde (c = distancia / radio de costa)
@@ -4736,6 +4737,7 @@ const AR_SPOTS=(()=>{ const coastAt=coastAtA;
   return [mk('plat','Plataformas flotantes',1.37,38,-7), mk('papa','Papa caliente',4.71,-44,-20), mk('bola','Rebote sobre pelotas',3.93,21,-7), mk('carrera','Carrera de obstáculos',.15,42,-7)]; })();
 AR_SPOTS.push({id:'laberinto', name:'Laberinto', a:0, c:0, u:[0,-1], v:[1,0], center:[MZ.x,MZ.z], plate:[MZ.x+3,MZ.z+MZ.N*MZ.S/2+5], watch:[MZ.x+3,MZ.z+MZ.N*MZ.S/2+9]});   // v160
 AR_SPOTS.push({id:'carritos', name:'Carritos chocones', a:0, c:0, u:[-1,0], v:[0,1], center:[CHOC.x,CHOC.z], plate:[CHOC.x+CHOC.R+5,CHOC.z+2], watch:[CHOC.x+CHOC.R+9,CHOC.z+2]});   // v161
+AR_SPOTS.push({id:'banda', name:'Banda en el aire', a:0, c:0, u:[0,1], v:[-1,0], center:[TM.x,TM.z], plate:[TM.x+TM.W/2+6,TM.z-TM.L/2-3], watch:[TM.x+TM.W/2+10,TM.z-TM.L/2-3]});   // v162
 const TELEPORTS=[{id:'inicio', name:'Inicio', x:START.x, z:START.z}, {id:'pista', name:'Pista', x:MAP.park.x-6, z:MAP.park.z+30}, {id:'aero', name:'Aeropuerto', ...(([x,z])=>({x,z}))(airportXZ(85,-80))}, {id:'parque', name:'Parque', x:PG.x+1, z:PG.z+2}, {id:'feria', name:'Feria', x:FAIR.x+Math.sin(FAIR.yaw)*-(FAIR.R-5), z:FAIR.z+Math.cos(FAIR.yaw)*-(FAIR.R-5)}, ...AR_SPOTS.map(A=>({id:'ar_'+A.id, name:A.id==='carrera'?'Obstáculos':A.name, x:A.watch[0], z:A.watch[1], noPortal:true}))];
 
 // ---------- Portales del segundo piso del castillo: arcos de mini bombones que llevan a los lugares del mapa ----------
@@ -11389,10 +11391,95 @@ function ccUpdate(dt,t){ const G=AR.G[5]; const playing=G && G.ph>=1 && G.ph<=3;
   if(ccCars.size){ const alive=new Set(mp.remotes.values()); ccCars.forEach((car,r)=>{ if(!seen.has(r)) car.visible=false; if(!alive.has(r)){ scene.remove(car); ccCars.delete(r); } }); } }
 // sentado en el carrito, con las manos en el volante
 function carRiderPose(o,t,dt){ poseLimbs(o,t,dt,0,false,0,false,null,0,0,false,1,true); o.position.y+=(o.userData.av==='a'?-.25:o.userData.av==='c'?.05:-.08); }   // sentado en el asiento
+// ---------------- 7) Banda en el aire (v162): una banda de correr flotando muy alto, en el bosque del centro-norte ----------------
+// El piso se mueve hacia atrás (cada vez más rápido): hay que caminar (y luego correr) para no caerte. Van llegando huecos y
+// muros con aberturas que viajan con la banda; si un muro te alcanza, te empuja. Gana el último que siga arriba.
+// Todo sale de la semilla y del tiempo de la partida, así todos ven los mismos huecos y muros en el mismo lugar.
+const TM_V0=2.6, TM_A=.03, TM_VMAX=6.6, TM_TC=(TM_VMAX-TM_V0)/TM_A, TM_DUR=240000;
+const tmSpeed=t=>Math.min(TM_VMAX, TM_V0+TM_A*Math.max(0,t));
+const tmDist=t=>{ t=Math.max(0,t); return t<TM_TC ? TM_V0*t+.5*TM_A*t*t : TM_V0*TM_TC+.5*TM_A*TM_TC*TM_TC+TM_VMAX*(t-TM_TC); };
+// coordenadas de la banda: u = a lo ancho (x), w = a lo largo (z; el frente es +L/2)
+const tmW=(u,w)=>[TM.x+u, TM.z+w], tmL=(x,z)=>[x-TM.x, z-TM.z];
+function tmObsList(seed){ const R=mzRand((seed^0x5bd1e995)>>>0), out=[]; let s=18;
+  for(let k=0;k<420;k++){ s+=Math.max(6.5,13-k*.11)+R()*4;
+    if(R()<.55){ const w=3+R()*3.5; out.push({s, k:'h', u:(R()-.5)*(TM.W-w), w, l:2.6+R()*1.4}); }
+    else { const n=R()<.55?1:2, ops=[]; for(let i=0;i<n;i++) ops.push((R()-.5)*(TM.W-3.4)); ops.sort((a,b)=>a-b); out.push({s, k:'m', ops, ow:3.1}); } }
+  return out; }
+Object.assign(TM,{obs:[], seed:-1, te:0, on:false, clk:0, hue:.92});
+// lo que hay sobre la banda ahora: [obstáculo, w del centro]
+function tmActive(){ if(!TM.on) return []; const D=tmDist(TM.te), out=[]; for(const o of TM.obs){ const w=TM.L/2-(D-o.s); if(w>TM.L/2+3) break; if(w<-TM.L/2-3) continue; out.push([o,w]); } return out; }
+const tmLin=c=>c.convertSRGBToLinear();
+{ const g=new THREE.Group(), side=FM('#3a3f52');
+  // la superficie: flechas que apuntan hacia adelante, con un degradado de colores de lado a lado (cambia durante la partida)
+  const c=document.createElement('canvas'); c.width=256; c.height=256; const q=c.getContext('2d'); q.fillStyle='#d4d4d4'; q.fillRect(0,0,256,256);
+  q.fillStyle='rgba(0,0,0,.07)'; for(let y=0;y<256;y+=16) q.fillRect(0,y,256,3);   // rayitas de la banda
+  q.fillStyle='rgba(255,255,255,1)'; q.strokeStyle='rgba(0,0,0,.10)'; q.lineWidth=4;
+  for(let y=0;y<256;y+=128){ q.beginPath(); q.moveTo(70,y+30); q.lineTo(128,y+70); q.lineTo(186,y+30); q.lineTo(186,y+58); q.lineTo(128,y+98); q.lineTo(70,y+58); q.closePath(); q.stroke(); q.fillStyle='#ffffff'; q.fill(); }
+  const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1,TM.L/8); TM.beltTex=t;
+  const pg=new THREE.PlaneGeometry(TM.W,TM.L,4,1); pg.rotateX(-Math.PI/2); pg.setAttribute('color',new THREE.Float32BufferAttribute(new Float32Array(pg.attributes.position.count*3).fill(1),3));
+  TM.top=new THREE.Mesh(pg,new THREE.MeshStandardMaterial({map:t, vertexColors:true, roughness:.8})); TM.top.position.set(TM.x,TM.Y+.003,TM.z); TM.top.receiveShadow=true; g.add(TM.top);
+  const belt=new THREE.Mesh(new THREE.BoxGeometry(TM.W,.5,TM.L),side); belt.position.set(TM.x,TM.Y-.25,TM.z); g.add(belt);
+  for(const s of [-1,1]){ const rl=new THREE.Mesh(new THREE.CylinderGeometry(.42,.42,TM.W+.5,20),FM('#e8ebf3','shiny')); rl.rotation.z=Math.PI/2; rl.position.set(TM.x,TM.Y-.3,TM.z+s*TM.L/2); g.add(rl); }
+  // barandales de cristal a los lados y al frente (atrás no hay: por ahí te caes)
+  TM.railMat=new THREE.MeshStandardMaterial({color:0xffffff, roughness:.2, transparent:true, opacity:.5});
+  for(const s of [-1,1]){ const r=new THREE.Mesh(new THREE.BoxGeometry(.3,.8,TM.L),TM.railMat); r.position.set(TM.x+s*(TM.W/2+.15),TM.Y+.4,TM.z); g.add(r); }
+  const fr=new THREE.Mesh(new THREE.BoxGeometry(TM.W+.6,.8,.3),TM.railMat); fr.position.set(TM.x,TM.Y+.4,TM.z+TM.L/2+.15); g.add(fr);
+  // nubes abajo, para que se vea que flota
+  for(let i=0;i<9;i++){ const cl=new THREE.Mesh(sphereG,cloudMat); cl.scale.set(3.4+(i%3)*.8,1.3,3.2); cl.position.set(TM.x+(i%2?-4.5:4.5)+((i*7)%5-2)*.5,TM.Y-1.6-(i%3)*.45,TM.z+(i-4)*3.6); g.add(cl); }
+  // letrero arriba del frente
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(7,1.6), new THREE.MeshStandardMaterial({map:textTex(['¡No te caigas!'],512,118,'#fff3d6','#7a2f6e','#ff9ad5'), roughness:.8, side:THREE.DoubleSide}));
+  sg.position.set(TM.x,TM.Y+4.2,TM.z+TM.L/2+1.2); sg.rotation.y=Math.PI; g.add(sg);
+  for(const s of [-1,1]){ const p=new THREE.Mesh(new THREE.CylinderGeometry(.1,.1,4.2,8),FM('#fbf3e4')); p.position.set(TM.x+s*3.3,TM.Y+2.1,TM.z+TM.L/2+1.2); g.add(p); }
+  scene.add(g); g.traverse(o=>{ if(o.isMesh) o.userData.noBatch=true; }); TM.grp=g;
+  // muros: cajas con degradado de abajo hacia arriba; huecos: cuadros oscuros con orilla brillante
+  const wg=new THREE.BoxGeometry(1,1,1), col=[]; const P=wg.attributes.position; for(let i=0;i<P.count;i++){ const k=P.getY(i)>0?1:.45; col.push(k,k,k); } wg.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+  TM.walls=new THREE.InstancedMesh(wg,new THREE.MeshStandardMaterial({vertexColors:true, roughness:.35}),24); TM.walls.castShadow=true;
+  for(let i=0;i<24;i++) TM.walls.setColorAt(i,new THREE.Color(1,1,1)); TM.walls.count=0;   // (el color por pieza se crea antes de dejarlo en 0)
+  TM.holes=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial({color:0x0b0c1e}),16); TM.holes.count=0;
+  TM.hEdge=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial({color:0xffffff}),16); TM.hEdge.count=0;
+  for(const m of [TM.walls,TM.holes,TM.hEdge]){ m.userData.noBatch=true; m.frustumCulled=false; scene.add(m); } }
+// el hueco [w0,w1] recortado a la banda
+const tmClipW=(w,l)=>[Math.max(-TM.L/2,w-l/2), Math.min(TM.L/2,w+l/2)];
+// ¿estás parado sobre la banda (y no sobre un hueco)?
+function tmGround(x,z,y){ const [u,w]=tmL(x,z); if(Math.abs(u)>TM.W/2+.1 || Math.abs(w)>TM.L/2+.1 || y<TM.Y-.25 || y>TM.Y+6) return null;
+  if(TM.on) for(const [o,ow] of tmActive()){ if(o.k!=='h') continue; const [a,b]=tmClipW(ow,o.l); if(w>a && w<b && Math.abs(u-o.u)<o.w/2) return null; }
+  return TM.Y; }
+// cada cuadro (para todos, también para quien mira desde abajo): tiempo, banda que avanza, colores y obstáculos
+function tmUpdate(dt){ const G=AR.G[6]; const on=!!(G && G.ph===3 && G.sd);
+  if(on && TM.seed!==G.sd){ TM.seed=G.sd; TM.obs=tmObsList(G.sd); }
+  TM.on=on; TM.te = on ? Math.max(0,(TM_DUR-G.ms)/1000) : 0;
+  const v=on?tmSpeed(TM.te):.8; TM.beltTex.offset.y-=v*dt/8; TM.clk+=dt*(on?1+v/3:.4);
+  const hue=TM.hue=(.92+TM.clk/140)%1, C=new THREE.Color(), A=TM.top.geometry.attributes.color, Pp=TM.top.geometry.attributes.position;
+  for(let i=0;i<A.count;i++){ const k=Pp.getX(i)/TM.W+.5; tmLin(C.setHSL((hue+k*.28)%1,.85,.74)); A.setXYZ(i,C.r,C.g,C.b); } A.needsUpdate=true;
+  tmLin(TM.railMat.color.setHSL((hue+.5)%1,.7,.8));
+  const o3=new THREE.Object3D(); let nw=0, nh=0;
+  if(on) for(const [o,w] of tmActive()){
+    if(o.k==='m'){ if(w>TM.L/2 || w<-TM.L/2) continue; const rise=Math.min(1,(TM.L/2-w)/1.6);   // sale de la banda poco a poco, por el frente
+      const cuts=[-TM.W/2, ...o.ops.flatMap(c=>[c-o.ow/2, c+o.ow/2]), TM.W/2];
+      for(let i=0;i<cuts.length;i+=2){ const a=Math.max(-TM.W/2,cuts[i]), b=Math.min(TM.W/2,cuts[i+1]); if(b-a<.2 || nw>=24) continue;
+        const [x,z]=tmW((a+b)/2,w), h=2.5*rise; o3.position.set(x,TM.Y+h/2,z); o3.scale.set(b-a,Math.max(.01,h),.7); o3.updateMatrix(); TM.walls.setMatrixAt(nw,o3.matrix);
+        TM.walls.setColorAt(nw,tmLin(C.setHSL((hue+.33+(o.s*.037)%.34)%1,.85,.6))); nw++; } }
+    else if(nh<16){ const [a,b]=tmClipW(w,o.l); if(b-a<.05) continue; const [x,z]=tmW(o.u,(a+b)/2);
+      o3.position.set(x,TM.Y+.02,z); o3.scale.set(o.w,.05,b-a); o3.updateMatrix(); TM.holes.setMatrixAt(nh,o3.matrix);
+      o3.position.y=TM.Y+.008; o3.scale.set(o.w+.3,.03,Math.min(b-a+.3,TM.L)); o3.updateMatrix(); TM.hEdge.setMatrixAt(nh,o3.matrix); nh++; } }
+  TM.walls.count=nw; TM.holes.count=nh; TM.hEdge.count=nh;
+  TM.walls.instanceMatrix.needsUpdate=TM.holes.instanceMatrix.needsUpdate=TM.hEdge.instanceMatrix.needsUpdate=true; if(TM.walls.instanceColor) TM.walls.instanceColor.needsUpdate=true;
+  tmLin(TM.hEdge.material.color.setHSL((hue+.5)%1,.9,.75)); }
+// jugar: la banda te lleva hacia atrás; los barandales y los muros te detienen; si caes, quedas fuera
+const tmMine=()=>AR.me.a===6 && AR.me.st===2 && AR.G[6].ph>=1 && AR.G[6].ph<=3;
+function tmPlay(dt,G){ const P=player.pos; if(!TM.on) return; const [u,w]=tmL(P.x,P.z);
+  if(player.grounded && Math.abs(u)<TM.W/2+.2 && Math.abs(w)<TM.L/2+.2 && Math.abs(P.y-TM.Y)<.3) P.z-=tmSpeed(TM.te)*dt;   // la banda corre hacia atrás
+  tmRails(P);
+  for(const [o,ow] of tmActive()){ if(o.k!=='m' || ow>TM.L/2-.3 || ow<-TM.L/2) continue; const [uu,ww]=tmL(P.x,P.z); if(Math.abs(ww-ow)>.77 || P.y>TM.Y+2.4 || P.y<TM.Y-.6) continue;
+    if(o.ops.some(c=>Math.abs(uu-c)<o.ow/2-.42)) continue; P.z=TM.z+ow+(ww<ow?-.77:.77); }   // te empuja (a menos que pases por la abertura)
+  if(P.y<TM.Y-5) arOut(6,'¡Te caíste de la banda!'); }
+// barandales a los lados y al frente (para todos)
+function tmRails(P){ const [u,w]=tmL(P.x,P.z); if(P.y<TM.Y-.5 || P.y>TM.Y+3 || Math.abs(w)>TM.L/2+.6 || Math.abs(u)>TM.W/2+.8) return;
+  if(Math.abs(u)>TM.W/2-.42) P.x=TM.x+Math.sign(u)*(TM.W/2-.42); if(w>TM.L/2-.42) P.z=TM.z+TM.L/2-.42; }
 // ---------------- placas para unirse (en la playa) y letreros ----------------
 (function buildPlates(){ AR_SPOTS.forEach((A,i)=>{ const [x,z]=A.plate, h=terrainH(x,z);
   const m=padMesh(scene,x,z,.9); m.position.y=h+.04;
-  const sg=new THREE.Mesh(new THREE.PlaneGeometry(3.4,1.15), new THREE.MeshStandardMaterial({map:textTex([A.name, i===1?'Pásala antes de que explote':i===3?'¡El más rápido gana!':i===4?'¡Encuentra la salida!':i===5?'¡Revienta sus globos!':'¡El último gana!'],512,174,'#fff3d6','#7a2b2b','#ffd34d'), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(3.4,1.15), new THREE.MeshStandardMaterial({map:textTex([A.name, i===1?'Pásala antes de que explote':i===3?'¡El más rápido gana!':i===4?'¡Encuentra la salida!':i===5?'¡Revienta sus globos!':i===6?'¡No te caigas!':'¡El último gana!'],512,174,'#fff3d6','#7a2b2b','#ffd34d'), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
   const yaw=Math.atan2(A.u[0],A.u[1]); const sp=[x+A.u[0]*1.6, z+A.u[1]*1.6]; sg.position.set(sp[0],h+2.6,sp[1]); sg.rotation.y=yaw+Math.PI; scene.add(sg); fairGlow.push(sg.material); const sb=sg.clone(); sb.rotation.y=yaw; sb.position.addScaledVector(new THREE.Vector3(A.u[0],0,A.u[1]),.02); scene.add(sb);
   [-1,1].forEach(s=>{ const p=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,2.6,8),new THREE.MeshStandardMaterial({color:'#fbf3e4'})); p.position.set(sp[0]+A.v[0]*s*1.6,h+1.3,sp[1]+A.v[1]*s*1.6); scene.add(p); obstacles.push({x:p.position.x,z:p.position.z,r:.12,top:h+2.6,walk:false}); }); }); })();
 
@@ -11429,7 +11516,7 @@ function arLead(a,dt){ const G=AR.G[a], ms=dt*1000;
     else G.ms=-1; return; }
   G.ms-=ms;
   if(G.ph===1 && G.ms<=0){ G.ph=2; G.ms=AR_COUNT; }
-  else if(G.ph===2 && G.ms<=0){ G.ph=3; G.ms=[600000,240000,150000,300000,300000,180000][a]; G.pt=0; }
+  else if(G.ph===2 && G.ms<=0){ G.ph=3; G.ms=[600000,240000,150000,300000,300000,180000,TM_DUR][a]; G.pt=0; }
   else if(G.ph===3){
     G.pt=(G.pt||0)+ms; G.fin=G.fin||[]; G.ft=G.ft||{};
     for(const u of G.pl){ if(G.fin.includes(u)) continue; const st=arStatus(a,u);
@@ -11477,6 +11564,7 @@ function arStartSpot(a,n,N){ const A=AR_SPOTS[a], ang=n/N*Math.PI*2+.3;
   if(a===1){ const r=8, w=arW(A,Math.cos(ang)*r,Math.sin(ang)*r,0); w.y=terrainH(w.x,w.z)+.05; return [w,ang]; }
   if(a===3){ const w=rcW(3+Math.floor(n/4)*2.6, -4.5+(n%4)*3, RC.Y); return [w,ang]; }
   if(a===5){ const w=new THREE.Vector3(CHOC.x+Math.cos(ang)*12, CHOC.floor, CHOC.z+Math.sin(ang)*12); return [w,ang]; }
+  if(a===6){ const w=new THREE.Vector3(TM.x-5.5+(n%6)*2.2, TM.Y, TM.z+5-Math.floor(n/6)*2.4); return [w,0]; }
   if(a===4){ const r=1+(n%3)*.9, w=new THREE.Vector3(MZ.x+Math.cos(ang)*r, MZ.h+.05, MZ.z+Math.sin(ang)*r); return [w,ang]; }
   const r=7, w=arW(A,Math.cos(ang)*r,Math.sin(ang)*r,BOLA.top); return [w,ang]; }
 function arEnter(a,G){ const me=AR.me, n=G.pl.indexOf(myUid), [w,ang]=arStartSpot(a,n,G.pl.length), A=AR_SPOTS[a];
@@ -11485,7 +11573,7 @@ function arEnter(a,G){ const me=AR.me, n=G.pl.indexOf(myUid), [w,ang]=arStartSpo
   if(a===0){ platReset(G.gid); }
   if(a===3){ RC.t0=0; RC.kv.set(0,0); me.finMs=0; }
   if(a===4){ mzBuild(G.sd); MZ.t0=0; me.finMs=0; }
-  arWarp(w.x,w.y,w.z,face);
+  arWarp(w.x,w.y,w.z,a===6?0:face);
   if(a===5){ CHOC.v.set(0,0); CHOC.head=face; CHOC.cool=0; CHOC.req=null; CHOC.hitT.clear(); }
   if(a===2){ BOLA.v.set(0,0); BOLA.vy=0; BOLA.fall=false; BOLA.mine.visible=true; }
   try{ audio.teleport(); }catch(e){} }
@@ -11528,6 +11616,7 @@ function arenaUpdate(dt){
       if(a===1) papaPlay(dt,G);
       if(a===3) racePlay(dt,G);
       if(a===4) mazePlay(dt,G);
+      if(a===6) tmPlay(dt,G);
     }
     if(arBall()) ballPlay(dt,G);
     if(arCar()) carPlay(dt,G);
@@ -11539,6 +11628,7 @@ function arenaUpdate(dt){
   platWarn(dt);
   papaShow(dt);
   ccUpdate(dt);   // v161: los carritos y sus globos
+  tmUpdate(dt);   // v162: la banda, sus colores, huecos y muros
   renderArHud();
   // si hay juego activo mandamos presencia más seguido para que el tiempo y los pases vayan parejos
   arSendT-=dt; if(arSendT<=0 && (me.a>=0 || AR.lead.some(x=>x))){ arSendT=.2; sendPresence(false); }
@@ -11609,10 +11699,10 @@ function remoteArenaPose(r,t,dt){ const az=r.az; let b=remoteBalls.get(r);
   else if(b) b.visible=false;
   if(az && az[0]===1 && AR.G[1].h===uidOf(r) && AR.G[1].ph===3) pgPoseLimbs(r.obj,{armsUp:1},t,dt,r.walk||0);
   if(az && az[0]===5 && az[1]===2 && AR.G[5].ph>=1 && AR.G[5].ph<=3) carRiderPose(r.obj,t,dt); }
-function arenaGround(x,z,y){ if(!arenaReady) return null; { const cg=ccArenaGround(x,z,y); if(cg!==null) return cg; } const A=AR_SPOTS[0]; if(Math.abs(x-A.center[0])<40 && Math.abs(z-A.center[1])<40) return platGround(x,z,y); return raceGround(x,z,y); }
+function arenaGround(x,z,y){ if(!arenaReady) return null; { const tg=tmGround(x,z,y); if(tg!==null) return tg; } { const cg=ccArenaGround(x,z,y); if(cg!==null) return cg; } const A=AR_SPOTS[0]; if(Math.abs(x-A.center[0])<40 && Math.abs(z-A.center[1])<40) return platGround(x,z,y); return raceGround(x,z,y); }
 // cámara: al acomodarse, una vuelta por arriba de la arena
 function arenaCamera(dt){ const me=AR.me; if(me.a<0 || me.st!==2 || AR.G[me.a].ph!==1 || me.a===4) return false;   // v160: al laberinto no se le da la vuelta por arriba (se vería el camino)
-  const A=AR_SPOTS[me.a], k=1-Math.max(0,AR.G[me.a].ms)/AR_PLACE, ang=k*1.8+Math.atan2(A.u[0],A.u[1]), rad=me.a===0?48:28, hgt=(me.a===0?platTop(4):me.a===3?RC.Y:terrainH(A.center[0],A.center[1]))+(me.a===0?22:16);
+  const A=AR_SPOTS[me.a], k=1-Math.max(0,AR.G[me.a].ms)/AR_PLACE, ang=k*1.8+Math.atan2(A.u[0],A.u[1]), rad=me.a===0?48:28, hgt=(me.a===0?platTop(4):me.a===3?RC.Y:me.a===6?TM.Y:terrainH(A.center[0],A.center[1]))+(me.a===0?22:16);
   const c=me.a===3?rcW(8,0,0):arW(A,0,0,0), want=_pv.set(c.x+Math.sin(ang)*rad*(1-k*.6), hgt*(1-k*.35)+ (me.a===0?0:4*k), c.z+Math.cos(ang)*rad*(1-k*.6));
   camera.position.lerp(want,1-Math.exp(-dt*4)); camera.lookAt(player.pos.x*k+c.x*(1-k), (me.a===0?platTop(4):player.pos.y)+1, player.pos.z*k+c.z*(1-k)); plush.visible=true; return true; }
 // botón junto a cada placa
@@ -11637,6 +11727,7 @@ function renderArHud(){ const me=AR.me, el=arHudEl(); if(!el) return;
     if(me.a===1){ if(G.h===myUid) txt='¡Tienes la papa! Pásala: '+fmtMs(G.hms); else if(G.h){ const r=arRemote(G.h); txt='La tiene '+(r&&r.name||'alguien')+' · '+fmtMs(G.hms); } else txt='Nueva papa en un momento…'; }
     if(me.a===3||me.a===4){ const t0=me.a===4?MZ.t0:RC.t0, fin=(G.fin||[]).length, N=G.pl.length, el=t0?performance.now()-t0:0; const lw=me.a===4?' · salieron ':' · llegaron '; txt = me.st===4 ? (me.a===4?'¡Saliste! ':'¡Llegaste! ')+fmtRace(me.finMs)+lw+fin+'/'+N : fmtRace(Math.floor(el/100)*100)+lw+fin+'/'+N+' · quedan '+fmtMs(G.ms); }
     if(me.a===5) txt='Globos: '+ccBal(myUid)+' · quedan '+alive+' · '+fmtMs(G.ms);
+    if(me.a===6) txt='Velocidad '+tmSpeed(TM.te).toFixed(1)+' · quedan '+alive+' · '+fmtMs(G.ms);
     if(me.st===3) txt='Fuera · '+txt; }
   else if(G.ph===4) txt='Resultados';
   const key=A.name+'|'+txt; if(key===arHudKey) return; arHudKey=key; el.hidden=false; ui('arTitle').textContent=A.name; ui('arTxt').textContent=txt;
@@ -14959,6 +15050,7 @@ function update(dt,t){ myLabelUpdate();
 
     collideAircraft(player.pos);   // aviones y helicópteros también
     mzCollide(player.pos);   // v160: los setos del laberinto
+    tmRails(player.pos);   // v162: barandales de la banda
     if(player.pos.y<CAVE_TOP) caveCollide(player.pos);   // paredes de la mina
     // los coches son sólidos
     for(const c of cars){
