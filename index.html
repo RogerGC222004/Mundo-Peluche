@@ -653,7 +653,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       <dt><kbd>Deslizar</kbd></dt><dd>Mirar alrededor: desliza el dedo en la mitad derecha</dd>
       <dt><kbd>Saltar</kbd></dt><dd>Saltar · en el mar, subir</dd>
       <dt><kbd>Tirarse</kbd></dt><dd>Tirarse al suelo hacia adelante · en el mar, bajar</dd>
-      <dt><kbd>Saludar</kbd></dt><dd>Saludar a otros jugadores</dd>
+      <dt><kbd>Saludar</kbd></dt><dd>Saludar a otros jugadores (con el Chibi: sentarse en el piso)</dd>
       <dt><kbd>Botones de acción</kbd></dt><dd>Aparecen al acercarte a algo: abrir puertas, subir al coche, jugar, hablar…</dd>
       <dt><kbd>Acelerar</kbd> <kbd>Frenar</kbd></dt><dd>En el coche: avanzar y frenar (o reversa); la palanca gira · <kbd>Luces</kbd></dd>
       <dt><kbd>Acelerar</kbd> <kbd>Frenar</kbd></dt><dd>En el avión y el helicóptero: más potencia o subir, y menos potencia o bajar; la palanca dirige</dd>
@@ -669,7 +669,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       <dt><kbd>Ratón</kbd></dt><dd>Mirar alrededor (clic para fijar el cursor, o arrastra)</dd>
       <dt><kbd>V</kbd></dt><dd>Cambiar entre primera y tercera persona</dd>
       <dt><kbd>Q</kbd></dt><dd>Tirarse al suelo hacia adelante · en el mar, bajar</dd>
-      <dt><kbd>G</kbd></dt><dd>Saludar a otros jugadores</dd>
+      <dt><kbd>G</kbd></dt><dd>Saludar a otros jugadores (con el Chibi: sentarse en el piso)</dd>
       <dt><kbd>E</kbd> <kbd>R</kbd></dt><dd>Acciones: abrir o cerrar puertas, subir y bajar del coche</dd>
       <dt><kbd>W</kbd> <kbd>S</kbd></dt><dd>En el coche: acelerar y frenar (o reversa)</dd>
       <dt><kbd>A</kbd> <kbd>D</kbd></dt><dd>En el coche: girar · <kbd>H</kbd> claxon · <kbd>L</kbd> luces</dd>
@@ -1123,7 +1123,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='151';
+const GAME_VERSION='152';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -2758,7 +2758,7 @@ function stainStep(o,now,x,y,z,gY,grounded,flat,facing,stepped,side){
   else if(!flat){ o.sx=1e9; }
   return {feet:feetS, front:frontS};
 }
-function showStains(obj,st){ const S=obj.userData.stains; if(!S) return;
+function showStains(obj,st){ const S=obj.userData.stains; if(!S) return; if(obj.userData.av==='c' && st.front) st={feet:st.feet, front:false};
   S.feet.forEach(m=>{ if(m.visible!==st.feet) m.visible=st.feet; }); S.front.forEach(m=>{ if(m.visible!==st.front) m.visible=st.front; }); }
 const myStain=newStain();
 
@@ -3157,6 +3157,98 @@ function limb(mat, upLen, lowLen, r, rLow){
   return pivot;
 }
 const stainMat=new THREE.MeshStandardMaterial({color:0x4a2614, roughness:.3});   // chocolate en patitas y panza
+// ---------- v152: el Chibi, otro tipo de cuerpo ----------
+// Usa los MISMOS brazos y piernas del peluche (solo cambian de forma y tamaño), así le sirven todas las poses:
+// caminar, saltar, nadar, coches, juegos… La cabeza y el cuerpo van dentro de "body", así se aplastan igual al caer.
+const CH={HY:1.36, RX:.66, RY:.58, RZ:.57, sitDrop:.23, armRest:.72};
+const chSkinMats={};
+const chSkinMat=hex=>chSkinMats[hex]||(chSkinMats[hex]=new THREE.MeshStandardMaterial({color:new THREE.Color(hex).convertSRGBToLinear(), roughness:.92}));
+const chHideMat=new THREE.MeshBasicMaterial({visible:false});
+const CH_GEO={};
+function chGeos(){ if(CH_GEO.head) return CH_GEO;
+  const prof=[[0,0],[.27,.02],[.31,.15],[.29,.33],[.22,.46],[.1,.52],[0,.53]], c=new THREE.SplineCurve(prof.map(p=>new THREE.Vector2(p[0],p[1]))), P=c.getPoints(24); P[0].x=0; P[P.length-1].x=0;
+  CH_GEO.torso=new THREE.LatheGeometry(P,24);
+  CH_GEO.head=new THREE.SphereGeometry(1,28,20);
+  CH_GEO.face=new THREE.SphereGeometry(1,24,16,Math.PI/2-1.05,2.1,1.12,1.08);   // pedazo del frente de la cabeza, para los ojos
+  return CH_GEO; }
+// --- ojos del Chibi: se dibujan sobre una calcomanía curva (frente en el centro; ojos en x=512±178, y=300) ---
+const CH_EYE_TEX={}, CH_EYE_MAT={};
+function chEyeDraw(g,w,h,st){ const L=[-1,1], cy=300, X=s=>w/2+s*178;
+  const anime=(s,c,pup)=>{ const cx=X(s), ex=82, ey=96;
+    g.fillStyle='#ffffff'; g.beginPath(); g.ellipse(cx,cy,ex,ey*.86,0,0,Math.PI*2); g.fill();
+    const ir=g.createLinearGradient(0,cy-80,0,cy+80); ir.addColorStop(0,c[0]); ir.addColorStop(.55,c[1]); ir.addColorStop(1,c[2]); g.fillStyle=ir; g.beginPath(); g.ellipse(cx+s*6,cy+6,60,74,0,0,Math.PI*2); g.fill();
+    g.strokeStyle=c[0]; g.lineWidth=5; g.stroke();
+    if(pup!==false){ g.fillStyle='#160904'; g.beginPath(); g.ellipse(cx+s*6,cy+4,24,30,0,0,Math.PI*2); g.fill(); }
+    g.fillStyle='#fff'; g.beginPath(); g.ellipse(cx-s*16,cy-26,15,17,0,0,Math.PI*2); g.fill(); g.beginPath(); g.ellipse(cx+s*24,cy+34,6,7,0,0,Math.PI*2); g.fill();
+    g.strokeStyle='#1b120c'; g.lineCap='round'; g.lineWidth=14; g.beginPath(); g.moveTo(cx-ex-4,cy-38); g.quadraticCurveTo(cx-10,cy-ey-14,cx+ex+6,cy-50); g.stroke();
+    g.lineWidth=9; g.beginPath(); g.moveTo(cx+s*(ex-4),cy-60); g.lineTo(cx+s*(ex+22),cy-84); g.stroke();
+    g.lineWidth=5; g.beginPath(); g.moveTo(cx-ex+10,cy+ey*.86-4); g.quadraticCurveTo(cx,cy+ey*.86+10,cx+ex-10,cy+ey*.86-4); g.stroke(); };
+  const star=(x,y,r,col)=>{ g.fillStyle=col; g.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*.45:r; g.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } g.closePath(); g.fill(); };
+  const heart=(x,y,r,col)=>{ g.fillStyle=col; g.beginPath(); g.moveTo(x,y+r*.9); g.bezierCurveTo(x-r*1.5,y-r*.1,x-r*.7,y-r*1.25,x,y-r*.45); g.bezierCurveTo(x+r*.7,y-r*1.25,x+r*1.5,y-r*.1,x,y+r*.9); g.fill(); };
+  if(st==='cafe') L.forEach(s=>anime(s,['#5a240a','#b85a1c','#e59a3c']));
+  else if(st==='azul') L.forEach(s=>anime(s,['#0d2560','#2f6fd0','#86c6ff']));
+  else if(st==='verde') L.forEach(s=>anime(s,['#0b4122','#2f9a55','#93e3a4']));
+  else if(st==='boton') L.forEach(s=>{ const cx=X(s); g.fillStyle='#121014'; g.beginPath(); g.arc(cx,cy,56,0,Math.PI*2); g.fill(); g.fillStyle='#fff'; g.beginPath(); g.ellipse(cx-s*14-6,cy-20,15,15,0,0,Math.PI*2); g.fill(); g.beginPath(); g.arc(cx+18,cy+22,6,0,Math.PI*2); g.fill(); });
+  else if(st==='puntos') L.forEach(s=>{ const cx=X(s)-s*20; g.fillStyle='#1a1210'; g.beginPath(); g.ellipse(cx,cy+10,22,30,0,0,Math.PI*2); g.fill(); g.fillStyle='#fff'; g.beginPath(); g.arc(cx-6,cy,6,0,Math.PI*2); g.fill(); });
+  else if(st==='felices') L.forEach(s=>{ const cx=X(s); g.strokeStyle='#1b120c'; g.lineCap='round'; g.lineWidth=16; g.beginPath(); g.moveTo(cx-62,cy+24); g.quadraticCurveTo(cx,cy-64,cx+62,cy+24); g.stroke(); });
+  else if(st==='dormilon') L.forEach(s=>{ const cx=X(s), ex=78; g.save(); g.beginPath(); g.rect(cx-ex-10,cy-6,ex*2+20,140); g.clip(); anime(s,['#3d2a5c','#7a62b8','#c3b4f0']); g.restore();
+      g.strokeStyle='#1b120c'; g.lineCap='round'; g.lineWidth=13; g.beginPath(); g.moveTo(cx-ex-6,cy-4); g.quadraticCurveTo(cx,cy-16,cx+ex+6,cy-4); g.stroke(); });
+  else if(st==='estrellas') L.forEach(s=>{ anime(s,['#7a3a00','#f0a020','#ffe27a'],false); star(X(s)+s*6,cy+6,34,'#fff6c9'); star(X(s)+s*6,cy+6,20,'#e07000'); });
+  else if(st==='corazones') L.forEach(s=>{ anime(s,['#7a0f3a','#e0407a','#ffa6c8'],false); heart(X(s)+s*6,cy+10,34,'#ffffff'); heart(X(s)+s*6,cy+10,22,'#c2185b'); });
+  else if(st==='kawaii') L.forEach(s=>{ const cx=X(s); anime(s,['#2a0f4a','#6a2fb0','#c69cf5']); g.fillStyle='#fff';
+      for(const [dx,dy,r] of [[-s*20,-14,20],[s*26,26,11],[-s*30,40,7]]){ g.beginPath(); g.arc(cx+dx,cy+dy,r,0,Math.PI*2); g.fill(); } star(cx+s*28,cy-30,12,'#ffffff'); }); }
+function chEyeTex(st){ if(CH_EYE_TEX[st]) return CH_EYE_TEX[st];
+  const c=document.createElement('canvas'); c.width=1024; c.height=512; const g=c.getContext('2d'); chEyeDraw(g,1024,512,st);
+  const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; t.userData={canvas:c}; return CH_EYE_TEX[st]=t; }
+function chEyeMat(st){ return CH_EYE_MAT[st]||(CH_EYE_MAT[st]=new THREE.MeshStandardMaterial({map:chEyeTex(st), transparent:true, alphaTest:.05, roughness:.85, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-2})); }
+// miniatura para la tienda (solo la franja de los ojos sobre un tono de piel)
+function chEyeThumb(st){ const t=chEyeTex(st), c=document.createElement('canvas'); c.width=c.height=120; const g=c.getContext('2d');
+  g.fillStyle='#f3d0b6'; g.fillRect(0,0,120,120); g.drawImage(t.userData.canvas,236,170,552,276,4,32,112,56); return c; }
+// dibujito de cada cuerpo para la pestaña Cuerpo
+function avThumb(k){ const c=document.createElement('canvas'); c.width=c.height=120; const g=c.getContext('2d'), E=(x,y,a,b,col)=>{ g.fillStyle=col; g.beginPath(); g.ellipse(x,y,a,b,0,0,Math.PI*2); g.fill(); };
+  if(k==='frijol'){ E(60,66,30,44,'#a6d24f'); E(52,50,3.5,6,'#222'); E(68,50,3.5,6,'#222'); E(40,102,9,6,'#a6d24f'); E(80,102,9,6,'#a6d24f'); }
+  else if(k==='chibi'){ E(60,96,17,15,'#efc2a2'); E(51,109,7,6,'#efc2a2'); E(69,109,7,6,'#efc2a2'); E(60,52,36,32,'#efc2a2'); E(24,54,5,8,'#e6b292'); E(96,54,5,8,'#e6b292'); }
+  else { E(60,38,22,22,'#e9d3b4'); g.fillStyle='#e9d3b4'; g.fillRect(50,58,20,34); g.fillRect(50,90,8,22); g.fillRect(62,90,8,22); g.fillRect(40,60,7,28); g.fillRect(73,60,7,28); E(60,43,3,2.5,'#d8b896'); }
+  return c; }
+// guarda la forma del Frijolito la primera vez, para poder regresar a ella
+function avSaveFrijol(u){ if(u.fj) return;
+  const lim=p=>({x:p.position.x, y:p.position.y, base:p.userData.base?p.userData.base.clone():null, up:p.children.find(m=>m.isMesh), upGeo:null, upY:0, jy:p.userData.joint.position.y, low:p.userData.low, lowGeo:p.userData.low.geometry, lowY:p.userData.low.position.y});
+  u.fj={arms:u.arms.map(lim), legs:u.legs.map(lim)};
+  for(const L of [...u.fj.arms,...u.fj.legs]){ L.upGeo=L.up.geometry; L.upY=L.up.position.y; }
+  u.fj.legs.forEach((L,i)=>{ const f=u.legs[i].userData.foot; if(f){ L.foot=f; L.fs=f.scale.clone(); L.fp=f.position.clone(); } }); }
+function chibiParts(u){ if(u.ch) return u.ch; const G=chGeos(), g=new THREE.Group(); g.position.y=-BODY_Y; g.scale.z=1/.78;   // coordenadas como si "body" estuviera en el suelo
+  const sk=chSkinMat('#efc2a2'), M=(geo,x,y,z,sx,sy,sz)=>{ const m=new THREE.Mesh(geo,sk); m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.castShadow=true; m.receiveShadow=true; g.add(m); return m; };
+  const torso=M(G.torso,0,.34,0,1,1,.85), head=M(G.head,0,CH.HY,0,CH.RX,CH.RY,CH.RZ), ears=[-1,1].map(s=>M(sphereG,s*CH.RX*.99,CH.HY-.06,-.02,.08,.13,.07));
+  const face=new THREE.Mesh(G.face,chEyeMat('cafe')); face.position.set(0,CH.HY,0); face.scale.set(CH.RX*1.012,CH.RY*1.012,CH.RZ*1.02); face.visible=false; g.add(face);
+  u.body.add(g); return u.ch={g, skinned:[torso,head,...ears], face}; }
+// cambia el peluche al cuerpo que trae puesto (eq.body), con su piel y sus ojos
+function avatarShape(o,eq){ const u=o.userData; if(!u.arms || !u.legs || !u.body) return;
+  const av=eq && eq.body==='av_chibi' ? 'c' : 'f';
+  const skin=((eq && SHOP_BY[eq.cskin]) || SHOP_BY.cp_durazno).c, eye=eq && SHOP_BY[eq.ceyes] ? SHOP_BY[eq.ceyes].eye : null;
+  if(av===u.av && skin===u.avSkin && eye===u.avEye) return;
+  avSaveFrijol(u); const F=u.fj, tag=u.legs.map(l=>l.children.find(m=>m.isMesh && m.material===tagMat)).find(Boolean);
+  if(av==='c'){ const C=chibiParts(u), sk=chSkinMat(skin);
+    C.g.visible=true; C.skinned.forEach(m=>m.material=sk); C.face.visible=!!eye; if(eye) C.face.material=chEyeMat(eye);
+    u.body.material=chHideMat; (u.eyes||[]).forEach(e=>e.visible=false); if(tag) tag.visible=false;
+    u.arms.forEach(a=>{ const s=a.userData.side, j=a.userData.joint, up=a.children.find(m=>m.isMesh);
+      up.geometry=capsuleGeo(.1,.15); up.position.y=-.075; up.material=sk; j.position.y=-.15; a.userData.low.geometry=capsuleGeo(.105,.17); a.userData.low.position.y=-.085; a.userData.low.material=sk;
+      a.userData.base.set(s*.24,.78,0); a.position.copy(a.userData.base); });
+    u.legs.forEach(l=>{ const s=l.userData.side, j=l.userData.joint, up=l.children.find(m=>m.isMesh && m.material!==tagMat), f=l.userData.foot;
+      l.position.set(s*.14,.4,0); up.geometry=capsuleGeo(.125,.13); up.position.y=-.065; up.material=sk; j.position.y=-.13; l.userData.low.geometry=capsuleGeo(.12,.13); l.userData.low.position.y=-.065; l.userData.low.material=sk;
+      if(f){ f.scale.set(.14,.11,.18); f.position.set(0,-.16,.04); f.material=sk; } });
+    u.armRest=CH.armRest; }
+  else { const pm=plushMatFor(u.colorIdx|0); if(u.ch) u.ch.g.visible=false;
+    u.body.material=pm; (u.eyes||[]).forEach(e=>e.visible=true); if(tag) tag.visible=true;
+    u.arms.forEach((a,i)=>{ const L=F.arms[i]; L.up.geometry=L.upGeo; L.up.position.y=L.upY; L.up.material=pm; a.userData.joint.position.y=L.jy; L.low.geometry=L.lowGeo; L.low.position.y=L.lowY; L.low.material=pm;
+      a.userData.base.copy(L.base); a.position.copy(L.base); });
+    u.legs.forEach((l,i)=>{ const L=F.legs[i]; l.position.set(L.x,L.y,0); L.up.geometry=L.upGeo; L.up.position.y=L.upY; L.up.material=pm; l.userData.joint.position.y=L.jy; L.low.geometry=L.lowGeo; L.low.position.y=L.lowY; L.low.material=pm;
+      if(L.foot){ L.foot.scale.copy(L.fs); L.foot.position.copy(L.fp); L.foot.material=pm; } });
+    u.armRest=0; }
+  u.av=av; u.avSkin=skin; u.avEye=eye; }
+// Chibi sentado en el piso (k: 0 de pie … 1 sentado): piernas estiradas al frente y manos apoyadas atrás
+function chibiSitPose(o,k){ if(k<.002 || o.userData.av!=='c') return; const {arms,legs}=o.userData;
+  legs.forEach(l=>{ const j=l.userData.joint; l.rotation.x+=(-1.45-l.rotation.x)*k; j.rotation.x+=(.06-j.rotation.x)*k; });
+  arms.forEach(a=>{ const sd=a.userData.side, j=a.userData.joint; a.rotation.z+=(sd*.42-a.rotation.z)*k; a.rotation.x+=(.5-a.rotation.x)*k; j.rotation.x+=(0-j.rotation.x)*k; j.rotation.z+=(0-j.rotation.z)*k; }); }
 function makePlush(colorIdx){
   const stains={feet:[], front:[]};
   const plushMat=plushMatFor(colorIdx);
@@ -3190,7 +3282,7 @@ function makePlush(colorIdx){
     const pivot=limb(plushMat, LEG_UP, LEG_LOW, LEG_R, LEG_R*.95);
     pivot.position.set(s*.2,HIP_Y,0); pivot.userData.side=s;
     const foot=new THREE.Mesh(sphereG,plushMat); foot.scale.set(.125,.085,.17); foot.position.set(0,-LEG_LOW-.03,.045);
-    pivot.userData.joint.add(foot);
+    pivot.userData.joint.add(foot); pivot.userData.foot=foot;
     { const fs=new THREE.Mesh(sphereG,stainMat); fs.scale.set(1.07,.62,1.07); fs.position.set(0,-.42,.06); fs.visible=false; foot.add(fs); stains.feet.push(fs); }
     root.add(pivot); legs.push(pivot);
     if(s===1){ const tag=new THREE.Mesh(new THREE.PlaneGeometry(.1,.15),tagMat); tag.position.set(.125,-LEG_UP*.55,0); tag.rotation.y=Math.PI/2+.2; pivot.add(tag); }
@@ -3243,7 +3335,7 @@ function startDive(){
 // Brazos y piernas: caminar, saltar, saludar, nadar y estirarse al tirarse (dk: 0 de pie … 1 tirado).
 // Cada extremidad tiene hombro/cadera y codo/rodilla; los codos y rodillas se doblan solos.
 function poseLimbs(obj,t,dt,sw,air,dk,waving,swimT,walkPh=0,mv=0,holdMap=false,sit=0,drive=false){
-  const {arms,legs}=obj.userData;
+  const {arms,legs}=obj.userData; if(obj.userData.av==='c') waving=false;
   const k=Math.min(1,dt*12), ease=(o,prop,v)=>{ o[prop]+=(v-o[prop])*k; };
   if(swimT!==null && swimT!==undefined){
     // Nado de perrito: brazos que reman doblando el codo y piernas que patalean
@@ -3285,7 +3377,7 @@ function poseLimbs(obj,t,dt,sw,air,dk,waving,swimT,walkPh=0,mv=0,holdMap=false,s
       a.rotation.z=2.3+Math.sin(t*6)*.18; a.rotation.x=0;
       j.rotation.z=sd*(.55+Math.sin(t*6+.6)*.45); ease(j.rotation,'x',0); return;   // saluda moviendo el antebrazo
     }
-    const base=(air ? sd*2.2 : sd*1.05) + sd*1.6*dk + sd*Math.sin(t*2)*.04*(1-dk);
+    const base=(air ? sd*2.2 : sd*(obj.userData.armRest||1.05)) + sd*1.6*dk + sd*Math.sin(t*2)*.04*(1-dk);
     a.rotation.z += (base - a.rotation.z)*Math.min(1, dt*(dk>0?16:10));
     a.rotation.x = (sd===1?-sw:sw)*.5*(1-dk);
     const elbowX = air ? -.25 : -(.22 + .5*mv)*(1-dk);
@@ -3959,7 +4051,7 @@ function sendPresence(force){
     p: [r2(player.pos.x), r2(player.pos.y), r2(player.pos.z)],
     f: r2(Math.atan2(Math.sin(player.facing), Math.cos(player.facing))),
     m: playing ? r2(Math.min(1, player.vel.length()/4.2)) : 0,
-    pub: mp.pub?1:0, gv: GAME_VERSION, a: playing && !player.grounded && !player.swim, w: mp.waveStamp, d: r2(player.diveAngle), s: player.swim, h: heldItem()||'',
+    pub: mp.pub?1:0, gv: GAME_VERSION, a: playing && !player.grounded && !player.swim, w: mp.waveStamp, sf: player.sitF?1:undefined, d: r2(player.diveAngle), s: player.swim, h: heldItem()||'',
     vc: player.car && player.car.kind!=='exit' ? [player.car.i, player.car.seat] : null,
     dv: iDrive() ? (c=>[c.i, r2(c.x), r2(c.z), Math.round(c.h*1000)/1000, r2(c.v), r2(c.steer), c.braking?1:0])(cars[player.car.i]) : null,
     lt: cars.map(c=>[c.lights?1:0, c.lightT]),
@@ -4054,6 +4146,7 @@ function onPeers({peers}){
     r.diveTarget=nd; r.held = pr.h==='map' ? 'map' : pr.h==='bow' ? 'bow' : pr.h==='lamp' ? 'lamp' : null; parseMine(r,pr); parseBow(r,pr); parseMg(r,pr); parseArena(r,pr); parseSpace(r,pr);
     const w=clampN(pr.w,0,Infinity,0);
     if(r.w!==undefined && w!==r.w){ r.waveUntil=clock.elapsedTime+1.6; audio.wave(); }
+    r.sf=pr.sf===1;
     r.w=w;
     // ¿tiene la misma versión del juego?
     const gv=typeof pr.gv==='string' ? pr.gv.slice(0,8) : '';
@@ -4133,12 +4226,14 @@ function updateRemotes(dt,t){
     r.swimT=(r.swimT||0)+dt*(2.5+r.moving*5);
     const rHold = r.held==='map' && !r.swim && r.dive<.15; r.heldMap.visible=rHold;
     poseLimbs(r.obj, t, dt, sw, r.air && dk<.05, dk, t<r.waveUntil, r.swim?r.swimT:null, r.walk, mv, rHold);
+    r.sitK=(r.sitK||0)+(((r.sf && r.obj.userData.av==='c')?1:0)-(r.sitK||0))*Math.min(1,dt*7); chibiSitPose(r.obj,r.sitK);
     if(r.pushUntil && performance.now()/1000<r.pushUntil) pgPoseLimbs(r.obj,{push:1},t,dt,r.walk);
     const bob=r.swim?Math.sin(t*2)*.05:Math.abs(Math.sin(r.walk))*.06*mv;
     if(r.swim){ const o=swimOffset(r.dive, r.obj.rotation.y); r.obj.position.set(r.pos.x+o.x, r.pos.y+bob+o.y, r.pos.z+o.z); }
     else r.obj.position.set(r.pos.x, r.pos.y+bob+diveLift(r.dive), r.pos.z);
     r.obj.rotation.x=r.dive;
     r.obj.rotation.z=Math.sin(r.walk)*.08*mv;
+    if(r.sitK>.002 && r.obj.userData.av==='c') r.obj.position.y-=CH.sitDrop*r.sitK;
     { const now=performance.now()/1000, ph=Math.floor(r.walk/Math.PI), stepped=ph!==r.stepPh && r.moving>.2 && !r.air && !r.swim; r.stepPh=ph;
       r.stain=r.stain||newStain();
       const st=stainStep(r.stain,now,r.pos.x,r.pos.y,r.pos.z,groundAt(r.pos.x,r.pos.z,r.pos.y+.3),!r.air && !r.swim,r.dive>1.15 && !r.swim,r.obj.rotation.y,stepped,ph&1);
@@ -4176,7 +4271,13 @@ function updateRoomUI(){
   const txt=`${mp.pub?'Sala pública':'Sala privada'} · Código ${mp.code} · Versión ${GAME_VERSION} · Conexión: ${mp.connected?'sí':'no'} · Datos ${mp.presBytes||0} B · Con el juego abierto: ${all} · En tu sala: ${total} · Se ven: ${mp.remotes.size+1}${mp.lastErr?' · Error: '+mp.lastErr:''}`;
   if(d.textContent!==txt) d.textContent=txt;
 }
+function chibiSitToggle(){ if(state!=='play') return;
+  if(player.sitF) player.sitF=false;
+  else { if(!player.grounded || player.swim || player.dive || player.car || player.ac || player.pg || player.mg || player.busy || player.balloon) return; player.vel.set(0,0,0); player.sitF=true; try{ audio.land(.35); }catch(e){} }
+  try{ sendPresence(true); }catch(e){} }
+function waveLabel(){ const b=ui('tWave'), t=plush.userData.av==='c'?'Sentarse':'Saludar'; if(b && b.dataset.lbl!==t){ b.dataset.lbl=t; centerText(b,t); } }
 function wave(){
+  if(plush.userData.av==='c'){ chibiSitToggle(); return; }
   player.waveUntil=clock.elapsedTime+1.6; audio.wave();
   mp.waveStamp=Date.now(); sendPresence(true);
 }
@@ -7518,8 +7619,9 @@ function updateCoinFx(dt){
 // ======================================================================================
 // Lo que compras se guarda en este navegador. Lo que traes puesto viaja en tu presencia ("ou"),
 // así todos en la sala ven tu peluche vestido igual que tú.
-const SLOT_OF={sudaderas:'top', camisas:'top', sueteres:'top', gorras:'hat', guantes:'gloves', calcetines:'socks', zapatos:'shoes', gafas:'glasses', colores:'skin', texturas:'tex'};
+const SLOT_OF={cuerpo:'body', cpiel:'cskin', cojos:'ceyes', sudaderas:'top', camisas:'top', sueteres:'top', gorras:'hat', guantes:'gloves', calcetines:'socks', zapatos:'shoes', gafas:'glasses', colores:'skin', texturas:'tex'};
 const SHOP_CATS=[
+  {id:'cuerpo', name:'Cuerpo', ic:'🧸'}, {id:'cpiel', name:'Tono de piel', ic:'🎨', av:'c'}, {id:'cojos', name:'Ojos', ic:'👀', av:'c'},
   {id:'mascotas', name:'Mascotas', ic:'🐾'}, {id:'sudaderas', name:'Sudaderas', ic:'🧥'}, {id:'camisas', name:'Camisas', ic:'👕'}, {id:'sueteres', name:'Suéteres', ic:'🧶'},
   {id:'gorras', name:'Gorras', ic:'🧢'}, {id:'guantes', name:'Guantes', ic:'🧤'}, {id:'calcetines', name:'Calcetines', ic:'🧦'},
   {id:'zapatos', name:'Zapatos', ic:'👟'}, {id:'gafas', name:'Gafas', ic:'🕶️'}, {id:'colores', name:'Colores especiales', ic:'🌈'}, {id:'texturas', name:'Texturas', ic:'✨'}];
@@ -7794,13 +7896,22 @@ I('guantes','gud_algodon','Guantes de algodón de azúcar',7,{k:'mitten',c:'#ffb
 I('guantes','gud_pulseras','Pulseras de dulce',7,{k:'beads',c:'#ff5fa2',dulce:1});
 I('calcetines','cad_caramelo','Calcetines de caramelo',6,{k:'sock',c:'#e5342b',c2:'#ffffff',pat:'rayas',dulce:1});
 I('gorras','god_premio','Corona de caramelo dorada',0,{k:'crown',c:'#ffd23f',c2:'#ff5fa2',dulce:2,desc:'Premio por encontrar los 10 dulces escondidos'});   // solo se gana
-const SHOP_BY={}; SHOP.forEach(it=>{ it.slot=SLOT_OF[it.cat]; if(it.price>0) it.price=Math.max(15,it.price*5); SHOP_BY[it.id]=it; });   // v124: precios ×5 (economía más justa)
-const OUT_SLOTS=['top','hat','gloves','socks','shoes','glasses','skin','tex'];
+// v152: los cuerpos (gratis) y lo del Chibi: tonos de piel y ojos (algunos gratis)
+I('cuerpo','av_frijol','Frijolito',0,{free:1, def:1, thumb:'frijol', plain:'#eef6dc'});
+I('cuerpo','av_chibi','Chibi',0,{free:1, thumb:'chibi', plain:'#fbeee4'});
+I('cuerpo','av_amigu','Amigurumi',0,{soon:1, thumb:'amigu', plain:'#f4efe6'});
+[['porcelana','Porcelana','#f8e1d0'],['durazno','Durazno','#efc2a2'],['miel','Miel','#dba57c'],['canela','Canela','#b97c52'],['cacao','Cacao','#8a5634'],['chocolate','Chocolate','#5e3a24']]
+  .forEach(([k,n,c])=>I('cpiel','cp_'+k,'Piel '+n,0,{free:1, c, def:k==='durazno'?1:0}));
+[['celeste','Celeste','#b8d9f7'],['lavanda','Lavanda','#cdb8f2'],['menta','Menta','#bfe9cc'],['chicle','Rosa chicle','#f7b6cf']].forEach(([k,n,c])=>I('cpiel','cp_'+k,'Piel '+n,12,{c}));
+[['cafe','Anime café',0],['boton','Botón',0],['puntos','Puntitos',0],['felices','Felices',0],['azul','Anime azul',10],['verde','Anime verde',10],['dormilon','Dormilones',10],['estrellas','Estrellitas',14],['corazones','Corazones',14],['kawaii','Brillantes',16]]
+  .forEach(([k,n,p])=>I('cojos','co_'+k,'Ojos '+n,p,p?{eye:k}:{eye:k, free:1}));
+const SHOP_BY={}; SHOP.forEach(it=>{ it.slot=SLOT_OF[it.cat]; it.av=(SHOP_CATS.find(c=>c.id===it.cat)||{}).av||'f'; if(it.price>0) it.price=Math.max(15,it.price*5); SHOP_BY[it.id]=it; });   // v124: precios ×5 (economía más justa)
+const OUT_SLOTS=['top','hat','gloves','socks','shoes','glasses','skin','tex','body','cskin','ceyes'];
 // lo comprado y lo puesto
-const wardrobe=(()=>{ let w={own:[], eq:{}}; try{ const s=JSON.parse(localStorage.getItem('mundoPelucheRopa')||'null'); if(s){ w.own=(s.own||[]).filter(id=>SHOP_BY[id]); for(const k of OUT_SLOTS) if(s.eq && SHOP_BY[s.eq[k]] && w.own.includes(s.eq[k])) w.eq[k]=s.eq[k]; } }catch(e){} return w; })();
+const wardrobe=(()=>{ let w={own:[], eq:{}}; try{ const s=JSON.parse(localStorage.getItem('mundoPelucheRopa')||'null'); if(s){ w.own=(s.own||[]).filter(id=>SHOP_BY[id]); for(const k of OUT_SLOTS) if(s.eq && SHOP_BY[s.eq[k]] && (w.own.includes(s.eq[k]) || SHOP_BY[s.eq[k]].free)) w.eq[k]=s.eq[k]; } }catch(e){} return w; })();
 function saveWardrobe(){ try{ localStorage.setItem('mundoPelucheRopa', JSON.stringify(wardrobe)); }catch(e){} }
 const outfitList=eq=>OUT_SLOTS.map(k=>eq[k]).filter(Boolean);
-function parseOutfit(a){ const eq={}; if(Array.isArray(a)) a.slice(0,10).forEach(id=>{ const it=typeof id==='string' && SHOP_BY[id]; if(it) eq[it.slot]=id; }); return eq; }
+function parseOutfit(a){ const eq={}; if(Array.isArray(a)) a.slice(0,16).forEach(id=>{ const it=typeof id==='string' && SHOP_BY[id]; if(it) eq[it.slot]=id; }); return eq; }
 
 // ---- Telas (dibujadas en un lienzo, con pelusa de fieltro) ----
 function fuzz(g,w,h,n){ for(let i=0;i<n;i++){ const x=Math.random()*w, y=Math.random()*h, a=Math.random()*Math.PI, l=1+Math.random()*3; g.strokeStyle=Math.random()<.5?'rgba(0,0,0,.10)':'rgba(255,255,255,.10)'; g.lineWidth=.6; g.beginPath(); g.moveTo(x,y); g.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l); g.stroke(); } }
@@ -8290,16 +8401,19 @@ function buildItem(o,it,list){
 }
 // pone (o quita) todo lo de un atuendo en un peluche
 function applyOutfit(o,eq){ batchDropUnder(o); const u=o.userData; (u.cloth||[]).forEach(m=>m.parent&&m.parent.remove(m)); u.cloth=[]; u.outfit=eq||{};
-  u.hatParts=[]; for(const k of ['top','hat','gloves','socks','shoes','glasses']){ const it=SHOP_BY[u.outfit[k]], n0=u.cloth.length; if(it) try{ buildItem(o,it,u.cloth); }catch(e){} if(k==='hat') u.hatParts=u.cloth.slice(n0); }
-  recolor(o, u.colorIdx|0); }
+  try{ avatarShape(o,u.outfit); }catch(e){ console.warn('avatar',e); }   // v152: Frijolito o Chibi
+  u.hatParts=[]; if(u.av!=='c') for(const k of ['top','hat','gloves','socks','shoes','glasses']){ const it=SHOP_BY[u.outfit[k]], n0=u.cloth.length; if(it) try{ buildItem(o,it,u.cloth); }catch(e){} if(k==='hat') u.hatParts=u.cloth.slice(n0); }   // la ropa del Frijolito es solo del Frijolito
+  recolor(o, u.colorIdx|0); if(o===plush) try{ waveLabel(); }catch(e){} }
 applyOutfit(plush, wardrobe.eq);
 
 // ---- Tienda (menú principal → Personalizar) ----
 const shopEl=ui('shop'); let shopCat='sudaderas', shopTry=null;
 let shopOnly=null;   // v144: 'dulce' cuando abres la Dulcería
-const diShopVis=it=>shopOnly ? (it.dulce===1 || (!!it.dulce && wardrobe.own.includes(it.id))) : (!it.dulce || wardrobe.own.includes(it.id));
+const myAv=()=>wardrobe.eq.body==='av_chibi'?'c':'f', catAv=id=>(SHOP_CATS.find(c=>c.id===id)||{}).av||'f';
+const owns=it=>!!it.free || wardrobe.own.includes(it.id);
+const diShopVis=it=>shopOnly ? (it.dulce===1 || (!!it.dulce && wardrobe.own.includes(it.id))) : ((it.cat==='cuerpo' || it.av===myAv()) && (!it.dulce || wardrobe.own.includes(it.id)));   // v152: solo lo del cuerpo que traes
 // ---- Filtros de la tienda: buscar por nombre o color, lo nuevo, lo mío y lo que me alcanza ----
-const NEW_RE=/^(sdd_|cmd_|sud_|god_|gud_|cad_|hn_|gln_|gun_|zn_|zp_dino$|sdn_|pln_|cmn_|sun2_|can_|dg_(aurora|chicle|caribe|volcan)$|pa_(salmon|pistache)$|ne_(dorado|menta)$|fo_amarillo$|ar_rayas$|tx_(huellitas|mezclilla|vichy|hojas|notas|burbujas|fresas|sandia|cuadritos|metalazul)$)/;
+const NEW_RE=/^(cp_|co_|sdd_|cmd_|sud_|god_|gud_|cad_|hn_|gln_|gun_|zn_|zp_dino$|sdn_|pln_|cmn_|sun2_|can_|dg_(aurora|chicle|caribe|volcan)$|pa_(salmon|pistache)$|ne_(dorado|menta)$|fo_amarillo$|ar_rayas$|tx_(huellitas|mezclilla|vichy|hojas|notas|burbujas|fresas|sandia|cuadritos|metalazul)$)/;
 const isNewItem=it=>NEW_RE.test(it.id), isNewPet=p=>p.i>=12;
 const shopF={q:'', new:false, mine:false, afford:false};
 // quita acentos y la terminación (roja/rojo/rojas → roj) para que «rojo» encuentre «Gorra roja»
@@ -8346,8 +8460,12 @@ function renderShop(){
   shopCoinsUI();
   const tabs=ui('shopTabs'); tabs.textContent='';
   ui('shopFilter').querySelectorAll('.fchip').forEach(b=>b.classList.toggle('on',!!shopF[b.dataset.f]));
-  SHOP_CATS.forEach(c=>{ if(shopOnly && (c.id==='mascotas' || !SHOP.some(it=>it.cat===c.id && diShopVis(it)))) return; const b=document.createElement('button'); b.type='button'; b.className='shop-tab'+(c.id===shopCat?' on':''); b.innerHTML=`<span aria-hidden="true">${c.ic}</span>`;
-    if(c.id==='mascotas' ? PETS.some(p=>isNewPet(p)&&!pets.own.includes(p.id)) : SHOP.some(it=>it.cat===c.id&&isNewItem(it)&&!wardrobe.own.includes(it.id)&&diShopVis(it))) b.innerHTML+='<i class="tnw" title="Hay cosas nuevas"></i>'; const t=document.createElement('span'); t.textContent=c.name; b.appendChild(t);
+  if(!shopOnly && shopCat!=='mascotas' && shopCat!=='cuerpo' && catAv(shopCat)!==myAv()) shopCat='cuerpo';
+  if(shopCat==='cuerpo') try{ localStorage.setItem('mpCuerpoVisto','1'); }catch(e){}
+  let cuerpoVisto=true; try{ cuerpoVisto=!!localStorage.getItem('mpCuerpoVisto'); }catch(e){}
+  SHOP_CATS.forEach(c=>{ if(shopOnly && (c.id==='mascotas' || !SHOP.some(it=>it.cat===c.id && diShopVis(it)))) return;
+    if(!shopOnly && c.id!=='mascotas' && c.id!=='cuerpo' && (c.av||'f')!==myAv()) return; const b=document.createElement('button'); b.type='button'; b.className='shop-tab'+(c.id===shopCat?' on':''); b.innerHTML=`<span aria-hidden="true">${c.ic}</span>`;
+    if(c.id==='mascotas' ? PETS.some(p=>isNewPet(p)&&!pets.own.includes(p.id)) : SHOP.some(it=>it.cat===c.id&&isNewItem(it)&&!wardrobe.own.includes(it.id)&&diShopVis(it)) || (c.id==='cuerpo' && !cuerpoVisto)) b.innerHTML+='<i class="tnw" title="Hay cosas nuevas"></i>'; const t=document.createElement('span'); t.textContent=c.name; b.appendChild(t);
     b.onclick=()=>{ shopCat=c.id; renderShop(); }; tabs.appendChild(b); });
   const grid=ui('shopGrid'); grid.textContent='';
   if(shopCat==='mascotas'){ renderPetShop(grid); return; }
@@ -8355,21 +8473,24 @@ function renderShop(){
   const inCat=SHOP.filter(it=>it.cat===shopCat && diShopVis(it)), list=inCat.filter(it=>shopMatch(it.name, wardrobe.own.includes(it.id), it.price, isNewItem(it)));
   shopCountTxt(list.length, inCat.length); if(!list.length) shopEmpty(grid);
   list.forEach(it=>{
-    const own=wardrobe.own.includes(it.id), on=wardrobe.eq[it.slot]===it.id, trying=shopTry&&shopTry.id===it.id;
+    const own=owns(it), on=wardrobe.eq[it.slot]===it.id || (!wardrobe.eq[it.slot] && !!it.def), trying=shopTry&&shopTry.id===it.id;
     const b=document.createElement('button'); b.type='button'; b.className='shop-item'+(on?' on':'')+(trying?' try':'');
-    const sw=document.createElement('span'); sw.className='sw'; sw.style.background=swatchCss(it); if(KIND_IC[it.k]){ const ic=document.createElement('i'); ic.className='ic'; ic.textContent=KIND_IC[it.k]; sw.appendChild(ic); } if(it.neon) sw.style.boxShadow=`0 0 12px ${it.neon}`;
+    const sw=document.createElement('span'); sw.className='sw'; sw.style.background=it.eye ? `url(${canUrl(chEyeThumb(it.eye))}) center/cover` : it.thumb ? `url(${canUrl(it.thumbC||(it.thumbC=avThumb(it.thumb)))}) center/contain no-repeat, ${it.plain}` : swatchCss(it); if(KIND_IC[it.k]){ const ic=document.createElement('i'); ic.className='ic'; ic.textContent=KIND_IC[it.k]; sw.appendChild(ic); } if(it.neon) sw.style.boxShadow=`0 0 12px ${it.neon}`;
     const nm=document.createElement('span'); nm.className='nm'; nm.textContent=it.name;
-    const st=document.createElement('span'); st.className='st'; st.innerHTML = on ? 'Puesto ✓' : own ? 'Tuyo · ponértelo' : `<i class="cn"></i>${it.price}`;
+    const st=document.createElement('span'); st.className='st'; st.innerHTML = on ? 'Puesto ✓' : it.soon ? 'Muy pronto' : own ? (it.free && !wardrobe.own.includes(it.id) ? 'Gratis · ponértelo' : 'Tuyo · ponértelo') : `<i class="cn"></i>${it.price}`;
     b.append(sw,nm,st); if(isNewItem(it) && !own){ const n=document.createElement('span'); n.className='nw'; n.textContent='Nuevo'; b.appendChild(n); } b.onclick=()=>shopPick(it); grid.appendChild(b); });
   const bar=ui('shopBuy'), it=shopTry;
-  if(it && !wardrobe.own.includes(it.id)){ bar.hidden=false; const can=coins>=it.price;
+  if(it && !owns(it)){ bar.hidden=false; const can=coins>=it.price;
     ui('shopBuyTxt').textContent = can ? `${it.name}${it.desc?' · '+it.desc:''}` : shopShort(it.price,'r:'+it.id);
     const bb=ui('shopBuyBtn'); bb.disabled=!can; bb.innerHTML=`Comprar · <i class="cn"></i>${it.price}`; shopAdRender('r:'+it.id,it.price); }
   else bar.hidden=true;
 }
 function previewEq(){ const eq={...wardrobe.eq}; if(shopTry) eq[shopTry.slot]=shopTry.id; return eq; }
 function shopPick(it){
-  if(wardrobe.own.includes(it.id)){ shopTry=null; if(wardrobe.eq[it.slot]===it.id) delete wardrobe.eq[it.slot]; else wardrobe.eq[it.slot]=it.id; saveWardrobe(); try{ audio.cam(); }catch(e){} }
+  if(it.soon){ flashNote(`El ${it.name} llega muy pronto`); return; }
+  if(owns(it)){ shopTry=null;
+    if(it.slot==='body'){ if(it.def) delete wardrobe.eq.body; else wardrobe.eq.body=it.id; player.sitF=false; }   // v152: cambiar de cuerpo
+    else if(wardrobe.eq[it.slot]===it.id) delete wardrobe.eq[it.slot]; else wardrobe.eq[it.slot]=it.id; saveWardrobe(); try{ audio.cam(); }catch(e){} }
   else shopTry = shopTry&&shopTry.id===it.id ? null : it;   // probártelo antes de comprar
   applyOutfit(plush, previewEq()); renderShop(); try{ sendPresence(true); }catch(e){}
 }
@@ -14434,6 +14555,9 @@ function update(dt,t){ myLabelUpdate();
   } else
   poseLimbs(plush, t, dt, sw, air && !player.dive, dk, ((state==='menu' && !shopOpen()) || t<player.waveUntil), player.swim?player.swimT:null, player.walk, moving, holdMap);
   caveAfterPose(dt);   // pico y linterna
+  if(player.sitF && (state!=='play' || moving>.08 || !player.grounded || player.swim || player.dive || player.car || player.ac || player.pg || player.mg || player.busy || plush.userData.av!=='c')){ player.sitF=false; try{ sendPresence(true); }catch(e){} }
+  player.sitK=(player.sitK||0)+((player.sitF?1:0)-(player.sitK||0))*Math.min(1,dt*7);
+  chibiSitPose(plush,player.sitK);   // v152: el Chibi sentado en el piso
   player.squash=Math.max(0,player.squash-dt*4);
   const bob = player.swim ? Math.sin(t*2)*.05 : Math.abs(Math.sin(player.walk))*.06*moving;
   const breathe = Math.sin(t*2.2)*.012;
@@ -14442,6 +14566,7 @@ function update(dt,t){ myLabelUpdate();
   shapeHead(plush);   // ojos y brazos siguen a la cabeza cuando el cuerpo se aplasta
   if(player.swim){ const o=swimOffset(player.diveAngle, player.facing); plush.position.set(player.pos.x+o.x, player.pos.y+bob+o.y, player.pos.z+o.z); }
   else plush.position.set(player.pos.x, player.pos.y+bob+diveLift(player.diveAngle), player.pos.z);
+  if(player.sitK>.002 && plush.userData.av==='c') plush.position.y-=CH.sitDrop*player.sitK;
   plush.rotation.y = state==='menu' ? (shopOpen() ? 0 : Math.sin(t*.4)*.5) : player.facing;
   plush.rotation.x = player.diveAngle;
   plush.rotation.z = player.swim ? 0 : Math.sin(player.walk)*.08*moving;
