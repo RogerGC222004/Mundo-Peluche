@@ -461,6 +461,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 .switch:focus-visible,.seg button:focus-visible{outline:3px solid var(--thread);outline-offset:2px;}
 .opt-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
 .fps{font-family:var(--body);font-variant-numeric:tabular-nums;}
+.coords{font-size:12px;opacity:.85;white-space:nowrap;}   /* v149 */
 
 @media (max-width:560px){
   input[type=range]{width:100px;}
@@ -700,6 +701,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <h2>Pausa</h2>
     <button class="btn primary" id="resumeBtn">Continuar</button>
     <button class="btn" id="pauseOptionsBtn">Opciones</button>
+    <button class="btn" id="copyLocBtn">📍 Copiar ubicación</button>
     <button class="btn" id="leaveRoomBtn" hidden>Salir de la sala</button>
     <p class="room-diag" id="roomDiag" hidden></p>
     <button class="btn" id="diagBtn" hidden>Ver diagnóstico de conexión</button>
@@ -804,6 +806,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       <h3>Interfaz</h3>
       <div class="opt"><label for="optBob">Balanceo al caminar<small>Movimiento de la cámara en 1ª persona</small></label><button class="switch" id="optBob" role="switch" aria-checked="true" aria-label="Balanceo al caminar"></button></div>
       <div class="opt"><label for="optMyName">Ver mi nombre<small>Tu nombre encima de tu peluche, como lo ven los demás</small></label><button class="switch" id="optMyName" role="switch" aria-checked="false" aria-label="Ver mi nombre"></button></div>
+      <div class="opt"><label for="optCoords">Mostrar coordenadas<small>Para mandar capturas cuando algo falle</small></label><button class="switch" id="optCoords" role="switch" aria-checked="true" aria-label="Mostrar coordenadas"></button></div>
       <div class="opt"><label for="optFps">Mostrar FPS<small id="gpuName"></small></label><button class="switch" id="optFps" role="switch" aria-checked="false" aria-label="Mostrar FPS"></button></div>
       <div class="opt"><label for="optAutoFull">Empezar en pantalla completa<small>Y en horizontal en el celular, al tocar la pantalla</small></label><button class="switch" id="optAutoFull" role="switch" aria-checked="true" aria-label="Empezar en pantalla completa"></button></div>
       <div class="opt"><label for="optHints">Mostrar ayudas en pantalla</label><button class="switch" id="optHints" role="switch" aria-checked="true" aria-label="Mostrar ayudas"></button></div>
@@ -821,6 +824,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <button class="chip hud-tog" id="hudTog" title="Ocultar botones" aria-label="Ocultar botones"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M12.5 4 6.5 10l6 6" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <button class="chip" id="pauseChip">Pausa</button>
     <span class="hint fps" id="fps" hidden>60 FPS</span>
+    <span class="hint fps coords" id="coordsEl" hidden></span>
     <span class="chip coin-chip" id="coinChip" title="Monedas de peluche"><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="#f6c445" stroke="#b07a12" stroke-width="2.5"/><circle cx="20" cy="20" r="13" fill="none" stroke="#b07a12" stroke-width="1.6" stroke-dasharray="3 2.5"/><path d="M20 10l2.9 6 6.5.8-4.8 4.5 1.3 6.4L20 24.6l-5.9 3.1 1.3-6.4-4.8-4.5 6.5-.8z" fill="#fff3c4" stroke="#b07a12" stroke-width="1.4" stroke-linejoin="round"/></svg><span id="coinN">0</span></span>
     <button class="chip room-chip" id="roomChip" hidden title="Copiar el código de la sala"><span class="dot" id="roomDot"></span><span id="roomLabel">Sala</span></button>
   </div>
@@ -956,7 +960,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='148';
+const GAME_VERSION='149';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -3342,7 +3346,7 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden) audio.sus
 addEventListener('keydown',e=>{ if(e.code==='KeyM' && !e.repeat && !(e.target instanceof HTMLInputElement)){ set('muted',!settings.muted); flashNote(settings.muted?'Sonido silenciado':'Sonido activado'); } });
 
 // ---------- Opciones ----------
-const DEFAULTS={fov:65, quality:'low', shadows:true, draw:190, sens:1, invert:false, startCam:'third', alwaysRun:false, bob:true, fps:false, hints:true,
+const DEFAULTS={fov:65, quality:'low', shadows:true, draw:190, sens:1, invert:false, startCam:'third', alwaysRun:false, bob:true, fps:false, hints:true, coords:true,
   master:80, music:60, sfx:80, muted:false, autoRes:true, fpsCap:'free', weather:true, layout:{}, qDef:1, autoFull:true, myName:false, ultra:false};
 let settings={...DEFAULTS};
 const QPR={min:.5, low:.75, mid:1.25, high:2, max:3};   // nitidez máxima por calidad (Máxima: la de la pantalla completa)
@@ -3407,6 +3411,7 @@ function applySettings(){
   refreshFog();
   camera.far=settings.draw*1.05+15; camera.updateProjectionMatrix();   // más allá todo queda cubierto por la niebla: no se dibuja
   ui('fps').hidden=!settings.fps;
+  ui('coordsEl').hidden=!settings.coords;   // v149
   audio.apply();
   ui('hint').style.visibility = settings.hints ? '' : 'hidden';
   if(typeof applyLayout==='function') applyLayout();
@@ -3420,7 +3425,7 @@ function syncOptionsUI(){
   ui('optDraw').value=settings.draw; ui('optDrawOut').textContent=settings.draw+' m';
   ui('optSens').value=settings.sens; ui('optSensOut').textContent=settings.sens.toFixed(1)+'×';
   [['optMaster','master'],['optMusic','music'],['optSfx','sfx']].forEach(([id,k])=>{ ui(id).value=settings[k]; ui(id+'Out').textContent=settings[k]+'%'; });
-  [['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optHints','hints'],['optWeather','weather'],['optAutoFull','autoFull'],['optMyName','myName']]
+  [['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optCoords','coords'],['optHints','hints'],['optWeather','weather'],['optAutoFull','autoFull'],['optMyName','myName']]
     .forEach(([id,k])=>ui(id).setAttribute('aria-checked', String(settings[k])));
   [['optQuality','quality'],['optStartCam','startCam'],['optFpsCap','fpsCap']].forEach(([id,k])=>
     ui(id).querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.v===settings[k]))));
@@ -3428,7 +3433,7 @@ function syncOptionsUI(){
 function set(k,v){ settings[k]=v; saveSettings(); applySettings(); }
 
 ui('optFull').onclick=toggleFullscreen;
-[['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optHints','hints'],['optWeather','weather'],['optAutoFull','autoFull'],['optMyName','myName']]
+[['optAutoRes','autoRes'],['optMute','muted'],['optShadows','shadows'],['optInvert','invert'],['optRun','alwaysRun'],['optBob','bob'],['optFps','fps'],['optCoords','coords'],['optHints','hints'],['optWeather','weather'],['optAutoFull','autoFull'],['optMyName','myName']]
   .forEach(([id,k])=>ui(id).onclick=()=>set(k,!settings[k]));
 let sfxPreview=0;
 [['optMaster','master'],['optMusic','music'],['optSfx','sfx']].forEach(([id,k])=>ui(id).oninput=e=>{
@@ -3447,6 +3452,13 @@ ui('optUltra').onclick=()=>{ const on=!ULTRA; settings.ultra=on;
 function openOptions(){ optionsEl.hidden=false; syncOptionsUI(); ui('optUltra').setAttribute('aria-checked',String(ULTRA)); optionsEl.scrollTop=0; ui('closeOptions').focus({preventScroll:true}); }
 ui('optionsBtn').onclick=openOptions;
 ui('pauseOptionsBtn').onclick=openOptions;
+// v149: dónde estás (para mandarle a Claude una captura o el texto cuando algo falle)
+function zoneName(x,z){ if(typeof SP!=='undefined' && SP.on) return 'Espacio';
+  for(const [I,n] of [[WI,'Isla Invierno'],[JI,'Isla Selva'],[DI,'Isla Dulce']]) if(Math.hypot(x-I.x,z-I.z)<I.E) return n;
+  return Math.hypot(x,z)<1750 ? 'Isla principal' : 'Mar abierto'; }
+function locText(){ const p=player.pos; return 'X '+Math.round(p.x)+' · Y '+Math.round(p.y)+' · Z '+Math.round(p.z)+' · '+zoneName(p.x,p.z)+' · v'+GAME_VERSION; }
+ui('copyLocBtn').onclick=()=>{ const t='Mundo Peluche · '+locText(); const ok=()=>flashNote('Ubicación copiada: '+locText());
+  try{ navigator.clipboard.writeText(t).then(ok,()=>{ prompt('Copia tu ubicación:',t); }); }catch(e){ prompt('Copia tu ubicación:',t); } };
 ui('closeOptions').onclick=()=>{ optionsEl.hidden=true; };
 addEventListener('keydown',e=>{
   if(e.code==='KeyF' && !e.repeat && !(e.target instanceof HTMLInputElement)) toggleFullscreen();
@@ -4325,7 +4337,8 @@ function drawMap(force){
     mctx.fillStyle=p.lock&&p.lock()?'#c8c4bc':'#ffd36b'; mctx.strokeStyle='#8a6a3e'; mctx.lineWidth=3; mctx.beginPath(); mctx.arc(px,py,r,0,7); mctx.fill(); mctx.stroke();
     mctx.fillStyle='#8a6a3e'; [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([a,b])=>{ mctx.beginPath(); mctx.arc(px+a*r*.32,py+b*r*.32,r*.13,0,7); mctx.fill(); });
     pillRects.push([px-r,py-r,px+r,py+r]); });
-  tps.sort((a,b)=>(b.hov?1:0)-(a.hov?1:0)).forEach(({p,px,py,hov,r})=>{
+  tps.sort((a,b)=>(b.hov?1:0)-(a.hov?1:0) || (b.p.isle?1:0)-(a.p.isle?1:0)).forEach(({p,px,py,hov,r})=>{   // v149: las islas, antes que los demás (y siempre con su nombre)
+    if(p.isle && !hov){ const t=(p.lock&&p.lock()?'🔒 ':'')+p.isle, c=[[px,py-r-14*mk],[px,py+r+14*mk],[px+r+4*mk,py,1],[px-r-4*mk,py,-1]]; if(!pillPlace(t,c,'rgba(251,243,223,.95)','#5a4426')) pillPlace(t,c,'rgba(251,243,223,.95)','#5a4426',true); return; }
     pillPlace(p.lock&&p.lock()?p.name+' · llega en barco':p.name, [[px,py+r+14*mk],[px,py-r-14*mk],[px+r+4*mk,py,1],[px-r-4*mk,py,-1]], hov?'#5a4426':'rgba(251,243,223,.95)', hov?'#fbf3df':'#5a4426', hov); });
   cars.forEach(c=>{
     const [px,py]=toScreen(...toMap(c.x,c.z)), ang=Math.atan2(-Math.cos(c.h),-Math.sin(c.h)), w=Math.max(14, CAR_L/(2*MAP_E)*MAP_PX*mapView.z), hgt=w*.55;
@@ -4435,6 +4448,10 @@ function tpLook(p){ try{ const A=AR_SPOTS.find(A=>'ar_'+A.id===p.id); if(A) retu
   } }catch(e){} return null; }
 function teleportTo(p){
   if(p.lock && p.lock()){ flashNote('Primero llega en barco a la '+p.name+' (sale del muelle de Tortu)'); return; }   // v139
+  { const I=[WI,JI,DI].find(I=>Math.hypot(p.x-I.x,p.z-I.z)<I.E);   // v149: si la isla aún no está armada, primero se avisa (se arma de golpe y tarda un momento)
+    if(I && !I.done && !teleportTo.busy){ teleportTo.busy=true; const m=document.createElement('div'); m.className='card'; m.textContent='Cargando '+p.name+'…';
+      Object.assign(m.style,{position:'fixed',left:'50%',top:'42%',transform:'translate(-50%,-50%)',zIndex:60,padding:'16px 26px',fontWeight:'800',fontSize:'20px',pointerEvents:'none'}); document.body.appendChild(m);
+      setTimeout(()=>{ try{ teleportTo(p); }finally{ teleportTo.busy=false; } const t0=performance.now(); const wt=()=>{ if(I.done || performance.now()-t0>15000) m.remove(); else requestAnimationFrame(wt); }; requestAnimationFrame(wt); },80); return; } }
   if(player.balloon) blExit(true);
   if(typeof SP!=='undefined' && SP.on) exitSpace(true);
   if(player.rk){ player.rk=null; plush.visible=true; islandRocket.door.rotation.y=0; }
@@ -12359,6 +12376,7 @@ function diMapDraw2(g){ if(!DI.done) return; g.fillStyle='#8a4a1e'; for(const B 
 // v145: el mar cerca de cada isla usa su propio mapa de profundidad (orilla clara y espuma); lejos, el de la isla grande
 function islandSeaDepth(){ const U=seaSurface.material.uniforms; let want=SEA_MAIN_DEPTH; for(const I of [WI,JI,DI]) if(I.depth && I.depthOn) want=I.depth;
   if(U.uRect.value!==want.rect){ U.uDepth.value=want.tex; U.uRect.value=want.rect; } }
+for(const t of TELEPORTS){ const n={invierno:'Isla Invierno', selva:'Isla Selva', dulce:'Isla Dulce'}[t.id]; if(n) t.isle=n; }   // v149: nombre corto en el mapa
 function wiMapDraw(g){ const E=WI.E, [x0,y0]=toMap(WI.x+E,WI.z+E), s=2*E/(2*MAP_E)*MAP_PX; g.imageSmoothingEnabled=true; g.drawImage(wiMapImage(),x0,y0,s,s);
   // el muelle y la cabaña
   const q=(pts,col)=>{ g.fillStyle=col; g.beginPath(); pts.forEach(([su,sv],i)=>{ const [px,py]=toMap(...wiS(su,sv)); i?g.lineTo(px,py):g.moveTo(px,py); }); g.closePath(); g.fill(); };
@@ -14393,7 +14411,7 @@ function update(dt,t){ myLabelUpdate();
 
 }
 
-let fpsFrames=0, fpsTime=0, fpsLogic=0, fpsDraw=0, fpsCalls=0, fpsTris=0; const fpsEl=ui('fps');
+const coordsEl=ui('coordsEl'); let fpsFrames=0, fpsTime=0, fpsLogic=0, fpsDraw=0, fpsCalls=0, fpsTris=0; const fpsEl=ui('fps');
 const FPS_CAPS={'30':30,'60':60,'90':90,'120':120};   // límite de cuadros por segundo (Libre = al ritmo de la pantalla)
 let capLast=0, resWin=[], resLast=0, resGood=0;
 function autoResolution(raw){
@@ -14524,6 +14542,7 @@ function frame(){
   if(shopOpen()) renderStudio(dt); else { const S=SP.on&&state!=='menu'?spaceScene:scene; if(FX.on) fxRender(S,camera); else renderer.render(S,camera); }
   if(pf){ const p2=performance.now(); fpsLogic+=p1-p0; fpsDraw+=p2-p1; fpsCalls+=renderer.info.render.calls; fpsTris+=renderer.info.render.triangles; }
   fpsFrames++; fpsTime+=raw;
+  if(settings.coords && state==='play'){ frame.cT=(frame.cT||0)+raw; if(frame.cT>.25){ frame.cT=0; const t3=locText(); if(coordsEl.textContent!==t3) coordsEl.textContent=t3; } }   // v149
   // con "Mostrar FPS": cuánto tarda la lógica del juego y cuánto preparar el dibujo (para saber qué frena en cada equipo)
   if(fpsTime>=.5){ if(settings.fps){ const n=fpsFrames, t2=Math.round(n/fpsTime)+' FPS'+(resScale<.99?` · ${Math.round(resScale*100)}%`:'')+` · lógica ${(fpsLogic/n).toFixed(0)} · dibujo ${(fpsDraw/n).toFixed(0)} ms · ${Math.round(fpsCalls/n)} dib · ${Math.round(fpsTris/n/1000)}k ▲`; if(fpsEl.textContent!==t2) fpsEl.textContent=t2; } fpsFrames=0; fpsTime=0; fpsLogic=fpsDraw=fpsCalls=fpsTris=0; }
   if(state==='play') autoResolution(raw);
