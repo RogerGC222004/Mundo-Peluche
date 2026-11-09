@@ -962,7 +962,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='157';
+const GAME_VERSION='158';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -3361,7 +3361,7 @@ function avPortrait(eq,view){ const key=JSON.stringify(eq)+(view||''); if(AV_POR
     if(!avPortraitRig){ const sc=new THREE.Scene(); sc.background=new THREE.Color('#fbf3ea'); sc.add(new THREE.HemisphereLight(0xffffff,0xd8d0c8,1.0)); const d=new THREE.DirectionalLight(0xffffff,.7); d.position.set(2,4,5); sc.add(d);
       const cam=new THREE.PerspectiveCamera(30,1,.1,20), rt=new THREE.WebGLRenderTarget(128,128); rt.texture.encoding=THREE.sRGBEncoding; const o=makePlush(0); sc.add(o); avPortraitRig={sc,cam,rt,o}; }
     const R=avPortraitRig; applyOutfit(R.o,eq); poseLimbs(R.o,0,.05,0,false,0,false,null,0,0,false);
-    R.o.rotation.y=.45; if(view==='espalda') R.o.rotation.y=Math.PI-.6; const V={cuerpo:[[0,1.05,4.3],[0,.72,0]], espalda:[[0,1.05,4.3],[0,.72,0]], pies:[[0,.62,2.3],[0,.2,0]], gorro:[[0,1.75,4.0],[0,1.5,0]], acara:[[0,2.12,3.3],[0,1.92,0]]}[view]||[[0,1.62,3.6],[0,1.38,0]]; R.cam.position.set(...V[0]); R.cam.lookAt(...V[1]); R.o.updateMatrixWorld(true);
+    R.o.rotation.y=.45; if(view==='espalda') R.o.rotation.y=Math.PI-.6; const V={cuerpo:[[0,1.05,4.3],[0,.72,0]], espalda:[[0,1.05,4.3],[0,.72,0]], pies:[[0,.62,2.3],[0,.2,0]], gorro:[[0,1.75,4.0],[0,1.5,0]], acara:[[0,2.12,3.3],[0,1.92,0]], acuerpo:[[0,1.4,5.0],[0,1.0,0]], apies:[[0,.6,2.6],[0,.18,0]]}[view]||[[0,1.62,3.6],[0,1.38,0]]; R.cam.position.set(...V[0]); R.cam.lookAt(...V[1]); R.o.updateMatrixWorld(true);
     const prev=renderer.getRenderTarget(), sm=renderer.shadowMap.enabled; renderer.shadowMap.enabled=false; renderer.setRenderTarget(R.rt); renderer.render(R.sc,R.cam); renderer.setRenderTarget(prev); renderer.shadowMap.enabled=sm;
     const px=new Uint8Array(128*128*4); renderer.readRenderTargetPixels(R.rt,0,0,128,128,px);
     const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d'), im=g.createImageData(128,128);
@@ -3372,9 +3372,9 @@ function avPortrait(eq,view){ const key=JSON.stringify(eq)+(view||''); if(AV_POR
 const CH_TORSO=(()=>{ const prof=[[0,0],[.27,.02],[.31,.15],[.29,.33],[.22,.46],[.1,.52],[0,.53]]; return new THREE.SplineCurve(prof.map(p=>new THREE.Vector2(p[0],p[1]))).getPoints(48); })();
 const CH_CG={};
 // pedazo del cuerpo (entre y0 y y1, medido desde la base del cuerpo), un poquito más grande que el cuerpo
-function chShellGeo(y0,y1,k,closeBottom){ const key='sh'+y0+'_'+y1+'_'+k+'_'+(closeBottom?1:0); if(CH_CG[key]) return CH_CG[key];
+function chShellGeo(y0,y1,k,closeBottom,prof,pk){ const key='sh'+y0+'_'+y1+'_'+k+'_'+(closeBottom?1:0)+(pk||''); if(CH_CG[key]) return CH_CG[key];
   const P=[]; if(closeBottom) P.push(new THREE.Vector2(0,y0-.012));
-  for(const p of CH_TORSO) if(p.y>=y0 && p.y<=y1) P.push(new THREE.Vector2(p.x*k+.012, p.y));
+  for(const p of (prof||CH_TORSO)) if(p.y>=y0 && p.y<=y1) P.push(new THREE.Vector2(p.x*k+.012, p.y));
   return CH_CG[key]=new THREE.LatheGeometry(P,28); }
 function chConeGeo(pts){ const key='cn'+pts.join(); if(CH_CG[key]) return CH_CG[key]; return CH_CG[key]=new THREE.LatheGeometry(pts.map(([x,y])=>new THREE.Vector2(x,y)),28); }
 const chTubeGeo=(r0,r1,h)=>CH_CG['tb'+r0+'_'+r1+'_'+h]||(CH_CG['tb'+r0+'_'+r1+'_'+h]=new THREE.CylinderGeometry(r1,r0,h,16,1,true));
@@ -3402,14 +3402,14 @@ function chCatPrintMat(base){ const key='cat|'+base; if(CH_CMAT[key]) return CH_
     g.fillStyle='#2a2226'; g.beginPath(); g.arc(48,64,6,0,Math.PI*2); g.arc(80,64,6,0,Math.PI*2); g.fill(); g.fillStyle='#f07a92'; g.beginPath(); g.moveTo(58,76); g.lineTo(70,76); g.lineTo(64,83); g.fill(); chCatTex=new THREE.CanvasTexture(c); chCatTex.encoding=THREE.sRGBEncoding; }
   return CH_CMAT[key]=new THREE.MeshStandardMaterial({map:chCatTex, transparent:true, alphaTest:.3, roughness:.9, polygonOffset:true, polygonOffsetFactor:-2}); }
 // arma la ropa del Chibi; cada pieza se anota en "list" para quitarla al cambiarse
-function chibiClothes(o,eq,list){ const u=o.userData, C=u.ch; if(!C) return; const it=k=>eq && SHOP_BY[eq[k]] ? SHOP_BY[eq[k]] : null;
+function chibiClothes(o,eq,list,X){ const u=o.userData, C=X?{g:X.torso}:u.ch; if(!C) return; const CM=X?X.mat:chClothMat, SG=X?X.shell:chShellGeo; const it=k=>eq && SHOP_BY[eq[k]] ? SHOP_BY[eq[k]] : null;
   const add=(par,geo,mat,x,y,z,sx=1,sy=1,sz=1,rx=0,ry=0,rz=0)=>{ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.rotation.set(rx,ry,rz); m.castShadow=true; m.receiveShadow=true; par.add(m); list.push(m); return m; };
   const TY=.34, ZS=.85;   // base del cuerpo y lo aplastado de frente
-  const arms=u.arms, legs=u.legs, up=p=>p, low=p=>p.userData.joint;
+  const arms=u.arms, legs=u.legs, up=p=>X?X.up.get(p):p, low=p=>X?X.low.get(p):p.userData.joint;
   // --- arriba ---
   const T=it('ctop');
-  if(T){ const m=chClothMat(T.c,T.pat,T.c2,{rep:T.rep}), m2=T.c3?chClothMat(T.c3):m, k=T.tk;
-    const y0=k==='dress'?.2:.08, sh=add(C.g,chShellGeo(y0,.5,1.04,false),m,0,TY,0,1,1,ZS,0,Math.PI,0);
+  if(T){ const m=CM(T.c,T.pat,T.c2,{rep:T.rep}), m2=T.c3?CM(T.c3):m, k=T.tk;
+    const y0=k==='dress'?.2:.08, sh=add(C.g,SG(y0,.5,1.04,false),m,0,TY,0,1,1,ZS,0,Math.PI,0);
     if(k!=='dress') add(C.g,chRingGeo(.305,.018),m2,0,TY+y0+.005,0,1,ZS,1,Math.PI/2);   // dobladillo
     const sleeve=(long)=>arms.forEach(a=>{ add(up(a),chTubeGeo(.118,.112,long?.17:.12),m,0,long?-.075:-.055,0); add(up(a),chRingGeo(.112,.012),m2,0,long?-.155:-.115,0,1,1,1,Math.PI/2);
       if(long){ add(low(a),chTubeGeo(.122,.118,.14),m,0,-.06,0); add(low(a),chRingGeo(.12,.014),m2,0,-.13,0,1,1,1,Math.PI/2); } });
@@ -3418,39 +3418,39 @@ function chibiClothes(o,eq,list){ const u=o.userData, C=u.ch; if(!C) return; con
       add(C.g,chBoxGeo(),m2,0,TY+.17,.265,.26,.1,.02);   // bolsa de canguro
       if(k==='cat') add(C.g,new THREE.PlaneGeometry(.2,.2),chCatPrintMat(T.c),0,TY+.31,.275,1,1,1,-.2); }
     if(k==='dress') add(C.g,chConeGeo([[.29,.2],[.36,.08],[.45,-.06],[.47,-.08]]),m,0,TY,0,1,1,ZS);
-    if(k==='sailor'){ add(C.g,chConeGeo([[.1,.53],[.2,.5],[.29,.42],[.31,.38]]),chClothMat(T.c2),0,TY+.005,0,1.02,1,ZS*1.04);   // cuello de marinero
-      add(C.g,chBoxGeo(),chClothMat(T.c2),0,TY+.32,-.228,.34,.2,.015,.25); add(C.g,chBoxGeo(),chClothMat('#ffffff'),0,TY+.24,-.25,.3,.012,.012,.25);   // la solapa de atrás
-      const r=chClothMat('#d8283a'); add(C.g,chSph(),r,0,TY+.4,.255,.045,.035,.03); for(const s of [-1,1]) add(C.g,chSph(),r,s*.05,TY+.39,.25,.05,.03,.025,0,0,s*.5); }
-    if(k==='blazer'){ add(C.g,chBoxGeo(),chClothMat('#ffffff'),0,TY+.39,.232,.14,.12,.02,-.25); add(C.g,chBoxGeo(),chClothMat(T.c2),0,TY+.32,.25,.045,.2,.015,-.12);
-      for(const s of [-1,1]) add(C.g,chSph(),chClothMat('#e8c45a'),s*.07,TY+.18,.278,.018,.018,.008); }
+    if(k==='sailor'){ add(C.g,chConeGeo([[.1,.53],[.2,.5],[.29,.42],[.31,.38]]),CM(T.c2),0,TY+.005,0,1.02,1,ZS*1.04);   // cuello de marinero
+      add(C.g,chBoxGeo(),CM(T.c2),0,TY+.32,-.228,.34,.2,.015,.25); add(C.g,chBoxGeo(),CM('#ffffff'),0,TY+.24,-.25,.3,.012,.012,.25);   // la solapa de atrás
+      const r=CM('#d8283a'); add(C.g,chSph(),r,0,TY+.4,.255,.045,.035,.03); for(const s of [-1,1]) add(C.g,chSph(),r,s*.05,TY+.39,.25,.05,.03,.025,0,0,s*.5); }
+    if(k==='blazer'){ add(C.g,chBoxGeo(),CM('#ffffff'),0,TY+.39,.232,.14,.12,.02,-.25); add(C.g,chBoxGeo(),CM(T.c2),0,TY+.32,.25,.045,.2,.015,-.12);
+      for(const s of [-1,1]) add(C.g,chSph(),CM('#e8c45a'),s*.07,TY+.18,.278,.018,.018,.008); }
     if(k==='long' && T.knit) add(C.g,chRingGeo(.17,.025),m,0,TY+.49,0,1,ZS,1,Math.PI/2);   // cuello del suéter
   }
   // --- abajo ---
   const B=it('cbot');
-  if(B){ const m=chClothMat(B.c,B.pat,B.c2,{rep:B.rep}), k=B.bk;
-    if(k==='shorts'||k==='pants'||k==='overall'){ add(C.g,chShellGeo(0,.17,1.06,true),m,0,TY,0,1,1,ZS);
+  if(B){ const m=CM(B.c,B.pat,B.c2,{rep:B.rep}), k=B.bk;
+    if(k==='shorts'||k==='pants'||k==='overall'){ add(C.g,SG(0,.17,1.06,true),m,0,TY,0,1,1,ZS);
       legs.forEach(l=>{ add(up(l),chTubeGeo(.15,.142,.13),m,0,-.06,0); if(k!=='shorts'){ add(low(l),chTubeGeo(.142,.138,.12),m,0,-.05,0); add(low(l),chRingGeo(.138,.012),m,0,-.11,0,1,1,1,Math.PI/2); }
         else add(up(l),chRingGeo(.142,.012),m,0,-.125,0,1,1,1,Math.PI/2); });
-      if(B.stripe) legs.forEach(l=>{ const s=l.userData.side, w=chClothMat(B.stripe); add(up(l),chBoxGeo(),w,s*.148,-.06,0,.006,.13,.04); add(low(l),chBoxGeo(),w,s*.142,-.05,0,.006,.12,.04); });
-      if(k==='overall'){ add(C.g,chBoxGeo(),m,0,TY+.25,.266,.26,.18,.02); for(const s of [-1,1]){ add(C.g,chBoxGeo(),m,s*.1,TY+.38,.22,.045,.2,.02,-.45); add(C.g,chSph(),chClothMat('#e8c45a'),s*.1,TY+.31,.272,.018,.018,.008); } } }
+      if(B.stripe) legs.forEach(l=>{ const s=l.userData.side, w=CM(B.stripe); add(up(l),chBoxGeo(),w,s*.148,-.06,0,.006,.13,.04); add(low(l),chBoxGeo(),w,s*.142,-.05,0,.006,.12,.04); });
+      if(k==='overall'){ add(C.g,chBoxGeo(),m,0,TY+.25,.266,.26,.18,.02); for(const s of [-1,1]){ add(C.g,chBoxGeo(),m,s*.1,TY+.38,.22,.045,.2,.02,-.45); add(C.g,chSph(),CM('#e8c45a'),s*.1,TY+.31,.272,.018,.018,.008); } } }
     else if(k==='skirt') add(C.g,chConeGeo([[.32,.2],[.38,.1],[.43,-.02],[.435,-.03]]),m,0,TY,0,1,1,ZS);
-    else if(k==='tutu'){ add(C.g,chShellGeo(0,.16,1.05,true),chClothMat(B.c2),0,TY,0,1,1,ZS); for(let i=0;i<3;i++) add(C.g,chConeGeo([[.3,.12],[.42+i*.03,.08-i*.02],[.55+i*.03,.05-i*.03]]),m,0,TY-.03*i,0,1,1,ZS); }
+    else if(k==='tutu'){ add(C.g,SG(0,.16,1.05,true),CM(B.c2),0,TY,0,1,1,ZS); for(let i=0;i<3;i++) add(C.g,chConeGeo([[.3,.12],[.42+i*.03,.08-i*.02],[.55+i*.03,.05-i*.03]]),m,0,TY-.03*i,0,1,1,ZS); }
   }
   // --- zapatos ---
   const Z=it('cshoe');
-  if(Z){ const m=chClothMat(Z.c,Z.pat,Z.c2), sole=chClothMat(Z.sole||'#f4f1ea',null,null,{emi:Z.emi}), k=Z.sk;
-    legs.forEach(l=>{ const J=low(l), f=l.userData.foot; if(!f) return; const fx=f.position.x, fy=f.position.y, fz=f.position.z;
+  if(Z){ const m=CM(Z.c,Z.pat,Z.c2), sole=CM(Z.sole||'#f4f1ea',null,null,{emi:Z.emi}), k=Z.sk;
+    legs.forEach(l=>{ const J=X?X.foot.get(l):low(l), f=X?X.footPos:l.userData.foot; if(!f) return; const fx=f.position.x, fy=f.position.y, fz=f.position.z;
       const big=k==='pantufla'||k==='nieve'?1.18:1;
       add(J,chSph(),m,fx,fy+.008,fz+.005,.155*big,.125*big,.198*big);
       if(k!=='pantufla' && k!=='ballet') add(J,chCylGeo(),sole,fx,fy-.1,fz+.008,.142,.03,.18);
-      if(k==='tenis'||k==='luces'){ add(J,chBoxGeo(),chClothMat(Z.c2||'#ffffff'),fx,fy+.06,fz+.13,.05,.02,.07,-.5); }
-      if(k==='bota'||k==='lluvia'||k==='nieve'||k==='vaquera'){ add(J,chTubeGeo(.14,.138,.11),m,0,-.075,0); add(J,chRingGeo(.138,.016),k==='nieve'?chClothMat('#ffffff'):m,0,-.02,0,1,1,1,Math.PI/2); }
-      if(k==='vaquera') add(J,chBoxGeo(),chClothMat('#5a3a20'),fx,fy-.085,fz-.12,.06,.05,.04);
-      if(k==='pantufla') for(const s of [-1,1]) add(J,chSph(),chClothMat('#ffffff'),fx+s*.05,fy+.16,fz+.06,.035,.09,.025,-.3,0,s*.25);
-      if(k==='ballet') add(J,chRingGeo(.123,.01),chClothMat(Z.c2||'#f7a6c4'),0,-.09,0,1,1,1,Math.PI/2);
-      if(k==='zapato') add(J,chBoxGeo(),chClothMat(Z.c2||'#2a2226'),fx,fy+.075,fz+.06,.13,.02,.02,-.3); });
+      if(k==='tenis'||k==='luces'){ add(J,chBoxGeo(),CM(Z.c2||'#ffffff'),fx,fy+.06,fz+.13,.05,.02,.07,-.5); }
+      if(k==='bota'||k==='lluvia'||k==='nieve'||k==='vaquera'){ add(J,chTubeGeo(.14,.138,.11),m,0,-.075,0); add(J,chRingGeo(.138,.016),k==='nieve'?CM('#ffffff'):m,0,-.02,0,1,1,1,Math.PI/2); }
+      if(k==='vaquera') add(J,chBoxGeo(),CM('#5a3a20'),fx,fy-.085,fz-.12,.06,.05,.04);
+      if(k==='pantufla') for(const s of [-1,1]) add(J,chSph(),CM('#ffffff'),fx+s*.05,fy+.16,fz+.06,.035,.09,.025,-.3,0,s*.25);
+      if(k==='ballet') add(J,chRingGeo(.123,.01),CM(Z.c2||'#f7a6c4'),0,-.09,0,1,1,1,Math.PI/2);
+      if(k==='zapato') add(J,chBoxGeo(),CM(Z.c2||'#2a2226'),fx,fy+.075,fz+.06,.13,.02,.02,-.3); });
   }
-  chibiHatAcc(o,eq,list,C,add);   // v155: gorros y accesorios
+  if(!X) chibiHatAcc(o,eq,list,C,add);   // v155: gorros y accesorios
 }
 // ---------- v155: gorros y accesorios del Chibi (parte 4) ----------
 // Medidas de la cabeza con cabello: todo se arma alrededor del centro de la cabeza (H) con sus radios.
@@ -3504,6 +3504,26 @@ function chibiHatAcc(o,eq,list,C,add){ const u=o.userData, it=k=>eq && SHOP_BY[e
       const tg=CH_CG.tail||(CH_CG.tail=new THREE.TubeGeometry(cv,14,.045,8,false)); add(p,tg,a,0,0,0); add(p,chSph(),b,.02,-.38,.08,.05,.05,.05); }
     else if(k==='estrella'){ add(g,chShapeGeo('star'),M(acc.c,{emi:'#4a3a00'}),.5,H+RY*.5,.4,1.7,1.7,1.4,-.3,.75,-.2); } }
   const S=u.hsw; if(S) S.pieces=[...(C.hairX||[]),...(C.earX||[]),...pivots]; }
+// v158: la ropa del Amigurumi: las prendas del Chibi, estiradas a su cuerpo (más alto y delgado) y tejidas con estambre
+const AM_CLOTH={};
+function amClothMat(c,pat,c2,o){ o=o||{}; const key=[c,pat,c2,o.emi,o.rep].join('|'); if(AM_CLOTH[key]) return AM_CLOTH[key];
+  const cv=document.createElement('canvas'); cv.width=cv.height=256; const g=cv.getContext('2d');
+  if(pat) g.drawImage(chPatCanvas(pat,c,c2||'#ffffff'),0,0,256,256); else { g.fillStyle=c; g.fillRect(0,0,256,256); }
+  g.globalCompositeOperation='multiply'; const st=amStitchTex(), n=pat?6:4; for(let i=0;i<n;i++) for(let j=0;j<n;j++) g.drawImage(st,i*256/n,j*256/n,256/n,256/n);
+  const t=new THREE.CanvasTexture(cv); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(...(pat?(o.rep||[4,2]):[3,2])); t.anisotropy=4;
+  const b=new THREE.CanvasTexture(amStitchTex()); b.wrapS=b.wrapT=THREE.RepeatWrapping; b.repeat.set(...(pat?(o.rep||[4,2]).map(x=>x*6):[12,8]));
+  const m=new THREE.MeshStandardMaterial({map:t, bumpMap:b, bumpScale:.015, roughness:1, side:THREE.DoubleSide});
+  if(o.emi){ m.emissive=new THREE.Color(o.emi); m.emissiveIntensity=.9; }
+  return AM_CLOTH[key]=m; }
+// el perfil del cuerpo del Amigurumi, pasado a las medidas del Chibi (así las prendas del Chibi le quedan justas)
+const AM_TORSO_C=(()=>{ const prof=[[0,0],[.19,.02],[.215,.14],[.205,.34],[.19,.5],[.15,.58],[.08,.62],[0,.63]]; return new THREE.SplineCurve(prof.map(p=>new THREE.Vector2(p[0]/.69,p[1]/1.19))).getPoints(48); })();
+function amiguClothes(o,eq,list){ const u=o.userData, A=u.am; if(!A || !eq) return;
+  const wrap=(par,x,y,z,sx,sy,sz)=>{ const g=new THREE.Group(); g.position.set(x,y,z); g.scale.set(sx,sy,sz); par.add(g); list.push(g); return g; };
+  const X={mat:amClothMat, shell:(y0,y1,k,cb)=>chShellGeo(y0,y1,k,cb,AM_TORSO_C,'am'), up:new Map(), low:new Map(), foot:new Map(), footPos:{position:new THREE.Vector3(0,-.16,.04)}};
+  X.torso=wrap(A.g,0,.76-.34*1.19,0,.69,1.19,.69*.82/.85);   // el cuerpo del Chibi (.53 de alto) → el del Amigurumi (.63)
+  u.arms.forEach(a=>{ X.up.set(a,wrap(a,0,0,0,.65,2,.65)); X.low.set(a,wrap(a.userData.joint,0,0,0,.57,1.76,.57)); });
+  u.legs.forEach(l=>{ X.up.set(l,wrap(l,0,0,0,.68,2.77,.68)); X.low.set(l,wrap(l.userData.joint,0,0,0,.67,2.77,.67)); X.foot.set(l,wrap(l.userData.joint,0,-.257,.005,.71,.77,.75)); });
+  chibiClothes(o,{ctop:eq.atop, cbot:eq.abot, cshoe:eq.ashoe},list,X); }
 // Chibi sentado en el piso (k: 0 de pie … 1 sentado): piernas estiradas al frente y manos apoyadas atrás
 function chibiSitPose(o,k){ if(k<.002 || o.userData.av!=='c') return; const {arms,legs}=o.userData;
   legs.forEach(l=>{ const j=l.userData.joint; l.rotation.x+=(-1.45-l.rotation.x)*k; j.rotation.x+=(.06-j.rotation.x)*k; });
@@ -7876,7 +7896,7 @@ function updateCoinFx(dt){
 // ======================================================================================
 // Lo que compras se guarda en este navegador. Lo que traes puesto viaja en tu presencia ("ou"),
 // así todos en la sala ven tu peluche vestido igual que tú.
-const SLOT_OF={apiel:'askin', aojos:'aeyes', apelo:'ahair', acolor:'ahcol', acejas:'abrows', amejillas:'acheeks', aorejas:'aears', cuerpo:'body', cpiel:'cskin', cojos:'ceyes', cpelo:'chair', ccolor:'chcol', ccejas:'cbrows', cboca:'cmouth', cmejillas:'ccheeks', corejas:'cears', carriba:'ctop', cabajo:'cbot', czapatos:'cshoe', cgorros:'chat', caccesorios:'cacc', sudaderas:'top', camisas:'top', sueteres:'top', gorras:'hat', guantes:'gloves', calcetines:'socks', zapatos:'shoes', gafas:'glasses', colores:'skin', texturas:'tex'};
+const SLOT_OF={aarriba:'atop', aabajo:'abot', azapatos:'ashoe', apiel:'askin', aojos:'aeyes', apelo:'ahair', acolor:'ahcol', acejas:'abrows', amejillas:'acheeks', aorejas:'aears', cuerpo:'body', cpiel:'cskin', cojos:'ceyes', cpelo:'chair', ccolor:'chcol', ccejas:'cbrows', cboca:'cmouth', cmejillas:'ccheeks', corejas:'cears', carriba:'ctop', cabajo:'cbot', czapatos:'cshoe', cgorros:'chat', caccesorios:'cacc', sudaderas:'top', camisas:'top', sueteres:'top', gorras:'hat', guantes:'gloves', calcetines:'socks', zapatos:'shoes', gafas:'glasses', colores:'skin', texturas:'tex'};
 const SHOP_CATS=[
   {id:'cuerpo', name:'Cuerpo', ic:'🧸'}, {id:'cpiel', name:'Tono de piel', ic:'🎨', av:'c'}, {id:'cojos', name:'Ojos', ic:'👀', av:'c'},
   {id:'cpelo', name:'Peinado', ic:'💇', av:'c'}, {id:'ccolor', name:'Color de cabello', ic:'🖍️', av:'c'}, {id:'ccejas', name:'Cejas', ic:'🤨', av:'c'}, {id:'cboca', name:'Boca', ic:'👄', av:'c'},
@@ -7885,6 +7905,7 @@ const SHOP_CATS=[
   {id:'cgorros', name:'Gorros', ic:'🧢', av:'c'}, {id:'caccesorios', name:'Accesorios', ic:'🎀', av:'c'},
   {id:'apiel', name:'Tono de piel', ic:'🧶', av:'a'}, {id:'aojos', name:'Ojos', ic:'👀', av:'a'},
   {id:'apelo', name:'Peinado', ic:'💇', av:'a'}, {id:'acolor', name:'Color de cabello', ic:'🖍️', av:'a'}, {id:'acejas', name:'Cejas', ic:'🤨', av:'a'}, {id:'amejillas', name:'Mejillas', ic:'😊', av:'a'}, {id:'aorejas', name:'Orejitas', ic:'🐱', av:'a'},
+  {id:'aarriba', name:'Arriba', ic:'👕', av:'a'}, {id:'aabajo', name:'Abajo', ic:'👖', av:'a'}, {id:'azapatos', name:'Zapatos', ic:'👟', av:'a'},
   {id:'mascotas', name:'Mascotas', ic:'🐾'}, {id:'sudaderas', name:'Sudaderas', ic:'🧥'}, {id:'camisas', name:'Camisas', ic:'👕'}, {id:'sueteres', name:'Suéteres', ic:'🧶'},
   {id:'gorras', name:'Gorras', ic:'🧢'}, {id:'guantes', name:'Guantes', ic:'🧤'}, {id:'calcetines', name:'Calcetines', ic:'🧦'},
   {id:'zapatos', name:'Zapatos', ic:'👟'}, {id:'gafas', name:'Gafas', ic:'🕶️'}, {id:'colores', name:'Colores especiales', ic:'🌈'}, {id:'texturas', name:'Texturas', ic:'✨'}];
@@ -8212,14 +8233,15 @@ I('cuerpo','av_amigu','Amigurumi',0,{free:1, thumb:'amigu', plain:'#f4efe6'});
   .forEach(([k,n,p])=>I('aojos','ae_'+k,n,p,p?{eye:k, aeye:1}:{eye:k, aeye:1, free:1}));
 // v157: lo mismo que el Chibi, en versión tejida para el Amigurumi (copiado de su lista, con su propio id)
 { const cp=(cat,pre,np)=>SHOP.filter(it=>it.cat===cat).forEach(it=>{ const o={...it}; delete o.id; delete o.cat; delete o.name; delete o.price; I(np,pre+it.id.slice(it.id.indexOf('_')+1),it.name,it.price,o); });
+  cp('carriba','ara_','aarriba'); cp('cabajo','arb_','aabajo'); cp('czapatos','arz_','azapatos');
   cp('cpelo','ahp_','apelo'); cp('ccolor','ahc_','acolor'); cp('ccejas','acj_','acejas'); cp('cmejillas','amj_','amejillas'); cp('corejas','aor_','aorejas'); }
 const SHOP_BY={}; SHOP.forEach(it=>{ it.slot=SLOT_OF[it.cat]; it.av=(SHOP_CATS.find(c=>c.id===it.cat)||{}).av||'f'; if(it.price>0) it.price=Math.max(15,it.price*5); SHOP_BY[it.id]=it; });   // v124: precios ×5 (economía más justa)
-const OUT_SLOTS=['top','hat','gloves','socks','shoes','glasses','skin','tex','body','cskin','ceyes','chair','chcol','cbrows','cmouth','ccheeks','cears','ctop','cbot','cshoe','chat','cacc','askin','aeyes','ahair','ahcol','abrows','acheeks','aears'];
+const OUT_SLOTS=['top','hat','gloves','socks','shoes','glasses','skin','tex','body','cskin','ceyes','chair','chcol','cbrows','cmouth','ccheeks','cears','ctop','cbot','cshoe','chat','cacc','askin','aeyes','ahair','ahcol','abrows','acheeks','aears','atop','abot','ashoe'];
 // lo comprado y lo puesto
 const wardrobe=(()=>{ let w={own:[], eq:{}}; try{ const s=JSON.parse(localStorage.getItem('mundoPelucheRopa')||'null'); if(s){ w.own=(s.own||[]).filter(id=>SHOP_BY[id]); for(const k of OUT_SLOTS) if(s.eq && SHOP_BY[s.eq[k]] && (w.own.includes(s.eq[k]) || SHOP_BY[s.eq[k]].free)) w.eq[k]=s.eq[k]; } }catch(e){} return w; })();
 function saveWardrobe(){ try{ localStorage.setItem('mundoPelucheRopa', JSON.stringify(wardrobe)); }catch(e){} }
 const outfitList=eq=>OUT_SLOTS.map(k=>eq[k]).filter(Boolean);
-function parseOutfit(a){ const eq={}; if(Array.isArray(a)) a.slice(0,44).forEach(id=>{ const it=typeof id==='string' && SHOP_BY[id]; if(it) eq[it.slot]=id; }); return eq; }
+function parseOutfit(a){ const eq={}; if(Array.isArray(a)) a.slice(0,48).forEach(id=>{ const it=typeof id==='string' && SHOP_BY[id]; if(it) eq[it.slot]=id; }); return eq; }
 
 // ---- Telas (dibujadas en un lienzo, con pelusa de fieltro) ----
 function fuzz(g,w,h,n){ for(let i=0;i<n;i++){ const x=Math.random()*w, y=Math.random()*h, a=Math.random()*Math.PI, l=1+Math.random()*3; g.strokeStyle=Math.random()<.5?'rgba(0,0,0,.10)':'rgba(255,255,255,.10)'; g.lineWidth=.6; g.beginPath(); g.moveTo(x,y); g.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l); g.stroke(); } }
@@ -8711,6 +8733,7 @@ function buildItem(o,it,list){
 function applyOutfit(o,eq){ batchDropUnder(o); const u=o.userData; (u.cloth||[]).forEach(m=>m.parent&&m.parent.remove(m)); u.cloth=[]; u.outfit=eq||{};
   try{ avatarShape(o,u.outfit); }catch(e){ console.warn('avatar',e); }   // v152: Frijolito o Chibi
   if(u.av==='c') try{ chibiClothes(o,u.outfit,u.cloth); }catch(e){ console.warn('ropa chibi',e); }   // v154: su propia ropa
+  if(u.av==='a') try{ amiguClothes(o,u.outfit,u.cloth); }catch(e){ console.warn('ropa amigurumi',e); }   // v158: la del Amigurumi, tejida
   u.hatParts=[]; if(u.av==='f') for(const k of ['top','hat','gloves','socks','shoes','glasses']){ const it=SHOP_BY[u.outfit[k]], n0=u.cloth.length; if(it) try{ buildItem(o,it,u.cloth); }catch(e){} if(k==='hat') u.hatParts=u.cloth.slice(n0); }   // la ropa del Frijolito es solo del Frijolito
   recolor(o, u.colorIdx|0); if(o===plush) try{ waveLabel(); }catch(e){} }
 applyOutfit(plush, wardrobe.eq);
@@ -8722,7 +8745,7 @@ const myAv=()=>wardrobe.eq.body==='av_chibi'?'c':wardrobe.eq.body==='av_amigu'?'
 const owns=it=>!!it.free || wardrobe.own.includes(it.id);
 const diShopVis=it=>shopOnly ? (it.dulce===1 || (!!it.dulce && wardrobe.own.includes(it.id))) : ((it.cat==='cuerpo' || it.av===myAv()) && (!it.dulce || wardrobe.own.includes(it.id)));   // v152: solo lo del cuerpo que traes
 // ---- Filtros de la tienda: buscar por nombre o color, lo nuevo, lo mío y lo que me alcanza ----
-const NEW_RE=/^(ahp_|ahc_|acj_|amj_|aor_|ap_|ae_|rg_|rc_|ra_|rb_|rz_|hp_|hc_|cj_|bo_|mj_|or_|cp_|co_|sdd_|cmd_|sud_|god_|gud_|cad_|hn_|gln_|gun_|zn_|zp_dino$|sdn_|pln_|cmn_|sun2_|can_|dg_(aurora|chicle|caribe|volcan)$|pa_(salmon|pistache)$|ne_(dorado|menta)$|fo_amarillo$|ar_rayas$|tx_(huellitas|mezclilla|vichy|hojas|notas|burbujas|fresas|sandia|cuadritos|metalazul)$)/;
+const NEW_RE=/^(ara_|arb_|arz_|ahp_|ahc_|acj_|amj_|aor_|ap_|ae_|rg_|rc_|ra_|rb_|rz_|hp_|hc_|cj_|bo_|mj_|or_|cp_|co_|sdd_|cmd_|sud_|god_|gud_|cad_|hn_|gln_|gun_|zn_|zp_dino$|sdn_|pln_|cmn_|sun2_|can_|dg_(aurora|chicle|caribe|volcan)$|pa_(salmon|pistache)$|ne_(dorado|menta)$|fo_amarillo$|ar_rayas$|tx_(huellitas|mezclilla|vichy|hojas|notas|burbujas|fresas|sandia|cuadritos|metalazul)$)/;
 const isNewItem=it=>NEW_RE.test(it.id), isNewPet=p=>p.i>=12;
 const shopF={q:'', new:false, mine:false, afford:false};
 // quita acentos y la terminación (roja/rojo/rojas → roj) para que «rojo» encuentre «Gorra roja»
@@ -8769,6 +8792,7 @@ function swatchCss(it){
 function chSwatch(it){ const e=wardrobe.eq, base={body:'av_chibi', cskin:e.cskin, chcol:e.chcol, ceyes:e.ceyes||'co_cafe'};
   try{
     if(it.aeye) return `url(${canUrl(avPortrait({body:'av_amigu', askin:e.askin, aeyes:it.id},'acara'))}) center/cover`;
+    if(it.av==='a' && (it.tk||it.bk||it.sk)){ const ab={body:'av_amigu', askin:e.askin, aeyes:e.aeyes||'ae_negro', ahcol:e.ahcol, ahair:e.ahair, atop:e.atop, abot:e.abot, ashoe:e.ashoe}; ab[it.slot]=it.id; return `url(${canUrl(avPortrait(ab,it.sk?'apies':'acuerpo'))}) center/cover`; }
     if(it.av==='a' && (it.hs||it.ear||it.br||it.ck)){ const ab={body:'av_amigu', askin:e.askin, aeyes:e.aeyes||'ae_negro', ahcol:e.ahcol, ahair:e.ahair, abrows:e.abrows, acheeks:e.acheeks}; ab[it.slot]=it.id; return `url(${canUrl(avPortrait(ab,'acara'))}) center/cover`; }
     if(it.hs) return `url(${canUrl(avPortrait({...base, chair:it.id}))}) center/cover`;
     if(it.ear) return `url(${canUrl(avPortrait({...base, chair:e.chair, cears:it.id}))}) center/cover`;
