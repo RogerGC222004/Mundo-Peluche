@@ -11,3 +11,6 @@ Juego 3D de peluches en el navegador, con mundo abierto, coches, mar y multijuga
 
 Las salas se conectan directo entre jugadores (WebRTC con PeerJS). Quien entra primero hace de anfitrión;
 si se sale, otro jugador toma su lugar automáticamente.
+
+## Derechos
+© 2026 RogerGC · Todos los derechos reservados. Ver [LICENSE](LICENSE): el código está a la vista solo para publicar el juego; no se permite copiarlo, modificarlo ni publicarlo sin permiso.

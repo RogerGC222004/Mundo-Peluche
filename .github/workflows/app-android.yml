@@ -1,7 +1,7 @@
 # Arma la app de Android de Mundo Peluche cada vez que cambia el juego.
 # - Siempre: un APK para instalar y probar en tu teléfono.
 # - El APK se firma con la llave privada del APK (secretos APK_LLAVE y APK_LLAVE_CLAVE); sin ellos, con la de prueba.
-# - Si en GitHub existe el secreto LLAVE_CLAVE: además el AAB (el que se sube a Google Play), firmado con tu llave.
+# - Si en GitHub existen los secretos PLAY_LLAVE y PLAY_LLAVE_CLAVE: además el AAB (el que se sube a Google Play), firmado con esa llave.
 # Todo queda en "Releases" del repositorio (app-v<versión>).
 name: App Android
 on:
@@ -49,7 +49,8 @@ jobs:
       - name: Armar (APK y AAB)
         working-directory: app/android
         env:
-          LLAVE_CLAVE: ${{ secrets.LLAVE_CLAVE }}
+          PLAY_LLAVE: ${{ secrets.PLAY_LLAVE }}
+          PLAY_LLAVE_CLAVE: ${{ secrets.PLAY_LLAVE_CLAVE }}
           APK_LLAVE: ${{ secrets.APK_LLAVE }}
           APK_LLAVE_CLAVE: ${{ secrets.APK_LLAVE_CLAVE }}
         run: |
@@ -70,9 +71,10 @@ jobs:
           unset APK_LLAVE_ARCHIVO; rm -f "$RUNNER_TEMP/apk.p12"
           cp app/build/outputs/apk/debug/app-debug.apk "../../mundo-peluche-${{ steps.ver.outputs.v }}-prueba.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "../../mundo-peluche.apk"   # mismo nombre siempre: enlace fijo a la última versión
-          if [ -n "$LLAVE_CLAVE" ]; then   # para Google Play: el AAB firmado con tu llave
-            export LLAVE_ARCHIVO="$GITHUB_WORKSPACE/app/llave/subida.p12" LLAVE_ALIAS=mundopeluche
-            ./gradlew --no-daemon bundleRelease 2>&1 | tee -a ../../registro.txt
+          if [ -n "$PLAY_LLAVE" ] && [ -n "$PLAY_LLAVE_CLAVE" ]; then   # para Google Play: el AAB firmado con la llave de subida (v151: solo existe como secreto)
+            printf '%s' "$PLAY_LLAVE" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/play.p12"
+            LLAVE_ARCHIVO="$RUNNER_TEMP/play.p12" LLAVE_ALIAS=mundopeluche LLAVE_CLAVE="$PLAY_LLAVE_CLAVE" ./gradlew --no-daemon bundleRelease 2>&1 | tee -a ../../registro.txt
+            rm -f "$RUNNER_TEMP/play.p12"
             cp app/build/outputs/bundle/release/app-release.aab "../../mundo-peluche-${{ steps.ver.outputs.v }}.aab"
           fi
       - name: Publicar en Releases
