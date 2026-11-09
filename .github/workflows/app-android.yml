@@ -1,6 +1,6 @@
 # Arma la app de Android de Mundo Peluche cada vez que cambia el juego.
 # - Siempre: un APK para instalar y probar en tu teléfono.
-# - El APK siempre lleva la firma de prueba fija (se actualiza encima sin desinstalar).
+# - El APK se firma con la llave privada del APK (secretos APK_LLAVE y APK_LLAVE_CLAVE); sin ellos, con la de prueba.
 # - Si en GitHub existe el secreto LLAVE_CLAVE: además el AAB (el que se sube a Google Play), firmado con tu llave.
 # Todo queda en "Releases" del repositorio (app-v<versión>).
 name: App Android
@@ -50,13 +50,24 @@ jobs:
         working-directory: app/android
         env:
           LLAVE_CLAVE: ${{ secrets.LLAVE_CLAVE }}
+          APK_LLAVE: ${{ secrets.APK_LLAVE }}
+          APK_LLAVE_CLAVE: ${{ secrets.APK_LLAVE_CLAVE }}
         run: |
           set -o pipefail
           chmod +x gradlew
           # v132: el APK para instalar siempre usa la misma firma de prueba (app/llave/prueba-debug.keystore),
           # así cada versión nueva se instala encima de la anterior sin desinstalar ni perder el progreso.
           mkdir -p ~/.android && cp "$GITHUB_WORKSPACE/app/llave/prueba-debug.keystore" ~/.android/debug.keystore
-          ./gradlew --no-daemon assembleDebug 2>&1 | tee -a ../../registro.txt
+          # v148: si existen los secretos, el APK se firma con la llave privada (nadie más puede hacer "actualizaciones" falsas)
+          if [ -n "$APK_LLAVE" ] && [ -n "$APK_LLAVE_CLAVE" ]; then
+            printf '%s' "$APK_LLAVE" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/apk.p12"
+            export APK_LLAVE_ARCHIVO="$RUNNER_TEMP/apk.p12"
+            echo "APK: firmado con la llave privada"
+          else
+            echo "APK: firmado con la llave de prueba (faltan los secretos APK_LLAVE / APK_LLAVE_CLAVE)"
+          fi
+          APK_LLAVE_CLAVE="$APK_LLAVE_CLAVE" ./gradlew --no-daemon assembleDebug 2>&1 | tee -a ../../registro.txt
+          unset APK_LLAVE_ARCHIVO; rm -f "$RUNNER_TEMP/apk.p12"
           cp app/build/outputs/apk/debug/app-debug.apk "../../mundo-peluche-${{ steps.ver.outputs.v }}-prueba.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "../../mundo-peluche.apk"   # mismo nombre siempre: enlace fijo a la última versión
           if [ -n "$LLAVE_CLAVE" ]; then   # para Google Play: el AAB firmado con tu llave

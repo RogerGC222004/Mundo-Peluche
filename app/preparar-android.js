@@ -70,11 +70,18 @@ g=g.replace(/versionCode\s*=?\s*\d+/,'versionCode '+ver).replace(/versionName\s*
 must(g,/buildTypes\s*\{\s*release\s*\{/,'buildTypes.release');
 g=g.replace(/android\s*\{/,`android {
     signingConfigs {
-        debug {   // v132: firma de prueba fija, así el APK se actualiza encima sin desinstalar
-            storeFile file("../../llave/prueba-debug.keystore")
-            storePassword "android"
-            keyAlias "androiddebugkey"
-            keyPassword "android"
+        debug {   // v148: el APK se firma con la llave privada del APK (secreto APK_LLAVE en GitHub); si no está, con la de prueba
+            if (System.getenv("APK_LLAVE_ARCHIVO")) {
+                storeFile file(System.getenv("APK_LLAVE_ARCHIVO"))
+                storePassword System.getenv("APK_LLAVE_CLAVE")
+                keyAlias "mundopelucheapk"
+                keyPassword System.getenv("APK_LLAVE_CLAVE")
+            } else {
+                storeFile file("../../llave/prueba-debug.keystore")
+                storePassword "android"
+                keyAlias "androiddebugkey"
+                keyPassword "android"
+            }
         }
         release {
             if (System.getenv("LLAVE_ARCHIVO")) {
