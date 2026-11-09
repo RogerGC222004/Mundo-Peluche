@@ -56,6 +56,8 @@ jobs:
         run: |
           set -o pipefail
           chmod +x gradlew
+          # v154: si GitHub o Maven fallan al descargar (error 504), se reintenta solo hasta 3 veces
+          reintenta(){ for i in 1 2 3; do "$@" && return 0; echo "Falló el intento $i (puede ser una descarga); reintento en 45 s"; sleep 45; done; return 1; }
           # v132: el APK para instalar siempre usa la misma firma de prueba (app/llave/prueba-debug.keystore),
           # así cada versión nueva se instala encima de la anterior sin desinstalar ni perder el progreso.
           mkdir -p ~/.android && cp "$GITHUB_WORKSPACE/app/llave/prueba-debug.keystore" ~/.android/debug.keystore
@@ -67,13 +69,13 @@ jobs:
           else
             echo "APK: firmado con la llave de prueba (faltan los secretos APK_LLAVE / APK_LLAVE_CLAVE)"
           fi
-          APK_LLAVE_CLAVE="$APK_LLAVE_CLAVE" ./gradlew --no-daemon assembleDebug 2>&1 | tee -a ../../registro.txt
+          reintenta env APK_LLAVE_CLAVE="$APK_LLAVE_CLAVE" ./gradlew --no-daemon assembleDebug 2>&1 | tee -a ../../registro.txt
           unset APK_LLAVE_ARCHIVO; rm -f "$RUNNER_TEMP/apk.p12"
           cp app/build/outputs/apk/debug/app-debug.apk "../../mundo-peluche-${{ steps.ver.outputs.v }}-prueba.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "../../mundo-peluche.apk"   # mismo nombre siempre: enlace fijo a la última versión
           if [ -n "$PLAY_LLAVE" ] && [ -n "$PLAY_LLAVE_CLAVE" ]; then   # para Google Play: el AAB firmado con la llave de subida (v151: solo existe como secreto)
             printf '%s' "$PLAY_LLAVE" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/play.p12"
-            LLAVE_ARCHIVO="$RUNNER_TEMP/play.p12" LLAVE_ALIAS=mundopeluche LLAVE_CLAVE="$PLAY_LLAVE_CLAVE" ./gradlew --no-daemon bundleRelease 2>&1 | tee -a ../../registro.txt
+            reintenta env LLAVE_ARCHIVO="$RUNNER_TEMP/play.p12" LLAVE_ALIAS=mundopeluche LLAVE_CLAVE="$PLAY_LLAVE_CLAVE" ./gradlew --no-daemon bundleRelease 2>&1 | tee -a ../../registro.txt
             rm -f "$RUNNER_TEMP/play.p12"
             cp app/build/outputs/bundle/release/app-release.aab "../../mundo-peluche-${{ steps.ver.outputs.v }}.aab"
           fi
