@@ -1123,7 +1123,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='159';
+const GAME_VERSION='160';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -1341,6 +1341,10 @@ const HILLS=[
   {x:200,z:-50,r:30,h:8}, {x:-50,z:-200,r:30,h:9}, {x:70,z:200,r:30,h:8}];
 const LAKE={x:55, z:-45, R:30, depth:1.4};
 const smooth=(e0,e1,x)=>{ const t=Math.min(1,Math.max(0,(x-e0)/(e1-e0))); return t*t*(3-2*t); };
+// v160: claros en el bosque para los minijuegos nuevos: el suelo queda plano (cuadrado de lado 2R, con orilla suave de B) y sin árboles
+const MZ={x:360, z:-430, N:15, S:3.2, WH:4.2, WT:.45, h:1.8, seed:-1, t0:0, fp:false};   // setos altos: nadie ve por encima
+const MG_PADS=[{x:MZ.x, z:MZ.z, R:MZ.N*MZ.S/2+5, B:12, h:MZ.h}];
+function mgPad(x,z,v){ for(const P of MG_PADS){ const d=Math.max(Math.abs(x-P.x),Math.abs(z-P.z)); if(d<P.R+P.B) v+=(P.h-v)*(1-smooth(P.R,P.R+P.B,d)); } return v; }
 const lerp=(a,b,t)=>a+(b-a)*t;
 // Perfil de la costa según qué tan lejos estás del borde (c = distancia / radio de costa)
 function shoreBase(c){
@@ -1530,7 +1534,7 @@ function terrainExact(x,z){
   if(ld<LAKE.R){ const u=ld/LAKE.R; h -= LAKE.depth*Math.pow(1-u*u,1.5); }
   // ondulación suave del fondo marino
   const sea = cN>1 ? .8*Math.sin(x*.03+1)*Math.cos(z*.027) * smooth(1,1.15,cN) * (1-smooth(1.35,1.45,cN)) : 0;
-  return h + reliefH(x,z) + shoreBaseN(cN) + sea;   // + montañas, cañones, colinas y el río (v119)
+  return mgPad(x,z, h + reliefH(x,z) + shoreBaseN(cN) + sea);   // + montañas, cañones, colinas y el río (v119)
 }
 const coastC=(x,z)=>Math.hypot(x,z)/coastR(x,z);
 // dónde empieza el mar mirando desde el centro en la dirección a (se busca desde afuera, así no confunde lagunas o el río con la costa)
@@ -1740,7 +1744,7 @@ const VEG={pines:[], snowPines:[], cacti:[]};
   const add=(L,it)=>{ it[0]=+it[0].toFixed(1); it[1]=+it[1].toFixed(1); L.push(it); };
   for(let gx=-95;gx<=95;gx++) for(let gz=-95;gz<=95;gz++){
     const r1=rlHash(gx*3+1,gz*7+5), r2=rlHash(gx*11+3,gz*5+9), r3=rlHash(gx*13+7,gz*17+1);
-    const x=(gx+.15+.7*r1)*C, z=(gz+.15+.7*r2)*C, d=Math.hypot(x,z); if(d<430 || d>1400) continue;
+    const x=(gx+.15+.7*r1)*C, z=(gz+.15+.7*r2)*C, d=Math.hypot(x,z); if(d<430 || d>1400) continue; if(MG_PADS.some(P=>Math.max(Math.abs(x-P.x),Math.abs(z-P.z))<P.R+P.B*.7)) continue;
     const a=Math.atan2(z,x), cO=d/coastOldR(x,z), cN=d/coastRN(a); if(cO<.93 || cN>.925) continue;   // lo de antes ya tiene lo suyo; la playa queda libre
     if(airportFlat(x,z)>.01) continue; { const [u,v]=airportUV(x,z); if(u>-140 && Math.abs(v+55)<175) continue; }   // aeropuerto y su pasillo
     if(cN>.76 && ARA.some(b=>Math.abs(angD(a,b))*d<130)) continue;   // juegos de la playa, muelle, cuco y cohete
@@ -4189,7 +4193,7 @@ function setHudMin(on){ document.body.classList.toggle('hud-min',on); const b=ui
 try{ if(localStorage.getItem('mundoPelucheHudMin')==='1') setHudMin(true); }catch(e){}
 tap(ui('hudTog'),()=>setHudMin(!document.body.classList.contains('hud-min')));
 tap(ui('pauseChip'),()=>{ if(document.pointerLockElement) document.exitPointerLock(); show('pause'); });
-tap(camChip,()=>{ const M=player.mg;
+tap(camChip,()=>{ const M=player.mg; if(mzLocked()){ flashNote('En el laberinto solo se juega en primera persona'); return; }
   if(M && M.g.fp){ M.view=mgView(M)==='first'?'third':'first'; try{ audio.cam(); }catch(e){} centerText(camChip, M.view==='first'?'1ª persona':'3ª persona'); return; }
   setCam(camMode==='third'?'first':'third'); });
 hold(ui('tJump'),()=>{ touchHold.up=true; jump(); },()=>{ touchHold.up=false; });
@@ -4203,7 +4207,8 @@ addEventListener('keydown',e=>{
   if(state!=='play'){ return; }
   keys[e.code]=true;
   if(e.code==='Space'){ e.preventDefault(); jump(); }
-  if(e.code==='KeyV' || e.code==='KeyC') setCam(camMode==='third'?'first':'third');
+  if((e.code==='KeyV' || e.code==='KeyC') && mzLocked()) flashNote('En el laberinto solo se juega en primera persona');
+  else if(e.code==='KeyV' || e.code==='KeyC') setCam(camMode==='third'?'first':'third');
   if(e.code==='KeyQ' && !e.repeat) startDive();
   if(e.code==='KeyP' || e.code==='Escape'){ if(e.code==='Escape' && (closeFishOv(false) || closeInv(false) || closeMap(false) || (window.__bookReady && closeBook(false)))) return; if(document.pointerLockElement) document.exitPointerLock(); show('pause'); }
   if(e.code.startsWith('Arrow')) e.preventDefault();
@@ -4892,6 +4897,7 @@ const AR_SPOTS=(()=>{ const coastAt=coastAtA;
     const at=d=>[u[0]*(c+d), u[1]*(c+d)];
     return {id, name, a, c, u, v, center:at(centerOff), plate:at(plateOff), watch:at(plateOff-6)}; };
   return [mk('plat','Plataformas flotantes',1.37,38,-7), mk('papa','Papa caliente',4.71,-44,-20), mk('bola','Rebote sobre pelotas',3.93,21,-7), mk('carrera','Carrera de obstáculos',.15,42,-7)]; })();
+AR_SPOTS.push({id:'laberinto', name:'Laberinto', a:0, c:0, u:[0,-1], v:[1,0], center:[MZ.x,MZ.z], plate:[MZ.x+3,MZ.z+MZ.N*MZ.S/2+5], watch:[MZ.x+3,MZ.z+MZ.N*MZ.S/2+9]});   // v160
 const TELEPORTS=[{id:'inicio', name:'Inicio', x:START.x, z:START.z}, {id:'pista', name:'Pista', x:MAP.park.x-6, z:MAP.park.z+30}, {id:'aero', name:'Aeropuerto', ...(([x,z])=>({x,z}))(airportXZ(85,-80))}, {id:'parque', name:'Parque', x:PG.x+1, z:PG.z+2}, {id:'feria', name:'Feria', x:FAIR.x+Math.sin(FAIR.yaw)*-(FAIR.R-5), z:FAIR.z+Math.cos(FAIR.yaw)*-(FAIR.R-5)}, ...AR_SPOTS.map(A=>({id:'ar_'+A.id, name:A.id==='carrera'?'Obstáculos':A.name, x:A.watch[0], z:A.watch[1], noPortal:true}))];
 
 // ---------- Portales del segundo piso del castillo: arcos de mini bombones que llevan a los lugares del mapa ----------
@@ -11416,10 +11422,67 @@ function racePlay(dt,G){ const me=AR.me; if(!RC.t0) RC.t0=performance.now();
   if(s>=386 && Math.abs(w)<6 && player.pos.y>RC.Y-.3 && me.st===2){ me.st=4; me.finMs=Math.round(performance.now()-RC.t0); bigText('¡Llegaste! '+fmtRace(me.finMs),2200); try{ coinSound(4); }catch(e){} sendPresence(true); } }
 const fmtRace=ms=>{ const s=ms/1000; return Math.floor(s/60)+':'+(s%60).toFixed(1).padStart(4,'0'); };
 
+// ---------------- 5) Laberinto (v160): de setos, en un claro del bosque; cada partida se arma uno nuevo ----------------
+// Todos arrancan en el cuarto del centro; la salida queda en una orilla distinta cada vez. Gana quien salga primero.
+// El laberinto sale de una semilla (G.sd) que manda el líder: así todos ven exactamente el mismo.
+function mzRand(seed){ let s=(seed>>>0)||1; return ()=>{ s=(s+0x6D2B79F5)>>>0; let t=s; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; }; }
+MZ.x0=MZ.x-MZ.N*MZ.S/2; MZ.z0=MZ.z-MZ.N*MZ.S/2; MZ.x1=MZ.x+MZ.N*MZ.S/2; MZ.z1=MZ.z+MZ.N*MZ.S/2;
+// paredes: hW = las que van a lo largo de x (entre filas), vW = las que van a lo largo de z (entre columnas)
+function mzGen(seed){ const N=MZ.N, R=mzRand(seed), hW=new Uint8Array((N+1)*N).fill(1), vW=new Uint8Array(N*(N+1)).fill(1), seen=new Uint8Array(N*N);
+  const H=(i,j)=>j*N+i, V=(i,j)=>j*(N+1)+i, c0=(N-1)/2;
+  const st=[[c0,c0]]; seen[c0*N+c0]=1;
+  while(st.length){ const [i,j]=st[st.length-1], opts=[];
+    if(i>0 && !seen[j*N+i-1]) opts.push([i-1,j,()=>vW[V(i,j)]=0]); if(i<N-1 && !seen[j*N+i+1]) opts.push([i+1,j,()=>vW[V(i+1,j)]=0]);
+    if(j>0 && !seen[(j-1)*N+i]) opts.push([i,j-1,()=>hW[H(i,j)]=0]); if(j<N-1 && !seen[(j+1)*N+i]) opts.push([i,j+1,()=>hW[H(i,j+1)]=0]);
+    if(!opts.length){ st.pop(); continue; } const o=opts[(R()*opts.length)|0]; o[2](); seen[o[1]*N+o[0]]=1; st.push([o[0],o[1]]); }
+  // el cuarto del centro (3×3) sin paredes adentro
+  for(let j=c0-1;j<=c0+1;j++) for(let i=c0-1;i<=c0+1;i++){ if(i>c0-1) vW[V(i,j)]=0; if(j>c0-1) hW[H(i,j)]=0; }
+  // unas cuantas vueltas extra (más de un camino), sin tocar la orilla
+  for(let k=0;k<N*N*.07;k++){ const i=1+((R()*(N-2))|0), j=1+((R()*(N-2))|0); if(R()<.5) vW[V(i,j)]=0; else hW[H(i,j)]=0; }
+  // la salida: un hueco en la orilla, en un lado y lugar al azar
+  const side=(R()*4)|0, k=1+((R()*(N-2))|0); let ex;
+  if(side===0){ hW[H(k,0)]=0; ex={i:k, j:-1}; } else if(side===1){ hW[H(k,N)]=0; ex={i:k, j:N}; } else if(side===2){ vW[V(0,k)]=0; ex={i:-1, j:k}; } else { vW[V(N,k)]=0; ex={i:N, j:k}; }
+  return {hW, vW, side, k, ex}; }
+// cajas de las paredes en el mundo: [cx, cz, medio-largo en x, medio-largo en z]
+function mzBoxes(M){ const N=MZ.N, S=MZ.S, T=MZ.WT/2, out=[];
+  for(let j=0;j<=N;j++) for(let i=0;i<N;i++) if(M.hW[j*N+i]) out.push([MZ.x0+(i+.5)*S, MZ.z0+j*S, S/2+T, T]);
+  for(let j=0;j<N;j++) for(let i=0;i<=N;i++) if(M.vW[j*(N+1)+i]) out.push([MZ.x0+i*S, MZ.z0+(j+.5)*S, T, S/2+T]);
+  return out; }
+const mzHedge=felt('#3f8a3c','rgba(10,50,10,.22)'), mzHedgeTop=felt('#5aa64e','rgba(10,50,10,.18)');
+const MZ_MAX=(MZ.N+1)*MZ.N*2;
+MZ.mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), mzHedge, MZ_MAX); MZ.mesh.castShadow=true; MZ.mesh.receiveShadow=true; MZ.mesh.userData.noBatch=true; scene.add(MZ.mesh);
+MZ.tops=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), mzHedgeTop, MZ_MAX); MZ.tops.userData.noBatch=true; scene.add(MZ.tops);
+// la puerta de salida (arco con letrero) y el círculo de salida en el centro
+MZ.gate=(()=>{ const g=new THREE.Group(), post=FM('#fbf3e4'), red=FM('#e5534b');
+  for(const s of [-1,1]){ const p=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,3.2,10),post); p.position.set(s*1.75,1.6,0); g.add(p); const b=new THREE.Mesh(sphereG,red); b.scale.setScalar(.2); b.position.set(s*1.75,3.25,0); g.add(b); }
+  const bar=new THREE.Mesh(new THREE.BoxGeometry(3.7,.16,.16),post); bar.position.y=3.1; g.add(bar);
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(2.6,.8), new THREE.MeshStandardMaterial({map:textTex(['¡SALIDA!'],512,158,'#fff3d6','#2f7a35','#7ed957'), roughness:.8, side:THREE.DoubleSide})); sg.position.y=2.55; g.add(sg);
+  scene.add(g); return g; })();
+{ const h=MZ.h, d=new THREE.Mesh(new THREE.CircleGeometry(3.6,40), new THREE.MeshStandardMaterial({map:textTex(['Laberinto','¡Encuentra la salida!'],512,512,'#fff3d6','#2f7a35','#ffd34d'), roughness:.8, polygonOffset:true, polygonOffsetFactor:-2}));
+  d.rotation.x=-Math.PI/2; d.position.set(MZ.x,h+.03,MZ.z); d.receiveShadow=true; scene.add(d); }   // se lee desde la placa (lado norte)
+function mzBuild(seed){ if(seed===MZ.seed) return; MZ.seed=seed; MZ.M=mzGen(seed); MZ.boxes=mzBoxes(MZ.M);
+  const o=new THREE.Object3D(), h=MZ.h; let n=0;
+  for(const [cx,cz,hx,hz] of MZ.boxes){ o.position.set(cx,h+MZ.WH/2,cz); o.scale.set(hx*2,MZ.WH,hz*2); o.rotation.set(0,0,0); o.updateMatrix(); MZ.mesh.setMatrixAt(n,o.matrix);
+    o.position.y=h+MZ.WH+.06; o.scale.set(hx*2+.08,.14,hz*2+.08); o.updateMatrix(); MZ.tops.setMatrixAt(n,o.matrix); n++; }
+  MZ.mesh.count=MZ.tops.count=n; MZ.mesh.instanceMatrix.needsUpdate=MZ.tops.instanceMatrix.needsUpdate=true; MZ.mesh.computeBoundingSphere&&(MZ.mesh.boundingSphere=null);
+  // la puerta, afuera del hueco de salida
+  const {ex}=MZ.M, S=MZ.S, gx=MZ.x0+(ex.i+.5)*S, gz=MZ.z0+(ex.j+.5)*S, onX=ex.j<0||ex.j>=MZ.N;
+  const px=onX?gx:(ex.i<0?MZ.x0:MZ.x1), pz=onX?(ex.j<0?MZ.z0:MZ.z1):gz; MZ.gate.position.set(px,h,pz); MZ.gate.rotation.y=onX?0:Math.PI/2; MZ.exitAt=[px,pz]; }
+mzBuild(777);   // uno de muestra mientras no hay partida
+// las paredes son sólidas (para todos, juegue o no)
+function mzCollide(p){ if(!MZ.boxes || p.x<MZ.x0-2 || p.x>MZ.x1+2 || p.z<MZ.z0-2 || p.z>MZ.z1+2 || p.y>MZ.h+MZ.WH+.3) return;
+  const r=.42; for(let pass=0;pass<2;pass++) for(const [cx,cz,hx,hz] of MZ.boxes){ const dx=p.x-cx, dz=p.z-cz; if(Math.abs(dx)>hx+r || Math.abs(dz)>hz+r) continue;
+    const qx=Math.max(-hx,Math.min(hx,dx)), qz=Math.max(-hz,Math.min(hz,dz)), ox=dx-qx, oz=dz-qz, d=Math.hypot(ox,oz);
+    if(d<r){ if(d>1e-4){ p.x=cx+qx+ox/d*r; p.z=cz+qz+oz/d*r; } else { if(hx-Math.abs(dx)<hz-Math.abs(dz)) p.x=cx+Math.sign(dx||1)*(hx+r); else p.z=cz+Math.sign(dz||1)*(hz+r); } } } }
+const mzLocked=()=>AR.me.a===4 && AR.me.st===2 && AR.G[4] && AR.G[4].ph>=1 && AR.G[4].ph<=3;
+// jugar: saliste cuando ya estás afuera del cuadro del laberinto
+function mazePlay(dt,G){ const me=AR.me; if(!MZ.t0) MZ.t0=performance.now();
+  const P=player.pos, out=P.x<MZ.x0-.8||P.x>MZ.x1+.8||P.z<MZ.z0-.8||P.z>MZ.z1+.8;
+  if(out && me.st===2){ me.st=4; me.finMs=Math.round(performance.now()-MZ.t0); bigText('¡Saliste! '+fmtRace(me.finMs),2200); try{ coinSound(4); }catch(e){} sendPresence(true); } }
 // ---------------- placas para unirse (en la playa) y letreros ----------------
 (function buildPlates(){ AR_SPOTS.forEach((A,i)=>{ const [x,z]=A.plate, h=terrainH(x,z);
   const m=padMesh(scene,x,z,.9); m.position.y=h+.04;
-  const sg=new THREE.Mesh(new THREE.PlaneGeometry(3.4,1.15), new THREE.MeshStandardMaterial({map:textTex([A.name, i===1?'Pásala antes de que explote':i===3?'¡El más rápido gana!':'¡El último gana!'],512,174,'#fff3d6','#7a2b2b','#ffd34d'), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(3.4,1.15), new THREE.MeshStandardMaterial({map:textTex([A.name, i===1?'Pásala antes de que explote':i===3?'¡El más rápido gana!':i===4?'¡Encuentra la salida!':'¡El último gana!'],512,174,'#fff3d6','#7a2b2b','#ffd34d'), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
   const yaw=Math.atan2(A.u[0],A.u[1]); const sp=[x+A.u[0]*1.6, z+A.u[1]*1.6]; sg.position.set(sp[0],h+2.6,sp[1]); sg.rotation.y=yaw+Math.PI; scene.add(sg); fairGlow.push(sg.material); const sb=sg.clone(); sb.rotation.y=yaw; sb.position.addScaledVector(new THREE.Vector3(A.u[0],0,A.u[1]),.02); scene.add(sb);
   [-1,1].forEach(s=>{ const p=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,2.6,8),new THREE.MeshStandardMaterial({color:'#fbf3e4'})); p.position.set(sp[0]+A.v[0]*s*1.6,h+1.3,sp[1]+A.v[1]*s*1.6); scene.add(p); obstacles.push({x:p.position.x,z:p.position.z,r:.12,top:h+2.6,walk:false}); }); }); })();
 
@@ -11429,7 +11492,7 @@ const fmtRace=ms=>{ const s=ms/1000; return Math.floor(s/60)+':'+(s%60).toFixed(
 function arenaPresence(){ const me=AR.me, la=AR.lead.indexOf(true);
   const agOf=a=>{ const G=AR.G[a]; return {a, ph:G.ph, ms:Math.round(G.ms/100)*100, gid:G.gid, pl:G.pl, el:G.el, h:G.h, hms:Math.round(G.hms/100)*100, pause:G.pause>0?1:0, rk:G.rk, tie:G.tie, sd:G.sd, prev:G.prev, fin:G.fin||[]}; };
   if(me.a<0) return {az:null, ag: la>=0 && AR.G[la].ph>0 ? agOf(la) : null, rt:null};   // aunque ya salí, sigo avisando cómo acabó la partida que llevaba
-  const az=[me.a, me.st]; if(me.a===2 && me.st===2) az.push(r2(BOLA.v.x), r2(BOLA.v.y), BOLA.dashT>0?1:0); if(me.a===1 && me.req) az.push(me.req[0], me.req[1]); if(me.a===3 && me.st===4) az.push(me.finMs||0);
+  const az=[me.a, me.st]; if(me.a===2 && me.st===2) az.push(r2(BOLA.v.x), r2(BOLA.v.y), BOLA.dashT>0?1:0); if(me.a===1 && me.req) az.push(me.req[0], me.req[1]); if((me.a===3||me.a===4) && me.st===4) az.push(me.finMs||0);
   const ag=AR.lead[me.a] ? agOf(me.a) : la>=0 && AR.G[la].ph>0 ? agOf(la) : null;
   return {az, ag, rt: me.a===0 && PLAT.mine.length ? [PLAT.gid, ...PLAT.mine.slice(-200)] : null}; }
 const clean12=s=>typeof s==='string'?s.slice(0,24):'';
@@ -11456,11 +11519,11 @@ function arLead(a,dt){ const G=AR.G[a], ms=dt*1000;
     else G.ms=-1; return; }
   G.ms-=ms;
   if(G.ph===1 && G.ms<=0){ G.ph=2; G.ms=AR_COUNT; }
-  else if(G.ph===2 && G.ms<=0){ G.ph=3; G.ms=[600000,240000,150000,300000][a]; G.pt=0; }
+  else if(G.ph===2 && G.ms<=0){ G.ph=3; G.ms=[600000,240000,150000,300000,300000][a]; G.pt=0; }
   else if(G.ph===3){
     G.pt=(G.pt||0)+ms; G.fin=G.fin||[]; G.ft=G.ft||{};
     for(const u of G.pl){ if(G.fin.includes(u)) continue; const st=arStatus(a,u);
-      if(a===3 && st===4 && !G.el.includes(u)){ G.fin.push(u); G.ft[u]=u===myUid?(AR.me.finMs||0):((arRemote(u)||{}).az||[])[2]||0; continue; }   // carrera: llegó a la meta
+      if((a===3||a===4) && st===4 && !G.el.includes(u)){ G.fin.push(u); G.ft[u]=u===myUid?(AR.me.finMs||0):((arRemote(u)||{}).az||[])[2]||0; continue; }   // carrera: llegó a la meta
       if(!G.el.includes(u) && (!arPresent(u) || st===3 || st===0 || (st!==2 && st!==4 && G.pt>4000))) G.el.push(u); }
     const alive=G.pl.filter(u=>!G.el.includes(u) && !G.fin.includes(u));
     if(a===1 && alive.length>1){   // papa caliente
@@ -11470,8 +11533,8 @@ function arLead(a,dt){ const G=AR.G[a], ms=dt*1000;
         const req = G.h===myUid ? AR.me.req : (r=>r&&r.az&&r.az[0]===1&&r.az.length>=4?[r.az[2],r.az[3]]:null)(arRemote(G.h));
         G.seen=G.seen||{}; if(req && req[1]>(G.seen[G.h]||0) && alive.includes(req[0]) && req[0]!==G.h){ G.seen[G.h]=req[1]; G.prev=G.h; G.h=req[0]; G.hms=Math.min(20000,G.hms+1000); }   // al pasarla se recarga un poquito (así no se puede quedar pasándola para siempre)
         if(G.hms<=0){ G.el.push(G.h); G.h=null; G.pause=3000; } } }
-    if(a===3 ? (alive.length===0 || G.ms<=0) : (alive.length<=1 || G.ms<=0)){
-      if(a===3){ const fs=G.fin.slice().sort((p,q)=>(G.ft[p]||1e9)-(G.ft[q]||1e9)); G.rk=[...fs, ...alive, ...G.el.slice().reverse()]; G.tie=fs.length?1:Math.max(1,alive.length); }
+    if((a===3||a===4) ? (alive.length===0 || G.ms<=0) : (alive.length<=1 || G.ms<=0)){
+      if(a===3||a===4){ const fs=G.fin.slice().sort((p,q)=>(G.ft[p]||1e9)-(G.ft[q]||1e9)); G.rk=[...fs, ...alive, ...G.el.slice().reverse()]; G.tie=fs.length?1:Math.max(1,alive.length); }
       else { const al=G.pl.filter(u=>!G.el.includes(u)); G.rk=[...al, ...G.el.slice().reverse()]; G.tie=Math.max(1,al.length); }
       G.ph=4; G.ms=AR_END; G.h=null; } }
   else if(G.ph===4 && G.ms<=0){ G.ph=0; G.ms=-1; G.pl=[]; G.el=[]; G.h=null; }
@@ -11498,12 +11561,14 @@ function arStartSpot(a,n,N){ const A=AR_SPOTS[a], ang=n/N*Math.PI*2+.3;
   if(a===0){ const T=PLAT.T, r=Math.min(18,4+N*1.2); const du=Math.cos(ang)*r, dv=Math.sin(ang)*r; const j=Math.round(du/T+PLAT.N/2-.5), i=Math.round(dv/T+PLAT.N/2-.5); const w=arW(A,(j-(PLAT.N-1)/2)*T,(i-(PLAT.N-1)/2)*T,platTop(PLAT.F-1)); return [w,ang]; }
   if(a===1){ const r=8, w=arW(A,Math.cos(ang)*r,Math.sin(ang)*r,0); w.y=terrainH(w.x,w.z)+.05; return [w,ang]; }
   if(a===3){ const w=rcW(3+Math.floor(n/4)*2.6, -4.5+(n%4)*3, RC.Y); return [w,ang]; }
+  if(a===4){ const r=1+(n%3)*.9, w=new THREE.Vector3(MZ.x+Math.cos(ang)*r, MZ.h+.05, MZ.z+Math.sin(ang)*r); return [w,ang]; }
   const r=7, w=arW(A,Math.cos(ang)*r,Math.sin(ang)*r,BOLA.top); return [w,ang]; }
 function arEnter(a,G){ const me=AR.me, n=G.pl.indexOf(myUid), [w,ang]=arStartSpot(a,n,G.pl.length), A=AR_SPOTS[a];
   me.gid=G.gid; me.st=2; me.req=null; me.lastPass=0;
   const c=arW(A,0,0,w.y), face=Math.atan2(c.x-w.x,c.z-w.z);
   if(a===0){ platReset(G.gid); }
   if(a===3){ RC.t0=0; RC.kv.set(0,0); me.finMs=0; }
+  if(a===4){ mzBuild(G.sd); MZ.t0=0; me.finMs=0; }
   arWarp(w.x,w.y,w.z,face);
   if(a===2){ BOLA.v.set(0,0); BOLA.vy=0; BOLA.fall=false; BOLA.mine.visible=true; }
   try{ audio.teleport(); }catch(e){} }
@@ -11545,9 +11610,11 @@ function arenaUpdate(dt){
       if(a===0) platPlay(dt);
       if(a===1) papaPlay(dt,G);
       if(a===3) racePlay(dt,G);
+      if(a===4) mazePlay(dt,G);
     }
     if(arBall()) ballPlay(dt,G);
   }
+  { const G=AR.G[4]; if(G && G.ph>=1 && G.sd) mzBuild(G.sd); const fp=mzLocked(); if(fp!==MZ.fp){ MZ.fp=fp; forceFirst(fp); } }   // v160: el laberinto de esta partida, y en primera persona mientras lo juegas
   // las baldosas quitadas se ven igual para todos (también para quien mira desde la playa)
   { const G=AR.G[0]; if(G.ph>=1 && G.gid) platReset(G.gid); else if(G.ph===0 && PLAT.gid && !(AR.me.a===0 && AR.me.st>=2)) platReset(''); }
   // baldosas que alguien pisa: se van poniendo rojas
@@ -11623,7 +11690,7 @@ function remoteArenaPose(r,t,dt){ const az=r.az; let b=remoteBalls.get(r);
   if(az && az[0]===1 && AR.G[1].h===uidOf(r) && AR.G[1].ph===3) pgPoseLimbs(r.obj,{armsUp:1},t,dt,r.walk||0); }
 function arenaGround(x,z,y){ if(!arenaReady) return null; const A=AR_SPOTS[0]; if(Math.abs(x-A.center[0])<40 && Math.abs(z-A.center[1])<40) return platGround(x,z,y); return raceGround(x,z,y); }
 // cámara: al acomodarse, una vuelta por arriba de la arena
-function arenaCamera(dt){ const me=AR.me; if(me.a<0 || me.st!==2 || AR.G[me.a].ph!==1) return false;
+function arenaCamera(dt){ const me=AR.me; if(me.a<0 || me.st!==2 || AR.G[me.a].ph!==1 || me.a===4) return false;   // v160: al laberinto no se le da la vuelta por arriba (se vería el camino)
   const A=AR_SPOTS[me.a], k=1-Math.max(0,AR.G[me.a].ms)/AR_PLACE, ang=k*1.8+Math.atan2(A.u[0],A.u[1]), rad=me.a===0?48:28, hgt=(me.a===0?platTop(4):me.a===3?RC.Y:terrainH(A.center[0],A.center[1]))+(me.a===0?22:16);
   const c=me.a===3?rcW(8,0,0):arW(A,0,0,0), want=_pv.set(c.x+Math.sin(ang)*rad*(1-k*.6), hgt*(1-k*.35)+ (me.a===0?0:4*k), c.z+Math.cos(ang)*rad*(1-k*.6));
   camera.position.lerp(want,1-Math.exp(-dt*4)); camera.lookAt(player.pos.x*k+c.x*(1-k), (me.a===0?platTop(4):player.pos.y)+1, player.pos.z*k+c.z*(1-k)); plush.visible=true; return true; }
@@ -11647,7 +11714,7 @@ function renderArHud(){ const me=AR.me, el=arHudEl(); if(!el) return;
   else if(G.ph===1||G.ph===2) txt='¡Prepárate!';
   else if(G.ph===3){ const alive=G.pl.filter(u=>!G.el.includes(u)).length; txt='Quedan '+alive+' · '+fmtMs(G.ms);
     if(me.a===1){ if(G.h===myUid) txt='¡Tienes la papa! Pásala: '+fmtMs(G.hms); else if(G.h){ const r=arRemote(G.h); txt='La tiene '+(r&&r.name||'alguien')+' · '+fmtMs(G.hms); } else txt='Nueva papa en un momento…'; }
-    if(me.a===3){ const fin=(G.fin||[]).length, N=G.pl.length, el=RC.t0?performance.now()-RC.t0:0; txt = me.st===4 ? '¡Llegaste! '+fmtRace(me.finMs)+' · llegaron '+fin+'/'+N : fmtRace(Math.floor(el/100)*100)+' · llegaron '+fin+'/'+N+' · quedan '+fmtMs(G.ms); }
+    if(me.a===3||me.a===4){ const t0=me.a===4?MZ.t0:RC.t0, fin=(G.fin||[]).length, N=G.pl.length, el=t0?performance.now()-t0:0; const lw=me.a===4?' · salieron ':' · llegaron '; txt = me.st===4 ? (me.a===4?'¡Saliste! ':'¡Llegaste! ')+fmtRace(me.finMs)+lw+fin+'/'+N : fmtRace(Math.floor(el/100)*100)+lw+fin+'/'+N+' · quedan '+fmtMs(G.ms); }
     if(me.st===3) txt='Fuera · '+txt; }
   else if(G.ph===4) txt='Resultados';
   const key=A.name+'|'+txt; if(key===arHudKey) return; arHudKey=key; el.hidden=false; ui('arTitle').textContent=A.name; ui('arTxt').textContent=txt;
@@ -14969,6 +15036,7 @@ function update(dt,t){ myLabelUpdate();
     softPushes();
 
     collideAircraft(player.pos);   // aviones y helicópteros también
+    mzCollide(player.pos);   // v160: los setos del laberinto
     if(player.pos.y<CAVE_TOP) caveCollide(player.pos);   // paredes de la mina
     // los coches son sólidos
     for(const c of cars){
