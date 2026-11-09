@@ -962,7 +962,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='168';
+const GAME_VERSION='169';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -11863,6 +11863,10 @@ const HK=[
   ...[18,19,20,21,22,23,24,25,26,27,28,29,31].map(t=>({id:'f'+t, t, n:FURN[t].n, w:'cell', rot:true, pal:true, mats:[0,1,2,3,4,5,6,7,8,9]})),
   {id:'f30', t:HT.CUADRO, n:'Cuadro', w:'edge', pal:true, mats:[0,1,2,3,4,5,6,7,8,9]},
 ];
+// v169: TIENDA de piezas. Precio por pieza; las piezas comunes vienen en paquetes de 5 (y un anuncio te da 5); las demás, de una en una (un anuncio te da 1).
+const HPRICE={piso:5, muro:6, teja:6, plano:6, remate:5, puerta:30, ventana:20, escalera:40, puerta2:45, parco:45, vgrande:30, vredonda:30, ventanal:40, piramide:40, cono:40, cupula:40,
+  f18:70, f19:65, f20:45, f21:20, f22:30, f23:20, f24:25, f25:75, f26:60, f27:80, f28:75, f29:80, f30:25, f31:20};
+const HPACK=k=>['piso','muro','teja','plano','remate'].includes(k)?5:1;
 const HINV4={'f18:1':1,'f19:0':1,'f20:3':1,'f21:3':2,'f22:6':2,'f23:2':3,'f24:5':2,'f25:8':1,'f26:7':1,'f27:9':1,'f28:6':1,'f29:1':1,'f30:7':3,'f31:5':2};   // v168: muebles para probar
 HK.find(k=>k.id==='teja').mats.push(10,11,12); HK.find(k=>k.id==='plano').mats.push(10,11,12);
 const HINV3={'puerta2:5':1,'parco:5':1,'vgrande:5':4,'vredonda:5':4,'ventanal:5':2,'piramide:7':2,'cono:11':2,'cupula:10':2,'teja:10':12,'teja:12':12};   // v167: piezas nuevas para probar
@@ -11905,7 +11909,7 @@ function hFits(P,p){ for(const [i,j] of hCellsOf(p)){ if(i<0||j<0||i>=HZ.N||j>=H
   const used=new Set(); for(const q of P) for(const s of hSlots(q)) used.add(s);
   return hSlots(p).every(s=>!used.has(s)); }
 // ---- estado del editor ----
-var ED={on:false, lv:0, roof:true, rot:0, sel:null, del:false, cam:{yaw:0, dist:40, pitch:.95, tx:0, tz:0}, hov:null, ghost:null, grid:null, ptr:null};
+var ED={on:false, shop:false, shopK:null, lv:0, roof:true, rot:0, sel:null, del:false, cam:{yaw:0, dist:40, pitch:.95, tx:0, tz:0}, hov:null, ghost:null, grid:null, ptr:null};
 const edGhostOK=new THREE.MeshBasicMaterial({color:0x5ee36a, transparent:true, opacity:.7, depthWrite:false}), edGhostBad=new THREE.MeshBasicMaterial({color:0xff5d5d, transparent:true, opacity:.55, depthWrite:false});
 function edLot(){ return HS.mine!==null ? LOTS[HS.mine] : null; }
 function edPieces(){ return hpDec(myHouseStr()); }
@@ -11923,6 +11927,10 @@ function edFilter(P){ return P.filter(p=>p.lv<=ED.lv && (ED.roof || !(p.t===HT.T
 #hedBar button{border:none;border-radius:12px;background:#fffaf0;box-shadow:0 3px 10px rgba(0,0,0,.18);font:800 14px var(--body);color:#7a2b2b;padding:10px 12px;min-width:44px;min-height:44px;cursor:pointer;}
 #hedBar button.on{background:#ffd9d9;}
 #hedBar button.ok{background:#7ed957;color:#fff;}
+.hed-buy{border:none;border-radius:8px;background:#ffd34d;color:#5a3a0a;font:800 12px var(--body);padding:5px 7px;display:flex;align-items:center;gap:3px;cursor:pointer;}
+.hed-buy.ad{background:#4fc3f7;color:#fff;}
+.hed-buy:disabled{opacity:.45;cursor:default;}
+.hed-buy .cn, .hed-it b .cn{flex:0 0 12px;width:12px;height:12px;border-radius:50%;box-shadow:none;}
 #hedTip{position:fixed;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));z-index:42;background:rgba(255,250,238,.92);border-radius:12px;padding:8px 14px;font:700 14px var(--body);color:#5a2b2b;max-width:calc(100vw - 230px);text-align:center;}
 body.in-hed #hud, body.in-hed #touch, body.in-hed #hotbar, body.in-hed .tbtns, body.in-hed #arHud{display:none!important;}
 @media (max-width:640px){ #hedInv{width:150px;} #hedTip{max-width:calc(100vw - 180px);font-size:12px;} #hedBar button{padding:8px 9px;font-size:13px;} }`;
@@ -11933,6 +11941,7 @@ body.in-hed #hud, body.in-hed #touch, body.in-hed #hotbar, body.in-hed .tbtns, b
   ED.bRot=B('⟳ Girar',()=>edRotate());
   ED.bDn=B('▼',()=>edLevel(-1)); ED.bLv=B('Nivel 1',()=>{}); ED.bUp=B('▲',()=>edLevel(1));
   ED.bDel=B('Quitar',b=>{ ED.del=!ED.del; if(ED.del) ED.sel=null; edRender(); });
+  ED.bShop=B('🛒 Tienda',b=>{ ED.shop=!ED.shop; ED.shopK=null; edRender(); });
   ED.bRoof=B('Techo: sí',b=>{ ED.roof=!ED.roof; edRender(); HS.tick=0; });
   B('⟲',()=>{ ED.cam.yaw+=Math.PI/4; }); B('⟳',()=>{ ED.cam.yaw-=Math.PI/4; });
   B('−',()=>{ ED.cam.dist=Math.min(70,ED.cam.dist*1.2); }); B('+',()=>{ ED.cam.dist=Math.max(10,ED.cam.dist/1.2); });
@@ -11957,16 +11966,37 @@ function edPan(tx0,tz0,px,py){ const L=edLot(); if(!L) return; const k=ED.cam.di
   ED.cam.tx=Math.max(-HZ.H,Math.min(HZ.H,tx0+lx)); ED.cam.tz=Math.max(-HZ.H,Math.min(HZ.H,tz0+lz)); }
 function edRotate(){ ED.rot=(ED.rot+1)%4; if(ED.hov) edPreview(ED.hov.i,ED.hov.j,ED.hov.fx,ED.hov.fz); }
 function edLevel(d){ ED.lv=Math.max(0,Math.min(4,ED.lv+d)); ED.bLv.textContent='Nivel '+(ED.lv+1); edGrid(); HS.tick=0; ED.hov=null; edGhost(null); }
-function edRender(){ ED.bDel.classList.toggle('on',ED.del); ED.bRoof.textContent='Techo: '+(ED.roof?'sí':'no'); ED.bLv.textContent='Nivel '+(ED.lv+1);
+function hBuy(kid,m,ad){ const K=HK_BY[kid], n=HPACK(kid), key=kid+':'+m, cost=HPRICE[kid]*n;
+  const give=()=>{ HS.inv[key]=(HS.inv[key]|0)+n; hSave(); try{ coinSound(Math.min(5,n)); }catch(e){} flashNote('+'+n+' '+K.n+(n>1?' (paquete)':'')); ED.sel=key; edRender(); };
+  if(ad){ ADS.show().then(ok=>{ if(ok) give(); else flashNote(ADS.failMsg()); }); return; }
+  if(coins<cost){ flashNote('Te faltan '+(cost-coins)+' monedas'); return; } coins-=cost; saveCoins(); renderCoins(); give(); }
+function edRenderShop(box){ const h=document.createElement('h4'); h.textContent='Tienda · tienes '+coins.toLocaleString('es-MX')+' monedas'; box.appendChild(h);
+  for(const K of HK){ if(!HPRICE[K.id]) continue; const open=ED.shopK===K.id, n=HPACK(K.id);
+    const b=document.createElement('button'); b.type='button'; b.className='hed-it'+(open?' on':''); const sw=document.createElement('i'); sw.style.background=K.pal?FCOL[K.mats[0]][1]:'#'+(HMAT[K.mats[0]].m.color.getHexString()); { const M0=HMAT[K.mats[0]].m; if(!K.pal && M0.map && M0.map.image && M0.map.image.toDataURL && !(M0.userData&&M0.userData.feltPQ)) sw.style.background='url('+M0.map.image.toDataURL()+') center/cover'; }
+    const tx=document.createElement('span'); tx.textContent=K.n+(n>1?' ×'+n:''); const c=document.createElement('b'); c.innerHTML='<i class="cn"></i> '+HPRICE[K.id]*n; c.style.display='flex'; c.style.alignItems='center'; c.style.gap='3px';
+    b.append(sw,tx,c); b.onclick=()=>{ ED.shopK=open?null:K.id; edRender(); const on=ED.inv.querySelector('.hed-it.on'); if(on) on.scrollIntoView({block:'nearest'}); }; box.appendChild(b);
+    if(!open) continue;
+    const grid=document.createElement('div'); grid.style.cssText='display:grid;grid-template-columns:1fr;gap:4px;padding:2px 0 6px 10px';
+    for(const m of K.mats){ const row=document.createElement('div'); row.style.cssText='display:flex;align-items:center;gap:6px;font:700 12px var(--body);color:#4a2b2b';
+      const s2=document.createElement('i'); s2.style.cssText='flex:0 0 20px;height:20px;border-radius:6px;box-shadow:inset 0 0 0 2px rgba(0,0,0,.15);background:'+(K.pal?FCOL[m][1]:'#'+HMAT[m].m.color.getHexString());
+      if(!K.pal && HMAT[m].m.map && HMAT[m].m.map.image && HMAT[m].m.map.image.toDataURL && !(HMAT[m].m.userData&&HMAT[m].m.userData.feltPQ)) s2.style.background='url('+HMAT[m].m.map.image.toDataURL()+') center/cover';
+      const nm=document.createElement('span'); nm.textContent=(K.pal?FCOL[m][0]:HMAT[m].n)+' ('+(HS.inv[K.id+':'+m]|0)+')'; nm.style.flex='1';
+      const buy=document.createElement('button'); buy.type='button'; buy.className='hed-buy'; buy.innerHTML='<i class="cn"></i>'+HPRICE[K.id]*n; buy.disabled=coins<HPRICE[K.id]*n; buy.onclick=e=>{ e.stopPropagation(); hBuy(K.id,m,false); };
+      row.append(s2,nm,buy);
+      if(ADS.ok()){ const ad=document.createElement('button'); ad.type='button'; ad.className='hed-buy ad'; ad.innerHTML='<i class="adi"></i>×'+n; ad.title='Mira un anuncio y te damos '+n; ad.disabled=ADS.left()<=0; ad.onclick=e=>{ e.stopPropagation(); hBuy(K.id,m,true); }; row.append(ad); }
+      grid.appendChild(row); }
+    box.appendChild(grid); } }
+function edRender(){ ED.bDel.classList.toggle('on',ED.del); ED.bShop.classList.toggle('on',ED.shop);
+  if(ED.shop){ const box=ED.inv; box.textContent=''; edRenderShop(box); ED.tip.textContent='Compra piezas con monedas'+(ADS.ok()?' o mirando un anuncio (×5 en pisos, muros y techos; ×1 en lo demás)':'')+'. Lo que compras aparece en «Tus piezas».'; return; } ED.bRoof.textContent='Techo: '+(ED.roof?'sí':'no'); ED.bLv.textContent='Nivel '+(ED.lv+1);
   const box=ED.inv; box.textContent=''; const h=document.createElement('h4'); h.textContent='Tus piezas'; box.appendChild(h);
   let any=false;
   for(const K of HK) for(const m of K.mats){ const n=HS.inv[K.id+':'+m]|0; if(n<=0) continue; any=true;
     const b=document.createElement('button'); b.type='button'; b.className='hed-it'+(ED.sel===K.id+':'+m?' on':'');
-    const sw=document.createElement('i'); if(K.pal){ sw.style.background=FCOL[m][1]; const tx=document.createElement('span'); tx.textContent=K.n+' · '+FCOL[m][0]; const c=document.createElement('b'); c.textContent='×'+n; b.append(sw,tx,c); b.onclick=()=>{ ED.sel=K.id+':'+m; ED.del=false; edRender(); if(ED.hov) edPreview(ED.hov.i,ED.hov.j,ED.hov.fx,ED.hov.fz); }; box.appendChild(b); continue; }
+    const sw=document.createElement('i'); if(K.pal){ sw.style.background=FCOL[m][1]; const tx=document.createElement('span'); tx.textContent=K.n+' · '+FCOL[m][0]; const c=document.createElement('b'); c.textContent='×'+n; b.append(sw,tx,c); b.onclick=()=>{ ED.sel=K.id+':'+m; ED.del=false; ED.shop=false; edRender(); if(ED.hov) edPreview(ED.hov.i,ED.hov.j,ED.hov.fx,ED.hov.fz); }; box.appendChild(b); continue; }
     const M=HMAT[m].m; sw.style.background=M.map&&M.map.image&&M.map.image.toDataURL?'url('+M.map.image.toDataURL()+') center/cover':'#'+M.color.getHexString(); if(M.userData&&M.userData.feltPQ) sw.style.background='#'+M.color.getHexString();
     const tx=document.createElement('span'); tx.textContent=K.n+' · '+HMAT[m].n; const c=document.createElement('b'); c.textContent='×'+n;
     b.append(sw,tx,c); b.onclick=()=>{ ED.sel=K.id+':'+m; ED.del=false; edRender(); if(ED.hov) edPreview(ED.hov.i,ED.hov.j,ED.hov.fx,ED.hov.fz); }; box.appendChild(b); }
-  if(!any){ const p=document.createElement('div'); p.style.cssText='font:700 13px var(--body);color:#7a2b2b;padding:6px'; p.textContent='No te quedan piezas. Quita alguna de tu casa para volver a usarla.'; box.appendChild(p); }
+  if(!any){ const p=document.createElement('div'); p.style.cssText='font:700 13px var(--body);color:#7a2b2b;padding:6px'; p.textContent='No te quedan piezas. Compra más en 🛒 Tienda, o quita alguna de tu casa para volver a usarla.'; box.appendChild(p); }
   ED.tip.textContent = ED.del ? 'Toca una pieza para quitarla (se pinta en rojo). Regresa a tus piezas.' : ED.sel ? (HK_BY[ED.sel.split(':')[0]].rot?(HK_BY[ED.sel.split(':')[0]].pal?'Toca un piso: verde = cabe, rojo = no cabe. Toca otra vez para colocar. "Girar" cambia hacia dónde mira.':'Toca el terreno: verde = cabe, rojo = no cabe. Toca otra vez para colocar. "Girar" cambia hacia dónde sube.'):'Toca el terreno: verde = cabe, rojo = no cabe. Toca otra vez para colocar.') : 'Elige una pieza a la derecha. Arrastra para mover la vista.'; }
 function edGrid(){ const L=edLot(); if(!L) return; if(!ED.grid){ ED.grid=new THREE.GridHelper(HZ.H*2,HZ.N,0xffffff,0xffffff); ED.grid.material.transparent=true; ED.grid.material.opacity=.35; ED.grid.material.depthWrite=false; scene.add(ED.grid); }
   ED.grid.position.set(L.x,L.y+ED.lv*HZ.LV+.27,L.z); ED.grid.rotation.y=L.yaw; ED.grid.visible=ED.on; }
