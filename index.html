@@ -1123,7 +1123,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='170';
+const GAME_VERSION='171';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -11973,18 +11973,33 @@ var HS={mine:null, claimT:0, str:'', hash:'', shown:new Map(), cache:new Map(), 
     const [sx2,sz2]=lotW(L,2.6,HZ.H-1.2); sg.position.set(sx2,L.y+1.9,sz2); sg.rotation.y=L.yaw; scene.add(sg); { const bk=sg.clone(); bk.rotation.y+=Math.PI; scene.add(bk); }
     for(const k of [-1,1]){ const [qx,qz]=lotW(L,2.6+k*1.15,HZ.H-1.25); const p=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,2.4,8),FM('#fbf3e4')); p.position.set(qx,L.y+1.2,qz); scene.add(p); obstacles.push({x:qx,z:qz,r:.1,top:L.y+2.4,walk:false}); }
     lotLabel(L,''); } })();
-function lotLabel(L,who){ if(L.label===who) return; L.label=who; const q=L.cv.getContext('2d'), w=512, h=200;
+function lotLabel(L,who,extra=''){ const key=who+'|'+extra; if(L.label===key) return; L.label=key; const q=L.cv.getContext('2d'), w=512, h=200;
   q.fillStyle=who?'#ffe3ef':'#fff3d6'; q.fillRect(0,0,w,h); q.strokeStyle=who?'#d81b60':'#c79a2a'; q.lineWidth=10; q.strokeRect(8,8,w-16,h-16);
   q.fillStyle='#7a2b2b'; q.textAlign='center'; q.textBaseline='middle'; q.font='800 56px Sniglet, Nunito, sans-serif'; q.fillText('Terreno '+(L.b+1)+'-'+L.n,w/2,68,w-40);
-  q.font='700 38px Sniglet, Nunito, sans-serif'; q.fillText(who?('Casa de '+who):'Libre: pisa la placa',w/2,140,w-40); L.tex.needsUpdate=true; }
+  q.font='700 38px Sniglet, Nunito, sans-serif'; q.fillText(who?('Casa de '+who+(extra?'  '+extra:'')):'Libre: pisa la placa',w/2,140,w-40); L.tex.needsUpdate=true; }
+// ---- v171: casas que ocultaste (solo tú dejas de verlas) y los "me gusta" que diste hoy ----
+const hToday=()=>{ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); };
+const HHIDE=(()=>{ let s=new Set(); try{ const a=JSON.parse(localStorage.getItem('mundoPelucheCasasOcultas')||'[]'); if(Array.isArray(a)) s=new Set(a.filter(x=>typeof x==='string').slice(-200)); }catch(e){}
+  return {has:u=>s.has(u), toggle(u){ if(s.has(u)) s.delete(u); else s.add(u); try{ localStorage.setItem('mundoPelucheCasasOcultas',JSON.stringify([...s])); }catch(e){} return s.has(u); }}; })();
+const HLIKED=(()=>{ let o={}; try{ o=JSON.parse(localStorage.getItem('mundoPelucheMeGusta')||'{}')||{}; }catch(e){}
+  return {can:u=>o[u]!==hToday(), mark(u){ o[u]=hToday(); try{ localStorage.setItem('mundoPelucheMeGusta',JSON.stringify(o)); }catch(e){} }}; })();
+function hLockOf(b){ if(b.owner===myUid) return !!HS.lock; for(const r of mp.remotes.values()) if(uidOf(r)===b.owner) return !!r.hlk; return false; }
+function hLikesOf(o){ return o ? (o.me ? (HS.likes|0) : ((o.r && o.r.hlc)|0)) : 0; }
+function hLike(o){ if(!HLIKED.can(o.u)){ flashNote('Ya le diste me gusta hoy a esta casa'); return; } HLIKED.mark(o.u); HS.likeSeq=(HS.likeSeq||0)+1; HS.likeReq=[HS.own.indexOf(o), HS.likeSeq]; sendPresence(true);
+  bigText('❤',900); flashNote('¡Le diste me gusta a la casa de '+o.name+'!'); try{ const R=audio.raw(), t=R.ctx.currentTime; [659,880].forEach((f,k)=>R.tone('triangle',f,f,t+k*.1,.12,.07)); }catch(e){} }
+// el dueño recibe los me gusta (uno por jugador al día) y +5 monedas
+function hOwnerLikes(){ if(HS.mine===null) return; HS.seenLike=HS.seenLike||{}; if(HS.likeDay.d!==hToday()) HS.likeDay={d:hToday(), u:[]};
+  for(const r of mp.remotes.values()){ const q=r.hg, u=uidOf(r); if(!q || q[0]!==HS.mine || !(q[1]>(HS.seenLike[u]||0))) continue; HS.seenLike[u]=q[1];
+    if(HS.likeDay.u.includes(u)) continue; HS.likeDay.u.push(u); HS.likes=(HS.likes|0)+1; hSave(); addCoins(5); flashNote('¡A '+(r.name||'alguien')+' le gustó tu casa! +5 monedas'); sendPresence(true); } }
 // ---- mi casa: la guardada (parte 2) o la inicial ----
 function myHouseStr(){ hLoad(); return HS.str; }
 // ---- presencia: en qué terreno está mi casa (y de vez en cuando, la casa completa) ----
-function housePresence(){ if(!HS) return {}; const base={hq:HS.req||null, hp:player.hpose?[HPOSE_K.indexOf(player.hpose.k), r2(player.hpose.x), r2(player.hpose.y), r2(player.hpose.z), r2(player.hpose.f)]:null};
-  if(HS.mine===null) return {...base, hl:null, hh:null, hx:null};
-  myHouseStr(); const o={...base, hl:[HS.mine, HS.claimT], hh:HS.hash, hx:[HS.hash, ...[...hMyState()].slice(0,80)]}; if(performance.now()-HS.sendT<150) o.hs=HS.str; return o; }
+function housePresence(){ if(!HS) return {}; const base={hg:HS.likeReq||null, hq:HS.req||null, hp:player.hpose?[HPOSE_K.indexOf(player.hpose.k), r2(player.hpose.x), r2(player.hpose.y), r2(player.hpose.z), r2(player.hpose.f)]:null};
+  if(HS.mine===null) return {...base, hl:null, hh:null, hx:null, hlk:0, hlc:0};
+  myHouseStr(); const o={...base, hl:[HS.mine, HS.claimT], hh:HS.hash, hx:[HS.hash, ...[...hMyState()].slice(0,80)], hlk:HS.lock?1:0, hlc:HS.likes|0}; if(performance.now()-HS.sendT<150) o.hs=HS.str; return o; }
 function houseParse(r,pr){ if(!HS) return;
   r.hx=Array.isArray(pr.hx) && typeof pr.hx[0]==='string' ? [pr.hx[0], ...pr.hx.slice(1,81).filter(Number.isInteger)] : null;
+  r.hlk=pr.hlk===1; r.hlc=Math.max(0,Math.min(99999,pr.hlc|0)); r.hg=Array.isArray(pr.hg) && pr.hg.length===2 && pr.hg.every(Number.isInteger) ? pr.hg : null;
   r.hq=Array.isArray(pr.hq) && pr.hq.length===3 && pr.hq.every(Number.isInteger) ? pr.hq : null;
   r.hp=Array.isArray(pr.hp) && pr.hp.length===5 && HPOSE_K[pr.hp[0]] && pr.hp.slice(1).every(Number.isFinite) ? {k:HPOSE_K[pr.hp[0]], x:pr.hp[1], y:pr.hp[2], z:pr.hp[3], f:pr.hp[4]} : null; const hl=pr.hl; r.hl=Array.isArray(hl) && Number.isInteger(hl[0]) && hl[0]>=0 && hl[0]<LOTS.length && Number.isFinite(hl[1]) ? [hl[0],+hl[1]] : null;
   r.hh=typeof pr.hh==='string' && pr.hh.length<=12 ? pr.hh : null;
@@ -11994,12 +12009,12 @@ function lotOwners(){ const own=LOTS.map(()=>null), better=(a,b)=>!b || a.t<b.t 
   if(HS.mine!==null) own[HS.mine]={u:myUid, t:HS.claimT, me:true, name:cleanName(profile.name)||'Peluche', hash:HS.hash, str:HS.str};
   for(const r of mp.remotes.values()){ if(!r.hl || !r.hh) continue; const c={u:uidOf(r)||'', t:r.hl[1], me:false, name:r.name||'Peluche', hash:r.hh, r}; if(better(c,own[r.hl[0]])) own[r.hl[0]]=c; }
   return own; }
-function houseUpdate(dt){ houseInterTick(dt); HS.tick-=dt; if(HS.tick<=0) hOwnerRequests(); if(HS.tick>0) return; HS.tick=.25;
+function houseUpdate(dt){ houseInterTick(dt); HS.tick-=dt; if(HS.tick<=0){ hOwnerRequests(); hOwnerLikes(); } if(HS.tick>0) return; HS.tick=.25;
   { const now=performance.now(); if(HS.mine!==null && mp.room && (now-HS.sendT>4000 || (HS.dirty && now-HS.sendT>1000))){ HS.sendT=now; HS.dirty=false; sendPresence(true); } }   // la casa completa: cada 4 s, o al cambiarla
   const own=lotOwners(); HS.own=own;
   if(HS.mine!==null && own[HS.mine] && !own[HS.mine].me){ HS.mine=null; flashNote('Alguien cargó su casita en ese terreno antes que tú'); sendPresence(true); return; }
-  LOTS.forEach((L,i)=>{ const o=own[i]; let str=o ? (o.me ? myHouseStr() : HS.cache.get(o.hash)) : null; if(o && o.me && ED.on) str=hpEnc(edFilter(hpDec(str))); const key=o && str ? o.u+'|'+hpHash(str) : '';
-    lotLabel(L, o ? o.name : '');
+  LOTS.forEach((L,i)=>{ const o=own[i]; let str=o ? (o.me ? myHouseStr() : HS.cache.get(o.hash)) : null; const hid=!!(o && !o.me && HHIDE.has(o.u)); if(hid) str=null; if(o && o.me && ED.on) str=hpEnc(edFilter(hpDec(str))); const key=o && str ? o.u+'|'+hpHash(str) : '';
+    { const lk=o && (o.me ? HS.lock : o.r && o.r.hlk), n=hLikesOf(o); lotLabel(L, o ? o.name : '', hid ? '(oculta)' : ((n?'❤ '+n:'')+(lk?' 🔒':''))); }
     const cur=HS.shown.get(i); if((cur?cur.key:'')===key) return;
     if(cur){ scene.remove(cur.g); cur.g.traverse(m=>{ if(m.isMesh) m.geometry.dispose(); }); HS.shown.delete(i); }
     if(key){ const b=hpBuild(L,hpDec(str)); b.key=key; b.L=L; b.owner=o.u; b.hash=hpHash(str); HS.shown.set(i,b); } }); }
@@ -12008,14 +12023,19 @@ function houseActions(){ if(player.car||player.ac||player.pg||player.mg) return 
   for(const L of LOTS){ const [x,z]=lotPlate(L); if(Math.hypot(player.pos.x-x,player.pos.z-z)>1.6 || Math.abs(player.pos.y-L.y)>2) continue;
     const o=HS.own[L.id];
     if(o && o.me) return [{label:'Quitar mi casita', run:()=>{ HS.mine=null; HS.tick=0; sendPresence(true); flashNote('Quitaste tu casita de este terreno'); }}, {label:'Editar mi casita', run:()=>edEnter()}];
-    if(o) return [{label:'Casa de '+o.name, disabled:true, run:()=>{}}, null];
+    if(o){ const hid=HHIDE.has(o.u); return [hid ? {label:'Mostrar casa', run:()=>{ HHIDE.toggle(o.u); HS.tick=0; flashNote('Vuelves a ver la casa de '+o.name); }} : {label:HLIKED.can(o.u)?'❤ Me gusta':'❤ Ya te gustó hoy', disabled:!HLIKED.can(o.u), run:()=>hLike(o)},
+      hid ? null : {label:'Ocultar casa', run:()=>{ HHIDE.toggle(o.u); HS.tick=0; flashNote('Ya no verás la casa de '+o.name+' (solo tú). Puedes mostrarla otra vez aquí'); }}]; }
     return [{label:HS.mine===null?'Cargar mi casita aquí':'Mover mi casita aquí', run:()=>{ HS.mine=L.id; HS.claimT=Date.now(); HS.sendT=performance.now(); HS.tick=0; myHouseStr(); houseUpdate(1); sendPresence(true);
       bigText('¡Tu casita está aquí!',1600); try{ const R=audio.raw(), t=R.ctx.currentTime; [523,659,784].forEach((f,k)=>R.tone('triangle',f,f,t+k*.1,.14,.08)); }catch(e){} }}, null]; }
   if(player.hpose) return [{label:'Levantarse', run:hStand}, null];
   let edit=null; if(HS.mine!==null){ const L=LOTS[HS.mine], [lx,lz]=lotL(L,player.pos.x,player.pos.z); if(Math.abs(lx)<HZ.H && Math.abs(lz)<HZ.H && Math.abs(player.pos.y-L.y)<20) edit={label:'Editar mi casita', run:()=>edEnter()}; }
   let best=null, bd=1e9; for(const b of HS.shown.values()) for(const it of b.ia||[]){ const d=Math.hypot(player.pos.x-it.x,player.pos.z-it.z); if(d<it.rad && d<bd && Math.abs(player.pos.y-it.y)<1.6){ bd=d; best=[b,it]; } }
   if(best){ const [b,it]=best, S=hStateOf(b), on=!!(S && S.has(it.pi)); let a=null;
-    if(it.k==='door') a={label:on?'Cerrar puerta':'Abrir puerta', run:()=>hToggle(b,it.pi,'door')};
+    if(it.k==='door'){ const lk=hLockOf(b), mine=b.owner===myUid;
+      if(!mine && lk && !on) return [{label:'Cerrado con candado 🔒', disabled:true, run:()=>{}}, null];
+      a={label:on?'Cerrar puerta':'Abrir puerta', run:()=>hToggle(b,it.pi,'door')};
+      if(mine) return [a, {label:HS.lock?'Quitar candado':'Poner candado 🔒', run:()=>{ HS.lock=!HS.lock; if(HS.lock){ const S=hMyState(); for(const q of b.ia) if(q.k==='door') S.delete(q.pi); } hSave(); HS.dirty=true; sendPresence(true);
+        flashNote(HS.lock?'Pusiste candado: las puertas se cierran y solo tú las abres':'Quitaste el candado: cualquiera puede abrir las puertas'); try{ const R=audio.raw(); R.noise(R.ctx.currentTime,.12,1800,.12); }catch(e){} }}]; }
     else if(it.k==='win') a={label:on?'Cerrar ventana':'Abrir ventana', run:()=>hToggle(b,it.pi,'win')};
     else if(it.k==='tv') a={label:on?'Apagar tele':'Prender tele', run:()=>hToggle(b,it.pi,'tv')};
     else if(it.k==='lamp') a={label:on?'Apagar lámpara':'Prender lámpara', run:()=>hToggle(b,it.pi,'lamp')};
@@ -12034,7 +12054,8 @@ function houseGround(x,z,y){ if(!HS || !HS.shown.size) return null; let best=nul
   return best; }
 function houseCollide(p){ if(!HS || !HS.shown.size) return;
   for(const b of HS.shown.values()){ const L=b.L; let [lx,lz]=lotL(L,p.x,p.z); if(Math.abs(lx)>HZ.H+1 || Math.abs(lz)>HZ.H+1) continue; const py=p.y-L.y, r=.42; let moved=false;
-    const closed=(b.doors||[]).filter(d=>d.col && d.open<.5), cl=closed.length?b.cols.concat(closed.map(d=>d.col)):b.cols;
+    const fl=b.floors.get(Math.floor((lx+HZ.H)/HZ.C)+','+Math.floor((lz+HZ.H)/HZ.C)), inside=!!(fl && fl.some(fy=>Math.abs(py-fy)<1.2));
+    const closed=inside?[]:(b.doors||[]).filter(d=>d.col && d.open<.5), cl=closed.length?b.cols.concat(closed.map(d=>d.col)):b.cols;
     for(let pass=0;pass<2;pass++) for(const c of cl){ if(py+1.9<c[1] || py>c[4]-.35) continue; if(lx<c[0]-r || lx>c[3]+r || lz<c[2]-r || lz>c[5]+r) continue;
       const qx=Math.max(c[0],Math.min(c[3],lx)), qz=Math.max(c[2],Math.min(c[5],lz)), ox=lx-qx, oz=lz-qz, d=Math.hypot(ox,oz);
       if(d<r){ moved=true; if(d>1e-4){ lx=qx+ox/d*r; lz=qz+oz/d*r; } else { const dx=Math.min(lx-c[0],c[3]-lx), dz=Math.min(lz-c[2],c[5]-lz); if(dx<dz) lx=lx-c[0]<c[3]-lx?c[0]-r:c[3]+r; else lz=lz-c[2]<c[5]-lz?c[2]-r:c[5]+r; } } }
@@ -12081,8 +12102,9 @@ function hLoad(){ if(HS.loaded) return; HS.loaded=true; let o=null; try{ o=JSON.
   HS.str = o && typeof o.p==='string' && hpDec(o.p).length ? o.p : hpEnc(starterHouse()); HS.hash=hpHash(HS.str);
   HS.inv={}; const src=o && o.inv && typeof o.inv==='object' ? o.inv : HINV0; for(const k in src){ const n=src[k]|0, [kid,m]=k.split(':'); if(n>0 && HK_BY[kid] && HK_BY[kid].mats.includes(+m)) HS.inv[k]=Math.min(9999,n); }
   HS.g3=!!(o && o.g3); if(!HS.g3){ for(const k in HINV3) HS.inv[k]=(HS.inv[k]|0)+HINV3[k]; HS.g3=true; }
+  HS.lock=!!(o && o.lock); HS.likes=Math.max(0,(o && o.likes)|0); HS.likeDay=(o && o.likeDay && typeof o.likeDay==='object') ? o.likeDay : {d:'', u:[]};
   HS.g4=!!(o && o.g4); if(!HS.g4){ for(const k in HINV4) HS.inv[k]=(HS.inv[k]|0)+HINV4[k]; HS.g4=true; } }
-function hSave(){ try{ localStorage.setItem('mundoPelucheCasa', JSON.stringify({v:1, p:HS.str, inv:HS.inv, g3:HS.g3?1:0, g4:HS.g4?1:0})); }catch(e){} }
+function hSave(){ try{ localStorage.setItem('mundoPelucheCasa', JSON.stringify({v:1, p:HS.str, inv:HS.inv, g3:HS.g3?1:0, g4:HS.g4?1:0, lock:HS.lock?1:0, likes:HS.likes|0, likeDay:HS.likeDay})); }catch(e){} }
 function hSetPieces(P){ HS.str=hpEnc(P); HS.hash=hpHash(HS.str); HS.dirty=true; HS.tick=0; hSave(); }
 // ---- reglas: dónde va cada pieza y si cabe ----
 const HD=[[0,1],[1,0],[0,-1],[-1,0]];   // giro 0:+z, 1:+x, 2:-z, 3:-x (en el terreno)
@@ -12286,7 +12308,8 @@ function hToggle(b,pi,kind){ if(b.owner===myUid){ const S=hMyState(); if(S.has(p
   sendPresence(true); try{ const R=audio.raw(), t=R.ctx.currentTime; kind==='door'||kind==='fridge' ? R.noise(t,.18,500,.12) : R.tone('triangle',700,900,t,.08,.05); }catch(e){} }
 // el dueño aplica lo que piden los visitantes
 function hOwnerRequests(){ if(HS.mine===null) return; const S=hMyState(), n=hpDec(HS.str).length; HS.seen=HS.seen||{};
-  for(const r of mp.remotes.values()){ const q=r.hq, u=uidOf(r); if(!q || q[0]!==HS.mine || !(q[2]>(HS.seen[u]||0))) continue; HS.seen[u]=q[2]; if(q[1]>=0 && q[1]<n){ if(S.has(q[1])) S.delete(q[1]); else S.add(q[1]); HS.dirty=true; sendPresence(true); } } }
+  for(const r of mp.remotes.values()){ const q=r.hq, u=uidOf(r); if(!q || q[0]!==HS.mine || !(q[2]>(HS.seen[u]||0))) continue; HS.seen[u]=q[2]; if(HS.lock && !S.has(q[1]) && (b=>b && (b.ia||[]).some(it=>it.k==='door' && it.pi===q[1]))(HS.shown.get(HS.mine))) continue;   // con candado no se abre
+      if(q[1]>=0 && q[1]<n){ if(S.has(q[1])) S.delete(q[1]); else S.add(q[1]); HS.dirty=true; sendPresence(true); } } }
 // ---- poses: sentarse, acostarse, bañarse, leer ----
 function hSit(k,seat){ const [x,y,z,f]=seat; player.hpose={k, x, y, z, f}; player.vel.set(0,0,0); player.facing=f; sendPresence(true); try{ audio.land(.35); }catch(e){}
   if(k==='lie') flashNote('A dormir un ratito… muévete para levantarte'); if(k==='bath') flashNote('¡Hora del baño! Muévete para salir'); }
