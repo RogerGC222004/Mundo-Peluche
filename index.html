@@ -1124,7 +1124,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='178';
+const GAME_VERSION='179';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -11545,7 +11545,7 @@ function mzBoxes(M){ const N=MZ.N, S=MZ.S, T=MZ.WT/2, out=[];
 const mzHedge=felt('#3f8a3c','rgba(10,50,10,.22)'), mzHedgeTop=felt('#5aa64e','rgba(10,50,10,.18)');
 const MZ_MAX=(MZ.N+1)*MZ.N*2;
 MZ.mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), mzHedge, MZ_MAX); MZ.mesh.castShadow=true; MZ.mesh.receiveShadow=true; MZ.mesh.userData.noBatch=true; scene.add(MZ.mesh);
-MZ.tops=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), mzHedgeTop, MZ_MAX); MZ.tops.userData.noBatch=true; scene.add(MZ.tops);
+MZ.tops=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), mzHedgeTop, MZ_MAX); MZ.tops.userData.noBatch=true; scene.add(MZ.tops); MZ.mesh.userData.noCol=MZ.tops.userData.noCol=true;   // v179: el laberinto ya tiene sus propios choques
 // la puerta de salida (arco con letrero) y el círculo de salida en el centro
 MZ.gate=(()=>{ const g=new THREE.Group(), post=FM('#fbf3e4'), red=FM('#e5534b');
   for(const s of [-1,1]){ const p=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,3.2,10),post); p.position.set(s*1.75,1.6,0); g.add(p); const b=new THREE.Mesh(sphereG,red); b.scale.setScalar(.2); b.position.set(s*1.75,3.25,0); g.add(b); }
@@ -16888,6 +16888,68 @@ ui('saveLoad').onclick=async()=>{ const v=ui('saveIn').value.trim(); if(!v){ ui(
 ui('saveCloudNow').onclick=async()=>{ await cloudSave(true); ui('saveMsg').textContent=cloud.state==='on'?'Guardado en la nube.':'No se pudo guardar ahora.'; };
 ui('saveCloudJoin').onclick=async()=>{ if(!cloud.remote) return; const m=mergeSaves(saveSnapshot(),cloud.remote); cloud.offer=false; applySave(m); await cloudSave(true); reloadWith(m,'Progreso unido: '+sumText(saveSummary(m))); };
 
+// ---------------- v179: TODO LO QUE SE VE, CHOCA ----------------
+// Se revisa todo lo quieto del mundo (poco a poco, unos milisegundos por cuadro). A cada cosa que sobresale del piso y queda a la
+// altura del peluche se le ponen "cajitas de choque" (círculos de .5 m) justo donde de verdad hay forma, así los arcos, puentes y
+// puertas se pueden seguir cruzando. No se toca: lo plano o chiquito (pasto, flores, caminitos), lo que está arriba de tu cabeza,
+// lo transparente (agua, vidrio de luz, humo), lo que se mueve (coches, aviones, animalitos, jugadores) y lo que ya chocaba.
+// Si algo quieto se mueve después (una puerta que se abre, un barco que zarpa), sus cajitas se quitan al instante.
+const AC={on:true, seen:new Map(), list:null, li:0, t:-9, made:[], samp:new WeakMap(), dyn:new Set(), chk:0, dirty:false, n:0, pend:[], fl:0};
+const _acM=new THREE.Matrix4(), _acB=new THREE.Box3(), _acV=new THREE.Vector3();
+function acDynRoots(){ const S=new Set([plush]); try{ cars.forEach(c=>S.add(c.root)); aircraft.forEach(a=>S.add(a.root)); critters.forEach(c=>c.g&&S.add(c.g)); }catch(e){}
+  for(const r of mp.remotes.values()){ if(r.obj) S.add(r.obj); if(r.pet) S.add(r.pet.P.root); } if(myPet && myPet.inst) S.add(myPet.inst.P.root);
+  try{ for(const b of HS.shown.values()) S.add(b.g); if(ED.ghost) S.add(ED.ghost.g); if(ED.ghost2) S.add(ED.ghost2.g); if(ED.grid) S.add(ED.grid); }catch(e){}
+  try{ S.add(skyRoot); for(const b of BATCH.batches) S.add(b.mesh); }catch(e){} return S; }
+// puntos sobre la superficie de una figura (se calculan una vez por figura)
+function acSamples(g){ let s=AC.samp.get(g); if(s) return s; const P=g.attributes.position; if(!P){ AC.samp.set(g,s=new Float32Array(0)); return s; }
+  if(!g.boundingBox) g.computeBoundingBox(); const bb=g.boundingBox, mx=Math.max(bb.max.x-bb.min.x, bb.max.y-bb.min.y, bb.max.z-bb.min.z, 1e-3), I=g.index, nt=(I?I.count:P.count)/3;
+  let step=mx/18; const out=[]; const A=new THREE.Vector3(), B=new THREE.Vector3(), Cc=new THREE.Vector3();
+  for(let tries=0;tries<4;tries++){ out.length=0;
+    for(let t=0;t<nt;t++){ const ia=I?I.getX(t*3):t*3, ib=I?I.getX(t*3+1):t*3+1, ic=I?I.getX(t*3+2):t*3+2; A.fromBufferAttribute(P,ia); B.fromBufferAttribute(P,ib); Cc.fromBufferAttribute(P,ic);
+      const L=Math.max(A.distanceTo(B),B.distanceTo(Cc),Cc.distanceTo(A)), n=Math.min(10,Math.max(1,Math.ceil(L/step)));
+      for(let i=0;i<=n;i++) for(let j=0;j<=n-i;j++){ const u=i/n, v=j/n, w=1-u-v; out.push(A.x*w+B.x*u+Cc.x*v, A.y*w+B.y*u+Cc.y*v, A.z*w+B.z*u+Cc.z*v); }
+      if(out.length>9000) break; }
+    if(out.length<=9000) break; step*=1.7; }
+  s=new Float32Array(out); AC.samp.set(g,s); return s; }
+// las cajitas de una figura puesta en el mundo con la matriz M
+function acMakeOne(g,M,out){ if(!g.boundingBox) g.computeBoundingBox(); _acB.copy(g.boundingBox).applyMatrix4(M);
+  const b=_acB, sx=b.max.x-b.min.x, sy=b.max.y-b.min.y, sz=b.max.z-b.min.z; if(Math.max(sx,sz)>30 || sy<.4 || Math.max(sx,sz)<.05 || b.min.y<CAVE_TOP) return;
+  const cx=(b.min.x+b.max.x)/2, cz=(b.min.z+b.max.z)/2, gr=groundAt(cx,cz,b.max.y+.6); if(b.max.y<gr+.8 || b.min.y>gr+1.9) return;   // muy bajito (se pasa encima) o arriba de tu cabeza
+  for(const o of obsNear(cx,cz)) if(!o.ac && Math.hypot(cx-o.x,cz-o.z)<o.r+.3 && o.top>gr+.35) return;   // ya tenía su choque (árboles, postes…)
+  const mxs=Math.max(sx,sz), mns=Math.max(.05,Math.min(sx,sz));
+  if(mxs<=3.2 && mxs/mns<1.7){ if(acTrap(cx,cz,Math.max(.15,(sx+sz)/4*.85))) return; out.push({x:cx, z:cz, r:Math.max(.15,(sx+sz)/4*.85), top:b.max.y, bot:b.min.y-.05, walk:sy<2.4, ac:true}); return; }   // cosas chicas y redonditas: un solo círculo
+  const S=acSamples(g), e=M.elements, cell=mxs>10?.8:.5, cells=new Map();
+  for(let i=0;i<S.length;i+=3){ const x=S[i], y=S[i+1], z=S[i+2], wx=e[0]*x+e[4]*y+e[8]*z+e[12], wy=e[1]*x+e[5]*y+e[9]*z+e[13], wz=e[2]*x+e[6]*y+e[10]*z+e[14];
+    const k=Math.floor(wx/cell)*100003+Math.floor(wz/cell); let c=cells.get(k); if(!c){ c=[wx,wz,wy,wy,1]; cells.set(k,c); } else { if(wy<c[2]) c[2]=wy; if(wy>c[3]) c[3]=wy; } }
+  let n=0; for(const c of cells.values()){ const x=(Math.floor(c[0]/cell)+.5)*cell, z=(Math.floor(c[1]/cell)+.5)*cell, gc=groundAt(x,z,c[3]+.5);
+    if(c[3]<gc+.8 || c[2]>gc+1.85) continue;   // solo lo que sobresale del piso (más que un escalón) y queda a tu altura
+    if(acTrap(x,z,cell*.62)) continue;
+    let cov=false; for(const o of obsNear(x,z)){ if(!o.ac && Math.hypot(x-o.x,z-o.z)<o.r+.12 && o.top>gc+.35 && !(o.bot>gc+1.85)){ cov=true; break; } } if(cov) continue;
+    out.push({x, z, r:cell*.62, top:c[3], bot:Math.min(c[2],b.min.y)-.05, walk:sy<2.4, ac:true}); if(++n>160) break; } }
+// no encerrar a nadie: si alguien está parado justo ahí, esa cajita no se pone
+function acTrap(x,z,r){ const t=(p)=>Math.hypot(p.x-x,p.z-z)<r+.45; if(t(player.pos)) return true; for(const q of mp.remotes.values()) if(q.pos && t(q.pos)) return true; return false; }
+const acVis=o=>{ for(let p=o;p;p=p.parent){ if(!p.visible) return false; if(p===scene) return true; } return false; };
+function acSig(o){ const e=o.matrixWorld.elements; return e[0].toFixed(3)+e[2].toFixed(3)+e[5].toFixed(3)+e[10].toFixed(3)+e[12].toFixed(2)+e[13].toFixed(2)+e[14].toFixed(2)+(o.isInstancedMesh?'i'+o.instanceMatrix.version+'_'+o.count:''); }   // dónde está (sin contar si se ve)
+function acEligible(o){ if(!o.isMesh || o.isSprite || o.userData.noCol || o.userData.batchShared) return false; const m=Array.isArray(o.material)?o.material[0]:o.material; if(!m || m.transparent || m.type==='MeshBasicMaterial' || m.type==='ShaderMaterial' || m.type==='RawShaderMaterial') return false;
+  for(let p=o;p;p=p.parent) if(AC.dyn.has(p) || (p.userData && p.userData.noCol)) return false; return !!o.geometry; }
+function acRemove(rec){ if(!rec.obs || !rec.obs.length) { rec.obs=null; return; } const S=new Set(rec.obs); if(AC.pend.length) AC.pend=AC.pend.filter(c=>!S.has(c)); let w=0; for(let i=0;i<obstacles.length;i++){ const o=obstacles[i]; if(!S.has(o)) obstacles[w++]=o; } obstacles.length=w; rec.obs=null; AC.dirty=true; }
+function acBuild(o,rec){ const out=[]; if(o.isInstancedMesh){ for(let i=0;i<o.count;i++){ o.getMatrixAt(i,_acM); _acM.premultiply(o.matrixWorld); acMakeOne(o.geometry,_acM,out); } } else acMakeOne(o.geometry,o.matrixWorld,out);
+  rec.obs=out; if(out.length){ for(const c of out) AC.pend.push(c); AC.made.push(rec); rec.o=o; const e=o.matrixWorld.elements; rec.x=e[12]; rec.z=e[14]; AC.n+=out.length; } }
+function acVisit(o){ if(!o.parent) return; let rec=AC.seen.get(o); const sig=acSig(o), vis=acVis(o);
+  if(!rec){ rec={sig, vis, n:0, obs:null, mv:0, dyn:false, ok:acEligible(o)}; AC.seen.set(o,rec); return; }
+  if(rec.dyn || !rec.ok) return;
+  if(rec.sig!==sig){ rec.sig=sig; rec.n=0; if(rec.obs) acRemove(rec); if(++rec.mv>2) rec.dyn=true; return; }   // se movió
+  if(rec.vis!==vis){ rec.vis=vis; rec.n=0; if(rec.obs) acRemove(rec); return; }   // se escondió o apareció
+  if(vis && ++rec.n===1 && !rec.obs) acBuild(o,rec); }
+// cada cuadro, unos milisegundos: revisar lo del mundo; y lo cercano que ya choca, más seguido (por si se movió)
+function acTick(){ if(!AC.on || (typeof SP!=='undefined' && SP.on)) return; const now=performance.now()/1000;
+  if(now-AC.chk>.25){ AC.chk=now; const px=player.pos.x, pz=player.pos.z; for(const rec of AC.made){ if(!rec.obs) continue; if(Math.abs(rec.x-px)>40 || Math.abs(rec.z-pz)>40) continue; const o=rec.o; if(!o.parent || acSig(o)!==rec.sig || !acVis(o)){ const moved=!o.parent || acSig(o)!==rec.sig; acRemove(rec); rec.n=0; rec.sig=o.parent?acSig(o):''; rec.vis=o.parent?acVis(o):false; if(moved && ++rec.mv>2) rec.dyn=true; } } AC.made=AC.made.filter(r=>r.obs); }
+  if(!AC.list){ if(now-AC.t<4) return; AC.t=now; AC.dyn=acDynRoots(); const L=[], px=player.pos.x, pz=player.pos.z; scene.traverse(o=>{ if(o.isMesh) L.push(o); });
+    const d=o=>{ if(o.isInstancedMesh) return 0; const e=o.matrixWorld.elements; return (e[12]-px)**2+(e[14]-pz)**2; }; L.sort((a,b)=>d(a)-d(b)); AC.list=L; AC.li=0; }   // lo más cercano primero
+  const t0=performance.now(), bud=state==='play'?2.5:9; while(AC.li<AC.list.length && performance.now()-t0<bud) acVisit(AC.list[AC.li++]);
+  if(AC.li>=AC.list.length) AC.list=null;
+  if(AC.pend.length && (!AC.list || now-AC.fl>.8)){ AC.fl=now; for(const c of AC.pend) obstacles.push(c); AC.pend.length=0; AC.dirty=true; }
+  if(AC.dirty){ AC.dirty=false; obsGrid.n=-1; } }
 // ---------- Detalle según la distancia: lo lejano se dibuja con menos caras (de lejos no se nota) ----------
 let lodT=0; const _lodV=new THREE.Vector3();
 function lodTick(){ const now=performance.now(); if(now-lodT<330 || SP.on) return; lodT=now; const cp=camera.position;
@@ -17732,6 +17794,7 @@ function frame(){
   if(mp.room && performance.now()-mp.heartbeat>4000){ mp.heartbeat=performance.now(); mp.lastPayload=''; sendPresence(true); updateRoomUI(); }   // latido
   const p1=pf?performance.now():0;
   try{ wlUpdate(); }catch(e){}
+  try{ acTick(); }catch(e){}
   renderer.info.reset();
   if(HAD.on) hadRender(dt); else if(shopOpen()) renderStudio(dt); else { const S=SP.on&&state!=='menu'?spaceScene:scene; if(FX.on) fxRender(S,camera); else renderer.render(S,camera); }
   if(pf){ const p2=performance.now(); fpsLogic+=p1-p0; fpsDraw+=p2-p1; fpsCalls+=renderer.info.render.calls; fpsTris+=renderer.info.render.triangles; }
