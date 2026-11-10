@@ -963,7 +963,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='179';
+const GAME_VERSION='180';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -14703,7 +14703,8 @@ function jiFloor(x,z,y){ if(!JI.done || x<JI_BOX[0]||x>JI_BOX[2]||z<JI_BOX[1]||z
   for(const B of JI_BRIDGES){ const dx=B.bx-B.ax, dz=B.bz-B.az, L2=dx*dx+dz*dz, t=((x-B.ax)*dx+(z-B.az)*dz)/L2; if(t<0||t>1) continue; const qx=B.ax+dx*t-x, qz=B.az+dz*t-z; if(qx*qx+qz*qz>B.W*B.W) continue;
     const yy=B.ay+(B.by-B.ay)*t-B.sag*4*t*(1-t); if(y>=yy-.9 && (best===null||yy>best)) best=yy; }
   const T=JI2.pyr; if(T){ const [su,sv]=jiL(x,z), lx=sv-T.sv, lz=su-T.su, m=Math.max(Math.abs(lx),Math.abs(lz)); if(m<T.half){ let yy=T.y+Math.min(T.steps,Math.floor((T.half-m)/T.sw)+1)*T.sh;
-      if(lz>0 && Math.abs(lx)<T.stairW) yy=Math.max(T.y+.05, Math.min(T.y+T.steps*T.sh, T.y+(T.half-lz)/(T.half-T.top)*T.steps*T.sh));   // escalinata
+      if(lz<0 && Math.abs(lx)<T.stairW) yy=Math.max(T.y+.05, Math.min(T.y+T.steps*T.sh, T.y+(T.half+lz)/(T.half-T.top)*T.steps*T.sh));   // escalinata (atrás)
+      if(T.hole && y<T.y+T.holeH-.3 && T.hole.some(([a,b,c,d])=>lx>a && lx<b && lz>c && lz<d)) yy=T.y+.05;   // v180: adentro del pasillo y del cuarto
       if(y>=yy-1.8 && (best===null||yy>best)) best=yy; } }
   if(JI2.grotto){ const G=JI2.grotto; if(Math.hypot(x-G.x,z-G.z)<G.R && y>=G.y-1 && (best===null||G.y>best)) best=G.y; }
   return best; }
@@ -14766,25 +14767,31 @@ function* jiBuild2(){
     mergeStatic(G); }
   yield;
   // templo escondido: pirámide de escalones, patio con muros, dos puertas de piedra con palanca y el cofre
-  { const T=JI_TEMPLE, [tx,tz]=jiS(T.su,T.sv), y0=terrainH(tx,tz)-.05, G=new THREE.Group(); scene.add(G); const ry=Math.atan2(JI.ux,JI.uz);
+  { const T=JI_TEMPLE, [tx,tz]=jiS(T.su,T.sv), y0=terrainH(tx,tz)-.05, G=new THREE.Group(); scene.add(G); G.userData.noCol=true; const ry=Math.atan2(JI.ux,JI.uz);
     const L=(lx,lz)=>jiS(T.su+lz, T.sv+lx);   // x de lado, z hacia la plaza
     const box=(lx,lz,w,d,h,m=stone,y=y0)=>{ const [x,z]=L(lx,lz); wiAdd(G,WI_BOXG,m,x,y+h/2,z,w,h,d,ry); };
     const P={su:T.su-8, sv:T.sv, y:y0, half:11, steps:5, sh:1.6, sw:1.7, top:2.5, stairW:1.6}; JI2.pyr=P;
-    for(let k=0;k<P.steps;k++){ const hw=P.half-k*P.sw; box(0,-8,hw*2,hw*2,P.sh*(k+1),k%2?stone:stoneD); }
-    { const [x,z]=L(0,-8); wiAdd(G,WI_BOXG,stoneD,x,y0+P.steps*P.sh+1.2,z,3.2,2.4,3.2,ry); wiAdd(G,WI_BOXG,moss,x,y0+P.steps*P.sh+2.5,z,3.6,.25,3.6,ry); obstacles.push({x,z,r:1.75,top:y0+P.steps*P.sh+2.6,walk:true}); }
-    for(let k=0;k<14;k++){ const t=k/14, lz=-8+P.half-(P.half-P.top)*t, yy=y0+P.steps*P.sh*t; box(0,lz,P.stairW*2,.8,yy-y0+.25,k%2?stone:stoneD); }   // escalinata
+    P.hole=[[-1.45,1.45,4,11.2],[-4,4,-4,4]]; P.holeH=2.8;   // v180: pasillo y cuarto del tesoro (x0,x1,z0,z1 desde el centro de la pirámide)
+    for(let k=0;k<P.steps;k++){ const hw=P.half-k*P.sw, top=P.sh*(k+1), m=k%2?stone:stoneD, low=Math.min(top,P.holeH);
+      const R2=(a,b,c,d,yA,yB)=>{ a=Math.max(a,-hw); b=Math.min(b,hw); c=Math.max(c,-hw); d=Math.min(d,hw); if(b-a<.01||d-c<.01||yB-yA<.01) return; box((a+b)/2,-8+(c+d)/2,b-a,d-c,yB-yA,m,y0+yA); };
+      R2(-hw,hw,-hw,-4,0,low); R2(-hw,-4,-4,4,0,low); R2(4,hw,-4,4,0,low); R2(-hw,-1.45,4,11.2,0,low); R2(1.45,hw,4,11.2,0,low); R2(-hw,hw,11.2,hw,0,low);   // abajo: todo menos el hueco
+      if(top>P.holeH) R2(-hw,hw,-hw,hw,P.holeH,top); }   // arriba: lleno
+    for(const [a,b,c,d] of [[-1.65,-1.45,4,11],[1.45,1.65,4,11],[-4.2,-4,-4,4],[4,4.2,-4,4],[-4,4,-4.2,-4],[-4,-1.45,4,4.2],[1.45,4,4,4.2]]) JI_BOXES.push({su:T.su-8+(c+d)/2, sv:T.sv+(a+b)/2, hd:(d-c)/2, hw:(b-a)/2, y1:y0+P.holeH-.2});   // paredes de adentro
+    for(const lx of [-3.3,3.3]){ const [x,z]=L(lx,-11.3); jiTorch(G,x,z,y0,1.9); }
+    { const [x,z]=L(0,-8); wiAdd(G,WI_BOXG,stoneD,x,y0+P.steps*P.sh+1.2,z,3.2,2.4,3.2,ry); wiAdd(G,WI_BOXG,moss,x,y0+P.steps*P.sh+2.5,z,3.6,.25,3.6,ry); obstacles.push({x,z,r:1.75,top:y0+P.steps*P.sh+2.6,bot:y0+P.steps*P.sh-.2,walk:true}); }   // v180: el altar solo choca arriba (abajo está el cuarto)
+    for(let k=0;k<14;k++){ const t=k/14, lz=-8-P.half+(P.half-P.top)*t, yy=y0+P.steps*P.sh*t, rz=lz+8, yb=(rz>-4.5 && rz<4.5)?P.holeH:0; if(yy-y0+.25>yb) box(0,lz,P.stairW*2,.8,yy-y0+.25-yb,k%2?stone:stoneD,y0+yb); }   // escalinata (v180: atrás, sin tapar el cuarto)
+    box(0,-8,8,8,.08,stoneD); box(0,-8+7.6,2.9,7.2,.08,stoneD);   // piso de piedra del cuarto y del pasillo
     const W=(x0,x1,z0,z1,h=2.8,gate)=>{ box((x0+x1)/2,(z0+z1)/2,Math.abs(x1-x0),Math.abs(z1-z0),h,stoneD); const b={su:T.su+(z0+z1)/2, sv:T.sv+(x0+x1)/2, hd:Math.abs(z1-z0)/2, hw:Math.abs(x1-x0)/2, y1:y0+h-.2}; JI_BOXES.push(b);
       for(let q=0;q<2;q++){ const [x,z]=L(x0+(x1-x0)*(.2+.6*q),(z0+z1)/2); wiAdd(G,sphereG,moss,x,y0+h+.05,z,Math.max(.6,Math.abs(x1-x0)*.18),.18,.6); } };
-    W(-12,-1.6,23.7,24.3); W(1.6,12,23.7,24.3); W(-12.3,-11.7,10,24.3); W(11.7,12.3,10,24.3);   // muro de enfrente (con entrada) y lados
-    W(-12,-1.6,18.7,19.3); W(1.6,12,18.7,19.3);   // muro 1 (con puerta 1)
-    W(-12,7.4,13.7,14.3); W(10.6,12,13.7,14.3);   // muro 2 (con puerta 2, a un lado)
+    W(-11.6,-1.6,23.7,24.3); W(1.6,11.6,23.7,24.3); W(-11.6,-11,2.6,24.3); W(11,11.6,2.6,24.3);   // muro de enfrente (con entrada) y lados, hasta la pirámide
+    W(-11,-1.6,18.7,19.3); W(1.6,11,18.7,19.3);   // muro 1 (con puerta 1)
     const gate=(lx0,lx1,lz,i)=>{ const [x,z]=L((lx0+lx1)/2,lz), g=new THREE.Mesh(WI_BOXG,stone); g.position.set(x,y0+1.3,z); g.scale.set(Math.abs(lx1-lx0),2.6,.5); g.rotation.y=ry; g.userData.noBatch=true; g.userData.y0=y0; scene.add(g); JI2.gateM[i]=g;
       JI_BOXES.push({su:T.su+lz, sv:T.sv+(lx0+lx1)/2, hd:.3, hw:Math.abs(lx1-lx0)/2, y1:y0+2.4, gate:i}); };
-    gate(-1.6,1.6,19,0); gate(7.4,10.6,14,1);
+    gate(-1.6,1.6,19,0); gate(-1.6,1.6,1.3,1);   // v180: la puerta 2 es la entrada de la pirámide
     const lever=(lx,lz,i)=>{ const [x,z]=L(lx,lz); box(lx,lz,.6,.6,1,stoneD); const h=new THREE.Group(); h.position.set(x,y0+1,z); h.rotation.y=ry; const s=new THREE.Mesh(cylG,woodD); s.scale.set(.07,1,.07); s.position.y=.45; h.add(s); const k=new THREE.Mesh(sphereG,wiMat('#e5534b')); k.scale.setScalar(.15); k.position.y=.95; h.add(k); h.rotation.x=-.5; h.userData.noBatch=true; scene.add(h); JI2.lev[i]={g:h,x,z}; };
-    lever(3.2,25.6,0); lever(-9.5,16.5,1);
+    lever(3.2,25.6,0); lever(-6.5,9,1);
     // el cofre del tesoro
-    { const [x,z]=L(-8.5,11.6), c=new THREE.Group(); c.position.set(x,y0,z); c.rotation.y=ry; scene.add(c); c.userData.noBatch=true; const bw=wiMat('#9a6a3e','rgba(50,25,5,.25)'), gold=wiMat('#f2c94c');
+    { const [x,z]=L(0,-10.8), c=new THREE.Group(); /* v180: adentro de la pirámide */ c.position.set(x,y0,z); c.rotation.y=ry; scene.add(c); c.userData.noBatch=true; const bw=wiMat('#9a6a3e','rgba(50,25,5,.25)'), gold=wiMat('#f2c94c');
       const b=new THREE.Mesh(WI_BOXG,bw); b.scale.set(1.2,.7,.8); b.position.y=.35; c.add(b); const lid=new THREE.Group(); lid.position.set(0,.7,-.4); c.add(lid); const l=new THREE.Mesh(WI_BOXG,bw); l.scale.set(1.25,.3,.85); l.position.set(0,.15,.4); lid.add(l);
       [-1,1].forEach(e=>{ const s=new THREE.Mesh(WI_BOXG,gold); s.scale.set(.08,.72,.84); s.position.set(e*.45,.36,0); c.add(s); }); const coins=new THREE.Mesh(sphereG,gold); coins.scale.set(.5,.12,.3); coins.position.y=.72; c.add(coins);
       JI2.chest={c, lid, coins, x, z, open:0}; obstacles.push({x,z,r:.75,top:y0+.75,walk:true}); }
@@ -16750,18 +16757,19 @@ function acSamples(g){ let s=AC.samp.get(g); if(s) return s; const P=g.attribute
 // las cajitas de una figura puesta en el mundo con la matriz M
 function acMakeOne(g,M,out){ if(!g.boundingBox) g.computeBoundingBox(); _acB.copy(g.boundingBox).applyMatrix4(M);
   const b=_acB, sx=b.max.x-b.min.x, sy=b.max.y-b.min.y, sz=b.max.z-b.min.z; if(Math.max(sx,sz)>30 || sy<.4 || Math.max(sx,sz)<.05 || b.min.y<CAVE_TOP) return;
-  const cx=(b.min.x+b.max.x)/2, cz=(b.min.z+b.max.z)/2, gr=groundAt(cx,cz,b.max.y+.6); if(b.max.y<gr+.8 || b.min.y>gr+1.9) return;   // muy bajito (se pasa encima) o arriba de tu cabeza
+  const cx=(b.min.x+b.max.x)/2, cz=(b.min.z+b.max.z)/2, gr=groundAt(cx,cz,b.max.y+.6); if(b.max.y<gr+.8 || b.min.y>gr+1.2) return;   // muy bajito (se pasa encima) o arriba de tu cabeza
   for(const o of obsNear(cx,cz)) if(!o.ac && Math.hypot(cx-o.x,cz-o.z)<o.r+.3 && o.top>gr+.35) return;   // ya tenía su choque (árboles, postes…)
   const mxs=Math.max(sx,sz), mns=Math.max(.05,Math.min(sx,sz));
-  if(mxs<=3.2 && mxs/mns<1.7){ if(acTrap(cx,cz,Math.max(.15,(sx+sz)/4*.85))) return; out.push({x:cx, z:cz, r:Math.max(.15,(sx+sz)/4*.85), top:b.max.y, bot:b.min.y-.05, walk:sy<2.4, ac:true}); return; }   // cosas chicas y redonditas: un solo círculo
-  const S=acSamples(g), e=M.elements, cell=mxs>10?.8:.5, cells=new Map();
+  if(mxs<=6.5 && mxs/mns<1.7){ if(acTrap(cx,cz,Math.max(.15,(sx+sz)/4*.85))) return; out.push({x:cx, z:cz, r:Math.max(.15,(sx+sz)/4*.85), top:b.max.y, bot:b.min.y-.05, walk:sy<2.4, ac:true}); return; }   // cosas chicas y redonditas: un solo círculo
+  const S=acSamples(g), e=M.elements, cell=mxs>5?.8:.5, cells=new Map();
   for(let i=0;i<S.length;i+=3){ const x=S[i], y=S[i+1], z=S[i+2], wx=e[0]*x+e[4]*y+e[8]*z+e[12], wy=e[1]*x+e[5]*y+e[9]*z+e[13], wz=e[2]*x+e[6]*y+e[10]*z+e[14];
-    const k=Math.floor(wx/cell)*100003+Math.floor(wz/cell); let c=cells.get(k); if(!c){ c=[wx,wz,wy,wy,1]; cells.set(k,c); } else { if(wy<c[2]) c[2]=wy; if(wy>c[3]) c[3]=wy; } }
-  let n=0; for(const c of cells.values()){ const x=(Math.floor(c[0]/cell)+.5)*cell, z=(Math.floor(c[1]/cell)+.5)*cell, gc=groundAt(x,z,c[3]+.5);
-    if(c[3]<gc+.8 || c[2]>gc+1.85) continue;   // solo lo que sobresale del piso (más que un escalón) y queda a tu altura
-    if(acTrap(x,z,cell*.62)) continue;
+    const k=Math.floor(wx/cell)*100003+Math.floor(wz/cell); let c=cells.get(k); if(!c){ c=[wx,wz,wy,wy,new Set(),wx,wx,wz,wz]; cells.set(k,c); } else { if(wy<c[2]) c[2]=wy; if(wy>c[3]) c[3]=wy; if(wx<c[5]) c[5]=wx; if(wx>c[6]) c[6]=wx; if(wz<c[7]) c[7]=wz; if(wz>c[8]) c[8]=wz; } c[4].add(Math.floor(wy*4)); }
+  let n=0; for(const c of cells.values()){ const x=(c[5]+c[6])/2, z=(c[7]+c[8])/2, rr=Math.min(cell*.72, Math.max(.12, Math.hypot(c[6]-c[5],c[8]-c[7])/2)), gc=groundAt(x,z,c[3]+.5);   // el círculo, del tamaño de lo que de verdad hay en la celda
+    if(c[3]<gc+.8 || c[2]>gc+1.2) continue;   // solo lo que sobresale del piso (más que un escalón) y queda a tu altura
+    { let mid=false; for(let q=Math.floor((gc+.3)*4); q<=Math.floor((gc+1.2)*4); q++) if(c[4].has(q)){ mid=true; break; } if(!mid) continue; }   // piso abajo y techo arriba, pero hueco a tu altura (puertas, arcos): se pasa
+    if(acTrap(x,z,rr)) continue;
     let cov=false; for(const o of obsNear(x,z)){ if(!o.ac && Math.hypot(x-o.x,z-o.z)<o.r+.12 && o.top>gc+.35 && !(o.bot>gc+1.85)){ cov=true; break; } } if(cov) continue;
-    out.push({x, z, r:cell*.62, top:c[3], bot:Math.min(c[2],b.min.y)-.05, walk:sy<2.4, ac:true}); if(++n>160) break; } }
+    out.push({x, z, r:rr, top:c[3], bot:Math.min(c[2],b.min.y)-.05, walk:sy<2.4, ac:true}); if(++n>160) break; } }
 // no encerrar a nadie: si alguien está parado justo ahí, esa cajita no se pone
 function acTrap(x,z,r){ const t=(p)=>Math.hypot(p.x-x,p.z-z)<r+.45; if(t(player.pos)) return true; for(const q of mp.remotes.values()) if(q.pos && t(q.pos)) return true; return false; }
 const acVis=o=>{ for(let p=o;p;p=p.parent){ if(!p.visible) return false; if(p===scene) return true; } return false; };
