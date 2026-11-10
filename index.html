@@ -886,6 +886,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       </div>
       <span class="map-tip" id="mapTip">Arrastra para mover · pellizca para acercar</span>
     </div>
+    <div class="map-houses" id="mapHouses"></div>
     <div class="map-legend">
       <span><i style="background:#2c3a1a"></i>Tú</span>
       <span><i style="background:#f5a9c0"></i>Otros jugadores</span>
@@ -1123,7 +1124,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='177';
+const GAME_VERSION='178';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -4790,7 +4791,7 @@ function applyHeld(){
   const open = heldItem()==='map' && state==='play';
   if(open===mapWrap.hidden){
     mapWrap.hidden=!open; hotbarEl.classList.toggle('map-open', open);
-    if(open){ if(document.pointerLockElement) document.exitPointerLock(); audio.paper(); mapView.z=MAP_E/MAP_W; mapView.cx=mapView.cy=MAP_PX/2; clampView(); drawMap(true);   // v146: abre mostrando todas las islas
+    if(open){ if(document.pointerLockElement) document.exitPointerLock(); audio.paper(); mapView.z=MAP_E/MAP_W; mapView.cx=mapView.cy=MAP_PX/2; clampView(); drawMap(true); try{ const el=ui('mapHouses'); if(el) el.dataset.k='~'; mapHousesFill(); }catch(e){}   // v146: abre mostrando todas las islas
       const tip=ui('mapTip'); tip.hidden=false; clearTimeout(applyHeld.tipT); applyHeld.tipT=setTimeout(()=>{tip.hidden=true;},4500); }
     else audio.paper();
   }
@@ -8027,6 +8028,81 @@ function addCoins(n, from){
 // Nunca salen solos ni a media partida, y hay un máximo por día. En la web no hay anuncios: los pone la app de Android con
 // window.MundoAds = { show(): Promise<boolean> }  (true si viste el anuncio completo).
 // Para probarlos sin la app: abre el juego con ?anuncios=prueba o toca 5 veces la versión en el menú.
+// ---------------- v178: "RATITO DE JUEGO" — en lugar de los anuncios de prueba de Google ----------------
+// Tu peluche (con su ropa y su mascota) juega unos segundos en varios minijuegos. Si la ves completa, te dan el premio.
+// Sale en la web y en la app mientras no estén puestos los códigos reales de AdMob.
+const HAD={on:false, sc:null, cam:null, t:0, seq:[], o:null, okey:'', pet:null, pkey:'', V:{}};
+function hadBuild(){ if(HAD.sc) return; const sc=new THREE.Scene(), cam=new THREE.PerspectiveCamera(38,1,.1,300); HAD.sc=sc; HAD.cam=cam;
+  sc.add(new THREE.HemisphereLight(0xffffff,0xa8c890,1.0)); const d=new THREE.DirectionalLight(0xfff4e0,.85); d.position.set(5,9,7); sc.add(d);
+  const V=HAD.V, G=()=>{ const g=new THREE.Group(); g.visible=false; sc.add(g); return g; }, M=(geo,c,g,x=0,y=0,z=0)=>{ const m=new THREE.Mesh(geo,FM(c)); m.position.set(x,y,z); g.add(m); return m; };
+  const grass=g=>{ const m=M(new THREE.CircleGeometry(40,40),'#8fd36a',g); m.rotation.x=-Math.PI/2; };
+  // trampolín
+  { const g=G(); grass(g); M(new THREE.CylinderGeometry(1.6,1.6,.08,32),'#3a3f52',g,0,.6,0); M(new THREE.CylinderGeometry(1.45,1.45,.03,32),'#4fc3f7',g,0,.65,0);
+    for(let i=0;i<6;i++){ const a=i/6*6.28; M(new THREE.CylinderGeometry(.05,.05,.6,8),'#c8ccd4',g,Math.cos(a)*1.45,.3,Math.sin(a)*1.45); }
+    V.tramp={g, sky:'#bfe6ff', cam:[0,3.2,9.5], look:[0,2.3,0]}; }
+  // banda flotante
+  { const g=G(); const c=document.createElement('canvas'); c.width=64; c.height=256; const q=c.getContext('2d'); q.fillStyle='#ff9ad5'; q.fillRect(0,0,64,256); q.fillStyle='#ffffff'; for(let y=0;y<256;y+=64){ q.beginPath(); q.moveTo(8,y+40); q.lineTo(32,y+12); q.lineTo(56,y+40); q.lineTo(46,y+40); q.lineTo(32,y+26); q.lineTo(18,y+40); q.fill(); }
+    const tex=new THREE.CanvasTexture(c); tex.encoding=THREE.sRGBEncoding; tex.wrapS=tex.wrapT=THREE.RepeatWrapping; tex.repeat.set(1,4);
+    const belt=new THREE.Mesh(new THREE.BoxGeometry(2.2,.3,14),new THREE.MeshStandardMaterial({map:tex,roughness:.8})); belt.position.y=3; g.add(belt);
+    M(new THREE.BoxGeometry(2.6,.25,14.2),'#7a5ac8',g,0,2.8,0); M(new THREE.BoxGeometry(3.4,3,.4),'#ffd34d',g,0,4.6,-6.8); M(new THREE.CircleGeometry(60,30),'#9fd8ff',g,0,-.2,0).rotation.x=-Math.PI/2;
+    V.banda={g, sky:'#ffe3ef', cam:[6.5,5.2,3.5], look:[0,3.6,-.5], tex, base:3.15, rot:Math.PI}; }
+  // pesca
+  { const g=G(); const w=M(new THREE.CircleGeometry(40,40),'#4fa8e0',g,0,0,0); w.rotation.x=-Math.PI/2; M(new THREE.BoxGeometry(2.4,.25,6),'#b88a5a',g,0,.55,-2);
+    for(const [x,z] of [[-1.1,-4.8],[1.1,-4.8],[-1.1,.8],[1.1,.8]]) M(new THREE.CylinderGeometry(.12,.12,1.4,8),'#8a5a3a',g,x,.1,z);
+    const rod=M(new THREE.CylinderGeometry(.03,.03,2.6,6),'#8a5a3a',g,.35,1.8,.9); rod.rotation.x=.9; const line=M(new THREE.CylinderGeometry(.008,.008,2.4,4),'#ffffff',g,.35,1.4,2.6);
+    const bob=M(new THREE.SphereGeometry(.12,12,8),'#e5534b',g,.35,.05,3.2), fish=M(new THREE.SphereGeometry(.3,14,10),'#ff9a3c',g,0,-1,4.5); fish.scale.set(.5,.6,1.2);
+    V.pesca={g, sky:'#bfe6ff', cam:[4.5,3.4,6], look:[0,1.2,1.5], bob, fish, base:.68, sit:1}; }
+  // fútbol
+  { const g=G(); grass(g); for(const x of [-1.6,1.6]) M(new THREE.CylinderGeometry(.08,.08,2.2,8),'#ffffff',g,x,1.1,-6); M(new THREE.BoxGeometry(3.3,.12,.12),'#ffffff',g,0,2.2,-6);
+    const ball=M(new THREE.SphereGeometry(.3,16,12),'#ffffff',g,0,.3,0); V.futbol={g, sky:'#bfe6ff', cam:[5,2.6,4], look:[0,.9,-2], ball}; }
+  // globos
+  { const g=G(); const bs=[]; [['#e5534b',-.5,0],['#4fc3f7',.45,.1],['#ffd34d',0,-.4],['#c77dff',.2,.45]].forEach(([c,x,z])=>{ const b=M(new THREE.SphereGeometry(.55,16,12),c,g,x,4.4,z); b.scale.y=1.2; bs.push(b); M(new THREE.CylinderGeometry(.01,.01,2,4),'#ffffff',g,x*.5,3.2,z*.5); });
+    for(let i=0;i<6;i++){ const cl=M(new THREE.SphereGeometry(1.4,14,10),'#ffffff',g,(i%3-1)*6+(i>2?3:0),-1-i*.8,-6-i*2); cl.scale.set(2,.7,1); }
+    V.globos={g, sky:'#9fd8ff', cam:[0,2.4,8], look:[0,2.2,0], base:.9}; }
+  // nadar
+  { const g=G(); const w=M(new THREE.CircleGeometry(40,40),'#4fc3f7',g,0,0,0); w.rotation.x=-Math.PI/2; const ring=M(new THREE.TorusGeometry(.6,.18,10,20),'#ff6fa8',g,0,.05,0); ring.rotation.x=Math.PI/2;
+    V.nadar={g, sky:'#bfe6ff', cam:[4,3,6], look:[0,.4,0], ring}; }
+  // columpio
+  { const g=G(); grass(g); for(const x of [-1.3,1.3]) M(new THREE.CylinderGeometry(.08,.08,3.2,8),'#e5534b',g,x,1.6,0); M(new THREE.CylinderGeometry(.07,.07,2.7,8),'#e5534b',g,0,3.2,0).rotation.z=Math.PI/2;
+    const sw=new THREE.Group(); sw.position.y=3.2; g.add(sw); M(new THREE.BoxGeometry(.8,.08,.4),'#b88a5a',sw,0,-2.4,0); for(const x of [-.35,.35]) M(new THREE.CylinderGeometry(.01,.01,2.4,4),'#3a3f52',sw,x,-1.2,0);
+    V.columpio={g, sky:'#ffe9c8', cam:[5.5,2.4,3], look:[0,1.4,0], sw}; }
+}
+function hadDress(){ const key=profile.color+'|'+JSON.stringify(wardrobe.eq||{}); if(HAD.o && HAD.okey===key) return; if(HAD.o){ HAD.sc.remove(HAD.o); } HAD.o=makePlush(profile.color); try{ applyOutfit(HAD.o, wardrobe.eq); }catch(e){} HAD.okey=key; HAD.sc.add(HAD.o);
+  const pk=pets.eq||''; if(pk!==HAD.pkey){ if(HAD.pet){ HAD.sc.remove(HAD.pet.root); HAD.pet=null; } HAD.pkey=pk; if(pk && PET_BY[pk]){ try{ HAD.pet=buildPet(PET_BY[pk]); HAD.sc.add(HAD.pet.root); }catch(e){ HAD.pet=null; } } } }
+const HAD_LIST=['tramp','banda','pesca','futbol','globos','nadar','columpio'], HAD_DUR=6;
+function hadPlay(){ hadBuild(); hadDress(); const L=[...HAD_LIST]; for(let i=L.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [L[i],L[j]]=[L[j],L[i]]; } HAD.seq=L.slice(0,3); HAD.t=0; HAD.on=true; document.body.classList.add('had-on'); }
+function hadStop(){ HAD.on=false; document.body.classList.remove('had-on'); }
+function hadRender(dt){ const t0=(HAD.t+=dt), t=t0>=HAD_DUR?HAD_DUR*2/3+((t0-HAD_DUR)%(HAD_DUR/3)):t0, slot=Math.min(2,Math.floor(t/(HAD_DUR/3))), lt=t-slot*(HAD_DUR/3), id=HAD.seq[slot], S=HAD.V[id], o=HAD.o, pet=HAD.pet;
+  for(const k in HAD.V) HAD.V[k].g.visible=k===id; HAD.sc.background=new THREE.Color(S.sky); o.position.set(0,0,0); o.rotation.set(0,0,0); o.visible=true; if(pet) pet.root.visible=true;
+  const pose=(...a)=>{ try{ poseLimbs(o,t,dt,...a); }catch(e){} };
+  if(id==='tramp'){ const h=Math.abs(Math.sin(lt*3.2)); o.position.y=.66+h*2.4; o.rotation.y=lt*.6; pose(0,h>.25,0,h>.5,null,0,0); if(pet) pet.root.position.set(2.4,0,1), pet.root.rotation.y=-.8; }
+  else if(id==='banda'){ S.tex.offset.y=(S.tex.offset.y+dt*1.6)%1; o.position.set(0,S.base,0); o.rotation.y=S.rot; pose(0,false,0,false,null,lt*11,1); if(pet) pet.root.position.set(.6,S.base,1.4), pet.root.rotation.y=Math.PI; }
+  else if(id==='pesca'){ o.position.set(0,S.base,.6); o.rotation.y=0; pose(0,false,0,false,null,0,0,true,1); S.bob.position.y=.05+Math.sin(lt*5)*.04; const fj=(lt%2)/2; S.fish.position.set(-.6+fj*1.4,-.4+Math.sin(fj*Math.PI)*1.8,4.4); S.fish.rotation.z=-1+fj*2; if(pet) pet.root.position.set(-.7,S.base,0), pet.root.rotation.y=.4; }
+  else if(id==='futbol'){ const ph=lt%2, x=Math.sin(lt*1.6)*1.2; o.position.set(x,0,1.4-ph*.8); o.rotation.y=Math.PI; pose(0,false,0,false,null,lt*12,1); S.ball.position.set(x*.6,.3+Math.abs(Math.sin(lt*4))*.2,.4-ph*3.2); S.ball.rotation.x-=dt*8; if(pet) pet.root.position.set(x+1,0,2), pet.root.rotation.y=Math.PI; }
+  else if(id==='globos'){ const y=S.base+lt*.45; o.position.set(Math.sin(lt*2)*.15,y,0); o.rotation.z=Math.sin(lt*2)*.08; pose(0,true,0,true,null,0,0); S.g.position.y=lt*.45; if(pet) pet.root.position.set(.55,y-.2,.2), pet.root.rotation.y=.3; }
+  else if(id==='nadar'){ o.position.set(Math.sin(lt*.8)*1.2,-.12,Math.cos(lt*.8)*.6); o.rotation.set(-1.2,Math.PI/2+lt*.8,0); pose(0,false,0,false,lt*7); S.ring.position.set(Math.sin(lt*.8-.9)*1.2,.05,Math.cos(lt*.8-.9)*.6); if(pet) pet.root.position.set(2.2,0,1.8), pet.root.rotation.y=-.6; }
+  else if(id==='columpio'){ const a=Math.sin(lt*2.6)*.7; S.sw.rotation.x=a; const r=2.4; o.position.set(0,3.2-Math.cos(a)*r-.62,Math.sin(a)*r); o.rotation.set(a,Math.PI/2*0,0); pose(0,false,0,false,null,0,0,false,1); if(pet) pet.root.position.set(1.9,0,1.6), pet.root.rotation.y=-.6; }
+  if(id!=='globos') S.g.position.y=0;
+  if(pet && pet.body){ pet.body.position.y=Math.abs(Math.sin(t*6))*.08; if(pet.tail) pet.tail.rotation.y=Math.sin(t*10)*.5; }
+  const w=canvas.clientWidth||innerWidth, h=canvas.clientHeight||innerHeight; HAD.cam.aspect=w/h; HAD.cam.position.set(...S.cam); if(id==='globos') HAD.cam.position.y+=lt*.45; HAD.cam.lookAt(S.look[0],S.look[1]+(id==='globos'?lt*.45:0),S.look[2]); HAD.cam.updateProjectionMatrix();
+  renderer.setScissorTest(false); renderer.setViewport(0,0,renderer.domElement.width/renderer.getPixelRatio(),renderer.domElement.height/renderer.getPixelRatio()); renderer.render(HAD.sc,HAD.cam); }
+// la pantalla: arriba el título, abajo cuánto falta y los botones
+const hadShow=()=>new Promise(res=>{ let el=document.getElementById('hadOv');
+  if(!el){ const st=document.createElement('style'); st.textContent=`body.had-on > *:not(#hadOv):not(#game){visibility:hidden!important;}
+#hadOv{position:fixed;inset:0;z-index:9600;display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:calc(14px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px));pointer-events:none;color:#fff;font-family:var(--body);text-align:center;}
+#hadOv[hidden]{display:none;}
+#hadOv .top{background:rgba(122,43,43,.82);border-radius:16px;padding:8px 18px;font:800 18px var(--display);box-shadow:0 4px 14px rgba(0,0,0,.2);}
+#hadOv .bot{display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:auto;}
+#hadOv .bar{width:min(320px,70vw);height:12px;border-radius:8px;background:rgba(255,255,255,.55);overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.2);}
+#hadOv .bar i{display:block;height:100%;width:0;background:#7ed957;border-radius:8px;}
+#hadOv .row{display:flex;gap:10px;}
+#hadOv button{border:none;border-radius:14px;padding:10px 16px;font:800 15px var(--body);cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.25);background:#fffaf0;color:#7a2b2b;}
+#hadOv button.ok{background:#7ed957;color:#fff;}`; document.head.appendChild(st);
+    el=document.createElement('div'); el.id='hadOv'; el.hidden=true; el.innerHTML='<div class="top">🧸 Un ratito de juego…</div><div class="bot"><div class="bar"><i></i></div><div class="row"><button type="button" class="skip">Cerrar sin premio</button><button type="button" class="ok" hidden>¡Listo! Llévate tu premio</button></div></div>'; document.body.appendChild(el); }
+  const bar=el.querySelector('.bar i'), ok=el.querySelector('.ok'), skip=el.querySelector('.skip'); ok.hidden=true; skip.hidden=false; bar.style.width='0%'; el.hidden=false; hadPlay();
+  const iv=setInterval(()=>{ const k=Math.min(1,HAD.t/HAD_DUR); bar.style.width=(k*100).toFixed(0)+'%'; if(k>=1){ clearInterval(iv); ok.hidden=false; skip.hidden=true; } },100);
+  const end=v=>{ clearInterval(iv); el.hidden=true; hadStop(); ok.onclick=skip.onclick=null; res(v); };
+  ok.onclick=e=>{ e.stopPropagation(); end(true); }; skip.onclick=e=>{ e.stopPropagation(); end(false); }; });
 const ADS=(()=>{
   const KEY='mundoPelucheAnuncios', TKEY='mundoPelucheAnunciosPrueba', MAX=10;
   const day=()=>{ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); };
@@ -8036,7 +8112,7 @@ const ADS=(()=>{
   const save=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(st)); }catch(e){} };
   const roll=()=>{ const t=day(); if(st.d!==t){ st.d=t; st.n=0; save(); } };
   let test=false; try{ test=/[?&]anuncios=prueba\b/.test(location.search) || localStorage.getItem(TKEY)==='1'; }catch(e){}
-  const real=()=>{ const m=window.MundoAds; return m && typeof m.show==='function' ? m : null; };
+  const real=()=>{ const m=window.MundoAds; return m && typeof m.show==='function' && !(window.__MP_APP && window.__MP_APP.pruebas) ? m : null; };   // v178: los de prueba de Google ya no
   let busy=false;
   // anuncio de prueba: una pantalla con cuenta atrás (así se ve el flujo completo sin la app)
   const fake=()=>new Promise(res=>{ const s=ui('adScreen'), done=ui('adScreenDone'), txt=ui('adScreenTxt'); let n=5;
@@ -8047,7 +8123,7 @@ const ADS=(()=>{
     done.onclick=()=>end(true); ui('adScreenSkip').onclick=()=>end(false); });
   return {
     MAX,
-    ok(){ return !!(real()||test); },                                  // ¿hay anuncios? (en la app, o en modo de prueba)
+    ok(){ return true; },   // v178: siempre hay premio (anuncio de verdad en la app, o el ratito de juego)                                  // ¿hay anuncios? (en la app, o en modo de prueba)
     left(){ roll(); return Math.max(0,MAX-st.n); },                     // cuántos quedan hoy
     need(price){ return Math.min(4,Math.max(1,Math.ceil(price/100))); },  // anuncios para llevarte algo de la tienda
     seen(k){ return st.p[k]||0; },
@@ -8059,7 +8135,7 @@ const ADS=(()=>{
     failMsg(){ return this.left()<=0 ? 'Ya viste los anuncios de hoy: vuelve mañana' : 'El anuncio no terminó, así que esta vez no cuenta'; },
     async show(){ if(busy || !this.ok() || this.left()<=0) return false; busy=true; let ok=false;
       try{ audio.suspend(); }catch(e){}
-      try{ const m=real(); if(m) flashNote('Cargando el anuncio…'); ok = m ? !!(await m.show()) : await fake(); }catch(e){ ok=false; }
+      try{ const m=real(); if(m) flashNote('Cargando el anuncio…'); ok = m ? !!(await m.show()) : await hadShow(); }catch(e){ ok=false; }
       try{ audio.resume(); }catch(e){}
       busy=false; if(ok){ roll(); st.n++; save(); } return ok; }
   };
@@ -9256,11 +9332,11 @@ function makePetInst(id, name){
 function petSetName(pet,name){ if(pet.name===name) return; pet.name=name; const m=pet.label.material; if(m.map) m.map.dispose(); m.map=labelTexture(name); m.needsUpdate=true; }
 function petDispose(pet){ if(!pet) return; scene.remove(pet.P.root, pet.label); if(pet.label.material.map) pet.label.material.map.dispose(); pet.label.material.dispose(); pet.P.root.traverse(o=>{ if(o.isMesh && o.geometry) o.geometry.dispose(); }); }
 const _petV=new THREE.Vector3();
-function petFollow(pet, ox, oy, oz, of, vis, dt, t){
+function petFollow(pet, ox, oy, oz, of, vis, dt, t, tgt){
   const R=pet.P.root, sp=pet.spec;
   if(!vis){ R.visible=false; pet.label.visible=false; pet.hidden=true; return; }
   // lugar junto al dueño: un poco atrás y a un lado
-  const sx=Math.sin(of), cz=Math.cos(of), tx=ox-sx*1.25+cz*pet.side*.85, tz=oz-cz*1.25-sx*pet.side*.85;
+  const sx=Math.sin(of), cz=Math.cos(of); let tx=ox-sx*1.25+cz*pet.side*.85, tz=oz-cz*1.25-sx*pet.side*.85; if(tgt){ tx=tgt.x; tz=tgt.z; }   // v178: en tu casa pasea
   let dx=tx-pet.x, dz=tz-pet.z, d=Math.hypot(dx,dz);
   if(pet.hidden || d>28 || Math.abs(oy-pet.y)>12){ pet.x=tx; pet.z=tz; pet.y=oy; pet.v=0; pet.f=of; dx=dz=d=0; pet.hidden=false; }
   R.visible=true;
@@ -9304,7 +9380,7 @@ function petsUpdate(dt,t){
   if(key!==myPet.key){ if(myPet.inst && (!id || myPet.inst.id!==id)){ petDispose(myPet.inst); myPet.inst=null; }
     if(id && !myPet.inst) myPet.inst=makePetInst(id, petName(id)); if(myPet.inst) petSetName(myPet.inst, petName(id)); myPet.key=key; }
   if(myPet.inst){ const vis=!(player.car || player.ac || player.balloon || (typeof SP!=='undefined' && SP.on) || player.rk);
-    petFollow(myPet.inst, player.pos.x, player.pos.y, player.pos.z, player.facing, vis, dt, t); }
+    petFollow(myPet.inst, player.pos.x, player.pos.y, player.pos.z, player.facing, vis, dt, t, (()=>{ try{ return hPetWander(dt); }catch(e){ return null; } })()); }
   for(const r of mp.remotes.values()) if(r.pet){
     const vis=r.obj.visible && r.obj.parent===scene && !r.car && !r.ai && !r.sp && !r.rk && !r.carAnim && !r.bl;
     petFollow(r.pet, r.pos.x, r.pos.y, r.pos.z, r.obj.rotation.y, vis, dt, t); }
@@ -10270,7 +10346,7 @@ function lampAim(M,night){ const L=M.lamp; L.updateMatrixWorld(true); const a=L.
   for(let i=0;i<20;i++){ x+=dx*.5; y+=dy*.5; z+=dz*.5; if(inC){ const f=cvField(x-CV.x,z-CV.z); if(f.d>-.2 || y<f.bot || y>f.top){ hit=true; break; } } else { const g=groundAt(x,z,y+1); if(y<=g){ y=g; hit=true; break; } } }
   M.spot.set(x-dx*.4,y-dy*.4,z-dz*.4);
   const vis=(night>.25 || inC); const beam=L.userData.beam; beam.visible=vis; beam.material.opacity=(inC?.07:.1*Math.min(1,(night-.25)*2.5));
-  const P=M.pool; if(vis && hit && !inC){ const g=groundAt(x,z,y+1), dist=Math.hypot(x-a.x,z-a.z); P.visible=true; P.position.set(x,g+.06,z); const s=1.1+dist*.18; P.scale.set(s,s,1); P.material.opacity=.55*Math.min(1,(night-.25)*2.5); } else P.visible=false; }
+  (M.org=M.org||new THREE.Vector3()).copy(a); const P=M.pool; if(false && vis && hit && !inC){ const g=groundAt(x,z,y+1), dist=Math.hypot(x-a.x,z-a.z); P.visible=true; P.position.set(x,g+.06,z); const s=1.1+dist*.18; P.scale.set(s,s,1); P.material.opacity=.55*Math.min(1,(night-.25)*2.5); } else P.visible=false; }
 
 // ---------- mi estado en la cueva ----------
 const MS={inC:false, swingT:9, swingSeq:0, target:null, hitDone:true, parts:[], zone:0, entering:false, lastNote:0};
@@ -12928,7 +13004,8 @@ function wlUpdate(){ const V=WL.V, C=WL.C; for(const v of V) v.w=0; if(state==='
   for(const c of cars){ if(!c.lights) continue; if(Math.hypot(c.x-cp.x,c.z-cp.z)>80) continue;
     let p=carLocalToWorld(c,0,1.3,CAR_L/2+7); add(p.x,p.y,p.z,9.5,[1,.95,.82],3.4); p=carLocalToWorld(c,0,1.6,CAR_L/2+16); add(p.x,p.y,p.z,11.5,[1,.95,.82],3.0); }
   // linterna (la mía y la de los demás), fuera de la cueva
-  const lamp=M=>{ if(M && M.lamp && M.lamp.visible && M.spot && !inCave(M.spot.y)) add(M.spot.x,M.spot.y+.8,M.spot.z,6,[.95,.97,1],2.6); };
+  const lamp=M=>{ if(!(M && M.lamp && M.lamp.visible && M.spot && M.org) || inCave(M.spot.y)) return; const o=M.org, s2=M.spot;
+    for(const [f,r,i] of [[.3,3.6,1.6],[.65,5,2.1],[1,6.5,2.6]]){ const x=o.x+(s2.x-o.x)*f, z=o.z+(s2.z-o.z)*f, y=o.y+(s2.y-o.y)*f, g=groundAt(x,z,y+1); add(x,Math.max(y,g+.7),z,r,[.95,.97,1],i); } };
   lamp(plush.userData.mg); for(const r of mp.remotes.values()) if(r.obj) lamp(r.obj.userData.mg);
   if(!cand.length) return; cand.sort((a,b)=>a[0]-b[0]); camera.updateMatrixWorld(); const M=camera.matrixWorldInverse;
   for(let i=0;i<8 && i<cand.length;i++){ const c=cand[i]; _wlv.set(c[1],c[2],c[3]).applyMatrix4(M); V[i].set(_wlv.x,_wlv.y,_wlv.z,c[4]); C[i].set(c[5][0],c[5][1],c[5][2]).multiplyScalar(c[6]*k); } }
@@ -12971,7 +13048,7 @@ var HS={mine:null, claimT:0, str:'', hash:'', shown:new Map(), cache:new Map(), 
     for(const [sx,sz] of [[L2,HZ.ST*2-1],[HZ.ST*2-1,L2]]){ const m=new THREE.Mesh(new THREE.BoxGeometry(sx,.06,sz),street); m.position.set(b.x,b.h+.02,b.z); m.receiveShadow=true; m.userData.noBatch=true; scene.add(m); }
     // letrero del barrio en el cruce
     const sg=new THREE.Mesh(new THREE.PlaneGeometry(3.6,1.2), new THREE.MeshStandardMaterial({map:textTex(['Vecindario '+(bi+1),'Casitas de los jugadores'],512,170,'#fff3d6','#7a2b2b','#ff9ad5'), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
-    sg.position.set(b.x,b.h+3.4,b.z); sg.rotation.y=Math.PI/4; scene.add(sg); fairGlow.push(sg.material); { const bk=sg.clone(); bk.rotation.y+=Math.PI; scene.add(bk); }
+    b.signM=sg.material; sg.position.set(b.x,b.h+3.4,b.z); sg.rotation.y=Math.PI/4; scene.add(sg); fairGlow.push(sg.material); { const bk=sg.clone(); bk.rotation.y+=Math.PI; scene.add(bk); }
     const post=new THREE.Mesh(new THREE.CylinderGeometry(.1,.1,3.0,8),FM('#fbf3e4')); post.position.set(b.x,b.h+1.5,b.z); scene.add(post); obstacles.push({x:b.x,z:b.z,r:.15,top:b.h+3,walk:false}); });
   for(const L of LOTS){ const H=HZ.H;
     for(const [lx,lz,sx,sz] of [[0,H,2*H,.35],[0,-H,2*H,.35],[H,0,.35,2*H],[-H,0,.35,2*H]]){ const m=new THREE.Mesh(new THREE.BoxGeometry(sx,.08,sz),line); const [x,z]=lotW(L,lx,lz); m.position.set(x,L.y+.04,z); m.rotation.y=L.yaw; m.userData.noBatch=true; scene.add(m); }
@@ -13003,12 +13080,13 @@ function hOwnerLikes(){ if(HS.mine===null) return; HS.seenLike=HS.seenLike||{}; 
 // ---- mi casa: la guardada (parte 2) o la inicial ----
 function myHouseStr(){ hLoad(); return HS.str; }
 // ---- presencia: en qué terreno está mi casa (y de vez en cuando, la casa completa) ----
-function housePresence(){ if(!HS) return {}; const base={hg:HS.likeReq||null, hq:HS.req||null, hp:player.hpose?[HPOSE_K.indexOf(player.hpose.k), r2(player.hpose.x), r2(player.hpose.y), r2(player.hpose.z), r2(player.hpose.f)]:null};
+function housePresence(){ if(!HS) return {}; const base={hb:HS.ring||null, hg:HS.likeReq||null, hq:HS.req||null, hp:player.hpose?[HPOSE_K.indexOf(player.hpose.k), r2(player.hpose.x), r2(player.hpose.y), r2(player.hpose.z), r2(player.hpose.f)]:null};
   if(HS.mine===null) return {...base, hl:null, hh:null, hx:null, hlk:0, hlc:0};
   myHouseStr(); const o={...base, hl:[HS.mine, HS.claimT], hh:HS.hash, hx:[HS.hash, ...[...hMyState()].slice(0,80)], hlk:HS.lock?1:0, hlc:HS.likes|0}; if(performance.now()-HS.sendT<150) o.hs=HS.str; return o; }
 function houseParse(r,pr){ if(!HS) return;
   r.hx=Array.isArray(pr.hx) && typeof pr.hx[0]==='string' ? [pr.hx[0], ...pr.hx.slice(1,81).filter(Number.isInteger)] : null;
   r.hlk=pr.hlk===1; r.hlc=Math.max(0,Math.min(99999,pr.hlc|0)); r.hg=Array.isArray(pr.hg) && pr.hg.length===2 && pr.hg.every(Number.isInteger) ? pr.hg : null;
+  r.hb=Array.isArray(pr.hb) && pr.hb.length===2 && pr.hb.every(Number.isInteger) ? pr.hb : null;
   r.hq=Array.isArray(pr.hq) && pr.hq.length===3 && pr.hq.every(Number.isInteger) ? pr.hq : null;
   r.hp=Array.isArray(pr.hp) && pr.hp.length===5 && HPOSE_K[pr.hp[0]] && pr.hp.slice(1).every(Number.isFinite) ? {k:HPOSE_K[pr.hp[0]], x:pr.hp[1], y:pr.hp[2], z:pr.hp[3], f:pr.hp[4]} : null; const hl=pr.hl; r.hl=Array.isArray(hl) && Number.isInteger(hl[0]) && hl[0]>=0 && hl[0]<LOTS.length && Number.isFinite(hl[1]) ? [hl[0],+hl[1]] : null;
   r.hh=typeof pr.hh==='string' && pr.hh.length<=12 ? pr.hh : null;
@@ -13018,9 +13096,9 @@ function lotOwners(){ const own=LOTS.map(()=>null), better=(a,b)=>!b || a.t<b.t 
   if(HS.mine!==null) own[HS.mine]={u:myUid, t:HS.claimT, me:true, name:cleanName(profile.name)||'Peluche', hash:HS.hash, str:HS.str};
   for(const r of mp.remotes.values()){ if(!r.hl || !r.hh) continue; const c={u:uidOf(r)||'', t:r.hl[1], me:false, name:r.name||'Peluche', hash:r.hh, r}; if(better(c,own[r.hl[0]])) own[r.hl[0]]=c; }
   return own; }
-function houseUpdate(dt){ houseInterTick(dt); HS.tick-=dt; if(HS.tick<=0){ hOwnerRequests(); hOwnerLikes(); } if(HS.tick>0) return; HS.tick=.25;
+function houseUpdate(dt){ houseInterTick(dt); HS.tick-=dt; if(HS.tick<=0){ hOwnerRequests(); hOwnerLikes(); hOwnerRings(); } if(HS.tick>0) return; HS.tick=.25;
   { const now=performance.now(); if(HS.mine!==null && mp.room && (now-HS.sendT>4000 || (HS.dirty && now-HS.sendT>1000))){ HS.sendT=now; HS.dirty=false; sendPresence(true); } }   // la casa completa: cada 4 s, o al cambiarla
-  const own=lotOwners(); HS.own=own;
+  const own=lotOwners(); HS.own=own; try{ hBarrioSigns(own); }catch(e){}
   if(HS.mine!==null && own[HS.mine] && !own[HS.mine].me){ HS.mine=null; flashNote('Alguien cargó su casita en ese terreno antes que tú'); sendPresence(true); return; }
   LOTS.forEach((L,i)=>{ const o=own[i]; let str=o ? (o.me ? myHouseStr() : HS.cache.get(o.hash)) : null; const hid=!!(o && !o.me && HHIDE.has(o.u)); if(hid) str=null; if(o && o.me && ED.on) str=hpEnc(edFilter(hpDec(str))); const key=o && str ? o.u+'|'+hpHash(str) : '';
     { const lk=o && (o.me ? HS.lock : o.r && o.r.hlk), n=hLikesOf(o); lotLabel(L, o ? o.name : '', hid ? '(oculta)' : ((n?'❤ '+n:'')+(lk?' 🔒':''))); }
@@ -13041,8 +13119,8 @@ function houseActions(){ if(player.car||player.ac||player.pg||player.mg) return 
   let best=null, bd=1e9; for(const b of HS.shown.values()) for(const it of b.ia||[]){ const d=Math.hypot(player.pos.x-it.x,player.pos.z-it.z); if(d<it.rad && d<bd && Math.abs(player.pos.y-it.y)<1.6){ bd=d; best=[b,it]; } }
   if(best){ const [b,it]=best, S=hStateOf(b), on=!!(S && S.has(it.pi)); let a=null;
     if(it.k==='door'){ const lk=hLockOf(b), mine=b.owner===myUid;
-      if(!mine && lk && !on) return [{label:'Cerrado con candado 🔒', disabled:true, run:()=>{}}, null];
-      a={label:on?'Cerrar puerta':'Abrir puerta', run:()=>hToggle(b,it.pi,'door')};
+      if(!mine && lk && !on) return [{label:'Cerrado con candado 🔒', disabled:true, run:()=>{}}, {label:'🔔 Tocar timbre', run:()=>hRing(b)}];
+      a={label:on?'Cerrar puerta':'Abrir puerta', run:()=>hToggle(b,it.pi,'door')}; if(!mine) return [a, {label:'🔔 Tocar timbre', run:()=>hRing(b)}];
       if(mine) return [a, {label:HS.lock?'Quitar candado':'Poner candado 🔒', run:()=>{ HS.lock=!HS.lock; if(HS.lock){ const S=hMyState(); for(const q of b.ia) if(q.k==='door') S.delete(q.pi); } hSave(); HS.dirty=true; sendPresence(true);
         flashNote(HS.lock?'Pusiste candado: las puertas se cierran y solo tú las abres':'Quitaste el candado: cualquiera puede abrir las puertas'); try{ const R=audio.raw(); R.noise(R.ctx.currentTime,.12,1800,.12); }catch(e){} }}]; }
     else if(it.k==='win') a={label:on?'Cerrar ventana':'Abrir ventana', run:()=>hToggle(b,it.pi,'win')};
@@ -13148,7 +13226,8 @@ const HOUSE_MAX=700;   // v177: antes 400
 const HINV0={'piso:0':30,'piso:2':10,'muro:5':30,'muro:1':20,'muro:0':10,'puerta:5':2,'ventana:5':6,'teja:6':30,'teja:7':12,'plano:6':10,'remate:5':12,'escalera:0':2};
 // ---- guardar / cargar ----
 function hLoad(){ if(HS.loaded) return; HS.loaded=true; let o=null; try{ o=JSON.parse(localStorage.getItem('mundoPelucheCasa')||'null'); }catch(e){}
-  HS.str = o && typeof o.p==='string' && hpDec(o.p).length ? o.p : hpEnc(starterHouse()); HS.hash=hpHash(HS.str);
+  HS.str = o && typeof o.p==='string' && (hpDec(o.p).length || Array.isArray(o.designs)) ? o.p : hpEnc(starterHouse());
+  HS.designs=(Array.isArray(o && o.designs) ? o.designs.slice(0,3) : []).map(x=>typeof x==='string'?x:null); while(HS.designs.length<3) HS.designs.push(null); HS.di=Math.max(0,Math.min(2,(o && o.di)|0)); HS.hash=hpHash(HS.str);
   HS.inv={}; const src=o && o.inv && typeof o.inv==='object' ? o.inv : HINV0; for(const k in src){ const n=src[k]|0, [kid,m]=k.split(':'); if(n>0 && HK_BY[kid] && HK_BY[kid].mats.includes(+m)) HS.inv[k]=Math.min(9999,n); }
   HS.g3=!!(o && o.g3); if(!HS.g3){ for(const k in HINV3) HS.inv[k]=(HS.inv[k]|0)+HINV3[k]; HS.g3=true; }
   HS.lock=!!(o && o.lock); HS.likes=Math.max(0,(o && o.likes)|0); HS.likeDay=(o && o.likeDay && typeof o.likeDay==='object') ? o.likeDay : {d:'', u:[]};
@@ -13156,7 +13235,7 @@ function hLoad(){ if(HS.loaded) return; HS.loaded=true; let o=null; try{ o=JSON.
   HS.fav=Array.isArray(o && o.fav) ? o.fav.filter(k=>typeof k==='string' && HK_BY[k]).slice(0,200) : [];
   HS.g6=!!(o && o.g6); if(!HS.g6){ for(const k in HINV6) if(HK_BY[k.split(':')[0]]) HS.inv[k]=(HS.inv[k]|0)+HINV6[k]; HS.g6=true; }
   HS.g4=!!(o && o.g4); if(!HS.g4){ for(const k in HINV4) HS.inv[k]=(HS.inv[k]|0)+HINV4[k]; HS.g4=true; } }
-function hSave(){ try{ localStorage.setItem('mundoPelucheCasa', JSON.stringify({v:1, p:HS.str, inv:HS.inv, g3:HS.g3?1:0, g4:HS.g4?1:0, g5:HS.g5?1:0, g6:HS.g6?1:0, fav:(HS.fav||[]).slice(0,200), lock:HS.lock?1:0, likes:HS.likes|0, likeDay:HS.likeDay})); }catch(e){} }
+function hSave(){ try{ localStorage.setItem('mundoPelucheCasa', JSON.stringify({v:1, p:HS.str, inv:HS.inv, g3:HS.g3?1:0, g4:HS.g4?1:0, g5:HS.g5?1:0, g6:HS.g6?1:0, fav:(HS.fav||[]).slice(0,200), designs:HS.designs||null, di:HS.di|0, lock:HS.lock?1:0, likes:HS.likes|0, likeDay:HS.likeDay})); }catch(e){} }
 function hSetPieces(P){ HS.str=hpEnc(P); HS.hash=hpHash(HS.str); HS.dirty=true; HS.tick=0; hSave(); }
 // ---- reglas: dónde va cada pieza y si cabe ----
 const HD=[[0,1],[1,0],[0,-1],[-1,0]];   // giro 0:+z, 1:+x, 2:-z, 3:-x (en el terreno)
@@ -13266,7 +13345,7 @@ body.in-hed #hud, body.in-hed #touch, body.in-hed #hotbar, body.in-hed .tbtns, b
   ED.bDel=B('🗑️','Quitar piezas',b=>{ edSetTool('del'); });
   ED.toolsBox=mk('div','hedTools'); { const T=(ic,lab,fn,id)=>{ const b=document.createElement('button'); b.type='button'; b.innerHTML='<span>'+ic+'</span>'+lab; if(id) b.dataset.t=id; b.onclick=e=>{ e.stopPropagation(); fn(); }; ED.toolsBox.appendChild(b); return b; };
     T('↶','Deshacer',()=>edUndo()); T('↷','Rehacer',()=>edRedo()); T('🪣','Rellenar',()=>edSetTool('fill'),'fill'); T('🖌️','Pintar',()=>edSetTool('paint'),'paint'); T('✋','Mover',()=>edSetTool('move'),'move');
-    ED.bRoof=T('🏠','Techo',()=>{ ED.roof=!ED.roof; HS.tick=0; edRender(); },'roof'); T('👁️','Caminar',()=>edWalk()); }
+    ED.bRoof=T('🏠','Techo',()=>{ ED.roof=!ED.roof; HS.tick=0; edRender(); },'roof'); T('👁️','Caminar',()=>edWalk()); ED.bDes=T('📐','Diseño 1',()=>edDesign()); }
   ED.bShop=B('🛒','Tienda',b=>{ ED.shop=!ED.shop; ED.shopK=null; if(ED.invOff) ED.tog.onclick({stopPropagation(){}}); edRender(); });
   B('✓','Listo',()=>edExit(),'ok');
   const lb=(t,f)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=t; b.onclick=e=>{ e.stopPropagation(); f(); }; return b; };
@@ -13312,7 +13391,7 @@ function hBuy(kid,m,ad){ const K=HK_BY[kid], n=HPACK(kid), key=kid+':'+m, cost=H
 // ---- v174: dibujito sin fondo de cada pieza (se hace una vez, poco a poco, y se guarda) ----
 const HTH={c:{}, q:[], rig:null};
 function hThumb(kid,m){ const k=kid+':'+m; if(HTH.c[k]) return HTH.c[k]; if(!HTH.q.includes(k)) HTH.q.push(k); return ''; }
-function hThumbRender(k){ const [kid,ms]=k.split(':'), K=HK_BY[kid]; if(!K) return 'x';
+function hThumbRender(k){ if(k.startsWith('pf:')) return hThumbRenderP(HPF[+k.slice(3)].P()); const [kid,ms]=k.split(':'), K=HK_BY[kid]; if(!K) return 'x';
   try{
     if(!HTH.rig){ const sc=new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff,0xd8d0c8,1.05)); const d=new THREE.DirectionalLight(0xffffff,.75); d.position.set(3,6,5); sc.add(d);
       const cam=new THREE.PerspectiveCamera(28,1,.05,200), rt=new THREE.WebGLRenderTarget(128,128); rt.texture.encoding=THREE.sRGBEncoding; HTH.rig={sc,cam,rt}; }
@@ -13344,7 +13423,8 @@ function edTabs(box){ const row=document.createElement('div'); row.className='he
   for(const [id,lab] of [['construir','Construir'],['casa','Casa'],['jardin','Jardín']]){ const b=document.createElement('button'); b.type='button'; b.textContent=lab; if(ED.tab===id) b.className='on'; b.onclick=e=>{ e.stopPropagation(); ED.tab=id; ED.shopK=null; edRender(); ED.inv.scrollTop=0; }; row.appendChild(b); }
   box.appendChild(row);
   const sr=document.createElement('div'); sr.className='hed-subs'; ED.sub=ED.sub||{}; const cur=ED.sub[ED.tab]||'todo';
-  for(const [id,lab] of [['todo','Todo'],...HSUBS[ED.tab],['fav','⭐']]){ const b=document.createElement('button'); b.type='button'; b.textContent=lab; if(cur===id) b.className='on'; b.onclick=e=>{ e.stopPropagation(); ED.sub[ED.tab]=id; ED.shopK=null; edRender(); ED.inv.scrollTop=0; }; sr.appendChild(b); }
+  if(!ED.shop && ED.sub && ED.sub.construir==='listas') ED.sub.construir='todo';
+  for(const [id,lab] of [['todo','Todo'],...HSUBS[ED.tab],['fav','⭐']]){ if(id==='listas' && !ED.shop) continue; const b=document.createElement('button'); b.type='button'; b.textContent=lab; if(cur===id) b.className='on'; b.onclick=e=>{ e.stopPropagation(); ED.sub[ED.tab]=id; ED.shopK=null; edRender(); ED.inv.scrollTop=0; }; sr.appendChild(b); }
   box.appendChild(sr);
   // buscador (busca en las 3 pestañas) y, en la tienda, ordenar
   const sw=document.createElement('div'); sw.className='hed-srch';
@@ -13364,7 +13444,7 @@ function edList(shop){ const q=hNorm((ED.q||'').trim()); let L=HK.filter(K=>(!sh
   L.sort((a,b)=>(hFav(b.id)-hFav(a.id)) || (ord==='b'?pr(a)-pr(b):ord==='c'?pr(b)-pr(a):ord==='v'?ix.get(b)-ix.get(a):ix.get(a)-ix.get(b))); return L; }
 const edShow=K=>{ if(K.cat!==ED.tab) return false; const sb=(ED.sub||{})[ED.tab]||'todo'; return sb==='todo' || (sb==='fav' ? hFav(K.id) : K.sub===sb); };
 // tienda: arriba el detalle de lo que escogiste (colores y comprar); abajo todas las piezas de la pestaña
-function edRenderShop(box){ edTabs(box);
+function edRenderShop(box){ edTabs(box); if(ED.tab==='construir' && (ED.sub||{}).construir==='listas'){ edRenderPrefabs(box); return; } ED.pfSure=null;
   if(ED.shopK && HK_BY[ED.shopK]){ const K=HK_BY[ED.shopK], n=HPACK(K.id); if(!K.mats.includes(ED.shopM)) ED.shopM=K.mats[0]; const m=ED.shopM;
     const det=document.createElement('div'); det.className='hed-det'; det.append(...hThumbEl(K.id,m));
     const nm=document.createElement('div'); nm.textContent=K.n+(n>1?' ×'+n:'')+(hMatName(K,m)?' · '+hMatName(K,m):'')+' (tienes '+(HS.inv[K.id+':'+m]|0)+')'; det.appendChild(nm);
@@ -13382,6 +13462,7 @@ function edRenderShop(box){ edTabs(box);
   box.appendChild(grid); }
 function edRender(){ ED.bDel.classList.toggle('on',ED.del); ED.bShop.classList.toggle('on',ED.shop); ED.bRoof.classList.toggle('on',!ED.roof); ED.bRoof.querySelector('span').textContent=ED.roof?'🏠':'🏚️';
   ED.toolsBox.hidden=!(ED.on && ED.toolsOpen); ED.toolsBox.querySelectorAll('button[data-t]').forEach(b=>{ if(b.dataset.t!=='roof') b.classList.toggle('on',ED.tool===b.dataset.t); });
+  if(ED.bDes) ED.bDes.lastChild.textContent='Diseño '+((HS.di|0)+1);
   ED.bTools.querySelector('span').textContent={fill:'🪣',paint:'🖌️',move:'✋'}[ED.tool]||'🧰'; ED.bTools.querySelector('small').textContent={fill:'Rellenar',paint:'Pintar',move:'Mover'}[ED.tool]||'Herramientas'; ED.bTools.classList.toggle('on',['fill','paint','move'].includes(ED.tool)||ED.toolsOpen); ED.bLv.textContent='Nivel '+(ED.lv+1);
   const box=ED.inv, keep=box.scrollTop; box.textContent=''; HTH.q.length=0;
   if(ED.shop){ edRenderShop(box); edTip('Compra piezas'+(ADS.ok()?' con monedas o con un anuncio ▶':' con monedas')+'. Aparecen en tus piezas.'); return; }
@@ -13441,7 +13522,7 @@ function edSnap(){ ED.undo.push({s:HS.str, inv:JSON.stringify(HS.inv)}); if(ED.u
 function edRestore(u){ HS.inv=JSON.parse(u.inv); hSetPieces(hpDec(u.s)); ED.moving=null; ED.hov=null; edGhost(null); edRender(); }
 function edUndo(){ const u=ED.undo.pop(); if(!u){ flashNote('No hay nada que deshacer'); return; } ED.redo.push({s:HS.str, inv:JSON.stringify(HS.inv)}); edRestore(u); }
 function edRedo(){ const u=ED.redo.pop(); if(!u){ flashNote('No hay nada que rehacer'); return; } ED.undo.push({s:HS.str, inv:JSON.stringify(HS.inv)}); edRestore(u); }
-function edSetTool(t){ ED.tool = ED.tool===t ? 'place' : t; ED.del = ED.tool==='del'; ED.moving=null; ED.hov=null; edGhost(null); ED.toolsOpen=false; edRender(); }
+function edSetTool(t){ ED.tool = ED.tool===t ? 'place' : t; ED.del = ED.tool==='del'; if(ED.del && ED.roof){ ED.roof=false; HS.tick=0; flashNote('Escondí el techo para quitar lo de adentro (🏠 en Herramientas lo vuelve a mostrar)'); } ED.moving=null; ED.hov=null; edGhost(null); ED.toolsOpen=false; edRender(); }
 const edSnd=(ok)=>{ try{ const R=audio.raw(), t=R.ctx.currentTime; ok ? R.tone('triangle',660,880,t,.1,.08) : R.tone('square',200,160,t,.1,.05); }catch(e){} };
 // ---- fantasmas de varias piezas a la vez (verdes las que caben, rojos las que no) ----
 function edGhostMulti(okL,badL){ edGhost(null); const L=edLot(); if(!L) return; const mk=(P,mat)=>{ if(!P.length) return null; const b=hpBuild(L,P,{mat}); b.g.traverse(m=>{ if(m.isMesh){ m.castShadow=false; m.renderOrder=5; } }); return b; };
@@ -13505,6 +13586,98 @@ const hedBack=(()=>{ const b=document.createElement('button'); b.type='button'; 
   b.onclick=e=>{ e.stopPropagation(); b.hidden=true; if(ED.prevCam && ED.prevCam!==camMode) setCam(ED.prevCam); if(HS.mine!==null) edEnter(); }; document.body.appendChild(b); return b; })();
 function edWalk(){ ED.toolsOpen=false; ED.prevCam=camMode; edExit(); if(camMode!=='first') setCam('first'); hedBack.hidden=false; flashNote('Camina por tu casa. Toca «Volver a editar» cuando quieras'); }
 // ---- cámara del editor ----
+// ---------------- v178: CASAS LISTAS, VARIOS DISEÑOS, TIMBRE, LISTA DE CASAS, CASA MÁS QUERIDA Y TU MASCOTA EN CASA ----------------
+// ---- casas listas para comprar: se arman con piezas normales (después las puedes cambiar como quieras) ----
+const hMt=(g,n)=>{ const k=HMAT_NEW[g].find(m=>HMAT[m].n===n); return k===undefined?(g==='techo'?6:g==='piso'?0:5):k; };
+function hPfBox(o){ const P=[], add=(t,i,j,r=0,m=0,k=0,lv=0)=>P.push({t,i,j,lv,r,m,k}), dn=n=>{ const id=DECO.findIndex(d=>d.n===n); return id<0?null:id; };
+  const A=(n,i,j,r=0,m=0,lv=0)=>{ const id=dn(n); if(id!==null) P.push({t:hDecoT(id),i,j,lv,r,m,k:id&7}); };
+  const {i0,i1,j0,W,R,F}=o, j1=j0+4;
+  for(let i=i0;i<=i1;i++) for(let j=j0;j<=j1;j++) add(HT.PISO,i,j,0,F);
+  const wall=(s,i,j,r)=>{ if(!s || s==='MURO'||s==='VENTANA'||s==='PUERTA') add(HT[s||'MURO'],i,j,r,W); else A(s,i,j,r,W); };
+  for(let i=i0;i<=i1;i++){ wall(o.front[i-i0],i,j1,0); wall((o.back||[])[i-i0],i,j0,2); }
+  for(let j=j0;j<=j1;j++){ wall((o.right||[])[j-j0],i1,j,1); wall((o.left||[])[j-j0],i0,j,3); }
+  if(o.flat){ for(let i=i0;i<=i1;i++) for(let j=j0;j<=j1;j++){ const corner=(i===i0||i===i1)&&(j===j0||j===j1); if(corner && o.towers) add(HT.CONO,i,j,0,R,0); else add(HT.CUMBRE,i,j,0,R,0); } }
+  else { for(let i=i0;i<=i1;i++){ add(HT.TEJA,i,j0,0,R,0); add(HT.TEJA,i,j0+1,0,R,1); add(HT.CUMBRE,i,j0+2,0,R,2); add(HT.TEJA,i,j1-1,2,R,1); add(HT.TEJA,i,j1,2,R,0); }
+    for(const [i,r] of [[i0,3],[i1,1]]){ add(HT.HAST_A,i,j0,r,W,0); add(HT.HAST_A,i,j0+1,r,W,1); add(HT.HAST_R,i,j0+2,r,W,2); add(HT.HAST_B,i,j1-1,r,W,1); add(HT.HAST_B,i,j1,r,W,0); } }
+  for(const it of o.items||[]) A(...it);
+  return P; }
+const HPF=[
+  {n:'Cabaña de madera', P:()=>hPfBox({i0:7,i1:12,j0:9, W:hMt('muro','Troncos claros'), R:hMt('techo','Tejas cafés'), F:hMt('piso','Madera oscura'),
+    front:['VENTANA','MURO','Puerta de tablones','MURO','Ventana con macetero','MURO'], back:['MURO','VENTANA','MURO','MURO','VENTANA','MURO'], left:['MURO','MURO','VENTANA','MURO','MURO'], right:['MURO','MURO','VENTANA','MURO','MURO'],
+    items:[['Chimenea',10,9,0,0],['Cama individual',8,10,0,0],['Mesa larga',11,11,0,0],['Silla de madera',11,12,2,2],['Velas',11,11,0,0],['Lámpara de mesa',12,10,0,7],['Tapete rectangular',9,12,0,0],
+      ['Leñero',13,13,3,0],['Pino',5,10,0,0],['Pino',15,10,0,0],['Farol clásico',8,15,0,0],['Farol clásico',11,15,0,0],...[4,5,6,7,8,11,12,13,14,15].map(i=>['Cerca rústica',i,17,0,0]),...[14,15,16].map(j=>['Camino de tablas',9,j,0,0]),...[14,15,16].map(j=>['Camino de tablas',10,j,0,0])]})},
+  {n:'Casita de dulce', P:()=>hPfBox({i0:8,i1:13,j0:9, W:hMt('muro','Galleta'), R:hMt('techo','Techo de chocolate'), F:hMt('piso','Piso de galleta'),
+    front:['Ventana de dulce','MURO','Puerta de dulce','MURO','Ventana de dulce','MURO'], back:['MURO','Ventana redonda de cruz','MURO','MURO','Ventana redonda de cruz','MURO'], left:['MURO','MURO','Ventana de dulce','MURO','MURO'], right:['MURO','MURO','Ventana de dulce','MURO','MURO'],
+    items:[['Mesa de té',11,11,0,5],['Pastel de cumpleaños',11,11,0,5],['Puf de pera',12,11,3,5],['Máquina de helados',9,9,0,5],['Frasco de dulces',12,9,0,0],['Barra de cocina',12,9,0,5],['Cama de nube',9,11,0,5],
+      ['Árbol de algodón de azúcar',6,12,0,0],['Árbol de paleta',15,12,0,0],['Hongo gigante',6,15,0,0],['Farol de dulce',9,16,0,0],['Farol de dulce',12,16,0,0],...[4,5,6,7,8,9,12,13,14,15,16,17].map(i=>['Cerca de bastones de dulce',i,18,0,0]),...[14,15,16,17].flatMap(j=>[['Piso de chocolate',10,j,0,0],['Piso de chocolate',11,j,0,0]])]})},
+  {n:'Castillo chico', P:()=>hPfBox({i0:7,i1:13,j0:9, flat:1, towers:1, W:hMt('muro','Piedra gris'), R:hMt('techo','Pizarra gris'), F:hMt('piso','Piedra gris'),
+    front:['MURO','Aspillera de castillo','MURO','Puerta de castillo','MURO','Aspillera de castillo','MURO'], back:['MURO','Aspillera de castillo','MURO','MURO','MURO','Aspillera de castillo','MURO'], left:['MURO','Aspillera de castillo','MURO','Aspillera de castillo','MURO'], right:['MURO','Aspillera de castillo','MURO','Aspillera de castillo','MURO'],
+    items:[['Cama de princesa',8,10,0,4],['Candelabro',10,9,0,0],['Cofre del tesoro',12,10,0,0],['Tapete rectangular',10,11,0,0],['Antorchas dobles',9,15,0,0],['Antorchas dobles',12,15,0,0],
+      ...[5,6,15,16].map(i=>['Muro de piedra alto',i,17,0,0]),...[14,15,16,17].flatMap(j=>[['Adoquín',10,j,0,0]])]})},
+  {n:'Casa moderna', P:()=>hPfBox({i0:7,i1:13,j0:8, flat:1, W:hMt('muro','Pintura blanco'), R:hMt('techo','Lámina gris'), F:hMt('piso','Mármol blanco'),
+    front:['MURO','Ventana panorámica','Ventana panorámica','Puerta de vidrio negra','Ventana panorámica','Ventana panorámica','MURO'], back:['MURO','MURO','Ventana larga','MURO','Ventana larga','MURO','MURO'], left:['MURO','Ventana alta','MURO','Ventana alta','MURO'], right:['MURO','Ventana alta','MURO','Ventana alta','MURO'],
+    items:[['Sofá largo',9,9,0,8],['Tele grande',9,11,2,0],['Mesa de cristal',12,10,0,0],['Lámpara de arco',8,9,0,8],['Monstera',13,8,0,0],['Tapete rectangular',9,10,0,8],
+      ['Alberca grande',15,15,0,1],['Silla de playa',13,15,3,1],['Farol moderno',8,15,0,0],['Farol moderno',12,15,0,0],...[13,14,15,16,17].map(j=>['Losas grandes',10,j,0,0])]})},
+  {n:'Casa de playa', P:()=>hPfBox({i0:8,i1:13,j0:9, W:hMt('muro','Tablones azul'), R:hMt('techo','Paja dorada'), F:hMt('piso','Madera clara'),
+    front:['Ventana con postigos azules','MURO','Puerta azul de tableros','MURO','Ventana con postigos azules','MURO'], back:['MURO','VENTANA','MURO','MURO','VENTANA','MURO'], left:['MURO','MURO','Ojo de buey','MURO','MURO'], right:['MURO','MURO','Ojo de buey','MURO','MURO'],
+    items:[['Hamaca',9,10,0,1],['Mesa de café redonda',12,11,0,0],['Lámpara de luna',12,11,0,0],['Silla de mimbre',12,10,0,0],['Acuario grande',9,9,0,0],
+      ['Palmera alta',6,13,0,0],['Palmera alta',16,13,0,0],['Sombrilla',14,16,0,4],['Pelota de playa',13,17,0,1],['Tumbona',15,17,2,4],...[14,15,16,17,18].flatMap(j=>[5,6,7,8,9,10,11,12,13,14,15,16,17].map(i=>['Arena de playa',i,j,0,0]))]})},
+];
+HPF.forEach(f=>{ f.price=Math.round(f.P().reduce((s,p)=>s+(HPRICE[hkOf(p)]||0),0)*.85/10)*10; });
+function hBuyPrefab(i){ const f=HPF[i]; if(coins<f.price){ flashNote('Te faltan '+(f.price-coins)+' monedas'); return; }
+  const old=edPieces(); for(const q of old){ const k=hkOf(q)+':'+q.m; if(HK_BY[hkOf(q)]) HS.inv[k]=(HS.inv[k]|0)+1; }
+  coins-=f.price; saveCoins(); renderCoins(); ED.undo=[]; ED.redo=[]; hSetPieces(f.P()); ED.pfSure=null; ED.shop=false; try{ coinSound(5); }catch(e){}
+  bigText('¡'+f.n+'!',1600); flashNote('Tu casa anterior regresó a tus piezas'); edRender(); }
+function hThumbRenderP(P){ try{ if(!HTH.rig) hThumbRender('piso:0'); const R=HTH.rig, L0={x:0,y:0,z:0,yaw:0,c:1,s:0,id:-1};
+    const b=hpBuild(L0,P); scene.remove(b.g); R.sc.add(b.g); b.g.updateMatrixWorld(true); const box=new THREE.Box3().setFromObject(b.g);
+    const c=box.getCenter(new THREE.Vector3()), sz=box.getSize(new THREE.Vector3()), mx=Math.max(sz.x,sz.y,sz.z,.4), dir=new THREE.Vector3(.55,.75,1).normalize();
+    R.cam.position.copy(c).addScaledVector(dir,mx*1.75); R.cam.lookAt(c); R.cam.updateMatrixWorld();
+    const prev=renderer.getRenderTarget(), sm=renderer.shadowMap.enabled, pc=renderer.getClearColor(new THREE.Color()), pa=renderer.getClearAlpha();
+    renderer.shadowMap.enabled=false; renderer.setClearColor(0x000000,0); renderer.setRenderTarget(R.rt); renderer.clear(); renderer.render(R.sc,R.cam); renderer.setRenderTarget(prev); renderer.setClearColor(pc,pa); renderer.shadowMap.enabled=sm;
+    const px=new Uint8Array(128*128*4); renderer.readRenderTargetPixels(R.rt,0,0,128,128,px); R.sc.remove(b.g); b.g.traverse(o=>{ if(o.isMesh && o.geometry) o.geometry.dispose(); });
+    const cv=document.createElement('canvas'); cv.width=cv.height=128; const g=cv.getContext('2d'), im=g.createImageData(128,128); for(let y=0;y<128;y++) im.data.set(px.subarray((127-y)*512,(128-y)*512),y*512); g.putImageData(im,0,0); return cv.toDataURL('image/png');
+  }catch(e){ return 'x'; } }
+function edRenderPrefabs(box){ const sure=ED.pfSure;
+  const h=document.createElement('div'); h.style.cssText='font:700 11px var(--body);color:#7a2b2b;padding:0 3px'; h.textContent='Casa completa, lista para usar. Tu casa de ahora regresa a tus piezas.'; box.appendChild(h);
+  const grid=document.createElement('div'); grid.className='hed-grid'; grid.style.gridTemplateColumns='1fr';
+  HPF.forEach((f,i)=>{ const c=document.createElement('button'); c.type='button'; c.className='hed-card'+(sure===i?' on':''); c.append(...hThumbEl('pf',i)); const t=document.createElement('span'); t.textContent=f.n; const pr=document.createElement('b'); pr.className='pr'; pr.innerHTML='<i class="cn"></i>'+f.price; c.append(t,pr);
+    if(sure===i){ const ok=document.createElement('div'); ok.className='hed-buy'; ok.style.cssText='margin-top:3px;justify-content:center'; ok.textContent=coins<f.price?'Te faltan '+(f.price-coins)+' monedas':'Toca otra vez para comprarla'; c.appendChild(ok); }
+    c.onclick=()=>{ if(ED.pfSure===i) hBuyPrefab(i); else { ED.pfSure=i; edRender(); } }; grid.appendChild(c); });
+  box.appendChild(grid); }
+// ---- varios diseños de tu casa (3): cada uno guarda sus propias piezas ----
+function edDesign(){ HS.designs=HS.designs||[null,null,null]; HS.designs[HS.di|0]=HS.str; HS.di=((HS.di|0)+1)%3; const s=HS.designs[HS.di]||''; ED.undo=[]; ED.redo=[]; ED.moving=null;
+  hSetPieces(hpDec(s)); edRender(); const n=hpDec(s).length; flashNote('Ahora editas el Diseño '+(HS.di+1)+(n?' ('+n+' piezas)':' (vacío: arma uno nuevo con tus piezas)')); }
+// ---- timbre: el visitante toca y al dueño le suena ----
+function hDing(){ try{ const R=audio.raw(), t=R.ctx.currentTime; R.tone('triangle',784,784,t,.28,.1); R.tone('triangle',622,622,t+.3,.4,.1); }catch(e){} }
+function hRing(b){ const now=performance.now(); if(now-(HS.ringT||0)<3000){ flashNote('Espera un poquito para volver a tocar'); return; } HS.ringT=now;
+  HS.ringSeq=(HS.ringSeq||0)+1; HS.ring=[b.L.id, HS.ringSeq]; sendPresence(true); hDing(); flashNote('🔔 Tocaste el timbre'); }
+function hOwnerRings(){ if(HS.mine===null) return; HS.seenRing=HS.seenRing||{};
+  for(const r of mp.remotes.values()){ const q=r.hb, u=uidOf(r); if(!q || q[0]!==HS.mine || !(q[1]>(HS.seenRing[u]||0))) continue; const first=HS.seenRing[u]===undefined; HS.seenRing[u]=q[1]; if(first && q[1]>1) continue;
+    hDing(); bigText('🔔',900); flashNote('🔔 ¡'+(r.name||'Alguien')+' tocó el timbre de tu casa!'); } }
+// ---- la casa más querida de cada vecindario (en el letrero del cruce) ----
+function hBarrioSigns(own){ BARRIOS.forEach((b,bi)=>{ if(!b.signM) return; let best=null, bn=0; for(let q=0;q<4;q++){ const o=own[bi*4+q]; if(!o) continue; const n=hLikesOf(o); if(n>bn){ bn=n; best=o; } }
+  const key=best?best.name+'|'+bn:''; if(b.signKey===key) return; b.signKey=key; const old=b.signM.map;
+  b.signM.map=textTex(['Vecindario '+(bi+1), best?'⭐ Más querida: '+best.name+' ❤'+bn:'Casitas de los jugadores'],512,170,'#fff3d6','#7a2b2b','#ff9ad5'); b.signM.needsUpdate=true; if(old) old.dispose(); }); }
+// ---- lista de casas en el mapa: toca una para ir ----
+function mapHousesFill(){ const el=ui('mapHouses'); if(!el || mapWrap.hidden) return; const own=HS.own||[]; const list=own.map((o,i)=>o?{o,i}:null).filter(Boolean);
+  const key=list.map(x=>x.i+x.o.name+(x.o.me?1:0)).join('|'); if(el.dataset.k===key) return; el.dataset.k=key; el.textContent='';
+  const h=document.createElement('b'); h.textContent='🏠 Casas:'; el.appendChild(h);
+  if(!list.length){ const s=document.createElement('span'); s.textContent='todavía no hay casas cargadas'; el.appendChild(s); return; }
+  for(const {o,i} of list){ const L=LOTS[i], b=document.createElement('button'); b.type='button'; b.textContent=o.me?'Mi casa':'Casa de '+o.name;
+    b.onclick=e=>{ e.stopPropagation(); const [x,z]=lotW(L,0,HZ.H+1.6); teleportTo({id:'casa'+i, name:o.me?'tu casa':'la casa de '+o.name, x, z}); const [lx,lz]=lotW(L,0,0); yaw=Math.atan2(-(lx-x),-(lz-z)); }; el.appendChild(b); } }
+// ---- tu mascota pasea por tu casa cuando estás adentro ----
+const HPW={t:0, tgt:null, key:''};
+function hPetWander(dt){ if(HS.mine===null || player.car || ED.on) return null; const L=LOTS[HS.mine], [lx,lz]=lotL(L,player.pos.x,player.pos.z);
+  if(Math.abs(lx)>HZ.H || Math.abs(lz)>HZ.H) { HPW.tgt=null; return null; } const i=Math.floor((lx+HZ.H)/HZ.C), j=Math.floor((lz+HZ.H)/HZ.C), lv=Math.max(0,Math.min(4,Math.round((player.pos.y-L.y-.25)/HZ.LV)));
+  if(HPW.ph!==HS.hash){ HPW.ph=HS.hash; HPW.P=hpDec(HS.str); } const P=HPW.P; if(!P.some(q=>q.t===HT.PISO && q.lv===lv && q.i===i && q.j===j)){ HPW.tgt=null; return null; }
+  const key=HS.hash+'|'+lv+'|'+i+','+j; if(key!==HPW.key){ HPW.key=key; const walls=new Set(P.filter(q=>q.lv===lv && hIsWallP(q)).map(q=>hEdgeKey(q.i,q.j,q.r))), seen=new Set([i+','+j]), st=[[i,j]], cells=[];
+    while(st.length && cells.length<160){ const [a,b2]=st.pop(); if(P.some(q=>q.t===HT.PISO && q.lv===lv && q.i===a && q.j===b2)) cells.push([a,b2]); else continue; for(let r=0;r<4;r++){ if(walls.has(hEdgeKey(a,b2,r))) continue; const ni=a+HD[r][0], nj=b2+HD[r][1]; const k=ni+','+nj; if(ni<0||nj<0||ni>=HZ.N||nj>=HZ.N||seen.has(k)) continue; seen.add(k); st.push([ni,nj]); } }
+    HPW.cells=cells; HPW.lv=lv; HPW.t=0; }
+  HPW.t-=dt; if(HPW.t<=0 || !HPW.tgt){ HPW.t=3+Math.random()*4; const c=HPW.cells[Math.floor(Math.random()*HPW.cells.length)]; if(!c) return null;
+    const [x,z]=lotW(L,-HZ.H+HZ.C*(c[0]+.3+Math.random()*.4), -HZ.H+HZ.C*(c[1]+.3+Math.random()*.4)); HPW.tgt={x,z}; }
+  return HPW.tgt; }
+HSUBS.construir.push(['listas','🏡 Casas listas']);
+(()=>{ const st=document.createElement('style'); st.textContent='.map-houses{display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:4px 10px 0;font:700 12px var(--body);color:#5a4426;}.map-houses button{border:none;border-radius:12px;background:#ffd36b;color:#5a4426;font:800 12px var(--body);padding:5px 10px;cursor:pointer;box-shadow:0 2px 0 #c9a24a;}'; document.head.appendChild(st); })();
 function hedCamera(dt){ hThumbPump(); const L=edLot(); if(!L){ edExit(); return false; } const C=ED.cam, [tx,tz]=lotW(L,C.tx,C.tz), ty=L.y+ED.lv*HZ.LV;
   const want=_pv.set(tx+Math.sin(C.yaw)*Math.cos(C.pitch)*C.dist, ty+Math.sin(C.pitch)*C.dist, tz+Math.cos(C.yaw)*Math.cos(C.pitch)*C.dist);
   camera.position.lerp(want,1-Math.exp(-dt*8)); camera.lookAt(tx,ty,tz); plush.visible=true; return true; }
@@ -17425,7 +17598,7 @@ function update(dt,t){ myLabelUpdate();
     if(hy<SEA_Y-.15) emitter={x:hx,y:hy,z:hz};
   }
   updateBubbles(dt, emitter);
-  if(!mapWrap.hidden) drawMap(false);
+  if(!mapWrap.hidden){ drawMap(false); if(((frame.mh=(frame.mh||0)+1)%30)===0) try{ mapHousesFill(); }catch(e){} }
   if(performance.now()-actScan>100){ actScan=performance.now(); scanActions(); }
   updateCarHud();
 
@@ -17560,7 +17733,7 @@ function frame(){
   const p1=pf?performance.now():0;
   try{ wlUpdate(); }catch(e){}
   renderer.info.reset();
-  if(shopOpen()) renderStudio(dt); else { const S=SP.on&&state!=='menu'?spaceScene:scene; if(FX.on) fxRender(S,camera); else renderer.render(S,camera); }
+  if(HAD.on) hadRender(dt); else if(shopOpen()) renderStudio(dt); else { const S=SP.on&&state!=='menu'?spaceScene:scene; if(FX.on) fxRender(S,camera); else renderer.render(S,camera); }
   if(pf){ const p2=performance.now(); fpsLogic+=p1-p0; fpsDraw+=p2-p1; fpsCalls+=renderer.info.render.calls; fpsTris+=renderer.info.render.triangles; }
   fpsFrames++; fpsTime+=raw;
   if(settings.coords && state==='play'){ frame.cT=(frame.cT||0)+raw; if(frame.cT>.25){ frame.cT=0; const t3=locText(); if(coordsEl.textContent!==t3) coordsEl.textContent=t3; } }   // v149

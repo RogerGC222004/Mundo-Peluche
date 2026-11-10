@@ -12,7 +12,7 @@
   var ready=null;
   function init(){ if(!ready) ready=AdMob.initialize({tagForChildDirectedTreatment:true, tagForUnderAgeOfConsent:true, maxAdContentRating:'General', initializeForTesting:!!CFG.pruebas})
     .catch(function(e){ ready=null; throw e; }); return ready; }
-  if(AdMob){
+  if(AdMob && !CFG.pruebas){   // v178: con anuncios de prueba no se usa AdMob (el juego muestra su propio "ratito de juego")
     setTimeout(function(){ init().catch(function(){}); },4000);   // se prepara solo, sin estorbar la carga
     window.MundoAds={ show:function(){ return new Promise(function(res){
       var got=false, done=false, hs=[];
