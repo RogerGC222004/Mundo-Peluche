@@ -319,6 +319,8 @@ body.in-mg #hint{display:none!important;}
 .slot:focus-visible{outline:3px solid var(--felt-dk);outline-offset:2px;}
 .slot-sep{width:2px;align-self:stretch;background:repeating-linear-gradient(var(--thread) 0 4px, transparent 4px 8px);opacity:.35;}
 
+/* v181: jugando un minijuego grande no hay barra de objetos ni inventario */
+body.ar-noinv #hotbar, body.ar-noinv #inv, body.ar-noinv #mapWrap{display:none!important}
 /* Inventario */
 .overlay#inv{padding-bottom:calc(92px + env(safe-area-inset-bottom,0px));}
 .inv-card{max-width:440px;display:flex;flex-direction:column;gap:12px;}
@@ -963,7 +965,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='180';
+const GAME_VERSION='181';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -4616,6 +4618,7 @@ function renderHotbar(){
 }
 // Usar el objeto de un espacio; si ya lo tienes en la mano, lo guardas
 function useSlot(i){
+  if(typeof arNoInv==='function' && arNoInv()) return;   // v181: en un minijuego grande no se usan objetos
   if(state!=='play' || player.car || player.pg || player.mg || player.busy) return;
   if(!invEl.hidden){ selectedSlot=i; holding=false; applyHeld(); renderHotbar(); renderInv(); return; }   // con el inventario abierto solo se elige el espacio
   if(typeof SP!=='undefined' && SP.on && hotbar[i]==='bow' && !(i===selectedSlot && holding)){ flashNote('El arco no funciona en el espacio: aquí no hay de dónde engancharse'); return; }
@@ -4650,7 +4653,7 @@ function renderInv(){
     grid.appendChild(b);
   }
 }
-function openInv(){ if(state!=='play') return; invEl.hidden=false; touchEl.hidden=true; if(document.pointerLockElement) document.exitPointerLock(); renderInv(); ui('invClose').focus({preventScroll:true}); }
+function openInv(){ if(state!=='play' || (typeof arNoInv==='function' && arNoInv())) return; invEl.hidden=false; touchEl.hidden=true; if(document.pointerLockElement) document.exitPointerLock(); renderInv(); ui('invClose').focus({preventScroll:true}); }
 function closeInv(relock){ if(invEl.hidden) return false; invEl.hidden=true; touchEl.hidden=!(state==='play' && isTouch); if(relock) lockPointer(); return true; }
 tap(ui('invBtn'),()=>{ invEl.hidden ? openInv() : closeInv(true); });
 ui('invClose').onclick=()=>closeInv(true);
@@ -4749,6 +4752,7 @@ const AR_SPOTS=(()=>{ const coastAt=coastAtA;
     const at=d=>[u[0]*(c+d), u[1]*(c+d)];
     return {id, name, a, c, u, v, center:at(centerOff), plate:at(plateOff), watch:at(plateOff-6)}; };
   return [mk('plat','Plataformas flotantes',1.37,38,-7), mk('papa','Papa caliente',4.71,-44,-20), mk('bola','Rebote sobre pelotas',3.93,21,-7), mk('carrera','Carrera de obstáculos',.15,42,-7)]; })();
+{ const A=AR_SPOTS[1]; A.watch=[A.u[0]*(A.c-14), A.u[1]*(A.c-14)]; }   // v181: el público de la papa ya no queda adentro del claro
 AR_SPOTS.push({id:'laberinto', name:'Laberinto', a:0, c:0, u:[0,-1], v:[1,0], center:[MZ.x,MZ.z], plate:[MZ.x+3,MZ.z+MZ.N*MZ.S/2+5], watch:[MZ.x+3,MZ.z+MZ.N*MZ.S/2+9]});   // v160
 AR_SPOTS.push({id:'carritos', name:'Carritos chocones', a:0, c:0, u:[-1,0], v:[0,1], center:[CHOC.x,CHOC.z], plate:[CHOC.x+CHOC.R+5,CHOC.z+2], watch:[CHOC.x+CHOC.R+9,CHOC.z+2]});   // v161
 AR_SPOTS.push({id:'banda', name:'Banda en el aire', a:0, c:0, u:[0,1], v:[-1,0], center:[TM.x,TM.z], plate:[TM.x+TM.W/2+6,TM.z-TM.L/2-3], watch:[TM.x+TM.W/2+10,TM.z-TM.L/2-3]});   // v162
@@ -13726,6 +13730,48 @@ function arResult(a,G){ const me=AR.me; if(me.awarded===G.gid) return; me.awarde
   setTimeout(()=>{ ui('arRes').hidden=true; },5500); setTimeout(()=>addCoins(coins),400);
   try{ const R=audio.raw(); const t=R.ctx.currentTime; (place===0?[523,659,784,1046]:[523,440]).forEach((f,k)=>R.tone('triangle',f,f,t+k*.12,.16,.08)); }catch(e){} }
 
+// ---------- v181: durante una partida grande: sin inventario para los que juegan, y paredes invisibles para los demás ----------
+// Cada minijuego tiene una "caja" (en sus ejes u/v): mientras hay partida (fases 1 a 4) nadie que no esté jugando puede entrar,
+// ni caminando, ni nadando, ni en coche, avión o barco; quien ya estaba adentro cuando empieza la partida aparece con el público.
+let AR_Z=null;
+function arZones(){ if(AR_Z) return AR_Z; const S=AR_SPOTS, g=a=>terrainH(S[a].center[0],S[a].center[1]);
+  const half=PLAT.N*PLAT.T/2+2, mz=MZ.N*MZ.S/2+1.5;
+  AR_Z=[
+    {u0:-half,u1:half,v0:-half,v1:half, y0:CAVE_TOP, y1:platTop(PLAT.F-1)+10},   // plataformas
+    {u0:-21,u1:21,v0:-21,v1:21, y0:CAVE_TOP, y1:g(1)+12},   // papa caliente
+    {u0:-BOLA.R-2,u1:BOLA.R+2,v0:-BOLA.R-2,v1:BOLA.R+2, y0:CAVE_TOP, y1:BOLA.top+12},   // pelotas
+    {u0:-9,u1:9,v0:-RC.L/2-6,v1:RC.L/2+6, y0:CAVE_TOP, y1:RC.Y+12},   // carrera (corre a lo largo de v)
+    {u0:-mz,u1:mz,v0:-mz,v1:mz, y0:CAVE_TOP, y1:MZ.h+MZ.WH+8},   // laberinto
+    {u0:-CHOC.R-1.5,u1:CHOC.R+1.5,v0:-CHOC.R-1.5,v1:CHOC.R+1.5, y0:CAVE_TOP, y1:(CHOC.floor||g(5))+CHOC.h+8},   // carritos
+    {u0:-TM.L/2-2,u1:TM.L/2+2,v0:-TM.W/2-2,v1:TM.W/2+2, y0:TM.Y-6, y1:TM.Y+12}];   // banda en el aire (abajo, en el claro, se camina normal)
+  return AR_Z; }
+function arInZone(a,x,y,z,m){ const Z=arZones()[a], [du,dv]=arL(AR_SPOTS[a],x,z); m=m||0; if(a===1) return papaInside(x,z,-1.5-m) && y>Z.y0 && y<Z.y1+m; return du>Z.u0-m && du<Z.u1+m && dv>Z.v0-m && dv<Z.v1+m && y>Z.y0 && y<Z.y1+m; }
+const arLive=a=>{ const G=AR.G[a]; return G && G.ph>=1 && G.ph<=4 && G.pl && G.pl.length>0; };
+const arMine=a=>AR.me.a===a && AR.me.st>=2;
+const arNoInv=()=>AR.me.a>=0 && AR.me.st>=2 && arLive(AR.me.a);   // jugando: el inventario se guarda
+const AG={ok:false, px:0, py:0, pz:0, o:null, ox:0, oy:0, oz:0, noteT:0, inv:false};
+function arGuardVeh(){ if(player.car) return cars[player.car.i]; if(player.ac) return aircraft[player.ac.i]; if(typeof shipOnDeck!=='undefined' && (shipOnDeck || iSteer())) return SH; return null; }
+function arGuard(){
+  // 1) inventario
+  const noInv=arNoInv();
+  if(noInv!==AG.inv){ AG.inv=noInv; document.body.classList.toggle('ar-noinv',noInv);
+    if(noInv){ try{ closeInv(false); }catch(e){} if(holding){ holding=false; applyHeld(); renderHotbar(); } } }
+  // 2) paredes invisibles
+  if(state!=='play' || SP.on){ AG.ok=false; return; }
+  const o=arGuardVeh(), px=o?o.x:player.pos.x, pz=o?o.z:player.pos.z, py=(o&&o.y!==undefined&&o!==SH)?o.y:player.pos.y;
+  let hit=-1; for(let a=0;a<ARN;a++){ if(!arLive(a) || arMine(a)) continue; if(arInZone(a,px,py,pz)){ hit=a; break; } }
+  if(hit<0){ AG.ok=true; AG.px=player.pos.x; AG.py=player.pos.y; AG.pz=player.pos.z; AG.o=o; if(o){ AG.ox=o.x; AG.oy=o.y; AG.oz=o.z; } return; }
+  const A=AR_SPOTS[hit], moved=AG.ok ? Math.hypot(px-(AG.o===o&&o?AG.ox:AG.px), pz-(AG.o===o&&o?AG.oz:AG.pz)) : 99;
+  const wasOut=AG.ok && AG.o===o && moved<25 && !arInZone(hit, o?AG.ox:AG.px, (o&&o!==SH&&o.y!==undefined)?AG.oy:AG.py, o?AG.oz:AG.pz);
+  if(wasOut){   // venía de afuera: la pared lo detiene
+    if(o){ o.x=AG.ox; o.z=AG.oz; if(o!==SH && o.y!==undefined) o.y=AG.oy; if(o.v!==undefined) o.v=(o===SH?0:o.v*-.25); if(o.vy!==undefined) o.vy=Math.min(0,o.vy); if(o===SH){ SH.v=0; } }
+    player.pos.set(AG.px,AG.py,AG.pz); player.vel.set(0,0,0); if(player.vy<0 && py<arZones()[hit].y1+.5 && AG.py>=arZones()[hit].y1-.6){ player.vy=0; player.grounded=true; }
+    if(performance.now()-AG.noteT>3500){ AG.noteT=performance.now(); flashNote('🚧 Hay una partida de «'+A.name+'» en curso: espera a que termine'); try{ audio.bump&&audio.bump(); }catch(e){} }
+    return; }
+  // ya estaba adentro (empezó la partida o llegó por teletransporte): con el público
+  arToBeach(hit); AG.ok=false; flashNote('Empezó una partida de «'+A.name+'»: te pusimos con el público para no estorbar');
+}
+
 // cada cuadro
 let arPrevPh=Array(ARN).fill(-1), arSendT=0;
 function arenaUpdate(dt){
@@ -17629,6 +17675,7 @@ function frame(){
   const raw=clock.getDelta(), dt=Math.min(raw,.05), t=clock.elapsedTime;
   const pf=settings.fps, p0=pf?performance.now():0;
   if(state!=='pause') update(dt,t);
+  try{ arGuard(); }catch(e){}   // v181
   updateSky(dt);
   updateRemotes(dt,t);
   petsUpdate(dt,t);
