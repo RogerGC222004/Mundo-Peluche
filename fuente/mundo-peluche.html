@@ -15191,9 +15191,29 @@ function vehHover(ev){ if(VE.ghost){ VS.scene.remove(VE.ghost); VE.ghost=null; }
 function vehInfo(){ const S=vehStats(VE.parts), L=[];
   L.push(S.canLand?'🚗 Tierra ✓ ('+Math.round(S.vLand*3.6)+' km/h)':'🚗 Tierra ✗ '+S.whyLand); L.push(S.canWater?'🚤 Agua ✓':'🚤 Agua ✗ '+S.whyWater); L.push(S.canAir?'✈️ Aire ✓':'✈️ Aire ✗ '+S.whyAir);
   const el=ui('vehInfo'); if(el) el.innerHTML=L.map(x=>'<div>'+x+'</div>').join('')+'<div class="vh-val">Piezas: '+S.n+' · Vale: '+S.price+' 🪙</div>'; }
+// v182: dibujito sin fondo de cada pieza del taller (como en las casitas; se hace una vez, poco a poco, y se guarda)
+const VTH={c:{}, q:[]};
+function vThumb(id,col){ const k=id+'|'+col; if(VTH.c[k]) return VTH.c[k]; if(!VTH.q.includes(k)) VTH.q.push(k); return ''; }
+function vThumbRender(k){ const [id,col]=k.split('|'), p=VP_BY[id]; if(!p) return 'x';
+  try{ if(!HTH.rig){ const sc=new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff,0xd8d0c8,1.05)); const d=new THREE.DirectionalLight(0xffffff,.75); d.position.set(3,6,5); sc.add(d);
+      const cam=new THREE.PerspectiveCamera(28,1,.05,200), rt=new THREE.WebGLRenderTarget(128,128); rt.texture.encoding=THREE.sRGBEncoding; HTH.rig={sc,cam,rt}; }
+    const Rg=HTH.rig, g=vehPartMesh(p,col); Rg.sc.add(g); g.updateMatrixWorld(true);
+    const box=new THREE.Box3().setFromObject(g); if(box.isEmpty()){ Rg.sc.remove(g); return 'x'; }
+    const c=box.getCenter(new THREE.Vector3()), sz=box.getSize(new THREE.Vector3()), mx=Math.max(sz.x,sz.y,sz.z,.05);
+    const dir=new THREE.Vector3(.8,.65,1.2).normalize(); Rg.cam.position.copy(c).addScaledVector(dir,mx*2.4+.05); Rg.cam.lookAt(c); Rg.cam.updateMatrixWorld();
+    const prev=renderer.getRenderTarget(), sm=renderer.shadowMap.enabled, pc=renderer.getClearColor(new THREE.Color()), pa=renderer.getClearAlpha();
+    renderer.shadowMap.enabled=false; renderer.setClearColor(0x000000,0); renderer.setRenderTarget(Rg.rt); renderer.clear(); renderer.render(Rg.sc,Rg.cam); renderer.setRenderTarget(prev); renderer.setClearColor(pc,pa); renderer.shadowMap.enabled=sm;
+    const px=new Uint8Array(128*128*4); renderer.readRenderTargetPixels(Rg.rt,0,0,128,128,px); Rg.sc.remove(g);   // las figuras son compartidas: no se borran
+    const cv=document.createElement('canvas'); cv.width=cv.height=128; const g2=cv.getContext('2d'), im=g2.createImageData(128,128);
+    for(let y=0;y<128;y++) im.data.set(px.subarray((127-y)*512,(128-y)*512),y*512); g2.putImageData(im,0,0); return cv.toDataURL('image/png');
+  }catch(e){ return 'x'; } }
+function vThumbPump(){ let n=0; while(VTH.q.length && n<3){ const k=VTH.q.shift(); if(VTH.c[k]) continue; const url=vThumbRender(k); VTH.c[k]=url; n++;
+  if(url!=='x') document.querySelectorAll('#vehParts img[data-vk]').forEach(im=>{ if(im.dataset.vk!==k) return; im.src=url; im.hidden=false; const ph=im.previousElementSibling; if(ph && ph.classList.contains('vh-ph')) ph.remove(); }); } }
+function vThumbHTML(p){ const col=VE.col||p.col, k=p.id+'|'+col, url=vThumb(p.id,col);
+  return url && url!=='x' ? '<img class="vh-th" alt="" draggable="false" data-vk="'+k+'" src="'+url+'">' : '<span class="vh-ph" style="background:'+col+'"></span><img class="vh-th" alt="" draggable="false" data-vk="'+k+'" hidden>'; }
 function vehUI(){ if(!ui('vehOv')) return; ui('vehCoins').textContent=coins.toLocaleString('es-MX'); ui('vehUndo').disabled=!VE.undo.length; ui('vehRedo').disabled=!VE.redo.length;
   ui('vehCats').innerHTML=VCATS.map(([id,n,ic])=>'<button class="vh-cat'+(VE.cat===id?' on':'')+'" data-c="'+id+'">'+ic+' '+n+'</button>').join('');
-  ui('vehParts').innerHTML=VPARTS.filter(p=>p.cat===VE.cat).map(p=>'<button class="vh-part'+(VE.sel===p.id&&VE.tool==='put'?' on':'')+'" data-p="'+p.id+'"><span class="vh-sw" style="background:'+(VE.col||p.col)+'"></span>'+p.n+'<small>'+((VE.inv[p.id]|0)>0?'Tienes '+VE.inv[p.id]:p.price+' 🪙')+'</small></button>').join('');
+  ui('vehParts').innerHTML=VPARTS.filter(p=>p.cat===VE.cat).map(p=>'<button class="vh-part'+(VE.sel===p.id&&VE.tool==='put'?' on':'')+'" data-p="'+p.id+'">'+vThumbHTML(p)+'<span class="vh-tx">'+p.n+'<small>'+((VE.inv[p.id]|0)>0?'Tienes '+VE.inv[p.id]:p.price+' 🪙')+'</small></span></button>').join('');
   { const p=VP_BY[VE.sel], n=vehPack(p), have=VE.inv[p.id]|0, B=ui('vehBuy'); B.classList.toggle('need',!!VE.needBuy && !have); VE.needBuy=false;
     B.innerHTML='<b>'+p.n+':</b> tienes '+have+'<button class="vh-btn" data-buy="'+p.id+'">+'+n+' · '+(p.price*n)+' 🪙</button><button class="vh-btn ad" data-ad="'+p.id+'">📺 +'+n+' gratis</button>'; }
   ui('vehTools').innerHTML=[['put','🧱 Poner'],['paint','🎨 Pintar'],['del','🗑️ Quitar']].map(([t,n])=>'<button class="vh-tool'+(VE.tool===t?' on':'')+'" data-t="'+t+'">'+n+'</button>').join('')+'<button class="vh-tool" data-t="rot">↻ Girar</button>';
@@ -15203,7 +15223,7 @@ function vehOpen(){ vehInit(); VE.ret={pos:player.pos.clone(), f:player.facing};
   if(!VE.parts.length) flashNote('Escoge una base y tócala en el piso para empezar (o usa una plantilla)'); }
 function vehClose(){ if(!VE.ed) return; VE.ed=false; ui('vehOv').hidden=true; if(VE.ghost){ VS.scene.remove(VE.ghost); VE.ghost=null; } show('play'); if(VE.ret){ player.pos.copy(VE.ret.pos); player.facing=VE.ret.f; player.vel.set(0,0,0); }
   if(VE.parts.length){ const S=vehStats(VE.parts); flashNote(S.seat?'¡Guardado! Toca "Sacar mi vehículo" para manejarlo':'Guardado. Le falta un asiento para poder subirte'); } }
-function vehRender(dt){ const W=innerWidth, H=innerHeight, side=ui('vehSide'), r=side?side.getBoundingClientRect():null, land=W>=H;
+function vehRender(dt){ vThumbPump(); const W=innerWidth, H=innerHeight, side=ui('vehSide'), r=side?side.getBoundingClientRect():null, land=W>=H;
   let cx=0,cy=.6,cz=0; if(VE.parts.length){ let a=1e9,b=-1e9,c=1e9,d=-1e9,e=0; for(const q of VE.parts){ const p=VP_BY[q[0]], s=vRot(p,q[4]|0); a=Math.min(a,q[1]); b=Math.max(b,q[1]+s[0]); c=Math.min(c,q[3]); d=Math.max(d,q[3]+s[2]); e=Math.max(e,q[2]+s[1]); } cx=(a+b)/2*VC; cz=(c+d)/2*VC; cy=e*VC*.4; }
   const cp=Math.cos(VE.pitch); VS.cam.position.set(cx+Math.sin(VE.yaw)*cp*VE.dist, cy+Math.sin(VE.pitch)*VE.dist, cz+Math.cos(VE.yaw)*cp*VE.dist); VS.cam.lookAt(cx,cy,cz);
   VS.cam.aspect=W/H; const sx=r&&land?(r.right+(W-r.right)/2)-W/2:0, sy=r&&!land?-((r.top)/2-H/2):0; if(sx||sy) VS.cam.setViewOffset(W,H,-sx,sy,W,H); else VS.cam.clearViewOffset(); VS.cam.updateProjectionMatrix();
@@ -15225,7 +15245,10 @@ function vehInit(){ if(ui('vehOv')) return;
 .vh-cat{flex:0 0 auto;border:none;border-radius:11px;padding:6px 9px;font-weight:800;font-size:13px;background:#f1e6cf;color:#3b2a1a;}
 .vh-cat.on{background:#ff9a3c;color:#fff;}
 #vehParts{flex:1 1 auto;overflow-y:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;align-content:start;}
-.vh-part{border:2px solid transparent;border-radius:12px;padding:6px;background:#fff;font-weight:700;font-size:13px;text-align:left;display:flex;flex-direction:column;gap:2px;color:#3b2a1a;}
+.vh-part{border:2px solid transparent;border-radius:12px;padding:5px;background:#fff;font-weight:700;font-size:13px;text-align:left;display:flex;flex-direction:row;align-items:center;gap:5px;color:#3b2a1a;min-width:0;}
+.vh-tx{display:flex;flex-direction:column;gap:2px;min-width:0;line-height:1.15;}
+.vh-th{width:46px;height:46px;flex:0 0 46px;object-fit:contain;pointer-events:none;filter:drop-shadow(0 1px 1.5px rgba(60,40,20,.35));}
+.vh-ph{flex:0 0 46px;width:46px;height:46px;border-radius:50%;opacity:.35;transform:scale(.55);}
 .vh-part small{color:#8a6a3a;font-weight:800;}
 .vh-part.on{border-color:#ff9a3c;background:#fff4e6;}
 .vh-sw{display:inline-block;width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.2);}
