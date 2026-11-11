@@ -1139,7 +1139,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='182';
+const GAME_VERSION='183';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -15239,7 +15239,7 @@ function vehStats(parts){ const S={mass:0, wheel:0, float:0, lift:0, balloon:0, 
 // ---- guardar ----
 const VE={ed:false, parts:[], inv:{}, TS:[], str:'', hash:'', sendT:0, park:false, undo:[], redo:[], cat:'base', sel:'b_tabla', tool:'put', rot:0, col:null, yaw:.8, pitch:.42, dist:9, w:null, built:false, T:null, ret:null, ghost:null, slots:[null,null,null], si:0, ren:false, bits:0, hornN:0, siren:false, lOv:null, brk:false};
 function vehLoad(){ try{ const o=JSON.parse(localStorage.getItem('mundoPelucheVehiculo')||'null'); if(o && Array.isArray(o.p)) VE.parts=o.p.filter(q=>Array.isArray(q) && VP_BY[q[0]] && q.slice(1,5).every(Number.isInteger)).slice(0,VMAX);
-  if(o && o.inv && typeof o.inv==='object') for(const k in o.inv) if(VP_BY[k]) VE.inv[k]=Math.max(0,Math.min(999,o.inv[k]|0)); VE.park=!!(o&&o.pk);
+  if(o && o.inv && typeof o.inv==='object') for(const k in o.inv) if(VP_BY[k]) VE.inv[k]=Math.max(0,Math.min(999,o.inv[k]|0)); VE.park=!!(o&&o.pk); VE.parts=vehNorm(VE.parts);
   if(o && Array.isArray(o.s)){ VE.si=Math.max(0,Math.min(2,o.si|0)); for(let i=0;i<3;i++){ const d=o.s[i]; if(d && typeof d==='object') VE.slots[i]={n:String(d.n||'').replace(/[<>]/g,'').slice(0,14)||('Diseño '+(i+1)), p:Array.isArray(d.p)?d.p.filter(q=>Array.isArray(q) && VP_BY[q[0]] && q.slice(1,5).every(Number.isInteger)).slice(0,VMAX):[]}; } } }catch(e){} }
 function vehSave(){ try{ localStorage.setItem('mundoPelucheVehiculo', JSON.stringify({v:3, p:VE.parts, inv:VE.inv, pk:VE.park?1:0, si:VE.si, s:VE.slots.map((d,i)=>i===VE.si?{n:vehSlotName(i), p:VE.parts}:d)})); }catch(e){} }
 vehLoad();
@@ -15337,7 +15337,7 @@ const VS={scene:new THREE.Scene(), cam:new THREE.PerspectiveCamera(45,1,.1,200),
   const fl=new THREE.Mesh(new THREE.PlaneGeometry(VB.x1-VB.x0,VB.z1-VB.z0).rotateX(-Math.PI/2).translate(0,0,0), new THREE.MeshStandardMaterial({color:'#f3ead8', roughness:1})); fl.position.set((VB.x0+VB.x1)/2*VC,0,(VB.z0+VB.z1)/2*VC); fl.scale.setScalar(VC); S.add(fl); VS.floor=fl;
   const gr=new THREE.GridHelper((VB.x1-VB.x0)*VC,VB.x1-VB.x0,'#c9b48a','#e2d4b4'); gr.position.y=.005; gr.scale.z=(VB.z1-VB.z0)/(VB.x1-VB.x0); S.add(gr);
   const ar=new THREE.Mesh(new THREE.ConeGeometry(.35,.7,3),new THREE.MeshBasicMaterial({color:'#7be07b'})); ar.rotation.x=Math.PI/2; ar.position.set(0,.02,VB.z1*VC+.6); S.add(ar); }   // flecha: el frente
-function vehRebuild(){ if(VS.design) VS.scene.remove(VS.design); VS.design=vehBuild(VE.parts); VS.scene.add(VS.design); vehInfo(); }
+function vehRebuild(){ vehClearPrev(); VE.hovK=null; if(VS.design) VS.scene.remove(VS.design); VS.design=vehBuild(VE.parts); VS.scene.add(VS.design); vehMoveBox(); vehInfo(); }
 function vehOcc(skip){ const O=new Set(); VE.parts.forEach((q,i)=>{ if(i===skip) return; const p=VP_BY[q[0]], s=vRot(p,q[4]|0); for(let a=0;a<s[0];a++) for(let b=0;b<s[1];b++) for(let c=0;c<s[2];c++) O.add((q[1]+a)+','+(q[2]+b)+','+(q[3]+c)); }); return O; }
 function vehFits(p,cx,cy,cz,r,skip){ const s=vRot(p,r); if(cx<VB.x0||cy<VB.y0||cz<VB.z0||cx+s[0]>VB.x1||cy+s[1]>VB.y1||cz+s[2]>VB.z1) return false; const O=vehOcc(skip);
   for(let a=0;a<s[0];a++) for(let b=0;b<s[1];b++) for(let c=0;c<s[2];c++) if(O.has((cx+a)+','+(cy+b)+','+(cz+c))) return false; return true; }
@@ -15347,29 +15347,83 @@ function vehHit(ev){ const st=ui('vehStage').getBoundingClientRect(), m=new THRE
   let n=new THREE.Vector3(0,1,0); if(h.object!==VS.floor && h.face){ n=h.face.normal.clone().transformDirection(h.object.matrixWorld); const ax=[Math.abs(n.x),Math.abs(n.y),Math.abs(n.z)], k=ax.indexOf(Math.max(...ax)); n.set(k===0?Math.sign(n.x):0,k===1?Math.sign(n.y):0,k===2?Math.sign(n.z):0); }
   return {p:h.point, n, pi}; }
 function vehTarget(h,p,r){ const s=vRot(p,r), a=[Math.floor((h.p.x+h.n.x*.01)/VC), Math.floor((h.p.y+h.n.y*.01)/VC), Math.floor((h.p.z+h.n.z*.01)/VC)], n=[h.n.x,h.n.y,h.n.z], out=[];
-  for(let k=0;k<3;k++) out.push(n[k]>0?a[k]:n[k]<0?a[k]-(s[k]-1):a[k]-Math.floor((s[k]-1)/2)); if(h.pi===null) out[1]=0; return out; }
+  const hp3=[h.p.x/VC,h.p.y/VC,h.p.z/VC];
+  for(let k=0;k<3;k++) out.push(n[k]>0?a[k]:n[k]<0?a[k]-(s[k]-1):Math.round(hp3[k]-s[k]/2)); if(h.pi===null) out[1]=0;   // v183: centrada donde tocas
+  const hq=h.pi!==null?VE.parts[h.pi]:null; if(hq){ const hs=vRot(VP_BY[hq[0]],hq[4]|0), o=[hq[1],hq[2],hq[3]];   // v183: pegada a la caja completa de la pieza tocada (las bases se ven delgadas pero ocupan su lugar)
+    for(let k=0;k<3;k++){ if(n[k]>0) out[k]=o[k]+hs[k]; else if(n[k]<0) out[k]=o[k]-s[k]; } }
+  return out; }
+// ---- v183: poner piezas más fácil — llantas que se acomodan solas, el carrito siempre apoyado en el piso, llantas en par, ver antes de poner y mover piezas ----
+function vehNorm(arr){ let m=1e9; for(const q of arr) m=Math.min(m,q[2]); if(!arr.length || m===0) return arr.map(q=>q.slice()); return arr.map(q=>{ const r=q.slice(); r[2]-=m; return r; }); }   // lo más bajo queda en el piso
+function vehFreeIn(arr,p,cx,cy,cz,r,skip){ const s=vRot(p,r), O=new Set(); arr.forEach((q,i)=>{ if(i===skip) return; const pp=VP_BY[q[0]], ss=vRot(pp,q[4]|0); for(let a=0;a<ss[0];a++) for(let b=0;b<ss[1];b++) for(let c=0;c<ss[2];c++) O.add((q[1]+a)+','+(q[2]+b)+','+(q[3]+c)); });
+  for(let a=0;a<s[0];a++) for(let b=0;b<s[1];b++) for(let c=0;c<s[2];c++) if(O.has((cx+a)+','+(cy+b)+','+(cz+c))) return false; return true; }
+function vehBoundsOK(arr){ for(const q of arr){ const s=vRot(VP_BY[q[0]],q[4]|0); if(q[1]<VB.x0||q[3]<VB.z0||q[1]+s[0]>VB.x1||q[3]+s[2]>VB.z1||q[2]<0||q[2]+s[1]>VB.y1) return false; } return true; }
+function vehInvDelta(a,b){ const d={}; for(const k of new Set([...Object.keys(a),...Object.keys(b)])){ const v=(b[k]|0)-(a[k]|0); if(v) d[k]=v; } return d; }
+// dónde iría la pieza escogida (y su pareja, si es llanta)
+function vehWheelSide(h){ const nw=q=>VP_BY[q[0]] && VP_BY[q[0]].cat!=='rueda', hx=h.p.x/VC, hz=h.p.z/VC; let hp=h.pi!==null?VE.parts[h.pi]:null;
+  if(hp && nw(hp) && h.n.y===0) return h;   // tocó el costado
+  const toSide=(q,i)=>{ const bs=vRot(VP_BY[q[0]],q[4]|0), right=hx>q[1]+bs[0]/2; return {p:{x:(right?q[1]+bs[0]:q[1])*VC, y:(q[2]+.5)*VC, z:Math.max(q[3]+.5,Math.min(q[3]+bs[2]-.5,hz))*VC}, n:{x:right?1:-1, y:0, z:0}, pi:i}; };
+  if(hp && nw(hp) && h.n.y>0) return toSide(hp,h.pi);   // tocó encima de la base: al costado más cercano
+  if(h.pi===null){ let best=null, bd=2.6; VE.parts.forEach((q,i)=>{ if(!nw(q)) return; const bs=vRot(VP_BY[q[0]],q[4]|0); if(hz<q[3]-.5 || hz>q[3]+bs[2]+.5) return; const d=hx<q[1]?q[1]-hx:hx>q[1]+bs[0]?hx-q[1]-bs[0]:0; if(d<bd){ bd=d; best=[q,i]; } });
+    if(best) return toSide(best[0],best[1]); }   // tocó el piso junto a la base
+  return null; }
+function vehPlan(h0){ const p=VP_BY[VE.sel]; if(!p) return null; let r=VE.rot, h=h0; const ws=p.d.wheel?vehWheelSide(h0):null; if(ws) h=ws; const hp=h.pi!==null?VE.parts[h.pi]:null, smart=!!ws;
+  if(smart) r=h.n.x!==0?(VE.rot%2===0?VE.rot:0):(VE.rot%2===1?VE.rot:1);   // el eje de la llanta hacia afuera
+  let [cx,cy,cz]=vehTarget(h,p,r); const s=vRot(p,r); let pair=null;
+  if(smart){ const bs=vRot(VP_BY[hp[0]],hp[4]|0); cy=hp[2]-Math.ceil(s[1]/2);   // la llanta a la altura de la base: el carrito se levanta solo
+    if(VE.pair!==false){ if(h.n.x!==0){ const px=2*hp[1]+bs[0]-cx-s[0]; if(px!==cx) pair=[px,cy,cz]; } else { const pz=2*hp[3]+bs[2]-cz-s[2]; if(pz!==cz) pair=[cx,cy,pz]; } } }
+  const col=VE.col||p.col, q=[p.id,cx,cy,cz,r,col], ok=vehFreeIn(VE.parts,p,cx,cy,cz,r); let q2=null;
+  if(ok && pair && vehFreeIn(VE.parts.concat([q]),p,pair[0],pair[1],pair[2],r)) q2=[p.id,pair[0],pair[1],pair[2],r,col];
+  const add=[q]; if(q2 && (VE.inv[p.id]|0)>=2) add.push(q2); const to=ok?vehNorm(VE.parts.concat(add)):null;
+  return {p, q, q2, add, to, ok:ok && vehBoundsOK(to), key:JSON.stringify(add)}; }
+function vehClearPrev(){ if(VE.ghost){ VS.scene.remove(VE.ghost); VE.ghost.traverse(o=>{ if(o.isMesh && o.userData.tmpM) o.material.dispose(); }); VE.ghost=null; } if(VS.design) VS.design.visible=true; VE.pend=null; }
+// así quedará: el carrito completo con la pieza nueva transparente (roja si no cabe)
+function vehPreview(P){ vehClearPrev(); if(!P) return; let g; const tint=(o,bad)=>{ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.55; o.material.depthWrite=false; if(bad) o.material.color.set('#ff4d4d'); o.userData.tmpM=1; };
+  if(P.ok){ const n0=VE.parts.length; g=vehBuild(P.to); g.traverse(o=>{ if(!o.isMesh) return; let pi=null; for(let x=o;x;x=x.parent) if(x.userData && x.userData.pi!==undefined){ pi=x.userData.pi; break; } if(pi!==null && pi>=n0) tint(o,false); }); if(VS.design) VS.design.visible=false; }
+  else { g=vehPartMesh(P.p,P.q[5]); g.traverse(o=>{ if(o.isMesh) tint(o,true); }); vehPlace(g,P.p,P.q[1],P.q[2],P.q[3],P.q[4]); }
+  VS.scene.add(g); VE.ghost=g; }
+function vehPut(P){ const p=P.p; if(VE.parts.length+P.add.length>VMAX){ flashNote('Ya tiene muchas piezas ('+VMAX+')'); return false; }
+  if(!P.ok){ flashNote('Ahí no cabe: prueba en otro lado o gírala'); return false; }
+  if(!(VE.inv[p.id]>0)){ VE.needBuy=true; vehUI(); flashNote('No tienes '+p.n+': cómprala o consíguela con un anuncio 📺'); return false; }
+  const ok=vehAct({t:'set', from:VE.parts.map(q=>q.slice()), to:P.to, inv:{[p.id]:-P.add.length}}); if(!ok) return false; try{ audio.wave(); }catch(e){}
+  if(P.q2 && P.add.length<2) flashNote('Para ponerla en par necesitas otra '+p.n); return true; }
+// mover una pieza ya puesta (con flechas)
+function vehMoveSel(d){ const i=VE.mv; if(i===null || i===undefined || !VE.parts[i]) return; const q=VE.parts[i], p=VP_BY[q[0]], n=[q[1]+d[0],q[2]+d[1],q[3]+d[2]];
+  if(!vehFreeIn(VE.parts,p,n[0],n[1],n[2],q[4]|0,i)){ flashNote('Ahí choca con otra pieza'); return; }
+  const arr=VE.parts.map(x=>x.slice()); arr[i]=[q[0],n[0],n[1],n[2],q[4],q[5]]; const to=vehNorm(arr); if(!vehBoundsOK(to)){ flashNote('Ya no se puede mover más para allá'); return; }
+  vehAct({t:'set', from:VE.parts.map(x=>x.slice()), to}); try{ audio.cam(); }catch(e){} }
+function vehMoveTurn(){ const i=VE.mv; if(i===null || i===undefined || !VE.parts[i]) return; const q=VE.parts[i], p=VP_BY[q[0]], r=((q[4]|0)+1)%4;
+  if(!vehFreeIn(VE.parts,p,q[1],q[2],q[3],r,i)){ flashNote('Girada no cabe ahí: muévela primero'); return; } const arr=VE.parts.map(x=>x.slice()); arr[i]=[q[0],q[1],q[2],q[3],r,q[5]]; const to=vehNorm(arr);
+  if(!vehBoundsOK(to)){ flashNote('Girada no cabe'); return; } vehAct({t:'set', from:VE.parts.map(x=>x.slice()), to}); }
+function vehMoveBox(){ const i=VE.mv; if(VE.tool!=='move' || i===null || i===undefined || !VE.parts[i] || !VS.design) return; const q=VE.parts[i], s=vRot(VP_BY[q[0]],q[4]|0);
+  const b=new THREE.Box3(new THREE.Vector3(q[1]*VC-.03,q[2]*VC-.03,q[3]*VC-.03), new THREE.Vector3((q[1]+s[0])*VC+.03,(q[2]+s[1])*VC+.03,(q[3]+s[2])*VC+.03)); const bh=new THREE.Box3Helper(b,0xffb400); bh.raycast=()=>{}; VS.design.add(bh); }
+// qué sigue (ayuda paso a paso)
+function vehHint(){ const P=VE.parts, has=c=>P.some(q=>VP_BY[q[0]] && VP_BY[q[0]].cat===c), S=vehStats(P);
+  if(!P.length || !has('base')) return '1️⃣ Escoge una <b>base</b> y toca el piso';
+  if(S.wheel<3 && !(S.float>=S.mass) && !has('aire')) return '2️⃣ Ahora <b>llantas</b>: toca un <b>costado</b> de la base (se ponen en par y el carrito se levanta solo)';
+  if(!S.seat) return '3️⃣ Pon un <b>asiento</b> encima de la base';
+  if(!(S.canLand||S.canWater||S.canAir)) return '4️⃣ Ponle un <b>motor</b> (o pedales) para que ande';
+  return '✅ ¡Ya anda! Adórnalo o toca <b>Listo</b> y sácalo del taller'; }
 function vehInvD(d,k){ if(d) for(const id in d){ VE.inv[id]=Math.max(0,(VE.inv[id]|0)+d[id]*k); if(!VE.inv[id]) delete VE.inv[id]; } }
-function vehDo(act,redo){ const C=act.cost||0; vehInvD(act.inv,1); if(act.t==='set') VE.inv={...act.invTo};
+function vehDo(act,redo){ const C=act.cost||0; vehInvD(act.inv,1); if(act.t==='set' && act.invTo) VE.inv={...act.invTo};
   if(act.t==='add'){ VE.parts.push(act.q); } else if(act.t==='del'){ VE.parts.splice(act.i,1); } else if(act.t==='paint'){ VE.parts[act.i][5]=act.to; } else if(act.t==='set'){ VE.parts=act.to.map(q=>q.slice()); }
   coins-=C; saveCoins(); renderCoins(); vehSave(); vehRebuild(); }
-function vehUndo1(act){ const C=act.cost||0; vehInvD(act.inv,-1); if(act.t==='set') VE.inv={...act.invFrom};
+function vehUndo1(act){ const C=act.cost||0; vehInvD(act.inv,-1); if(act.t==='set' && act.invFrom) VE.inv={...act.invFrom};
   if(act.t==='add'){ VE.parts.pop(); } else if(act.t==='del'){ VE.parts.splice(act.i,0,act.q); } else if(act.t==='paint'){ VE.parts[act.i][5]=act.from; } else if(act.t==='set'){ VE.parts=act.from.map(q=>q.slice()); }
   coins+=C; saveCoins(); renderCoins(); vehSave(); vehRebuild(); }
 function vehAct(act){ if(act.inv) for(const id in act.inv) if(act.inv[id]<0 && (VE.inv[id]|0)<-act.inv[id]){ flashNote('Ya no tienes esa pieza'); return false; }
   if((act.cost||0)>coins){ flashNote('Te faltan '+(act.cost-coins)+' monedas'); return false; } vehDo(act); VE.undo.push(act); if(VE.undo.length>80) VE.undo.shift(); VE.redo.length=0; vehUI(); return true; }
 function vehTap(ev){ const h=vehHit(ev); if(!h) return;
-  if(VE.tool==='put'){ if(VE.parts.length>=VMAX){ flashNote('Ya tiene muchas piezas ('+VMAX+')'); return; } const p=VP_BY[VE.sel], [cx,cy,cz]=vehTarget(h,p,VE.rot);
-    if(!vehFits(p,cx,cy,cz,VE.rot)){ flashNote('Ahí no cabe: prueba en otro lado o gírala'); return; }
-    if(!(VE.inv[p.id]>0)){ VE.needBuy=true; vehUI(); flashNote('No tienes '+p.n+': cómprala o consíguela con un anuncio 📺'); return; }
-    if(vehAct({t:'add', q:[p.id,cx,cy,cz,VE.rot,VE.col||p.col], inv:{[p.id]:-1}})) try{ audio.wave(); }catch(e){} }
-  else if(h.pi!==null){ const q=VE.parts[h.pi];
-    if(VE.tool==='del'){ vehAct({t:'del', i:h.pi, q:q.slice(), inv:{[q[0]]:1}}); try{ audio.getup(); }catch(e){} }
+  if(VE.tool==='put'){ const P=vehPlan(h); if(!P) return;
+    if(ev.pointerType==='mouse' || VE.pend===P.key){ vehClearPrev(); vehPut(P); return; }
+    vehPreview(P); VE.pend=P.key; if((VE.pendN=(VE.pendN|0)+1)<=3) flashNote(P.ok?'Así quedará: toca otra vez para ponerla ✓':'Ahí no cabe: prueba en otro lado o gírala'); return; }
+  if(VE.tool==='move'){ VE.mv=h.pi; vehRebuild(); vehUI(); if(h.pi!==null && (VE.mvN=(VE.mvN|0)+1)<=2) flashNote('Muévela con las flechas de abajo'); return; }
+  if(h.pi!==null){ const q=VE.parts[h.pi];
+    if(VE.tool==='del'){ const arr=VE.parts.filter((x,i)=>i!==h.pi); vehAct({t:'set', from:VE.parts.map(x=>x.slice()), to:vehNorm(arr), inv:{[q[0]]:1}}); VE.mv=null; try{ audio.getup(); }catch(e){} }
     else if(VE.tool==='paint'){ const to=VE.col||VP_BY[q[0]].col; if(q[5]!==to) vehAct({t:'paint', i:h.pi, from:q[5], to, cost:0}); } } }
-function vehHover(ev){ if(VE.ghost){ VS.scene.remove(VE.ghost); VE.ghost=null; } if(VE.tool!=='put') return; const h=vehHit(ev); if(!h) return; const p=VP_BY[VE.sel], [cx,cy,cz]=vehTarget(h,p,VE.rot), ok=vehFits(p,cx,cy,cz,VE.rot);
-  const g=vehPartMesh(p,VE.col||p.col); g.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.5; if(!ok) o.material.color.set('#ff4d4d'); } }); vehPlace(g,p,cx,cy,cz,VE.rot); VS.scene.add(g); VE.ghost=g; }
+function vehHover(ev){ if(VE.tool!=='put'){ if(VE.ghost) vehClearPrev(); return; } const h=vehHit(ev); if(!h){ vehClearPrev(); return; } const P=vehPlan(h); if(!P) return; if(VE.ghost && VE.hovK===P.key) return; VE.hovK=P.key; vehPreview(P); }
 function vehInfo(){ const S=vehStats(VE.parts), L=[];
   L.push(S.canLand?'🚗 Tierra ✓ ('+Math.round(S.vLand*3.6)+' km/h)':'🚗 Tierra ✗ '+S.whyLand); L.push(S.canWater?'🚤 Agua ✓':'🚤 Agua ✗ '+S.whyWater); L.push(S.canAir?'✈️ Aire ✓':'✈️ Aire ✗ '+S.whyAir);
-  const el=ui('vehInfo'); if(el) el.innerHTML=L.map(x=>'<div>'+x+'</div>').join('')+'<div class="vh-val">Piezas: '+S.n+' · Vale: '+S.price+' 🪙</div>'; }
+  const el=ui('vehInfo'); if(el) el.innerHTML='<div class="vh-hint">'+vehHint()+'</div>'+L.map(x=>'<div>'+x+'</div>').join('')+'<div class="vh-val">Piezas: '+S.n+' · Vale: '+S.price+' 🪙</div>'; }
 // v182: dibujito sin fondo de cada pieza del taller (como en las casitas; se hace una vez, poco a poco, y se guarda)
 const VTH={c:{}, q:[]};
 function vThumb(id,col){ const k=id+'|'+col; if(VTH.c[k]) return VTH.c[k]; if(!VTH.q.includes(k)) VTH.q.push(k); return ''; }
@@ -15395,12 +15449,18 @@ function vehUI(){ if(!ui('vehOv')) return; if(!(VE.ren && ui('vehName'))) ui('ve
   ui('vehParts').innerHTML=VPARTS.filter(p=>p.cat===VE.cat).map(p=>'<button class="vh-part'+(VE.sel===p.id&&VE.tool==='put'?' on':'')+'" data-p="'+p.id+'">'+vThumbHTML(p)+'<span class="vh-tx">'+p.n+'<small>'+((VE.inv[p.id]|0)>0?'Tienes '+VE.inv[p.id]:p.price+' 🪙')+'</small></span></button>').join('');
   { const p=VP_BY[VE.sel], n=vehPack(p), have=VE.inv[p.id]|0, B=ui('vehBuy'); B.classList.toggle('need',!!VE.needBuy && !have); VE.needBuy=false;
     B.innerHTML='<b>'+p.n+':</b> tienes '+have+'<button class="vh-btn" data-buy="'+p.id+'">+'+n+' · '+(p.price*n)+' 🪙</button><button class="vh-btn ad" data-ad="'+p.id+'">📺 +'+n+' gratis</button>'; }
-  ui('vehTools').innerHTML=[['put','🧱 Poner'],['paint','🎨 Pintar'],['del','🗑️ Quitar']].map(([t,n])=>'<button class="vh-tool'+(VE.tool===t?' on':'')+'" data-t="'+t+'">'+n+'</button>').join('')+'<button class="vh-tool" data-t="rot">↻ Girar</button>';
+  { const M=ui('vehMove'), p=VP_BY[VE.sel]; let h='';
+    if(VE.tool==='move'){ const q=VE.mv!==null && VE.mv!==undefined ? VE.parts[VE.mv] : null;
+      h=q?'<b>'+VP_BY[q[0]].n+':</b><button class="vh-btn" data-mv="0,1,0">⬆ Subir</button><button class="vh-btn" data-mv="0,-1,0">⬇ Bajar</button><button class="vh-btn" data-mv="0,0,1">Adelante</button><button class="vh-btn" data-mv="0,0,-1">Atrás</button><button class="vh-btn" data-mv="1,0,0">◀ Izq.</button><button class="vh-btn" data-mv="-1,0,0">Der. ▶</button><button class="vh-btn" data-mvr="1">↻</button>'
+        :'<span class="vh-tip">Toca la pieza que quieres mover</span>'; }
+    else if(VE.tool==='put' && p && p.d.wheel) h='<button class="vh-btn'+(VE.pair!==false?' ok':'')+'" data-pair="1">🔁 Llantas en par: '+(VE.pair!==false?'Sí':'No')+'</button>';
+    M.innerHTML=h; M.hidden=!h; }
+  ui('vehTools').innerHTML=[['put','🧱 Poner'],['move','✋ Mover'],['paint','🎨 Pintar'],['del','🗑️ Quitar']].map(([t,n])=>'<button class="vh-tool'+(VE.tool===t?' on':'')+'" data-t="'+t+'">'+n+'</button>').join('')+'<button class="vh-tool" data-t="rot">↻ Girar</button>';
   ui('vehColors').innerHTML='<button class="vh-col'+(VE.col===null?' on':'')+'" data-k="" title="Color de la pieza">🎲</button>'+VCOLS.map(c=>'<button class="vh-col'+(VE.col===c?' on':'')+'" data-k="'+c+'" style="background:'+c+'"></button>').join('');
   ui('vehTempl').innerHTML=VTEMPL.map(([n,to],i)=>{ const c=vehPlanSet(to).cost; return '<button class="vh-tpl" data-i="'+i+'">'+n+(c?' · '+c+' 🪙':' ✓')+'</button>'; }).join(''); vehInfo(); }
 function vehOpen(){ vehInit(); VE.ren=false; VE.ret={pos:player.pos.clone(), f:player.facing}; VE.ed=true; VE.dist=innerWidth<innerHeight?13:9; VE.undo.length=0; VE.redo.length=0; show('menu'); menuEl.hidden=true; ui('vehOv').hidden=false; vehRebuild(); vehUI(); try{ audio.door(true); }catch(e){}
   if(!VE.parts.length) flashNote('Escoge una base y tócala en el piso para empezar (o usa una plantilla)'); }
-function vehClose(){ if(!VE.ed) return; if(VE.ren) vehRename(); VE.ed=false; ui('vehOv').hidden=true; if(VE.ghost){ VS.scene.remove(VE.ghost); VE.ghost=null; } show('play'); if(VE.ret){ player.pos.copy(VE.ret.pos); player.facing=VE.ret.f; player.vel.set(0,0,0); }
+function vehClose(){ if(!VE.ed) return; if(VE.ren) vehRename(); VE.ed=false; ui('vehOv').hidden=true; vehClearPrev(); show('play'); if(VE.ret){ player.pos.copy(VE.ret.pos); player.facing=VE.ret.f; player.vel.set(0,0,0); }
   if(VE.parts.length){ const S=vehStats(VE.parts); flashNote(S.seat?'¡Guardado! Toca "Sacar mi vehículo" para manejarlo':'Guardado. Le falta un asiento para poder subirte'); } }
 function vehRender(dt){ vThumbPump(); const W=innerWidth, H=innerHeight, side=ui('vehSide'), r=side?side.getBoundingClientRect():null, land=W>=H;
   let cx=0,cy=.6,cz=0; if(VE.parts.length){ let a=1e9,b=-1e9,c=1e9,d=-1e9,e=0; for(const q of VE.parts){ const p=VP_BY[q[0]], s=vRot(p,q[4]|0); a=Math.min(a,q[1]); b=Math.max(b,q[1]+s[0]); c=Math.min(c,q[3]); d=Math.max(d,q[3]+s[2]); e=Math.max(e,q[2]+s[1]); } cx=(a+b)/2*VC; cz=(c+d)/2*VC; cy=e*VC*.4; }
@@ -15447,6 +15507,9 @@ function vehInit(){ if(ui('vehOv')) return;
 .vh-slot.on{border-color:#5ec8ff;background:#eaf7ff;}
 #vehSlots{flex-wrap:nowrap;}
 #vehName{flex:1;min-width:0;border:2px solid #5ec8ff;border-radius:10px;padding:5px 8px;font:inherit;font-weight:800;font-size:14px;}
+.vh-hint{background:#fff4d6;border-radius:9px;padding:4px 7px;margin-bottom:3px;color:#5a3a10;}
+#vehMove .vh-btn{font-size:12px;padding:5px 8px;}
+.vh-tip{font-size:12.5px;font-weight:700;color:#5a3a10;}
 .vh-tpl{border:none;border-radius:11px;padding:5px 8px;font-weight:800;font-size:12px;background:#ffe3f0;color:#7a2b4b;}
 #vehInfo{font-size:12.5px;font-weight:700;color:#3b2a1a;line-height:1.35;background:#fff;border-radius:12px;padding:6px 8px;}
 #vehInfo .vh-val{color:#8a6a3a;margin-top:2px;}
@@ -15455,24 +15518,25 @@ function vehInit(){ if(ui('vehOv')) return;
   document.head.appendChild(st);
   const el=document.createElement('div'); el.id='vehOv'; el.hidden=true;
   el.innerHTML='<div id="vehStage"></div><div id="vehSide"><div class="vh-top"><h2>🔧 Taller</h2><span class="sp"></span><span class="vh-btn">🪙 <b id="vehCoins">0</b></span><button class="vh-btn" id="vehUndo" title="Deshacer">↶</button><button class="vh-btn" id="vehRedo" title="Rehacer">↷</button><button class="vh-btn ok" id="vehClose">✓ Listo</button></div>'
-    +'<div class="vh-row" id="vehSlots"></div><div id="vehCats"></div><div id="vehParts"></div><div class="vh-row" id="vehBuy"></div><div class="vh-row" id="vehTools"></div><div class="vh-row" id="vehColors"></div><div id="vehInfo"></div><div class="vh-row"><b style="font-size:12px">Plantillas:</b><span id="vehTempl" class="vh-row"></span><button class="vh-btn" id="vehClear" style="font-size:12px;padding:5px 8px">🧹 Vaciar</button></div></div>';
+    +'<div class="vh-row" id="vehSlots"></div><div id="vehCats"></div><div id="vehParts"></div><div class="vh-row" id="vehBuy"></div><div class="vh-row" id="vehTools"></div><div class="vh-row" id="vehMove"></div><div class="vh-row" id="vehColors"></div><div id="vehInfo"></div><div class="vh-row"><b style="font-size:12px">Plantillas:</b><span id="vehTempl" class="vh-row"></span><button class="vh-btn" id="vehClear" style="font-size:12px;padding:5px 8px">🧹 Vaciar</button></div></div>';
   document.body.appendChild(el);
   el.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; e.stopPropagation();
     if(b.dataset.vs!==undefined){ if(VE.ren) vehRename(); vehSlot(+b.dataset.vs); return; } if(b.dataset.ren){ VE.ren=true; vehUI(); const i=ui('vehName'); if(i){ i.focus(); i.select(); } return; } if(b.dataset.rok){ vehRename(); return; }
     if(b.id==='vehClose') return vehClose(); if(b.id==='vehUndo'){ const a=VE.undo.pop(); if(a){ vehUndo1(a); VE.redo.push(a); vehUI(); } return; } if(b.id==='vehRedo'){ const a=VE.redo.pop(); if(a){ if((a.cost||0)>coins){ VE.redo.push(a); flashNote('Te faltan '+(a.cost-coins)+' monedas'); return; } vehDo(a); VE.undo.push(a); vehUI(); } return; }
-    if(b.id==='vehClear'){ if(!VE.parts.length) return; const pl=vehPlanSet([]); vehAct({t:'set', from:VE.parts.map(q=>q.slice()), to:[], invFrom:{...VE.inv}, invTo:pl.inv, cost:0}); return; }
+    if(b.id==='vehClear'){ if(!VE.parts.length) return; const pl=vehPlanSet([]); vehAct({t:'set', from:VE.parts.map(q=>q.slice()), to:[], inv:vehInvDelta(VE.inv,pl.inv), cost:0}); VE.mv=null; return; }
     if(b.dataset.buy){ vehBuy(b.dataset.buy,false); return; } if(b.dataset.ad){ vehBuy(b.dataset.ad,true); return; }
     if(b.dataset.c){ VE.cat=b.dataset.c; const f=VPARTS.find(p=>p.cat===VE.cat); if(f){ VE.sel=f.id; VE.tool='put'; } vehUI(); return; }
-    if(b.dataset.p){ VE.sel=b.dataset.p; VE.tool='put'; vehUI(); return; }
-    if(b.dataset.t){ if(b.dataset.t==='rot'){ VE.rot=(VE.rot+1)%4; flashNote('Giro: '+(VE.rot*90)+'°'); } else VE.tool=b.dataset.t; vehUI(); return; }
+    if(b.dataset.p){ VE.sel=b.dataset.p; VE.tool='put'; VE.mv=null; vehClearPrev(); vehUI(); return; }
+    if(b.dataset.mv){ vehMoveSel(b.dataset.mv.split(',').map(Number)); return; } if(b.dataset.mvr){ vehMoveTurn(); return; } if(b.dataset.pair){ VE.pair=VE.pair===false; vehUI(); return; }
+    if(b.dataset.t){ VE.mv=null; vehClearPrev(); if(b.dataset.t==='rot'){ VE.rot=(VE.rot+1)%4; flashNote('Giro: '+(VE.rot*90)+'°'); } else VE.tool=b.dataset.t; vehUI(); return; }
     if(b.dataset.k!==undefined){ VE.col=b.dataset.k||null; vehUI(); return; }
-    if(b.dataset.i!==undefined){ const T=VTEMPL[+b.dataset.i]; const to=T[1].map(q=>q.slice()), pl=vehPlanSet(to); vehAct({t:'set', from:VE.parts.map(q=>q.slice()), to, invFrom:{...VE.inv}, invTo:pl.inv, cost:pl.cost}); return; } });
+    if(b.dataset.i!==undefined){ const T=VTEMPL[+b.dataset.i]; const to=T[1].map(q=>q.slice()), pl=vehPlanSet(to); vehAct({t:'set', from:VE.parts.map(q=>q.slice()), to, inv:vehInvDelta(VE.inv,pl.inv), cost:pl.cost}); VE.mv=null; return; } });
   const stg=ui('vehStage'), pts=new Map(); let d0=0, moved=false, sx=0, sy=0, pinch0=0, dist0=0;
   stg.addEventListener('pointerdown',e=>{ stg.setPointerCapture(e.pointerId); pts.set(e.pointerId,[e.clientX,e.clientY]); if(pts.size===1){ moved=false; sx=e.clientX; sy=e.clientY; } else if(pts.size===2){ const [a,b]=[...pts.values()]; pinch0=Math.hypot(a[0]-b[0],a[1]-b[1]); dist0=VE.dist; moved=true; } });
   stg.addEventListener('pointermove',e=>{ const p=pts.get(e.pointerId); if(!p){ if(e.pointerType==='mouse') vehHover(e); return; }
     if(pts.size===2){ pts.set(e.pointerId,[e.clientX,e.clientY]); const [a,b]=[...pts.values()], d=Math.hypot(a[0]-b[0],a[1]-b[1]); if(pinch0>0) VE.dist=Math.max(3,Math.min(22,dist0*pinch0/d)); return; }
     const dx=e.clientX-p[0], dy=e.clientY-p[1]; pts.set(e.pointerId,[e.clientX,e.clientY]); if(Math.hypot(e.clientX-sx,e.clientY-sy)>7) moved=true;
-    if(moved){ VE.yaw-=dx*.008; VE.pitch=Math.max(.08,Math.min(1.35,VE.pitch+dy*.006)); if(VE.ghost){ VS.scene.remove(VE.ghost); VE.ghost=null; } } else if(e.pointerType==='mouse') vehHover(e); });
+    if(moved){ VE.yaw-=dx*.008; VE.pitch=Math.max(.08,Math.min(1.35,VE.pitch+dy*.006)); if(VE.ghost) vehClearPrev(); } else if(e.pointerType==='mouse') vehHover(e); });
   const up=e=>{ const had=pts.has(e.pointerId); pts.delete(e.pointerId); if(had && !moved && pts.size===0) vehTap(e); if(pts.size<2) pinch0=0; };
   stg.addEventListener('pointerup',up); stg.addEventListener('pointercancel',e=>{ pts.delete(e.pointerId); });
   stg.addEventListener('wheel',e=>{ e.preventDefault(); VE.dist=Math.max(3,Math.min(22,VE.dist*(e.deltaY>0?1.1:.9))); },{passive:false});
