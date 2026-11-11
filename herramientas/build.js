@@ -50,7 +50,7 @@ self.addEventListener('install',e=>{ e.waitUntil((async()=>{ const c=await cache
 self.addEventListener('activate',e=>{ e.waitUntil((async()=>{ for(const k of await caches.keys()) if(k.startsWith('mundo-peluche-') && k!==CACHE) await caches.delete(k); await self.clients.claim(); })()); });
 self.addEventListener('fetch',e=>{ const r=e.request; if(r.method!=='GET') return; const u=new URL(r.url);
   // el juego: primero internet (así siempre llega la última versión); si tarda o no hay, la copia guardada
-  if(r.mode==='navigate' && u.origin===location.origin){ e.respondWith((async()=>{ const c=await caches.open(CACHE), saved=await c.match('./');
+  if(r.mode==='navigate' && u.origin===location.origin && /\\/(index\\.html)?$/.test(u.pathname)){ /* solo el juego, no otras páginas como privacidad.html */ e.respondWith((async()=>{ const c=await caches.open(CACHE), saved=await c.match('./');
     const net=fetch(r).then(res=>{ if(res.ok) c.put('./',res.clone()); return res; });
     if(!saved) return net;
     return Promise.race([net.catch(()=>saved), new Promise(ok=>setTimeout(()=>ok(saved),4000))]); })()); return; }
