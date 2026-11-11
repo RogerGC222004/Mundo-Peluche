@@ -1336,12 +1336,12 @@ const diL=(x,z)=>{ const dx=x-DI.x, dz=z-DI.z; return [dx*DI.ux+dz*DI.uz, dx*DI.
 const DI_CAKE={su:-70, sv:-30, tiers:[{r:150,h:20},{r:104,h:20},{r:60,h:20}], wall:9};
 const DI_PLAZA={su:DI.rcU-125, sv:-6, r:16, b:16, h:null};
 const DI_LAKE={su:170, sv:200, R:52, lvl:2.6};   // el lago de limonada
-const DI_FLATS=[DI_PLAZA, {su:DI_PLAZA.su, sv:DI_PLAZA.sv, r:46, b:18, h:null}, {su:370, sv:60, r:15, b:12, h:null}];   // v144: el pueblito de galleta y la rueda de dona
+const DI_FLATS=[DI_PLAZA, {su:DI_PLAZA.su, sv:DI_PLAZA.sv, r:46, b:18, h:null}, {su:370, sv:60, r:15, b:12, h:null}, {su:368, sv:4, r:9, b:8, h:null}];   // v182: + el carrusel   // v144: el pueblito de galleta y la rueda de dona
 const DI_DOCK={s1:DI.rcU*1.085, W:1.9, Y:SEA_Y+2.35, s0:0};
 // el río de chocolate: nace al pie del pastel y baja al mar
 const DI_RIVER=(()=>{ const pts=[[-20,-205,4.2],[10,-260,3.4],[30,-320,2.3],[38,-385,1.1],[44,-450,-.6],[48,-520,-3]];
   const P=pts.map(([su,sv,b])=>{ const [x,z]=diS(su,sv); return {su,sv,x,z,b}; }), L=[0]; for(let i=1;i<P.length;i++) L.push(L[i-1]+Math.hypot(P[i].su-P[i-1].su,P[i].sv-P[i-1].sv));
-  return {P, L, W:5, pond:{R:11, lvl:4.95}}; })();
+  return {P, L, W:6.5, pond:{R:11, lvl:4.95}}; })();   // v182: más ancho
 function diCakeH(su,sv){ const C=DI_CAKE, r=Math.hypot(su-C.su,sv-C.sv); let h=0; for(const T of C.tiers) h+=T.h*smooth(T.r+C.wall*.6, T.r-C.wall*.4, r); return h; }
 function diRiverNear(su,sv){ const P=DI_RIVER.P; let best=1e9, s=0, bed=0;
   for(let i=0;i<P.length-1;i++){ const a=P[i], b=P[i+1], dx=b.su-a.su, dz=b.sv-a.sv, L2=dx*dx+dz*dz, t=Math.max(0,Math.min(1,((su-a.su)*dx+(sv-a.sv)*dz)/L2)), qx=a.su+dx*t-su, qz=a.sv+dz*t-sv, d=Math.hypot(qx,qz);
@@ -1354,7 +1354,7 @@ function diLand(su,sv,x,z){ let h=diBase(su,sv,x,z);
   for(const F of DI_FLATS){ const d=Math.hypot(su-F.su,sv-F.sv); if(d<F.r+F.b){ if(F.h===null){ const [fx,fz]=diS(F.su,F.sv); F.h=diBase(F.su,F.sv,fx,fz); } h=lerp(h,F.h,1-smooth(F.r,F.r+F.b,d)); } }
   { const L=DI_LAKE, d=Math.hypot(su-L.su,sv-L.sv); if(d<L.R+40){ const bowl=d<L.R ? L.lvl-3*(1-(d/L.R)*(d/L.R)) : L.lvl+.5+(d-L.R)*.12; h=lerp(h,d<L.R?bowl:Math.max(Math.min(h,bowl),L.lvl+.45),1-smooth(L.R+8,L.R+40,d)); } }   // la orilla nunca queda más baja que el agua
   const R=DI_RIVER, n=diRiverNear(su,sv);
-  if(n.d<R.W+18){ const w=R.W, chan=n.d<w ? n.bed+.75-1.4*(1-(n.d/w)*(n.d/w)) : n.bed+.9+(n.d-w)*.45; h=lerp(h,Math.min(h+(n.d<w?0:99),chan),1-smooth(w+5,w+18,n.d)); }
+  if(n.d<R.W+18){ const w=R.W, chan=n.d<w ? n.bed+.75-3.0*(1-(n.d/w)*(n.d/w)) : n.bed+.9+(n.d-w)*.45; h=lerp(h,Math.min(h+(n.d<w?0:99),chan),1-smooth(w+5,w+18,n.d)); }
   { const P=R.P[0], d=Math.hypot(su-P.su,sv-P.sv), C=R.pond; if(d<C.R+14){ const bowl=d<C.R ? C.lvl-3.4*(1-(d/C.R)*(d/C.R)) : C.lvl+.5+(d-C.R)*.35; h=lerp(h,d<C.R?Math.min(h,bowl):Math.max(Math.min(h,bowl),C.lvl+.4),1-smooth(C.R+4,C.R+14,d)); } }
   return h; }
 function diExact(x,z){ const lx=x-DI.x, lz=z-DI.z, d=Math.hypot(lx,lz); if(d>DI.E*1.42) return DEEP_Y;
@@ -4061,7 +4061,7 @@ hold(ui('tJump'),()=>{ touchHold.up=true; jump(); },()=>{ touchHold.up=false; })
 hold(ui('tDive'),()=>{ touchHold.down=true; startDive(); },()=>{ touchHold.down=false; });
 
 function jump(){ if(player.pg && player.pg.k==='vine'){ jiVineRelease(); return; }   // v142: soltar la liana
-  if(player.pg && (player.pg.k==='icsl' || player.pg.k==='dwheel')) return;   // v144: en el tobogán y en la rueda no se salta
+  if(player.pg && (player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar')) return;   // v144: en el tobogán y en la rueda no se salta
   if(player.busy) return; if(player.mg || (typeof SP!=='undefined' && SP.on)) return; if(hook.mode>=2){ bowRelease(); return; } if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see')){ stopPlay(); return; } if(player.grounded && !player.dive && !player.swim && !player.car && !player.ac && !player.pg){ player.vy=trOnMat(player.pos.x,player.pos.z,player.pos.y)?9.5:7.2; player.grounded=false; audio.jump(); } }
 
 addEventListener('keydown',e=>{
@@ -4477,7 +4477,7 @@ function onPeers({peers}){
       if(e[1]>c.lightT){ c.lights=e[0]===1; c.lightT=e[1]; }
     });
     // aviones y helicópteros: quién pilota, dónde quedaron, escaleras y puertas, y quién va a bordo
-    { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<(PG_KINDS[pl[0]]==='bench'?BENCHES.length:PG_KINDS[pl[0]]==='cuco'?5:PG_KINDS[pl[0]]==='dwheel'?DI_WHEEL.N:3) ? pl : null;
+    { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<(PG_KINDS[pl[0]]==='bench'?BENCHES.length:PG_KINDS[pl[0]]==='cuco'?5:PG_KINDS[pl[0]]==='dwheel'?DI_WHEEL.N:PG_KINDS[pl[0]]==='dcar'?DI_CAR.N:3) ? pl : null;
       if(pr.pu) pgCheckPush(r,pr.pu); }
     parseCuco(r,pr,cuDrv); parseShip(r,pr,cuDrv); wiParse(r,pr); parsePier(r,pr); trParse(r,pr); parsePet(r,pr); blParse(r,pr,p.peer,blSeen);   // Cuco: dónde está y si lo guía esta persona
     const ai=pr.ai;
@@ -5573,7 +5573,7 @@ function updateCarHud(){
 // Botones táctiles: a pie (saltar, tirarse…) o en coche (acelerar, frenar)
 function updateTouchMode(){
   const inCar=!!player.car, pilot=typeof iPilot==='function' && iPilot(), aboard=!!player.ac, seatedAir=aboard && player.ac.mode==='seated';
-  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && (player.pg.k==='cuco' || player.pg.k==='helm' || player.pg.k==='sled' || player.pg.k==='zip' || player.pg.k==='icsl' || player.pg.k==='dwheel'));
+  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && (player.pg.k==='cuco' || player.pg.k==='helm' || player.pg.k==='sled' || player.pg.k==='zip' || player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar'));
   ui('tcar').hidden=!((inCar && player.car.kind==='seated') || pilot);
   const drv=(inCar && player.car.seat===0) || pilot;
   ui('tGas').hidden=!drv; ui('tBrake').hidden=!drv; ui('tLights').hidden=!(inCar && player.car.seat===0);
@@ -6317,7 +6317,7 @@ function trRemotePose(r,t,dt){ if(r.tz && r.tz[2]) pgPoseLimbs(r.obj,{climb:(per
 let myPush={i:-1,t:0}; player.pushUntil=0;
 function pgOccupied(k,i){ if(player.pg && player.pg.k===k && player.pg.i===i) return 'me';
   for(const r of mp.remotes.values()) if(r.pl && r.pl[0]===PG_KINDS.indexOf(k) && r.pl[1]===i) return r; return null; }
-const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled','zip','vine','icsl','dwheel'];
+const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled','zip','vine','icsl','dwheel','dcar'];   // v182: + carrusel de dulces
 function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars' && k!=='cart') return;
   holding=false; applyHeld(); renderHotbar();
   player.pg={k,i,t0:performance.now()/1000, from:[player.pos.x,player.pos.y,player.pos.z]};
@@ -6345,7 +6345,7 @@ function playPose(k,i,v,dt){
   if(k==='cart'){ const q=MC.at(v); return {pos:[q.x,q.y+.2,q.z], yaw:q.yaw, sit:1, grip:1}; }
   if(k==='helm') return helmPose();   // v138
   if(k==='zip') return jiZipPose(v); if(k==='vine') return jiVinePose(i,v);   // v142
-  if(k==='icsl') return diSlidePose(v); if(k==='dwheel') return diWheelPose(i);   // v144
+  if(k==='icsl') return diSlidePose(v); if(k==='dwheel') return diWheelPose(i); if(k==='dcar') return diCarPose(i);   // v144 · v182
   if(k==='bench'){ const b=BENCHES[i]; if(!b) return null; const c=Math.cos(b.yaw), s=Math.sin(b.yaw); return {pos:[b.x-s*.12, b.y-.415, b.z-c*.12], yaw:b.yaw, sit:1}; }
   if(k==='swing'){ const e=PG_EQ.swings, [ry,rz]=rotX(-e.L-.415,-.06,-v);
     return {pos:eqToWorld(e,e.seats[i],e.pivot+ry,rz), yaw:e.yaw, tilt:-v, sit:1, holdUp:1}; }
@@ -6374,7 +6374,7 @@ function updateMyPlay(dt){
   if(P.k==='cart') return mcRide(P,dt);   // v137
   if(P.k==='helm'){ P.v=0; return helmPose(); }
   if(P.k==='sled') return wiSledRide(P,dt);   // v140
-  if(P.k==='icsl') return diSlideRide(P,dt); if(P.k==='dwheel') return diWheelRide(P,dt);   // v144
+  if(P.k==='icsl') return diSlideRide(P,dt); if(P.k==='dwheel') return diWheelRide(P,dt); if(P.k==='dcar') return diCarRide(P,dt);   // v144 · v182
   if(P.k==='zip') return jiZipRide(P,dt); if(P.k==='vine') return jiVineRide(P,dt);   // v142   // v138: el barco se mueve en shipUpdate
   if(P.k==='swing'){ const S=pgState.swing[P.i];
     S.w += (-(9.8/PG_EQ.swings.L)*Math.sin(S.a) - .12*S.w)*dt;
@@ -15241,6 +15241,7 @@ const DI_HOUSES=[   // su, sv, ancho, fondo, alto, pared, techo, ¿tienda?
   [392,-40,9,7,4.6,'#b8733a','#ffb3d0',true], [418,-30,6.5,6,4,'#c07c40','#fff3f6',false], [366,-32,6,6,4,'#a96a33','#bff0d6',false],
   [418,24,6.5,6,4.2,'#b8733a','#d6c4ff',false], [392,32,7,6,4.4,'#c07c40','#ffd36b',false]];
 const DI_WHEEL={su:370, sv:60, H:12, R:9.5, N:8, PER:70};
+const DI_CAR={su:368, sv:4, R:4.3, N:8, PER:22, DUR:45, H:.35};   // v182: el carrusel de dulces
 const DI_CTREES=[['paleta',330,-65],['paleta',345,-70],['paleta',360,-66],['paleta',338,-84],['chicle',352,-86],['chicle',326,-80],['chicle',366,-82],['algodon',334,-98],['algodon',350,-102],['algodon',364,-98]].map(([k,su,sv])=>({k,su,sv}));
 const DI_CANDY_N={paleta:'paletas', chicle:'chicles', algodon:'algodones'}, DI_CANDY_P={paleta:4, chicle:3, algodon:5}, DI_CANDY_IC={paleta:'🍭', chicle:'🍬', algodon:'☁️'}, DI_STAND={su:378, sv:-62};
 const DI_CLOUDS=[[25,-182,1.6],[31,-176.5,5],[37,-171,8.5],[43,-165.5,12],[49,-160,15.5]];   // su, sv, altura sobre el suelo
@@ -15250,6 +15251,7 @@ DI_PATHS.push([[60,-200],[30,-188]].map(([su,sv])=>diS(su,sv)));   // a las nube
 function diNoPlant2(su,sv){
   if(Math.hypot(su-DI_PLAZA.su,sv-DI_PLAZA.sv)<56) return true;   // el pueblito
   if(Math.hypot(su-DI_WHEEL.su,sv-DI_WHEEL.sv)<22) return true;
+  if(Math.hypot(su-DI_CAR.su,sv-DI_CAR.sv)<12) return true;   // v182
   for(const T of DI_CTREES) if(Math.hypot(su-T.su,sv-T.sv)<6) return true;
   for(const [a,b] of DI_CLOUDS) if(Math.hypot(su-a,sv-b)<7) return true;
   if(DI2.slideL) for(const [a,b] of DI2.slideL) if(Math.hypot(su-a,sv-b)<5) return true;
@@ -15287,15 +15289,27 @@ function diWheelPose(i){ if(DI_WHEEL.y===undefined) return null; const p=diGondP
 function diWheelStart(){ let best=-1, by=1e9; for(let k=0;k<DI_WHEEL.N;k++){ if(pgOccupied('dwheel',k)) continue; const p=diGondPt(k); if(p[1]<by){ by=p[1]; best=k; } } if(best<0){ flashNote('La rueda está llena'); return; }
   startPlay('dwheel',best); player.pg.wt0=performance.now()/1000; flashNote('¡Disfruta la vista! La vuelta dura un poco más de un minuto'); }
 function diWheelRide(P,dt){ P.v=0; if(performance.now()/1000-P.wt0>DI_WHEEL.PER*.99){ setTimeout(()=>{ if(player.pg===P){ stopPlay(); const [x,z]=diS(DI_WHEEL.su,DI_WHEEL.sv-4.5); player.pos.set(x,terrainH(x,z)+.05,z); } },0); } return diWheelPose(P.i); }
+// ---- v182: carrusel de dulces (gira igual para todos, con la hora) ----
+const diCarAng=()=>((Date.now()/1000)%DI_CAR.PER)/DI_CAR.PER*Math.PI*2;
+function diCarPt(k,tn){ const C=DI_CAR, a=diCarAng()+k/C.N*Math.PI*2; return [C.x+Math.sin(a)*C.R, C.y+1.4+Math.sin(tn*2.2+k*1.7)*.25, C.z+Math.cos(a)*C.R, a+Math.PI/2]; }
+function diCarPose(i){ if(DI_CAR.x===undefined) return null; const p=diCarPt(i,Date.now()/1000); return {pos:[p[0],p[1]+.12,p[2]], yaw:p[3], sit:1, grip:1}; }
+function diCarTune(){ try{ const R=audio.raw(), t0=R.ctx.currentTime; [523,659,784,659,587,698,880,698,784,659,523,587].forEach((f,i)=>R.tone('triangle',f,f,t0+i*.2,.18,.045)); }catch(e){} }
+function diCarStart(){ const C=DI_CAR; let best=-1, bd=1e9; for(let k=0;k<C.N;k++){ if(pgOccupied('dcar',k)) continue; const p=diCarPt(k,Date.now()/1000), d=Math.hypot(p[0]-player.pos.x,p[2]-player.pos.z); if(d<bd){ bd=d; best=k; } }
+  if(best<0){ flashNote('El carrusel está lleno'); return; } startPlay('dcar',best); const P=player.pg; P.wt0=performance.now()/1000; P.mt=0; flashNote('¡Arre, ositos! 🎠 La vuelta dura 45 segundos'); }
+function diCarExit(){ const P=player.pg; if(!P || P.k!=='dcar') return; const C=DI_CAR, p=diCarPt(P.i,Date.now()/1000), dx=p[0]-C.x, dz=p[2]-C.z, l=Math.hypot(dx,dz)||1; stopPlay();
+  const x=C.x+dx/l*(C.R+2.6), z=C.z+dz/l*(C.R+2.6); player.pos.set(x,terrainH(x,z)+.05,z); player.vel.set(0,0,0); player.vy=0; }
+function diCarRide(P,dt){ P.v=0; P.mt-=dt; if(P.mt<=0){ P.mt=10; diCarTune(); } if(performance.now()/1000-P.wt0>DI_CAR.DUR) setTimeout(()=>{ if(player.pg===P) diCarExit(); },0); return diCarPose(P.i); }
 // ---- acciones ----
 function diActions(){ if(!DI.done || player.car||player.ac||player.mg||player.balloon||player.rk||SP.on||player.busy) return null;
   const p=player.pos; if(Math.abs(p.x-DI.x)>DI.E || Math.abs(p.z-DI.z)>DI.E) return null;
   if(player.pg && (player.pg.k==='icsl' || player.pg.k==='dwheel')) return [null,null];
+  if(player.pg && player.pg.k==='dcar') return [{label:'Bajarse del carrusel', run:diCarExit}, null];   // v182
   if(player.pg || player.dive) return null;
   const near=(o,r)=>o && Math.hypot(p.x-o.x,p.z-o.z)<r;
   if(DI2.slide && near(DI2.slide.start,2.6) && Math.abs(p.y-DI2.slide.start.y)<2.5) return [{label:'Bajar por el tobogán de helado', run:diSlideStart}, null];
   if(DI2.board && near(DI2.board,2.6) && !player.swim) return [{label:'Subir a la rueda de dona', run:diWheelStart}, null];
   if(near(DI2.shopDoor,2.4)) return [{label:'Entrar a la Dulcería (ropa y gorros)', run:diOpenShop}, null];
+  if(DI_CAR.x!==undefined && !player.swim){ const dc=Math.hypot(p.x-DI_CAR.x,p.z-DI_CAR.z); if(dc>DI_CAR.R-1.6 && dc<DI_CAR.R+3.2 && Math.abs(p.y-DI_CAR.y)<2.5) return [{label:'Subir al carrusel de dulces', run:diCarStart}, null]; }   // v182
   for(const H of DI2.hidden) if(!H.got && Math.hypot(p.x-H.x,p.z-H.z)<2.2 && Math.abs(p.y-H.y)<2.6) return [{label:'Tomar el dulce escondido', run:()=>diTakeHidden(H)}, null];
   if(near(DI2.stand,3)){ const C=DI2.cv, n=C.paleta+C.chicle+C.algodon, m=C.paleta*4+C.chicle*3+C.algodon*5; return [n?{label:'Vender '+n+' dulces (+'+m+' monedas)', run:diSell}:{label:'Junta dulces de los árboles para vender', disabled:true, run:()=>{}}, null]; }
   for(const T of DI_CTREES) if(near(T,2.8)){ const ok=performance.now()>T.until; return [ok?{label:'Juntar '+DI_CANDY_N[T.k], run:()=>diPick(T)}:{label:'Ya no hay '+DI_CANDY_N[T.k]+' (vuelven pronto)', disabled:true, run:()=>{}}, null]; }
@@ -15424,6 +15438,49 @@ function* diBuild2(){ const ry0=Math.atan2(DI.ux,DI.uz);
       const roof=new THREE.Mesh(sphereG,fr); roof.scale.set(1.3,.5,1.3); roof.position.y=.15; c.add(roof); const ch=new THREE.Mesh(sphereG,wiMat('#d0102c')); ch.scale.setScalar(.22); ch.position.y=.68; c.add(ch);
       c.rotation.y=Math.atan2(DI.vx,DI.vz); DI2.gond.push(c); } }
   yield;
+  // v182: el carrusel de dulces (paletas, donas y ositos de gomita que suben y bajan)
+  { const C=DI_CAR, [cx,cz]=diS(C.su,C.sv), cy=groundMin(cx,cz,6)-.05, root=new THREE.Group(); root.position.set(cx,cy,cz); scene.add(root); C.x=cx; C.z=cz; C.y=cy;
+    const pink=wiMat('#ff8fc8'), white=wiMat('#fffaf5','rgba(0,0,0,.04)'), red=wiMat('#e8333f'), mint=wiMat('#9be8c8'), gold=wiMat('#ffd23f');
+    wiAdd(root,cylG,pink,0,C.H/2,0,5.9,C.H,5.9); wiAdd(root,cylG,white,0,C.H+.02,0,5.6,.06,5.6);
+    for(let q=0;q<10;q++) wiAdd(root,cylG,q%2?red:white,0,.25+q*.5,0,.42,.5,.42);   // poste de bastón de caramelo
+    wiAdd(root,WI_CONEG,pink,0,5.95,0,6.5,2.1,6.5); wiAdd(root,cylG,white,0,4.95,0,6.55,.14,6.55);
+    for(let q=0;q<16;q++){ const a=q/16*Math.PI*2; wiAdd(root,sphereG,q%2?mint:gold,Math.sin(a)*6.4,4.85,Math.cos(a)*6.4,.32,.32,.32); }
+    wiAdd(root,sphereG,wiMat('#d0102c'),0,7.2,0,.42,.42,.42);
+    const spin=new THREE.Group(); spin.userData.noBatch=true; root.add(spin); C.spin=spin; C.figs=[];
+    const gum=['#ff5fa2','#ffd23f','#5ec8ff','#7be07b','#b07cff','#ff9a3c'].map(h=>new THREE.MeshStandardMaterial({color:h, roughness:.28}));
+    const icing=['#ff8fc8','#fff3f8','#8a5232'].map(h=>wiMat(h)), dough=wiMat('#e0a868','rgba(90,50,10,.2)');
+    const torusG=new THREE.TorusGeometry(.42,.2,10,24), discG=new THREE.CylinderGeometry(.62,.62,.22,24), swirlG=new THREE.TorusGeometry(.38,.06,6,24);
+    for(let k=0;k<C.N;k++){ const ph=k/C.N*Math.PI*2, pole=wiAdd(spin,cylG,k%2?white:pink,Math.sin(ph)*C.R,2.6,Math.cos(ph)*C.R,.06,4.5,.06); pole.castShadow=false;
+      const f=new THREE.Group(); f.position.set(Math.sin(ph)*C.R,1.4,Math.cos(ph)*C.R); f.rotation.y=ph+Math.PI/2; f.scale.setScalar(1.35); spin.add(f); const kind=k%3;
+      if(kind===0){ const d=new THREE.Mesh(discG,gum[k%6]); d.rotation.x=Math.PI/2; f.add(d); for(const e of [-1,1]){ const s=new THREE.Mesh(swirlG,white); s.position.z=e*.12; f.add(s); const s2=new THREE.Mesh(swirlG,white); s2.scale.setScalar(.55); s2.position.z=e*.12; f.add(s2); } const st=new THREE.Mesh(cylG,white); st.scale.set(.06,.7,.06); st.position.y=-.65; f.add(st); }   // paleta
+      else if(kind===1){ const d=new THREE.Mesh(torusG,dough); d.rotation.y=Math.PI/2; f.add(d); const ic=new THREE.Mesh(torusG,icing[k%3]); ic.rotation.y=Math.PI/2; ic.scale.set(1.04,1.04,.62); ic.position.x=.05; f.add(ic); for(let q=0;q<7;q++){ const a=q/7*Math.PI*2, s=new THREE.Mesh(sphereLo,gum[q%6]); s.scale.setScalar(.05); s.position.set(.2,Math.sin(a)*.42,Math.cos(a)*.42); f.add(s); } }   // dona
+      else { const b=new THREE.Mesh(sphereG,gum[k%6]); b.scale.set(.42,.4,.62); f.add(b); const h=new THREE.Mesh(sphereG,gum[k%6]); h.scale.setScalar(.3); h.position.set(0,.38,.5); f.add(h); for(const e of [-1,1]){ const ear=new THREE.Mesh(sphereG,gum[k%6]); ear.scale.setScalar(.11); ear.position.set(e*.2,.64,.48); f.add(ear); } for(const e of [-1,1]){ const ey=new THREE.Mesh(sphereLo,wiMat('#3a2418')); ey.scale.setScalar(.045); ey.position.set(e*.11,.44,.79); f.add(ey); } }   // osito de gomita
+      C.figs.push(f); }
+    obstacles.push({x:cx,z:cz,r:.75,top:cy+7,walk:false}); obstacles.push({x:cx,z:cz,r:6.1,top:cy+C.H,walk:true});
+    { const [sx,sz]=diS(C.su+6.5,C.sv-6.5), sy=terrainH(sx,sz); wiAdd(root,cylG,wiMat('#7a4a2b'),sx-cx,sy-cy+.8,sz-cz,.06,1.6,.06); jiSign(root,sx-cx,sz-cz,sy-cy+1.65,Math.atan2(DI.ux,DI.uz),'Carrusel de dulces 🎠','#d63a7a',3.2,'#fff3f8'); } }
+  yield;
+  // v182: el espejo mágico junto a la Dulcería (te ves con tu ropa nueva)
+  { const [su,sv,w,d]=DI_HOUSES[0], [hx,hz]=diS(su,sv), fu=DI_PC[0]-su, fv=DI_PC[1]-sv, fl=Math.hypot(fu,fv), fx=(fu*DI.ux+fv*DI.vx)/fl, fz=(fu*DI.uz+fv*DI.vz)/fl, ry=Math.atan2(fx,fz);
+    const mx=hx+fz*(w/2+1.9)+fx*(d/2-.2), mz=hz-fx*(w/2+1.9)+fz*(d/2-.2), my=groundMin(mx,mz,.8)-.03, G=new THREE.Group(); G.position.set(mx,my,mz); G.rotation.y=ry; scene.add(G);
+    const pink=wiMat('#ff8fc8'), white=wiMat('#fffaf5','rgba(0,0,0,.04)'), red=wiMat('#e8333f');
+    wiAdd(G,cylG,wiMat('#b8733a'),0,.08,0,.75,.16,.45);   // base de galleta
+    for(const e of [-1,1]) for(let q=0;q<6;q++) wiAdd(G,cylG,q%2?red:white,e*.78,.25+q*.4,0,.07,.4,.07);   // patas de bastón
+    const fr=new THREE.Mesh(new THREE.TorusGeometry(.72,.09,8,40),pink); fr.scale.set(1,1.55,1); fr.position.set(0,1.45,0); G.add(fr);
+    for(let q=0;q<14;q++){ const a=q/14*Math.PI*2; wiAdd(G,sphereG,q%2?white:wiMat('#ffd23f'),Math.cos(a)*.74,1.45+Math.sin(a)*1.14,.04,.08,.08,.08); }
+    wiAdd(G,sphereG,wiMat('#d0102c'),0,2.72,0,.16,.16,.16);
+    const back=wiAdd(G,cylG,wiMat('#d9a866'),0,1.45,-.05,.7,.06,1.08); back.rotation.x=Math.PI/2;
+    const Q=MIN_Q||Q0==='low', rt=new THREE.WebGLRenderTarget(Q?150:220,Q?232:340,{depthBuffer:true}); rt.texture.encoding=renderer.outputEncoding;
+    const geo=new THREE.CircleGeometry(.7,40); geo.scale(1,1.55,1); { const uv=geo.attributes.uv; for(let i=0;i<uv.count;i++) uv.setX(i,1-uv.getX(i)); }   // al revés, como un espejo
+    const live=new THREE.MeshBasicMaterial({map:rt.texture}), idle=new THREE.MeshStandardMaterial({color:'#dfeefa', roughness:.05, metalness:.6, emissive:new THREE.Color('#9fc4e0'), emissiveIntensity:.25});
+    const glass=new THREE.Mesh(geo,idle); glass.position.set(0,1.45,.02); G.add(glass); glass.userData.noBatch=true;
+    const cam=new THREE.PerspectiveCamera(62,.7/1.085,.3,45); G.updateMatrixWorld(true); const c=new THREE.Vector3(0,1.45,.06).applyMatrix4(G.matrixWorld), t=new THREE.Vector3(0,1.25,8).applyMatrix4(G.matrixWorld); cam.position.copy(c); cam.lookAt(t); cam.updateMatrixWorld(true);
+    DI2.mirror={x:c.x, z:c.z, fx, fz, rt, live, idle, glass, cam, f:0};
+    obstacles.push({x:mx,z:mz,r:.85,top:my+2.8,walk:false});
+    { const sx=mx+fz*1.75+fx*.3, sz=mz-fx*1.75+fz*.3; wiAdd(scene,cylG,wiMat('#7a4a2b'),sx,my+1.1,sz,.06,2.2,.06); jiSign(scene,sx,sz,my+2.35,ry,'Espejo mágico ✨','#7a3bd6',2.2,'#fff3f8'); } }
+  yield;
+  // v182: burbujitas que salen y revientan en el río de chocolate
+  { const im=new THREE.InstancedMesh(sphereLo,new THREE.MeshStandardMaterial({color:'#b07040', roughness:.12, metalness:.1}),28); im.count=0; im.frustumCulled=false; im.userData.noBatch=true; im.userData.noCol=true; scene.add(im); DI2.bub={im, B:[], t:0}; }
+  yield;
   // los 10 dulces escondidos
   { const got=diHiddenGot(), C=DI_CAKE, top=C.base+60, cl=DI2.clouds[DI2.clouds.length-1], wrapC=['#ff5fa2','#ffd23f','#5ec8ff','#7be07b','#b07cff'];
     const spots=[[cl.x,cl.z,cl.y+.7], diCakeP(14,Math.PI*.98), diCakeP(DI_RAMPS[0].rho,-.37), diS(200,-300), diS(60,-430), diS(170,262), DI2.backShop, diCakeP(80,3.0), diS(-380,-100), diS(DI_WHEEL.su,DI_WHEEL.sv+8)];
@@ -15445,6 +15502,25 @@ function di2Tick(dt,t){ if(!DI.done) return; const near=Math.hypot(camera.positi
   for(const H of DI2.hidden) if(!H.got){ H.G.rotation.y=t*1.5+H.i; H.G.position.y=H.y+Math.sin(t*2+H.i)*.12; }
   // la fuente de chocolate
   if(DI2.fountain) DI2.fountain.forEach((f,i)=>{ f.scale.x=f.scale.z=1+.02*Math.sin(t*6+i*2); });
+  // v182: carrusel de dulces
+  { const C=DI_CAR; if(C.spin){ const tn=Date.now()/1000; C.spin.rotation.y=diCarAng(); C.figs.forEach((f,k)=>{ f.position.y=1.4+Math.sin(tn*2.2+k*1.7)*.25; }); } }
+  // v182: burbujas del río de chocolate (solo cerca)
+  if(DI2.bub){ const Bb=DI2.bub, R=DI_RIVER, P=R.P, total=R.L[R.L.length-1], px=player.pos.x, pz=player.pos.z;
+    const [psu,psv]=diL(px,pz), nr=diRiverNear(psu,psv), on=nr.d<90 && player.pos.y>CAVE_TOP;
+    if(!on){ if(Bb.im.count){ Bb.im.count=0; Bb.B.length=0; } }
+    else { for(let tries=0;tries<3 && Bb.B.length<28;tries++){ const s=Math.max(0,Math.min(total,nr.s+(Math.random()-.5)*110)); let i=0; while(i<P.length-2 && R.L[i+1]<s) i++; const a=P[i], b=P[i+1], tt=(s-R.L[i])/(R.L[i+1]-R.L[i]), su=a.su+(b.su-a.su)*tt, sv=a.sv+(b.sv-a.sv)*tt, lv=a.b+(b.b-a.b)*tt+.75;
+        if(lv<=SEA_Y+.06) continue; let dx=b.su-a.su, dz=b.sv-a.sv; const l=Math.hypot(dx,dz)||1; const w=(Math.random()*2-1)*(R.W-1.2), [x,z]=diS(su-dz/l*w, sv+dx/l*w);
+        Bb.B.push({x,z,y:lv,t:0,L:1+Math.random()*1.6,s:.22+Math.random()*.26}); }
+      const M=Bb.M||(Bb.M=new THREE.Matrix4()); let n=0;
+      for(let i=Bb.B.length-1;i>=0;i--){ const q=Bb.B[i]; q.t+=dt; if(q.t>q.L){ Bb.B.splice(i,1); continue; } const k=q.t/q.L, sc=q.s*(k<.85?.3+.7*k/.85:1.15);
+        M.makeScale(sc,sc*.85,sc); M.setPosition(q.x,q.y-.02,q.z); Bb.im.setMatrixAt(n++,M); }
+      Bb.im.count=n; Bb.im.instanceMatrix.needsUpdate=true; } }
+  // v182: el espejo mágico (se dibuja solo de cerca, unas veces por segundo)
+  if(DI2.mirror){ const Mi=DI2.mirror, d=Math.hypot(player.pos.x-Mi.x,player.pos.z-Mi.z), front=(player.pos.x-Mi.x)*Mi.fx+(player.pos.z-Mi.z)*Mi.fz>-.2;
+    const act=d<13 && front && state==='play' && !SP.on && !(typeof HAD!=='undefined' && HAD.on);
+    if(Mi.glass.material!==(act?Mi.live:Mi.idle)) Mi.glass.material=act?Mi.live:Mi.idle;
+    if(act && (Mi.f=(Mi.f+1)%(MIN_Q||Q0==='low'?3:2))===0){ const pv=plush.visible, au=renderer.shadowMap.autoUpdate, prev=renderer.getRenderTarget(); plush.visible=true; Mi.glass.visible=false; renderer.shadowMap.autoUpdate=false;
+      try{ renderer.setRenderTarget(Mi.rt); renderer.render(scene,Mi.cam); }catch(e){} renderer.setRenderTarget(prev); renderer.shadowMap.autoUpdate=au; Mi.glass.visible=true; plush.visible=pv; } }
 }
 // en el mapa: las casitas y la rueda
 function diMapDraw2(g){ if(!DI.done) return; g.fillStyle='#8a4a1e'; for(const B of DI2.boxes){ const [px,py]=toMap(B.x,B.z); g.fillRect(px-2,py-2,4,4); }
