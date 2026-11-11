@@ -1,5 +1,5 @@
-// Mundo Peluche 181: guarda el juego en el dispositivo para que abra rápido y sin internet.
-const CACHE='mundo-peluche-181';
+// Mundo Peluche 182: guarda el juego en el dispositivo para que abra rápido y sin internet.
+const CACHE='mundo-peluche-182';
 const CORE=['./','./manifest.webmanifest','./icono-48.png','./icono-180.png','./icono-192.png','./icono-512.png'];
 const LIBS=['https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js','https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'];
 self.addEventListener('install',e=>{ e.waitUntil((async()=>{ const c=await caches.open(CACHE);
@@ -9,7 +9,7 @@ self.addEventListener('install',e=>{ e.waitUntil((async()=>{ const c=await cache
 self.addEventListener('activate',e=>{ e.waitUntil((async()=>{ for(const k of await caches.keys()) if(k.startsWith('mundo-peluche-') && k!==CACHE) await caches.delete(k); await self.clients.claim(); })()); });
 self.addEventListener('fetch',e=>{ const r=e.request; if(r.method!=='GET') return; const u=new URL(r.url);
   // el juego: primero internet (así siempre llega la última versión); si tarda o no hay, la copia guardada
-  if(r.mode==='navigate' && u.origin===location.origin){ e.respondWith((async()=>{ const c=await caches.open(CACHE), saved=await c.match('./');
+  if(r.mode==='navigate' && u.origin===location.origin && /\/(index\.html)?$/.test(u.pathname)){ /* solo el juego, no otras páginas como privacidad.html */ e.respondWith((async()=>{ const c=await caches.open(CACHE), saved=await c.match('./');
     const net=fetch(r).then(res=>{ if(res.ok) c.put('./',res.clone()); return res; });
     if(!saved) return net;
     return Promise.race([net.catch(()=>saved), new Promise(ok=>setTimeout(()=>ok(saved),4000))]); })()); return; }
