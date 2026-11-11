@@ -190,11 +190,7 @@ body.not-play .mg-hud, body.not-play .mg-ctl, body.not-play .mg-result{display:n
 .farm-ic{font-size:30px;line-height:1;width:44px;text-align:center;flex:none;}
 /* v131: en pantallas angostas (celular en vertical) el texto usa todo el ancho y los botones pasan abajo */
 @media (max-width:480px){ .fish-row{flex-wrap:wrap;row-gap:6px;} .fish-row .fish-tx{flex:1 1 calc(100% - 64px);} .fish-row .fish-tx + .sbtn{margin-left:auto;} }
-@media (orientation:portrait){ .hotbar.map-open ~ .touch #tWave{visibility:hidden;}
-.tveh{position:fixed;right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(86px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;pointer-events:none;}
-.tveh.up{bottom:calc(300px + env(safe-area-inset-bottom,0px));}
-.tveh .tbtn.small{width:64px;height:64px;font-size:13px;}
-@media (max-height:500px){ .tveh.up{bottom:calc(240px + env(safe-area-inset-bottom,0px));} .tveh .tbtn.small{width:56px;height:56px;font-size:12px;} } }   /* v131: con el mapa abierto, Saludar no lo tapa */
+@media (orientation:portrait){ .hotbar.map-open ~ .touch #tWave{visibility:hidden;} }   /* v131: con el mapa abierto, Saludar no lo tapa */
 .fish-all{align-self:flex-start;font-size:20px;padding:10px 22px;}
 .fish-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px;}
 .fish-it{background:#fff;border-radius:12px;padding:6px 4px 7px;display:flex;flex-direction:column;align-items:center;text-align:center;box-shadow:0 3px 0 #c9dcea;}
@@ -271,6 +267,10 @@ body.in-mg #hint{display:none!important;}
   background:rgba(251,248,239,.45);outline:2px dashed rgba(44,58,26,.5);outline-offset:-8px;pointer-events:auto;}
 .knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:var(--felt);box-shadow:0 4px 0 var(--felt-dk);}
 .tbtns{position:fixed;right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(86px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:auto auto;gap:14px 16px;align-items:end;justify-items:center;pointer-events:none;}
+.tveh{position:fixed;right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(86px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;pointer-events:none;}
+.tveh.up{bottom:calc(300px + env(safe-area-inset-bottom,0px));}
+.tveh .tbtn.small{width:64px;height:64px;font-size:13px;}
+@media (max-height:500px){ .tveh.up{bottom:calc(240px + env(safe-area-inset-bottom,0px));} .tveh .tbtn.small{width:56px;height:56px;font-size:12px;} }
 .tbtns .tbtn{pointer-events:auto;touch-action:none;}
 .slot,.act,.chip{touch-action:manipulation;}
 .tbtn.small{width:72px;height:72px;font-size:15px;}
@@ -4128,7 +4128,7 @@ function look(dx,dy,s){
 // ---------- Botones en pantalla: mover y cambiar tamaño ----------
 // Cada control guarda un desplazamiento (en fracción de pantalla) y una escala, aparte para horizontal y vertical.
 const LAYOUT_ITEMS=[['stick','Joystick'],['tWave','Saludar'],['tDive','Tirarse'],['tJump','Saltar'],
-  ['tLights','Luces'],['tBrake','Frenar'],['tGas','Acelerar'],
+  ['tLights','Luces'],['tBrake','Frenar'],['tGas','Acelerar'],['tSiren','Sirena (vehículo)'],['tVLights','Luces (vehículo)'],['tHorn','Claxon (vehículo)'],
   ['hotbar','Barra de objetos'],['actions','Botones de acción'],['pauseChip','Pausa'],['camChip','Cambiar cámara']];
 const orientKey=()=>innerWidth>=innerHeight?'land':'port';
 function layoutOf(id){ const L=settings.layout||{}, o=L[orientKey()]||{}; return o[id]||{x:0,y:0,s:1}; }
@@ -4138,15 +4138,15 @@ function placeCtl(id,v){ const el=ui(id); if(!el) return;
 function applyLayout(){ LAYOUT_ITEMS.forEach(([id])=>placeCtl(id,layoutOf(id))); }
 addEventListener('resize',()=>{ clearTimeout(applyLayout._t); applyLayout._t=setTimeout(applyLayout,120); });
 const editor={on:false, sel:null, set:'foot', saved:null, drag:null};
-const EDIT_SHOW=['touch','hud','hotbar','actions','tbtnsFoot','tcar','pause','options','act1','act2'];
+const EDIT_SHOW=['touch','hud','hotbar','actions','tbtnsFoot','tcar','pause','options','act1','act2','tveh','tSiren','tVLights','tHorn','tLights','tBrake','tGas'];
 function editorVisible(id){ const foot=editor.set==='foot';
-  if(id==='tLights'||id==='tBrake'||id==='tGas') return !foot;
+  if(id==='tLights'||id==='tBrake'||id==='tGas'||id==='tSiren'||id==='tVLights'||id==='tHorn') return !foot;
   if(id==='tWave'||id==='tDive'||id==='tJump') return foot;
   return true; }
 function markEditor(){ LAYOUT_ITEMS.forEach(([id])=>{ const el=ui(id); if(!el) return; el.classList.toggle('edit-mark', editor.on && editorVisible(id)); el.classList.toggle('sel', editor.on && editor.sel===id); }); }
 function editorSetVisibility(){ const foot=editor.set==='foot';
   ui('touch').hidden=false; ui('hud').hidden=false; ui('hotbar').hidden=false; ui('actions').hidden=false;
-  ui('tbtnsFoot').hidden=!foot; ui('tcar').hidden=foot;
+  ui('tbtnsFoot').hidden=!foot; ui('tcar').hidden=foot; ui('tveh').hidden=foot; ui('tveh').classList.add('up'); ['tSiren','tVLights','tHorn','tLights','tBrake','tGas'].forEach(id=>{ ui(id).hidden=foot; });   // v182: también los del vehículo
   ui('editSet').textContent=foot?'Ver botones del coche':'Ver botones a pie'; centerText(ui('editSet'));
   if(editor.sel && !editorVisible(editor.sel)) selectCtl(null); markEditor(); }
 function selectCtl(id){ editor.sel=id; const name=id?LAYOUT_ITEMS.find(x=>x[0]===id)[1]:'Toca un botón';
@@ -5496,15 +5496,16 @@ function toggleLights(){
   try{ sendPresence(true); }catch(e){}
 }
 // Dos focos de luz reales (siempre en la escena, para no recompilar sombreadores) que siguen al coche con luces más cercano
-const headSpots=(settings.quality==='low'||settings.quality==='min'?[]:[-1,1]).map(()=>{ const l=new THREE.SpotLight(0xfff1c9, 0, 48, .5, .6, 1.2); l.castShadow=false; scene.add(l, l.target); return l; });
+// v182: en calidad Baja un solo foco (en medio, alcanza menos); en Mínima ninguno
+const headSpots=(settings.quality==='min'?[]:settings.quality==='low'?[0]:[-1,1]).map(()=>{ const l=new THREE.SpotLight(0xfff1c9, 0, settings.quality==='low'?34:48, settings.quality==='low'?.62:.5, .6, 1.2); l.castShadow=false; scene.add(l, l.target); return l; });
 function updateHeadSpots(){ if(vehSpots()) return;
   let best=null, bd=90;
   if(player.car && cars[player.car.i].lights) best=cars[player.car.i];
   else for(const c of cars){ if(!c.lights) continue; const d=Math.hypot(c.x-camera.position.x, c.z-camera.position.z); if(d<bd){ bd=d; best=c; } }
   headSpots.forEach((l,k)=>{
     if(!best){ l.intensity=0; return; }
-    const s=k?1:-1, p=carLocalToWorld(best, s*1.02, best.headY+.05, CAR_L/2+.3), t=carLocalToWorld(best, s*1.6, -1.2, CAR_L/2+20);
-    l.position.copy(p); l.target.position.copy(t); l.intensity=2.4;
+    const s=headSpots.length===1?0:k?1:-1, p=carLocalToWorld(best, s*1.02, best.headY+.05, CAR_L/2+.3), t=carLocalToWorld(best, s*1.6, -1.2, CAR_L/2+20);
+    l.position.copy(p); l.target.position.copy(t); l.intensity=headSpots.length===1?3:2.4;
   });
 }
 
@@ -15390,6 +15391,7 @@ function vehTick3(dt){ const W=VE.w, t=performance.now()/1000; if(!W || !W.L) re
 const _vs1=new THREE.Vector3(), _vs2=new THREE.Vector3();
 function vehSpots(){ const W=VE.w; if(!headSpots.length || !W || !W.L || !(VE.bits&1) || !W.L.faros.length || !vehDriving()) return false; const F=W.L.faros; let a=F[0], b=F[0];
   for(const g of F){ if(g.position.x<a.position.x) a=g; if(g.position.x>b.position.x) b=g; }
+  if(headSpots.length===1){ const l=headSpots[0]; a.updateMatrixWorld(true); b.updateMatrixWorld(true); l.position.copy(a.localToWorld(_vs1.set(0,.3,.5))).add(b.localToWorld(_vs2.set(0,.3,.5))).multiplyScalar(.5); a.localToWorld(_vs1.set(0,-3,22)); b.localToWorld(_vs2.set(0,-3,22)); l.target.position.copy(_vs1).add(_vs2).multiplyScalar(.5); l.target.updateMatrixWorld(); l.intensity=3; return true; }
   [a,b].forEach((g,k)=>{ const l=headSpots[k]; g.updateMatrixWorld(true); l.position.copy(g.localToWorld(_vs1.set(0,.3,.5))); l.target.position.copy(g.localToWorld(_vs2.set(0,-3,22))); l.target.updateMatrixWorld(); l.intensity=a===b?3:2.4; }); return true; }
 // ---- 3 diseños guardados ----
 const vEsc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
