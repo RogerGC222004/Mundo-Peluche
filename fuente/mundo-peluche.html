@@ -4061,7 +4061,7 @@ hold(ui('tJump'),()=>{ touchHold.up=true; jump(); },()=>{ touchHold.up=false; })
 hold(ui('tDive'),()=>{ touchHold.down=true; startDive(); },()=>{ touchHold.down=false; });
 
 function jump(){ if(player.pg && player.pg.k==='vine'){ jiVineRelease(); return; }   // v142: soltar la liana
-  if(player.pg && (player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='veh')) return;   // v144: en el tobogán y en la rueda no se salta
+  if(player.pg && (player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='veh' || player.pg.k==='vehp')) return;   // v144: en el tobogán y en la rueda no se salta
   if(player.busy) return; if(player.mg || (typeof SP!=='undefined' && SP.on)) return; if(hook.mode>=2){ bowRelease(); return; } if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see')){ stopPlay(); return; } if(player.grounded && !player.dive && !player.swim && !player.car && !player.ac && !player.pg){ player.vy=trOnMat(player.pos.x,player.pos.z,player.pos.y)?9.5:7.2; player.grounded=false; audio.jump(); } }
 
 addEventListener('keydown',e=>{
@@ -4366,7 +4366,7 @@ function sendPresence(force){
     ap: iPilot() ? (a=>[a.i, r2(a.x), r2(a.y), r2(a.z), Math.round(a.h*1000)/1000, Math.round(a.p*1000)/1000, Math.round(a.b*1000)/1000, r2(a.v), r2(a.vy), r2(a.rotor), a.onGround?1:0, r2(a.thr)])(aircraft[player.ac.i]) : null,
     as: aircraft.map(a=>[Math.round(a.x*10)/10, r2(a.y), Math.round(a.z*10)/10, Math.round(a.h*100)/100, a.t]),
     sd: aircraft.map(a=>[a.stairs, a.door, a.sdT]),
-    id: myUid, bw: bowPresence(), ...mgPresence(), ou: outfitList(wardrobe.eq), ...arenaPresence(), ...housePresence(), ...spacePresence(),
+    id: myUid, bw: bowPresence(), ...mgPresence(), ou: outfitList(wardrobe.eq), ...arenaPresence(), ...housePresence(), ...spacePresence(), ...vehPresence(),
     pl: player.pg ? [PG_KINDS.indexOf(player.pg.k), player.pg.i, r2(player.pg.v||0)] : null,
     pu: myPush.i>=0 ? [myPush.i, myPush.t] : null, cu: cucoPresence(), sh: shipPresence(), dk: deckPresence(), ...wiPresence(), pz: pierPresence(), tz: trPresence(), pt: petPresence(), bl: blPresence(), bs: blStates(), ...minePresence(),
     ai: player.ac && player.acPose ? (A=>[A.i, A.mode==='seated'||A.mode==='sitting'?A.seat:-1, r2(player.acPose.l[0]), r2(player.acPose.l[1]), r2(player.acPose.l[2]), r2(player.acPose.f||0), r2(player.acPose.sit||0), r2(player.acPose.walk?(player.acPose.mv||1):0), r2(player.acPose.armsUp||0), player.acPose.air?1:0])(player.ac) : null
@@ -4449,7 +4449,7 @@ function onPeers({peers}){
     r.facing=clampN(pr.f,-4,4,0); r.moving=clampN(pr.m,0,1,0); r.air=pr.a===true; r.swim=pr.s===true;
     const nd=clampN(pr.d,0,DIVE_FLAT,0);
     if(nd>.5 && r.diveTarget<=.5 && !r.swim) audio.flop(.5);
-    r.diveTarget=nd; r.held = pr.h==='map' ? 'map' : pr.h==='bow' ? 'bow' : pr.h==='lamp' ? 'lamp' : null; parseMine(r,pr); parseBow(r,pr); parseMg(r,pr); parseArena(r,pr); houseParse(r,pr); parseSpace(r,pr);
+    r.diveTarget=nd; r.held = pr.h==='map' ? 'map' : pr.h==='bow' ? 'bow' : pr.h==='lamp' ? 'lamp' : null; parseMine(r,pr); parseBow(r,pr); parseMg(r,pr); parseArena(r,pr); houseParse(r,pr); parseSpace(r,pr); vehParse(r,pr);
     const w=clampN(pr.w,0,Infinity,0);
     if(r.w!==undefined && w!==r.w){ r.waveUntil=clock.elapsedTime+1.6; audio.wave(); }
     r.sf=pr.sf===1;
@@ -4477,7 +4477,7 @@ function onPeers({peers}){
       if(e[1]>c.lightT){ c.lights=e[0]===1; c.lightT=e[1]; }
     });
     // aviones y helicópteros: quién pilota, dónde quedaron, escaleras y puertas, y quién va a bordo
-    { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<(PG_KINDS[pl[0]]==='bench'?BENCHES.length:PG_KINDS[pl[0]]==='cuco'?5:PG_KINDS[pl[0]]==='dwheel'?DI_WHEEL.N:PG_KINDS[pl[0]]==='dcar'?DI_CAR.N:3) ? pl : null;
+    { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<(PG_KINDS[pl[0]]==='bench'?BENCHES.length:PG_KINDS[pl[0]]==='cuco'?5:PG_KINDS[pl[0]]==='dwheel'?DI_WHEEL.N:PG_KINDS[pl[0]]==='dcar'?DI_CAR.N:PG_KINDS[pl[0]]==='vehp'?9:3) ? pl : null;
       if(pr.pu) pgCheckPush(r,pr.pu); }
     parseCuco(r,pr,cuDrv); parseShip(r,pr,cuDrv); wiParse(r,pr); parsePier(r,pr); trParse(r,pr); parsePet(r,pr); blParse(r,pr,p.peer,blSeen);   // Cuco: dónde está y si lo guía esta persona
     const ai=pr.ai;
@@ -5574,7 +5574,7 @@ function updateCarHud(){
 // Botones táctiles: a pie (saltar, tirarse…) o en coche (acelerar, frenar)
 function updateTouchMode(){
   const inCar=!!player.car, pilot=typeof iPilot==='function' && iPilot(), aboard=!!player.ac, seatedAir=aboard && player.ac.mode==='seated';
-  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && (player.pg.k==='cuco' || player.pg.k==='helm' || player.pg.k==='sled' || player.pg.k==='zip' || player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || (player.pg.k==='veh' && !(VE.w && VE.w.S.canAir))));
+  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && (player.pg.k==='cuco' || player.pg.k==='helm' || player.pg.k==='sled' || player.pg.k==='zip' || player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='vehp' || (player.pg.k==='veh' && !(VE.w && VE.w.S.canAir))));
   ui('tcar').hidden=!((inCar && player.car.kind==='seated') || pilot);
   const drv=(inCar && player.car.seat===0) || pilot;
   ui('tGas').hidden=!drv; ui('tBrake').hidden=!drv; ui('tLights').hidden=!(inCar && player.car.seat===0);
@@ -6318,8 +6318,8 @@ function trRemotePose(r,t,dt){ if(r.tz && r.tz[2]) pgPoseLimbs(r.obj,{climb:(per
 let myPush={i:-1,t:0}; player.pushUntil=0;
 function pgOccupied(k,i){ if(player.pg && player.pg.k===k && player.pg.i===i) return 'me';
   for(const r of mp.remotes.values()) if(r.pl && r.pl[0]===PG_KINDS.indexOf(k) && r.pl[1]===i) return r; return null; }
-const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled','zip','vine','icsl','dwheel','dcar','veh'];   // v182: + carrusel de dulces
-function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars' && k!=='cart') return;
+const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled','zip','vine','icsl','dwheel','dcar','veh','vehp'];   // v182: + carrusel de dulces
+function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars' && k!=='cart' && k!=='veh' && k!=='vehp') return;   // v182: cada quien tiene su vehículo
   holding=false; applyHeld(); renderHotbar();
   player.pg={k,i,t0:performance.now()/1000, from:[player.pos.x,player.pos.y,player.pos.z]};
   player.vel.set(0,0,0); player.vy=0; player.dive=null; player.diveAngle=0;
@@ -6375,7 +6375,7 @@ function updateMyPlay(dt){
   if(P.k==='cart') return mcRide(P,dt);   // v137
   if(P.k==='helm'){ P.v=0; return helmPose(); }
   if(P.k==='sled') return wiSledRide(P,dt);   // v140
-  if(P.k==='icsl') return diSlideRide(P,dt); if(P.k==='dwheel') return diWheelRide(P,dt); if(P.k==='dcar') return diCarRide(P,dt); if(P.k==='veh') return vehRide(P,dt);   // v144 · v182
+  if(P.k==='icsl') return diSlideRide(P,dt); if(P.k==='dwheel') return diWheelRide(P,dt); if(P.k==='dcar') return diCarRide(P,dt); if(P.k==='veh') return vehRide(P,dt); if(P.k==='vehp') return vehpRide(P,dt);   // v144 · v182
   if(P.k==='zip') return jiZipRide(P,dt); if(P.k==='vine') return jiVineRide(P,dt);   // v142   // v138: el barco se mueve en shipUpdate
   if(P.k==='swing'){ const S=pgState.swing[P.i];
     S.w += (-(9.8/PG_EQ.swings.L)*Math.sin(S.a) - .12*S.w)*dt;
@@ -6450,6 +6450,7 @@ function updateRemoteInPlay(r,dt,t){
   const d=r.pl, k=PG_KINDS[d[0]]; if(!k) return false;
   let v=0;
   if(k==='sled') return wiRemoteSled(r,dt,t);   // v140: en su trineo
+  if(k==='veh'||k==='vehp'){ const pose=vehRemotePose(r,k,d[1]); if(!pose) return false; placePlay(r.obj,pose); r.pos.set(...pose.pos); r.target.set(...pose.pos); pgPoseLimbs(r.obj,pose,t,dt,r.walk); r.label.position.set(0,2.42,0); r.blob.visible=false; return true; }   // v182
   if(k==='slide'||k==='bars'){ const key=d[0]+':'+d[1]; if(r.pgK!==key || Math.abs(r.pgEl-d[2])>.35) r.pgEl=d[2]; else r.pgEl+=dt; r.pgK=key; v=r.pgEl; }
   else if(k==='cart'){ r.pgK=null; if(r.mcS===undefined || Math.abs(r.mcS-d[2])>4) r.mcS=d[2]; else r.mcS+=dt*4.2+(d[2]-r.mcS)*Math.min(1,dt*3); v=r.mcS; }
   else if(k==='icsl'){ r.pgK=null; if(r.iceS===undefined || Math.abs(r.iceS-d[2])>.08) r.iceS=d[2]; else r.iceS+=(d[2]-r.iceS)*Math.min(1,dt*6); v=r.iceS; }   // v144
@@ -15059,36 +15060,44 @@ function vehStats(parts){ const S={mass:0, wheel:0, float:0, lift:0, balloon:0, 
   S.vLand=Math.max(6,Math.min(26,6+22*S.land/(S.mass*5))); S.vWater=Math.max(5,Math.min(18,5+16*S.water/(S.mass*5))); S.vAir=Math.max(16,Math.min(60,18+50*S.air/(S.mass*6)));
   return S; }
 // ---- guardar ----
-const VE={ed:false, parts:[], undo:[], redo:[], cat:'base', sel:'b_tabla', tool:'put', rot:0, col:null, yaw:.8, pitch:.42, dist:9, w:null, built:false, T:null, ret:null, ghost:null};
-function vehLoad(){ try{ const o=JSON.parse(localStorage.getItem('mundoPelucheVehiculo')||'null'); if(o && Array.isArray(o.p)) VE.parts=o.p.filter(q=>Array.isArray(q) && VP_BY[q[0]] && q.slice(1,5).every(Number.isInteger)).slice(0,VMAX); }catch(e){} }
-function vehSave(){ try{ localStorage.setItem('mundoPelucheVehiculo', JSON.stringify({v:1, p:VE.parts})); }catch(e){} }
+const VE={ed:false, parts:[], inv:{}, TS:[], str:'', hash:'', sendT:0, park:false, undo:[], redo:[], cat:'base', sel:'b_tabla', tool:'put', rot:0, col:null, yaw:.8, pitch:.42, dist:9, w:null, built:false, T:null, ret:null, ghost:null};
+function vehLoad(){ try{ const o=JSON.parse(localStorage.getItem('mundoPelucheVehiculo')||'null'); if(o && Array.isArray(o.p)) VE.parts=o.p.filter(q=>Array.isArray(q) && VP_BY[q[0]] && q.slice(1,5).every(Number.isInteger)).slice(0,VMAX);
+  if(o && o.inv && typeof o.inv==='object') for(const k in o.inv) if(VP_BY[k]) VE.inv[k]=Math.max(0,Math.min(999,o.inv[k]|0)); VE.park=!!(o&&o.pk); }catch(e){} }
+function vehSave(){ try{ localStorage.setItem('mundoPelucheVehiculo', JSON.stringify({v:2, p:VE.parts, inv:VE.inv, pk:VE.park?1:0})); }catch(e){} }
 vehLoad();
 // ---- el taller en la playa (junto al muelle de Tortu) ----
-function vehBuildTaller(){ if(VE.built) return; VE.built=true; const x=566, z=-733, fx=.72, fz=-.69, ry=Math.atan2(fx,fz), y=groundMin(x,z,5)-.05, G=new THREE.Group(); G.position.set(x,y,z); G.rotation.y=ry; scene.add(G);
-  const wall=wiMat('#5ec8ff','rgba(0,0,40,.15)'), wood=wiMat('#c89a5e','rgba(60,30,5,.2)'), roof=wiMat('#ff9a3c','rgba(80,30,0,.15)'), dark=wiMat('#3a3a44');
-  wiAdd(G,WI_BOXG,wood,0,.08,0,9,.16,8); wiAdd(G,WI_BOXG,wall,-4.4,2,0,.25,4,8); wiAdd(G,WI_BOXG,wall,4.4,2,0,.25,4,8); wiAdd(G,WI_BOXG,wall,0,2,-3.9,9,4,.25);
-  wiAdd(G,WI_BOXG,roof,0,4.15,0,9.6,.3,8.6); for(let q=0;q<5;q++) wiAdd(G,WI_BOXG,q%2?wiMat('#ffffff'):roof,-3.6+q*1.8,4.5,3.9,1.8,.5,.3);
-  for(const e of [-1,1]) for(let q=0;q<3;q++) wiAdd(G,cylG,dark,e*3.2,.25+q*.4,2.6,.42,.18,.42);   // llantas apiladas
-  wiAdd(G,WI_BOXG,wood,0,1.1,-3.5,4,.12,.6); wiAdd(G,WI_BOXG,wood,0,2.1,-3.5,4,.12,.6);   // repisas
-  for(let q=0;q<5;q++) wiAdd(G,WI_BOXG,wiMat(VCOLS[q*2]),-1.6+q*.8,1.38,-3.5,.4,.42,.4);
-  jiSign(G,0,4.05,3.4,0,'🔧 Taller de vehículos','#2f6fe0',4.6,'#fff3f8');
-  VE.T={x:x+fx*4.2, z:z+fz*4.2, fx, fz, ry, door:[x+fx*1.5, z+fz*1.5]}; }
-function vehSpawnSpot(S){ const T=VE.T; let land=[T.x+T.fx*3, T.z+T.fz*3];
-  if(!S.canLand && S.canWater){ for(let d=6;d<160;d+=2){ const x=T.x+T.fx*d, z=T.z+T.fz*d, wl=swimLevel(x,z); if(wl!==null && terrainH(x,z)<wl-1.6) return [x,z,'water']; } }
+function vehShed(x,z,fx,fz,big,water){ const K=big?1.6:1, ry=Math.atan2(fx,fz), y=groundMin(x,z,5*K)-.05, G=new THREE.Group(); G.position.set(x,y,z); G.rotation.y=ry; scene.add(G);
+  const wall=wiMat(big?'#ff8fc8':'#5ec8ff','rgba(0,0,40,.15)'), wood=wiMat('#c89a5e','rgba(60,30,5,.2)'), roof=wiMat(big?'#5ec8ff':'#ff9a3c','rgba(80,30,0,.15)'), dark=wiMat('#3a3a44'), W=9*K, D=8*K, H=4*(big?1.25:1);
+  wiAdd(G,WI_BOXG,wood,0,.08,0,W,.16,D); wiAdd(G,WI_BOXG,wall,-W/2+.1,H/2,0,.25,H,D); wiAdd(G,WI_BOXG,wall,W/2-.1,H/2,0,.25,H,D); wiAdd(G,WI_BOXG,wall,0,H/2,-D/2+.1,W,H,.25);
+  if(big) for(const e of [-1,1]) wiAdd(G,WI_BOXG,wall,e*W/6,H/2,-D/2+2.2,.2,H,4);   // divisiones: tres lugares
+  wiAdd(G,WI_BOXG,roof,0,H+.15,0,W+.6,.3,D+.6); const nst=big?7:5; for(let q=0;q<nst;q++) wiAdd(G,WI_BOXG,q%2?wiMat('#ffffff'):roof,-W/2+.9+q*(W-1.8)/(nst-1),H+.5,D/2-.1,(W-1.8)/(nst-1),.5,.3);
+  for(const e of [-1,1]) for(let q=0;q<3;q++) wiAdd(G,cylG,dark,e*(W/2-1.3),.25+q*.4,D/2-1.4,.42,.18,.42);   // llantas apiladas
+  wiAdd(G,WI_BOXG,wood,0,1.1,-D/2+.5,4,.12,.6); wiAdd(G,WI_BOXG,wood,0,2.1,-D/2+.5,4,.12,.6);
+  for(let q=0;q<5;q++) wiAdd(G,WI_BOXG,wiMat(VCOLS[q*2]),-1.6+q*.8,1.38,-D/2+.5,.4,.42,.4);
+  jiSign(G,0,D/2+.05,H-.6,0,big?'🔧 Gran Taller de vehículos 🏁':'🔧 Taller de vehículos','#2f6fe0',big?6.4:4.6,'#fff3f8');
+  return {x:x+fx*(D/2+.2), z:z+fz*(D/2+.2), fx, fz, ry, big, water, door:[x+fx*D*.19, z+fz*D*.19]}; }
+function vehBuildTaller(){ if(VE.built) return; VE.built=true;
+  VE.T=vehShed(566,-733,.72,-.69,false,true); VE.TS.push(VE.T);   // la playa (aquí salen las lanchas)
+  const notRoad=(x,z)=>trackNearest(x,z).d<TRACK_W/2+9 || inPark(x,z);
+  { const big=(x,z)=>{ for(const [dx,dz] of [[0,0],[8,8],[-8,8],[8,-8],[-8,-8],[8,0],[-8,0],[0,8],[0,-8]]) if(notRoad(x+dx,z+dz)) return true; return false; }; const S=vehPickSpot(PARK.x,PARK.z,[24,27,30,34,40],big); if(S) VE.TS.push(vehShed(S.x,S.z,S.fx,S.fz,true,false)); }   // la pista: el grande
+  for(const b of BARRIOS){ const S=vehPickSpot(b.x,b.z,[60,64,68],(x,z)=>notRoad(x,z) || LOTS.some(L=>Math.abs(lotL(L,x,z)[0])<HZ.H+6 && Math.abs(lotL(L,x,z)[1])<HZ.H+6)); if(S) VE.TS.push(vehShed(S.x,S.z,S.fx,S.fz,false,false)); } }
+function vehSpawnSpot(S,T){ T=T||VE.T; let land=[T.x+T.fx*3, T.z+T.fz*3];
+  if(!S.canLand && S.canWater && T.water){ for(let d=6;d<160;d+=2){ const x=T.x+T.fx*d, z=T.z+T.fz*d, wl=swimLevel(x,z); if(wl!==null && terrainH(x,z)<wl-1.6) return [x,z,'water']; } }
   return [land[0],land[1],'land']; }
 // ---- el vehículo en el mundo ----
-function vehMake(){ if(VE.w){ scene.remove(VE.w.g); VE.w=null; } if(!VE.parts.length) return null; const S=vehStats(VE.parts); if(!S.seat) return null;
-  const inner=vehBuild(VE.parts), g=new THREE.Group(); g.add(inner); g.userData.noBatch=true; inner.traverse(o=>{ if(o.isMesh) o.userData.noBatch=true; });
-  let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9,y1=0; for(const q of VE.parts){ const p=VP_BY[q[0]], s=vRot(p,q[4]|0); x0=Math.min(x0,q[1]); x1=Math.max(x1,q[1]+s[0]); z0=Math.min(z0,q[3]); z1=Math.max(z1,q[3]+s[2]); y1=Math.max(y1,q[2]+s[1]); }
+function vehMake(){ if(VE.w){ scene.remove(VE.w.g); VE.w=null; } if(!VE.parts.length) return null; const W=vehMakeW(VE.parts); if(!W) return null; VE.w=W; VE.str=vehEnc(VE.parts); VE.hash=vehHash(VE.str); VE.sendT=performance.now(); return W; }
+function vehMakeW(parts){ const S=vehStats(parts); if(!S.seat) return null;
+  const inner=vehBuild(parts), g=new THREE.Group(); g.add(inner); g.userData.noBatch=true; inner.traverse(o=>{ if(o.isMesh) o.userData.noBatch=true; });
+  let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9,y1=0; for(const q of parts){ const p=VP_BY[q[0]], s=vRot(p,q[4]|0); x0=Math.min(x0,q[1]); x1=Math.max(x1,q[1]+s[0]); z0=Math.min(z0,q[3]); z1=Math.max(z1,q[3]+s[2]); y1=Math.max(y1,q[2]+s[1]); }
   const cx=(x0+x1)/2*VC, cz=(z0+z1)/2*VC; inner.position.set(-cx,0,-cz); S.seats=S.seats.map(([a,b,c])=>[a-cx,b,c-cz]);
   scene.add(g); const W={g, inner, S, x:0, y:0, z:0, h:0, v:0, vy:0, mode:'land', rad:Math.max(.9,Math.min(3.2,Math.max(x1-x0,z1-z0)*VC*.42)), top:y1*VC, tilt:0, pitch:0, prop:[]};
-  inner.traverse(o=>{ if(o.parent && o.parent.userData.pi!==undefined){ const p=VP_BY[VE.parts[o.parent.userData.pi][0]]; if(p && (p.d.air && p.id!=='m_cohete' && p.id!=='p_turbina') && o.geometry===VG.b) W.prop.push(o); } });
-  VE.w=W; return W; }
-function vehPutAt(W,x,z,mode){ W.x=x; W.z=z; W.h=Math.atan2(VE.T.fx,VE.T.fz); W.v=0; W.vy=0; W.mode=mode; const wl=swimLevel(x,z); W.y=mode==='water'&&wl!==null?wl-.3:groundAt(x,z,60); vehPose(W); }
+  inner.traverse(o=>{ if(o.parent && o.parent.userData.pi!==undefined){ const p=VP_BY[parts[o.parent.userData.pi][0]]; if(p && (p.d.air && p.id!=='m_cohete' && p.id!=='p_turbina') && o.geometry===VG.b) W.prop.push(o); } });
+  return W; }
+function vehPutAt(W,x,z,mode,h){ W.x=x; W.z=z; W.h=h===undefined?Math.atan2(VE.T.fx,VE.T.fz):h; W.v=0; W.vy=0; W.mode=mode; const wl=swimLevel(x,z); W.y=mode==='water'&&wl!==null?wl-.3:groundAt(x,z,60); vehPose(W); }
 function vehPose(W){ W.g.position.set(W.x,W.y,W.z); W.g.rotation.set(0,W.h,0); W.g.rotateX(-W.pitch); W.g.rotateZ(W.tilt); }
 function vehSeatWorld(W,i){ const s=W.S.seats[i]||W.S.seats[0]; const v=new THREE.Vector3(s[0],s[1],s[2]).applyMatrix4(W.g.matrixWorld); return v; }
-function vehSpawn(){ const S=vehStats(VE.parts); if(!S.seat){ flashNote('Tu vehículo necesita al menos un asiento'); return; } if(!S.canLand && !S.canWater && !S.canAir){ flashNote('Así todavía no anda: revisa lo que le falta en el taller'); }
-  const W=vehMake(); if(!W) return; const [x,z,m]=vehSpawnSpot(S); vehPutAt(W,x,z,m); W.g.updateMatrixWorld(true); flashNote('¡Tu vehículo está listo! Acércate y súbete'); try{ audio.door(true); }catch(e){} }
+function vehSpawn(T){ T=T||VE.T; const S=vehStats(VE.parts); if(!S.canLand && S.canWater && !T.water){ flashNote('Las lanchas salen del taller de la playa (junto al muelle de Tortu)'); return; } if(!S.seat){ flashNote('Tu vehículo necesita al menos un asiento'); return; } if(!S.canLand && !S.canWater && !S.canAir){ flashNote('Así todavía no anda: revisa lo que le falta en el taller'); }
+  const W=vehMake(); if(!W) return; const [x,z,m]=vehSpawnSpot(S,T); vehPutAt(W,x,z,m,Math.atan2(T.fx,T.fz)); W.g.updateMatrixWorld(true); VE.park=false; vehSave(); try{ sendPresence(true); }catch(e){} flashNote('¡Tu vehículo está listo! Acércate y súbete'); try{ audio.door(true); }catch(e){} }
 // manejar: es un juego más del parque ('veh'), así lo ven igual los demás
 function vehEnter(){ if(!VE.w) return; startPlay('veh',0); const P=player.pg; P.t0=performance.now()/1000; VE.drive=true; blButtons(VE.w.S.canAir); updateTouchMode();
   const S=VE.w.S, can=[S.canLand?'🚗 tierra':'', S.canWater?'🚤 agua':'', S.canAir?'✈️ aire':''].filter(Boolean).join(' · ')||'¡nada todavía!';
@@ -15130,11 +15139,19 @@ function vehRide(P,dt){ const W=VE.w; if(!W){ setTimeout(()=>{ if(player.pg===P)
   P.v=0; const st=vehSeatWorld(W,0); return {pos:[st.x,st.y-.415,st.z], yaw:W.h, sit:1, grip:1}; }
 function vehSeatPose(i){ const W=VE.w; if(!W) return null; const st=vehSeatWorld(W,i); return {pos:[st.x,st.y-.415,st.z], yaw:W.h, sit:1, grip:1}; }
 function vehActions(){ if(!VE.built || player.car||player.ac||player.mg||player.balloon||player.rk||SP.on) return null; const p=player.pos;
-  if(player.pg && player.pg.k==='veh'){ const W=VE.w, flying=W && W.mode==='air' && W.y>groundAt(W.x,W.z,W.y+1)+1.5; return [flying?{label:'Aterriza para bajar', disabled:true, run:()=>{}}:Math.abs(W.v)>3?{label:'Frena para bajar', disabled:true, run:()=>{}}:{label:'Bajar', run:vehExit}, null]; }
+  if(player.pg && player.pg.k==='veh'){ const W=VE.w, flying=W && W.mode==='air' && W.y>groundAt(W.x,W.z,W.y+1)+1.5;
+    if(flying) return [{label:'Aterriza para bajar', disabled:true, run:()=>{}}, null]; if(Math.abs(W.v)>3) return [{label:'Frena para bajar', disabled:true, run:()=>{}}, null];
+    const L=HS&&HS.mine!==null?LOTS[HS.mine]:null, ps=L&&vehLotSpot(L), home=ps && Math.hypot(W.x-ps.x,W.z-ps.z)<30 && W.mode==='land';
+    return [{label:'Bajar', run:vehExit}, home?{label:'Estacionar en mi casita 🏠', run:vehParkHome}:null]; }
+  if(player.pg && player.pg.k==='vehp'){ const W=(VR.map.get(player.pg.owner)||{}).W, flying=W && W.mode==='air' && W.y>groundAt(W.x,W.z,W.y+1)+1.5; return [flying?{label:'Aterriza para bajar', disabled:true, run:()=>{}}:{label:'Bajar', run:vehpExit}, null]; }
   if(player.pg || player.busy || player.dive) return null;
   if(VE.w && Math.hypot(p.x-VE.w.x,p.z-VE.w.z)<VE.w.rad+2.2 && Math.abs(p.y-VE.w.y)<3) return [{label:'Subir a mi vehículo', run:vehEnter}, null];
-  if(VE.T && Math.hypot(p.x-VE.T.door[0],p.z-VE.T.door[1])<4.2 && !player.swim) return [{label:'Entrar al taller 🔧', run:vehOpen}, VE.parts.length?{label:'Sacar mi vehículo', run:vehSpawn}:null];
+  for(const [u,E] of VR.map){ const W=E.W; if(Math.hypot(p.x-W.x,p.z-W.z)>W.rad+2.2 || Math.abs(p.y-W.y)>3) continue; const n=W.S.seats.length, tk=vehSeatsTaken(u); let seat=-1; for(let k=1;k<n;k++) if(!tk.has(k)){ seat=k; break; }
+    return [seat<0?{label:n>1?'El vehículo de '+E.name+' va lleno':'El vehículo de '+E.name+' es de un asiento', disabled:true, run:()=>{}}:{label:'Subir con '+E.name, run:()=>vehBoard(u,seat)}, null]; }
+  for(const T of VE.TS) if(Math.hypot(p.x-T.door[0],p.z-T.door[1])<(T.big?5.5:4.2) && !player.swim) return [{label:'Entrar al taller 🔧', run:vehOpen}, VE.parts.length?{label:'Sacar mi vehículo', run:()=>vehSpawn(T)}:null];
   return null; }
+function vehParkHome(){ const W=VE.w, L=HS.mine!==null?LOTS[HS.mine]:null; if(!W || !L) return; const ps=vehLotSpot(L); vehExit(); vehPutAt(W,ps.x,ps.z,'land',ps.h); W.g.updateMatrixWorld(true); VE.park=true; vehSave();
+  flashNote('¡Tu vehículo quedó estacionado en tu casita! 🏠'); try{ sendPresence(true); }catch(e){} }
 // ---- el taller (pantalla para armar) ----
 const VS={scene:new THREE.Scene(), cam:new THREE.PerspectiveCamera(45,1,.1,200), ray:new THREE.Raycaster(), design:null, floor:null};
 { const S=VS.scene; S.background=new THREE.Color('#dff1fb'); S.add(new THREE.HemisphereLight('#ffffff','#b9c8d6',.75)); const d=new THREE.DirectionalLight('#ffffff',.8); d.position.set(5,12,7); S.add(d);
@@ -15152,19 +15169,22 @@ function vehHit(ev){ const st=ui('vehStage').getBoundingClientRect(), m=new THRE
   return {p:h.point, n, pi}; }
 function vehTarget(h,p,r){ const s=vRot(p,r), a=[Math.floor((h.p.x+h.n.x*.01)/VC), Math.floor((h.p.y+h.n.y*.01)/VC), Math.floor((h.p.z+h.n.z*.01)/VC)], n=[h.n.x,h.n.y,h.n.z], out=[];
   for(let k=0;k<3;k++) out.push(n[k]>0?a[k]:n[k]<0?a[k]-(s[k]-1):a[k]-Math.floor((s[k]-1)/2)); if(h.pi===null) out[1]=0; return out; }
-function vehDo(act,redo){ const C=act.cost||0;
+function vehInvD(d,k){ if(d) for(const id in d){ VE.inv[id]=Math.max(0,(VE.inv[id]|0)+d[id]*k); if(!VE.inv[id]) delete VE.inv[id]; } }
+function vehDo(act,redo){ const C=act.cost||0; vehInvD(act.inv,1); if(act.t==='set') VE.inv={...act.invTo};
   if(act.t==='add'){ VE.parts.push(act.q); } else if(act.t==='del'){ VE.parts.splice(act.i,1); } else if(act.t==='paint'){ VE.parts[act.i][5]=act.to; } else if(act.t==='set'){ VE.parts=act.to.map(q=>q.slice()); }
   coins-=C; saveCoins(); renderCoins(); vehSave(); vehRebuild(); }
-function vehUndo1(act){ const C=act.cost||0;
+function vehUndo1(act){ const C=act.cost||0; vehInvD(act.inv,-1); if(act.t==='set') VE.inv={...act.invFrom};
   if(act.t==='add'){ VE.parts.pop(); } else if(act.t==='del'){ VE.parts.splice(act.i,0,act.q); } else if(act.t==='paint'){ VE.parts[act.i][5]=act.from; } else if(act.t==='set'){ VE.parts=act.from.map(q=>q.slice()); }
   coins+=C; saveCoins(); renderCoins(); vehSave(); vehRebuild(); }
-function vehAct(act){ if((act.cost||0)>coins){ flashNote('Te faltan '+(act.cost-coins)+' monedas'); return false; } vehDo(act); VE.undo.push(act); if(VE.undo.length>80) VE.undo.shift(); VE.redo.length=0; vehUI(); return true; }
+function vehAct(act){ if(act.inv) for(const id in act.inv) if(act.inv[id]<0 && (VE.inv[id]|0)<-act.inv[id]){ flashNote('Ya no tienes esa pieza'); return false; }
+  if((act.cost||0)>coins){ flashNote('Te faltan '+(act.cost-coins)+' monedas'); return false; } vehDo(act); VE.undo.push(act); if(VE.undo.length>80) VE.undo.shift(); VE.redo.length=0; vehUI(); return true; }
 function vehTap(ev){ const h=vehHit(ev); if(!h) return;
   if(VE.tool==='put'){ if(VE.parts.length>=VMAX){ flashNote('Ya tiene muchas piezas ('+VMAX+')'); return; } const p=VP_BY[VE.sel], [cx,cy,cz]=vehTarget(h,p,VE.rot);
     if(!vehFits(p,cx,cy,cz,VE.rot)){ flashNote('Ahí no cabe: prueba en otro lado o gírala'); return; }
-    if(vehAct({t:'add', q:[p.id,cx,cy,cz,VE.rot,VE.col||p.col], cost:p.price})) try{ audio.wave(); }catch(e){} }
+    if(!(VE.inv[p.id]>0)){ VE.needBuy=true; vehUI(); flashNote('No tienes '+p.n+': cómprala o consíguela con un anuncio 📺'); return; }
+    if(vehAct({t:'add', q:[p.id,cx,cy,cz,VE.rot,VE.col||p.col], inv:{[p.id]:-1}})) try{ audio.wave(); }catch(e){} }
   else if(h.pi!==null){ const q=VE.parts[h.pi];
-    if(VE.tool==='del'){ vehAct({t:'del', i:h.pi, q:q.slice(), cost:-VP_BY[q[0]].price}); try{ audio.getup(); }catch(e){} }
+    if(VE.tool==='del'){ vehAct({t:'del', i:h.pi, q:q.slice(), inv:{[q[0]]:1}}); try{ audio.getup(); }catch(e){} }
     else if(VE.tool==='paint'){ const to=VE.col||VP_BY[q[0]].col; if(q[5]!==to) vehAct({t:'paint', i:h.pi, from:q[5], to, cost:0}); } } }
 function vehHover(ev){ if(VE.ghost){ VS.scene.remove(VE.ghost); VE.ghost=null; } if(VE.tool!=='put') return; const h=vehHit(ev); if(!h) return; const p=VP_BY[VE.sel], [cx,cy,cz]=vehTarget(h,p,VE.rot), ok=vehFits(p,cx,cy,cz,VE.rot);
   const g=vehPartMesh(p,VE.col||p.col); g.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.5; if(!ok) o.material.color.set('#ff4d4d'); } }); vehPlace(g,p,cx,cy,cz,VE.rot); VS.scene.add(g); VE.ghost=g; }
@@ -15173,10 +15193,12 @@ function vehInfo(){ const S=vehStats(VE.parts), L=[];
   const el=ui('vehInfo'); if(el) el.innerHTML=L.map(x=>'<div>'+x+'</div>').join('')+'<div class="vh-val">Piezas: '+S.n+' · Vale: '+S.price+' 🪙</div>'; }
 function vehUI(){ if(!ui('vehOv')) return; ui('vehCoins').textContent=coins.toLocaleString('es-MX'); ui('vehUndo').disabled=!VE.undo.length; ui('vehRedo').disabled=!VE.redo.length;
   ui('vehCats').innerHTML=VCATS.map(([id,n,ic])=>'<button class="vh-cat'+(VE.cat===id?' on':'')+'" data-c="'+id+'">'+ic+' '+n+'</button>').join('');
-  ui('vehParts').innerHTML=VPARTS.filter(p=>p.cat===VE.cat).map(p=>'<button class="vh-part'+(VE.sel===p.id&&VE.tool==='put'?' on':'')+'" data-p="'+p.id+'"><span class="vh-sw" style="background:'+(VE.col||p.col)+'"></span>'+p.n+'<small>'+p.price+' 🪙</small></button>').join('');
+  ui('vehParts').innerHTML=VPARTS.filter(p=>p.cat===VE.cat).map(p=>'<button class="vh-part'+(VE.sel===p.id&&VE.tool==='put'?' on':'')+'" data-p="'+p.id+'"><span class="vh-sw" style="background:'+(VE.col||p.col)+'"></span>'+p.n+'<small>'+((VE.inv[p.id]|0)>0?'Tienes '+VE.inv[p.id]:p.price+' 🪙')+'</small></button>').join('');
+  { const p=VP_BY[VE.sel], n=vehPack(p), have=VE.inv[p.id]|0, B=ui('vehBuy'); B.classList.toggle('need',!!VE.needBuy && !have); VE.needBuy=false;
+    B.innerHTML='<b>'+p.n+':</b> tienes '+have+'<button class="vh-btn" data-buy="'+p.id+'">+'+n+' · '+(p.price*n)+' 🪙</button><button class="vh-btn ad" data-ad="'+p.id+'">📺 +'+n+' gratis</button>'; }
   ui('vehTools').innerHTML=[['put','🧱 Poner'],['paint','🎨 Pintar'],['del','🗑️ Quitar']].map(([t,n])=>'<button class="vh-tool'+(VE.tool===t?' on':'')+'" data-t="'+t+'">'+n+'</button>').join('')+'<button class="vh-tool" data-t="rot">↻ Girar</button>';
   ui('vehColors').innerHTML='<button class="vh-col'+(VE.col===null?' on':'')+'" data-k="" title="Color de la pieza">🎲</button>'+VCOLS.map(c=>'<button class="vh-col'+(VE.col===c?' on':'')+'" data-k="'+c+'" style="background:'+c+'"></button>').join('');
-  ui('vehTempl').innerHTML=VTEMPL.map(([n],i)=>'<button class="vh-tpl" data-i="'+i+'">'+n+'</button>').join(''); vehInfo(); }
+  ui('vehTempl').innerHTML=VTEMPL.map(([n,to],i)=>{ const c=vehPlanSet(to).cost; return '<button class="vh-tpl" data-i="'+i+'">'+n+(c?' · '+c+' 🪙':' ✓')+'</button>'; }).join(''); vehInfo(); }
 function vehOpen(){ vehInit(); VE.ret={pos:player.pos.clone(), f:player.facing}; VE.ed=true; VE.dist=innerWidth<innerHeight?13:9; VE.undo.length=0; VE.redo.length=0; show('menu'); menuEl.hidden=true; ui('vehOv').hidden=false; vehRebuild(); vehUI(); try{ audio.door(true); }catch(e){}
   if(!VE.parts.length) flashNote('Escoge una base y tócala en el piso para empezar (o usa una plantilla)'); }
 function vehClose(){ if(!VE.ed) return; VE.ed=false; ui('vehOv').hidden=true; if(VE.ghost){ VS.scene.remove(VE.ghost); VE.ghost=null; } show('play'); if(VE.ret){ player.pos.copy(VE.ret.pos); player.facing=VE.ret.f; player.vel.set(0,0,0); }
@@ -15211,6 +15233,13 @@ function vehInit(){ if(ui('vehOv')) return;
 .vh-tool.on{background:#5ec8ff;color:#fff;}
 .vh-col{width:24px;height:24px;border-radius:50%;border:2px solid rgba(0,0,0,.15);padding:0;font-size:13px;background:#fff;}
 .vh-col.on{outline:3px solid #3b2a1a;}
+.vh-btn.ad{background:#ffe3f0;color:#7a2b4b;}
+#vehBuy{font-size:12.5px;color:#3b2a1a;background:#fff;border-radius:12px;padding:5px 7px;}
+#vehBuy.need{outline:3px solid #ff9a3c;}
+#vehBuy .vh-btn{font-size:12px;padding:5px 8px;}
+#vehParts{min-height:112px;}
+#vehSide{overflow-y:auto;}
+@media (orientation:portrait){ #vehBuy{flex-wrap:nowrap;font-size:11.5px;padding:4px 6px;} #vehBuy .vh-btn{font-size:11px;padding:4px 6px;white-space:nowrap;} #vehSide{height:60vh;} }
 .vh-tpl{border:none;border-radius:11px;padding:5px 8px;font-weight:800;font-size:12px;background:#ffe3f0;color:#7a2b4b;}
 #vehInfo{font-size:12.5px;font-weight:700;color:#3b2a1a;line-height:1.35;background:#fff;border-radius:12px;padding:6px 8px;}
 #vehInfo .vh-val{color:#8a6a3a;margin-top:2px;}
@@ -15219,16 +15248,17 @@ function vehInit(){ if(ui('vehOv')) return;
   document.head.appendChild(st);
   const el=document.createElement('div'); el.id='vehOv'; el.hidden=true;
   el.innerHTML='<div id="vehStage"></div><div id="vehSide"><div class="vh-top"><h2>🔧 Taller</h2><span class="sp"></span><span class="vh-btn">🪙 <b id="vehCoins">0</b></span><button class="vh-btn" id="vehUndo" title="Deshacer">↶</button><button class="vh-btn" id="vehRedo" title="Rehacer">↷</button><button class="vh-btn ok" id="vehClose">✓ Listo</button></div>'
-    +'<div id="vehCats"></div><div id="vehParts"></div><div class="vh-row" id="vehTools"></div><div class="vh-row" id="vehColors"></div><div id="vehInfo"></div><div class="vh-row"><b style="font-size:12px">Plantillas:</b><span id="vehTempl" class="vh-row"></span><button class="vh-btn" id="vehClear" style="font-size:12px;padding:5px 8px">🧹 Vaciar</button></div></div>';
+    +'<div id="vehCats"></div><div id="vehParts"></div><div class="vh-row" id="vehBuy"></div><div class="vh-row" id="vehTools"></div><div class="vh-row" id="vehColors"></div><div id="vehInfo"></div><div class="vh-row"><b style="font-size:12px">Plantillas:</b><span id="vehTempl" class="vh-row"></span><button class="vh-btn" id="vehClear" style="font-size:12px;padding:5px 8px">🧹 Vaciar</button></div></div>';
   document.body.appendChild(el);
   el.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; e.stopPropagation();
     if(b.id==='vehClose') return vehClose(); if(b.id==='vehUndo'){ const a=VE.undo.pop(); if(a){ vehUndo1(a); VE.redo.push(a); vehUI(); } return; } if(b.id==='vehRedo'){ const a=VE.redo.pop(); if(a){ if((a.cost||0)>coins){ VE.redo.push(a); flashNote('Te faltan '+(a.cost-coins)+' monedas'); return; } vehDo(a); VE.undo.push(a); vehUI(); } return; }
-    if(b.id==='vehClear'){ if(!VE.parts.length) return; const val=vehStats(VE.parts).price; vehAct({t:'set', from:VE.parts.map(q=>q.slice()), to:[], cost:-val}); return; }
+    if(b.id==='vehClear'){ if(!VE.parts.length) return; const pl=vehPlanSet([]); vehAct({t:'set', from:VE.parts.map(q=>q.slice()), to:[], invFrom:{...VE.inv}, invTo:pl.inv, cost:0}); return; }
+    if(b.dataset.buy){ vehBuy(b.dataset.buy,false); return; } if(b.dataset.ad){ vehBuy(b.dataset.ad,true); return; }
     if(b.dataset.c){ VE.cat=b.dataset.c; const f=VPARTS.find(p=>p.cat===VE.cat); if(f){ VE.sel=f.id; VE.tool='put'; } vehUI(); return; }
     if(b.dataset.p){ VE.sel=b.dataset.p; VE.tool='put'; vehUI(); return; }
     if(b.dataset.t){ if(b.dataset.t==='rot'){ VE.rot=(VE.rot+1)%4; flashNote('Giro: '+(VE.rot*90)+'°'); } else VE.tool=b.dataset.t; vehUI(); return; }
     if(b.dataset.k!==undefined){ VE.col=b.dataset.k||null; vehUI(); return; }
-    if(b.dataset.i!==undefined){ const T=VTEMPL[+b.dataset.i]; const to=T[1].map(q=>q.slice()), cost=vehStats(to).price-vehStats(VE.parts).price; vehAct({t:'set', from:VE.parts.map(q=>q.slice()), to, cost}); return; } });
+    if(b.dataset.i!==undefined){ const T=VTEMPL[+b.dataset.i]; const to=T[1].map(q=>q.slice()), pl=vehPlanSet(to); vehAct({t:'set', from:VE.parts.map(q=>q.slice()), to, invFrom:{...VE.inv}, invTo:pl.inv, cost:pl.cost}); return; } });
   const stg=ui('vehStage'), pts=new Map(); let d0=0, moved=false, sx=0, sy=0, pinch0=0, dist0=0;
   stg.addEventListener('pointerdown',e=>{ stg.setPointerCapture(e.pointerId); pts.set(e.pointerId,[e.clientX,e.clientY]); if(pts.size===1){ moved=false; sx=e.clientX; sy=e.clientY; } else if(pts.size===2){ const [a,b]=[...pts.values()]; pinch0=Math.hypot(a[0]-b[0],a[1]-b[1]); dist0=VE.dist; moved=true; } });
   stg.addEventListener('pointermove',e=>{ const p=pts.get(e.pointerId); if(!p){ if(e.pointerType==='mouse') vehHover(e); return; }
@@ -15240,7 +15270,57 @@ function vehInit(){ if(ui('vehOv')) return;
   stg.addEventListener('wheel',e=>{ e.preventDefault(); VE.dist=Math.max(3,Math.min(22,VE.dist*(e.deltaY>0?1.1:.9))); },{passive:false});
   addEventListener('keydown',e=>{ if(!VE.ed) return; if(e.code==='Escape'){ e.preventDefault(); e.stopImmediatePropagation(); vehClose(); } if(e.code==='KeyR'){ VE.rot=(VE.rot+1)%4; vehUI(); } if((e.ctrlKey||e.metaKey) && e.code==='KeyZ'){ const a=VE.undo.pop(); if(a){ vehUndo1(a); VE.redo.push(a); vehUI(); } } },{capture:true}); }
 function vehTick(dt){ if(VE.drive && !(player.pg && player.pg.k==='veh')){ VE.drive=false; try{ blButtons(false); }catch(e){} }
+  try{ vehRemotes(dt); }catch(e){}
+  if(VE.w && mp.room && performance.now()-VE.sendT>4000){ VE.sendT=performance.now(); try{ sendPresence(true); }catch(e){} }
+  if(VE.park && !VE.w && VE.built && HS && HS.mine!==null && VE.parts.length && performance.now()-(VE.parkT||0)>1500){ VE.parkT=performance.now(); const L=LOTS[HS.mine], ps=vehLotSpot(L); if(Math.hypot(player.pos.x-ps.x,player.pos.z-ps.z)<300){ const W=vehMake(); if(W){ vehPutAt(W,ps.x,ps.z,'land',ps.h); W.g.updateMatrixWorld(true); } } }
   if(!VE.built && state==='play'){ try{ vehBuildTaller(); }catch(e){ VE.built=true; console.warn('taller',e); } } }
+
+// ---------------- v182: creador de vehículos (parte 2) — inventario de piezas, talleres en los vecindarios y en la pista, estacionarlo en tu casita y verlo con los demás ----------------
+const vehPack=p=>p.price<=10?4:p.price<=25?2:1;
+function vehBuy(id,ad){ const p=VP_BY[id]; if(!p) return; const n=vehPack(p), cost=p.price*n;
+  const give=()=>{ VE.inv[id]=(VE.inv[id]|0)+n; vehSave(); try{ coinSound(Math.min(5,n)); }catch(e){} flashNote('+'+n+' '+p.n+(n>1?' (paquete)':'')); vehUI(); };
+  if(ad){ ADS.show().then(ok=>{ if(ok) give(); else flashNote(ADS.failMsg()); }); return; }
+  if(coins<cost){ flashNote('Te faltan '+(cost-coins)+' monedas'); return; } coins-=cost; saveCoins(); renderCoins(); give(); }
+function vehCount(parts){ const c={}; for(const q of parts) c[q[0]]=(c[q[0]]|0)+1; return c; }
+function vehPlanSet(to){ const have=vehCount(VE.parts), need=vehCount(to), inv={...VE.inv}; for(const k in have) inv[k]=(inv[k]|0)+have[k]; let cost=0;
+  for(const k in need){ const miss=Math.max(0,need[k]-(inv[k]|0)); cost+=miss*VP_BY[k].price; inv[k]=Math.max(0,(inv[k]|0)-need[k]); } for(const k in inv) if(!inv[k]) delete inv[k]; return {inv, cost}; }
+// ---- dónde poner cada taller: el lugar más plano y libre alrededor de un punto (igual para todos) ----
+function vehPickSpot(cx,cz,rads,avoid){ let best=null, bs=1e9; for(const R of rads) for(let k=0;k<16;k++){ const a=k/16*Math.PI*2, x=cx+Math.cos(a)*R, z=cz+Math.sin(a)*R;
+    { const wl=swimLevel(x,z), th=terrainH(x,z); if((wl!==null && th<wl+.4) || th<SEA_Y+.6) continue; } if(avoid && avoid(x,z)) continue;
+    let lo=1e9, hi=-1e9; for(const [dx,dz] of [[0,0],[6,0],[-6,0],[0,6],[0,-6],[4,4],[-4,-4],[4,-4],[-4,4]]){ const h=terrainH(x+dx,z+dz); lo=Math.min(lo,h); hi=Math.max(hi,h); }
+    let blk=0; for(const o of obstacles){ if(o.ac) continue; if(Math.hypot(o.x-x,o.z-z)<o.r+7.5){ blk=1; break; } } if(blk) continue;
+    const sc=hi-lo+R*.03; if(sc<bs){ bs=sc; best=[x,z]; } }
+  if(!best) return null; const dx=cx-best[0], dz=cz-best[1], l=Math.hypot(dx,dz)||1; return {x:best[0], z:best[1], fx:dx/l, fz:dz/l}; }
+function vehLotSpot(L){ const [x,z]=lotW(L,-(HZ.H-5),HZ.H-3.5); return {x, z, h:Math.atan2(L.c,-L.s)}; }
+// ---- códigos del diseño (para mandarlo a los demás) ----
+const V_ABC='0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_';
+function vehEnc(parts){ return parts.map(q=>{ const pi=VPARTS.findIndex(p=>p.id===q[0]), ci=VCOLS.indexOf(q[5]); return V_ABC[pi>>6&63]+V_ABC[pi&63]+V_ABC[q[1]+20]+V_ABC[q[2]+20]+V_ABC[q[3]+20]+V_ABC[(q[4]&3)]+V_ABC[ci<0?63:ci]; }).join(''); }
+function vehDec(s){ const out=[]; if(typeof s!=='string' || s.length>VMAX*7 || s.length%7) return out; const I=c=>V_ABC.indexOf(c);
+  for(let i=0;i<s.length;i+=7){ const pi=I(s[i])*64+I(s[i+1]), p=VPARTS[pi]; if(!p) continue; const ci=I(s[i+6]); out.push([p.id, I(s[i+2])-20, I(s[i+3])-20, I(s[i+4])-20, I(s[i+5])&3, ci>=0&&ci<VCOLS.length?VCOLS[ci]:p.col]); } return out; }
+const vehHash=s=>{ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0; return (h>>>0).toString(36); };
+// ---- presencia ----
+const VR={cache:new Map(), map:new Map()};
+const V_MODES=['land','water','air'];
+function vehPresence(){ const o={}; if(VE.w){ const W=VE.w; o.vh=[VE.hash, r2(W.x), r2(W.y), r2(W.z), Math.round(W.h*1000)/1000, r2(W.pitch), r2(W.tilt), V_MODES.indexOf(W.mode), r2(W.v)]; if(performance.now()-VE.sendT<150) o.vs=VE.str; }
+  if(player.pg && player.pg.k==='vehp' && player.pg.owner) o.vp=[player.pg.owner, player.pg.i]; return o; }
+function vehParse(r,pr){ const v=pr.vh; r.vh=Array.isArray(v) && v.length===9 && typeof v[0]==='string' && v[0].length<16 && v.slice(1).every(Number.isFinite) ? v : null;
+  r.vp=Array.isArray(pr.vp) && pr.vp.length===2 && typeof pr.vp[0]==='string' && Number.isInteger(pr.vp[1]) && pr.vp[1]>=0 && pr.vp[1]<9 ? pr.vp : null;
+  if(r.vh && typeof pr.vs==='string' && !VR.cache.has(r.vh[0]) && vehHash(pr.vs)===r.vh[0]){ const d=vehDec(pr.vs); if(d.length){ VR.cache.set(r.vh[0],d); if(VR.cache.size>40) VR.cache.delete(VR.cache.keys().next().value); } } }
+function vehRemotes(dt){ const seen=new Set();
+  for(const r of mp.remotes.values()){ const u=uidOf(r); if(!u || !r.vh) continue; const parts=VR.cache.get(r.vh[0]); if(!parts) continue; seen.add(u);
+    let E=VR.map.get(u); if(!E || E.hash!==r.vh[0]){ if(E) scene.remove(E.W.g); const W=vehMakeW(parts); if(!W) continue; E={hash:r.vh[0], W, name:r.name||'Alguien', fresh:true}; VR.map.set(u,E); }
+    const W=E.W, v=r.vh, k=E.fresh||Math.hypot(v[1]-W.x,v[3]-W.z)>40?1:1-Math.exp(-dt*8); E.fresh=false; E.name=r.name||E.name;
+    W.x+=(v[1]-W.x)*k; W.y+=(v[2]-W.y)*k; W.z+=(v[3]-W.z)*k; W.h=lerpAng(W.h,v[4],k); W.pitch+=(v[5]-W.pitch)*k; W.tilt+=(v[6]-W.tilt)*k; W.mode=V_MODES[v[7]]||'land'; W.v=v[8];
+    for(const p of W.prop) p.rotation.z+=dt*(8+Math.abs(W.v)*2); vehPose(W); W.g.updateMatrixWorld(true); }
+  for(const [u,E] of VR.map) if(!seen.has(u)){ scene.remove(E.W.g); VR.map.delete(u); } }
+// la pose de otros jugadores: manejando su vehículo o de pasajeros
+function vehRemotePose(r,k,i){ let W=null; if(k==='veh'){ const E=VR.map.get(uidOf(r)); W=E&&E.W; } else if(r.vp){ W=r.vp[0]===myUid?VE.w:(VR.map.get(r.vp[0])||{}).W; } if(!W) return null; const st=vehSeatWorld(W,k==='veh'?0:i); return {pos:[st.x,st.y-.415,st.z], yaw:W.h, sit:1, grip:1}; }
+// pasajero en el vehículo de otro
+function vehSeatsTaken(owner){ const s=new Set(); for(const r of mp.remotes.values()) if(r.vp && r.vp[0]===owner && r.pl && PG_KINDS[r.pl[0]]==='vehp') s.add(r.vp[1]); return s; }
+function vehBoard(owner,seat){ startPlay('vehp',seat); const P=player.pg; P.owner=owner; flashNote('¡Vas de pasajero! 🚗'); try{ sendPresence(true); }catch(e){} }
+function vehpRide(P,dt){ const W=P.owner===myUid?VE.w:(VR.map.get(P.owner)||{}).W; if(!W){ setTimeout(()=>{ if(player.pg===P) vehpExit(); },0); return null; } const st=vehSeatWorld(W,P.i); return {pos:[st.x,st.y-.415,st.z], yaw:W.h, sit:1, grip:1}; }
+function vehpExit(){ const P=player.pg; if(!P || P.k!=='vehp') return; const W=(VR.map.get(P.owner)||{}).W; stopPlay(); if(W){ const side=new THREE.Vector3(-(W.rad+1.4),0,0).applyAxisAngle(new THREE.Vector3(0,1,0),W.h), x=W.x+side.x, z=W.z+side.z, wl=swimLevel(x,z), t=terrainH(x,z);
+    if(wl!==null && t<wl-1.1){ player.pos.set(x,wl-.6,z); player.swim=true; player.grounded=false; } else { player.pos.set(x,groundAt(x,z,W.y+2)+.05,z); player.grounded=true; } } player.vel.set(0,0,0); player.vy=0; }
 
 // ---------- v143: Isla Dulce, parte 1 (Montaña de Pastel, río de chocolate, lago de limonada, bosque de dulces, playa de azúcar, muelle de galleta) ----------
 // ======================================================================================
@@ -17170,7 +17250,7 @@ const _acM=new THREE.Matrix4(), _acB=new THREE.Box3(), _acV=new THREE.Vector3();
 function acDynRoots(){ const S=new Set([plush]); try{ cars.forEach(c=>S.add(c.root)); aircraft.forEach(a=>S.add(a.root)); critters.forEach(c=>c.g&&S.add(c.g)); }catch(e){}
   for(const r of mp.remotes.values()){ if(r.obj) S.add(r.obj); if(r.pet) S.add(r.pet.P.root); } if(myPet && myPet.inst) S.add(myPet.inst.P.root);
   try{ for(const b of HS.shown.values()) S.add(b.g); if(ED.ghost) S.add(ED.ghost.g); if(ED.ghost2) S.add(ED.ghost2.g); if(ED.grid) S.add(ED.grid); }catch(e){}
-  try{ S.add(skyRoot); for(const b of BATCH.batches) S.add(b.mesh); }catch(e){} try{ if(VE.w) S.add(VE.w.g); }catch(e){} return S; }
+  try{ S.add(skyRoot); for(const b of BATCH.batches) S.add(b.mesh); }catch(e){} try{ if(VE.w) S.add(VE.w.g); for(const E of VR.map.values()) S.add(E.W.g); }catch(e){} return S; }
 // puntos sobre la superficie de una figura (se calculan una vez por figura)
 function acSamples(g){ let s=AC.samp.get(g); if(s) return s; const P=g.attributes.position; if(!P){ AC.samp.set(g,s=new Float32Array(0)); return s; }
   if(!g.boundingBox) g.computeBoundingBox(); const bb=g.boundingBox, mx=Math.max(bb.max.x-bb.min.x, bb.max.y-bb.min.y, bb.max.z-bb.min.z, 1e-3), I=g.index, nt=(I?I.count:P.count)/3;
