@@ -279,7 +279,7 @@ body.in-mg #hint{display:none!important;}
 .tbtns{position:fixed;right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(86px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:auto auto;gap:14px 16px;align-items:end;justify-items:center;pointer-events:none;}
 .tveh{position:fixed;right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(86px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;pointer-events:none;}
 .tveh.up{bottom:calc(300px + env(safe-area-inset-bottom,0px));}
-.tveh .tbtn.small{width:64px;height:64px;font-size:13px;}
+.tveh .tbtn.small{width:64px;height:64px;font-size:13px;pointer-events:auto;touch-action:none;}   /* v186: antes no se podían tocar (el toque pasaba al juego) */
 @media (max-height:500px){ .tveh.up{bottom:calc(240px + env(safe-area-inset-bottom,0px));} .tveh .tbtn.small{width:56px;height:56px;font-size:12px;} }
 .tbtns .tbtn{pointer-events:auto;touch-action:none;}
 .slot,.act,.chip{touch-action:manipulation;}
@@ -1140,7 +1140,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='185';
+const GAME_VERSION='186';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -15656,12 +15656,26 @@ function vehTarget(h,p,r){ const s=vRot(p,r), a=[Math.floor((h.p.x+h.n.x*.01)/VC
     for(let k=0;k<3;k++){ if(n[k]>0) out[k]=o[k]+hs[k]; else if(n[k]<0) out[k]=o[k]-s[k]; } }
   return out; }
 // ---- v183: poner piezas más fácil — llantas que se acomodan solas, el carrito siempre apoyado en el piso, llantas en par, ver antes de poner y mover piezas ----
-function vehNorm(arr){ let m=1e9; for(const q of arr) m=Math.min(m,q[2]); if(!arr.length || m===0) return arr.map(q=>q.slice()); return arr.map(q=>{ const r=q.slice(); r[2]-=m; return r; }); }   // lo más bajo queda en el piso
+function vehNorm(arr){ if(!arr.length) return []; let m=1e9, x0=1e9, x1=-1e9, z0=1e9, z1=-1e9;   // lo más bajo queda en el piso
+  for(const q of arr){ const s=vRot(VP_BY[q[0]],q[4]|0); m=Math.min(m,q[2]); x0=Math.min(x0,q[1]); x1=Math.max(x1,q[1]+s[0]); z0=Math.min(z0,q[3]); z1=Math.max(z1,q[3]+s[2]); }
+  // v186: si se sale del taller por un lado pero sí cabe, todo se recorre al centro (antes la pieza simplemente no se ponía)
+  const dx=(x0<VB.x0 || x1>VB.x1) && x1-x0<=VB.x1-VB.x0 ? -Math.round((x0+x1)/2) : 0, dz=(z0<VB.z0 || z1>VB.z1) && z1-z0<=VB.z1-VB.z0 ? -Math.round((z0+z1)/2) : 0;
+  if(!m && !dx && !dz) return arr.map(q=>q.slice()); return arr.map(q=>{ const r=q.slice(); r[1]+=dx; r[2]-=m; r[3]+=dz; return r; }); }
 function vehFreeIn(arr,p,cx,cy,cz,r,skip){ const s=vRot(p,r), O=new Set(); arr.forEach((q,i)=>{ if(i===skip) return; const pp=VP_BY[q[0]], ss=vRot(pp,q[4]|0); for(let a=0;a<ss[0];a++) for(let b=0;b<ss[1];b++) for(let c=0;c<ss[2];c++) O.add((q[1]+a)+','+(q[2]+b)+','+(q[3]+c)); });
   for(let a=0;a<s[0];a++) for(let b=0;b<s[1];b++) for(let c=0;c<s[2];c++) if(O.has((cx+a)+','+(cy+b)+','+(cz+c))) return false; return true; }
 function vehBoundsOK(arr){ for(const q of arr){ const s=vRot(VP_BY[q[0]],q[4]|0); if(q[1]<VB.x0||q[3]<VB.z0||q[1]+s[0]>VB.x1||q[3]+s[2]>VB.z1||q[2]<0||q[2]+s[1]>VB.y1) return false; } return true; }
 function vehInvDelta(a,b){ const d={}; for(const k of new Set([...Object.keys(a),...Object.keys(b)])){ const v=(b[k]|0)-(a[k]|0); if(v) d[k]=v; } return d; }
 // dónde iría la pieza escogida (y su pareja, si es llanta)
+// v186: el chasis = todas las piezas (no llantas ni paredes) que empiezan a la misma altura que la tocada
+function vehChassis(hq){ const B={x0:1e9,x1:-1e9,z0:1e9,z1:-1e9,top:hq[2]};
+  for(const q of VE.parts){ const pp=VP_BY[q[0]]; if(!pp || pp.cat==='rueda' || V_WALL.has(q[0]) || q[2]!==hq[2]) continue; const s=vRot(pp,q[4]|0); B.x0=Math.min(B.x0,q[1]); B.x1=Math.max(B.x1,q[1]+s[0]); B.z0=Math.min(B.z0,q[3]); B.z1=Math.max(B.z1,q[3]+s[2]); B.top=Math.max(B.top,q[2]+s[1]); }
+  if(B.x0>B.x1){ const s=vRot(VP_BY[hq[0]],hq[4]|0); B.x0=hq[1]; B.x1=hq[1]+s[0]; B.z0=hq[3]; B.z1=hq[3]+s[2]; B.top=hq[2]+s[1]; } return B; }
+// llantas: a la orilla del vehículo completo (izquierda/derecha; adelante/atrás si tocas el frente)
+function vehWheelSnap(h){ const nw=q=>VP_BY[q[0]] && VP_BY[q[0]].cat!=='rueda' && !V_WALL.has(q[0]), hx=h.p.x/VC, hz=h.p.z/VC; let hq=h.pi!==null?VE.parts[h.pi]:null;
+  if(hq && !nw(hq)){ if(VP_BY[hq[0]].cat==='rueda') return null; hq=null; }
+  if(!hq){ let best=null, bd=2.6; for(const q of VE.parts){ if(!nw(q)) continue; const B=vehChassis(q); if(hz<B.z0-.5 || hz>B.z1+.5) continue; const d=hx<B.x0?B.x0-hx:hx>B.x1?hx-B.x1:0; if(d<bd){ bd=d; best=q; } } if(!best) return null; hq=best; }
+  const B=vehChassis(hq), axis=(h.pi!==null && h.n.y===0 && h.n.z!==0 && h.n.x===0)?'z':'x', side=axis==='x'?(hx>(B.x0+B.x1)/2?1:-1):(hz>(B.z0+B.z1)/2?1:-1);
+  return {B, hq, axis, side, hx, hz}; }
 function vehWheelSide(h){ const nw=q=>VP_BY[q[0]] && VP_BY[q[0]].cat!=='rueda', hx=h.p.x/VC, hz=h.p.z/VC; let hp=h.pi!==null?VE.parts[h.pi]:null;
   if(hp && nw(hp) && h.n.y===0) return h;   // tocó el costado
   const toSide=(q,i)=>{ const bs=vRot(VP_BY[q[0]],q[4]|0), right=hx>q[1]+bs[0]/2; return {p:{x:(right?q[1]+bs[0]:q[1])*VC, y:(q[2]+.5)*VC, z:Math.max(q[3]+.5,Math.min(q[3]+bs[2]-.5,hz))*VC}, n:{x:right?1:-1, y:0, z:0}, pi:i}; };
@@ -15682,17 +15696,26 @@ function vehWallSpot(h,p){ const hq=h.pi!==null?VE.parts[h.pi]:null; if(!hq) ret
     else if(h.n.x>0) cx=hq[1]+hs[0]; else if(h.n.x<0) cx=hq[1]-s[0]; else if(h.n.z>0) cz=hq[3]+hs[2]; else cz=hq[3]-s[2];
     return {cx,cy,cz,r,pair:null}; }
   if(h.n.y<=0 || hp.cat==='rueda') return null;
-  const hx=h.p.x/VC, hz=h.p.z/VC, dl=hx-hq[1], dr=hq[1]+hs[0]-hx, db=hz-hq[3], df=hq[3]+hs[2]-hz, m=Math.min(dl,dr,db,df), cy=hq[2]+hs[1];
+  const B=vehChassis(hq), hx=h.p.x/VC, hz=h.p.z/VC, dl=hx-B.x0, dr=B.x1-hx, db=hz-B.z0, df=B.z1-hz, m=Math.min(dl,dr,db,df), cy=hq[2]+hs[1];   // v186: orillas del vehículo completo
   if(m>1.6) return null;   // en medio de la base: se pone normal, donde tocas
   let cx, cz, r, pair;
-  if(m===dl || m===dr){ r=vehWallRot(p,'x'); const s=vRot(p,r); cx=m===dl?hq[1]:hq[1]+hs[0]-s[0]; cz=Math.max(hq[3],Math.min(hq[3]+hs[2]-s[2],Math.round(hz-s[2]/2))); pair=[2*hq[1]+hs[0]-cx-s[0],cy,cz]; }
-  else { r=vehWallRot(p,'z'); const s=vRot(p,r); cz=m===db?hq[3]:hq[3]+hs[2]-s[2]; cx=Math.max(hq[1],Math.min(hq[1]+hs[0]-s[0],Math.round(hx-s[0]/2))); pair=[cx,cy,2*hq[3]+hs[2]-cz-s[2]]; }
+  if(m===dl || m===dr){ r=vehWallRot(p,'x'); const s=vRot(p,r); cx=m===dl?B.x0:B.x1-s[0]; cz=Math.max(B.z0,Math.min(B.z1-s[2],Math.round(hz-s[2]/2))); pair=[B.x0+B.x1-cx-s[0],cy,cz]; }
+  else { r=vehWallRot(p,'z'); const s=vRot(p,r); cz=m===db?B.z0:B.z1-s[2]; cx=Math.max(B.x0,Math.min(B.x1-s[0],Math.round(hx-s[0]/2))); pair=[cx,cy,B.z0+B.z1-cz-s[2]]; }
   if(pair[0]===cx && pair[2]===cz) pair=null; return {cx,cy,cz,r,pair}; }
-function vehPlan(h0){ { const p=VP_BY[VE.sel], w=p && V_WALL.has(p.id) ? vehWallSpot(h0,p) : null;
+function vehPlan(h0){ VE.lastH=h0;
+  { const p=VP_BY[VE.sel], ws=p && p.d.wheel ? vehWheelSnap(h0) : null;   // v186: llantas a la orilla del vehículo completo, con su pareja enfrente
+    if(ws){ const {B,hq,axis,side}=ws, r=axis==='x'?(VE.rot%2===0?VE.rot:0):(VE.rot%2===1?VE.rot:1), s=vRot(p,r), cy=hq[2]-Math.ceil(s[1]/2); let cx, cz, pr;
+      if(axis==='x'){ cx=side>0?B.x1:B.x0-s[0]; cz=Math.max(B.z0-Math.floor(s[2]/2),Math.min(B.z1-Math.ceil(s[2]/2),Math.round(ws.hz-s[2]/2))); pr=[B.x0+B.x1-cx-s[0],cy,cz]; }
+      else { cz=side>0?B.z1:B.z0-s[2]; cx=Math.max(B.x0-Math.floor(s[0]/2),Math.min(B.x1-Math.ceil(s[0]/2),Math.round(ws.hx-s[0]/2))); pr=[cx,cy,B.z0+B.z1-cz-s[2]]; }
+      const col=VE.col||p.col, q=[p.id,cx,cy,cz,r,col], ok=vehFreeIn(VE.parts,p,cx,cy,cz,r); let q2=null;
+      if(ok && VE.pair!==false && vehFreeIn(VE.parts.concat([q]),p,pr[0],pr[1],pr[2],r)) q2=[p.id,pr[0],pr[1],pr[2],r,col];
+      const add=[q]; if(q2 && (VE.inv[p.id]|0)>=2) add.push(q2); const to=ok?vehNorm(VE.parts.concat(add)):null;
+      return {p, q, q2, add, to, ok:ok && vehBoundsOK(to), key:JSON.stringify(add), auto:1}; } }
+  { const p=VP_BY[VE.sel], w=p && V_WALL.has(p.id) ? vehWallSpot(h0,p) : null;
     if(w){ const col=VE.col||p.col, q=[p.id,w.cx,w.cy,w.cz,w.r,col], ok=vehFreeIn(VE.parts,p,w.cx,w.cy,w.cz,w.r); let q2=null;
       if(ok && w.pair && VE.pair!==false && vehFreeIn(VE.parts.concat([q]),p,w.pair[0],w.pair[1],w.pair[2],w.r)) q2=[p.id,w.pair[0],w.pair[1],w.pair[2],w.r,col];
       const add=[q]; if(q2 && (VE.inv[p.id]|0)>=2) add.push(q2); const to=ok?vehNorm(VE.parts.concat(add)):null;
-      return {p, q, q2, add, to, ok:ok && vehBoundsOK(to), key:JSON.stringify(add)}; } } const p=VP_BY[VE.sel]; if(!p) return null; let r=VE.rot, h=h0; const ws=p.d.wheel?vehWheelSide(h0):null; if(ws) h=ws; const hp=h.pi!==null?VE.parts[h.pi]:null, smart=!!ws;
+      return {p, q, q2, add, to, ok:ok && vehBoundsOK(to), key:JSON.stringify(add), auto:1}; } } const p=VP_BY[VE.sel]; if(!p) return null; let r=VE.rot, h=h0; const ws=p.d.wheel?vehWheelSide(h0):null; if(ws) h=ws; const hp=h.pi!==null?VE.parts[h.pi]:null, smart=!!ws;
   if(smart) r=h.n.x!==0?(VE.rot%2===0?VE.rot:0):(VE.rot%2===1?VE.rot:1);   // el eje de la llanta hacia afuera
   let [cx,cy,cz]=vehTarget(h,p,r); const s=vRot(p,r); let pair=null;
   if(smart){ const bs=vRot(VP_BY[hp[0]],hp[4]|0); cy=hp[2]-Math.ceil(s[1]/2);   // la llanta a la altura de la base: el carrito se levanta solo
@@ -15717,8 +15740,8 @@ function vehMoveSel(d){ const i=VE.mv; if(i===null || i===undefined || !VE.parts
   if(!vehFreeIn(VE.parts,p,n[0],n[1],n[2],q[4]|0,i)){ flashNote('Ahí choca con otra pieza'); return; }
   const arr=VE.parts.map(x=>x.slice()); arr[i]=[q[0],n[0],n[1],n[2],q[4],q[5]]; const to=vehNorm(arr); if(!vehBoundsOK(to)){ flashNote('Ya no se puede mover más para allá'); return; }
   vehAct({t:'set', from:VE.parts.map(x=>x.slice()), to}); try{ audio.cam(); }catch(e){} }
-function vehMoveTurn(){ const i=VE.mv; if(i===null || i===undefined || !VE.parts[i]) return; const q=VE.parts[i], p=VP_BY[q[0]], r=((q[4]|0)+1)%4;
-  if(!vehFreeIn(VE.parts,p,q[1],q[2],q[3],r,i)){ flashNote('Girada no cabe ahí: muévela primero'); return; } const arr=VE.parts.map(x=>x.slice()); arr[i]=[q[0],q[1],q[2],q[3],r,q[5]]; const to=vehNorm(arr);
+function vehMoveTurn(){ const i=VE.mv; if(i===null || i===undefined || !VE.parts[i]) return; const q=VE.parts[i], p=VP_BY[q[0]], r=((q[4]|0)+1)%4, s0=vRot(p,q[4]|0), s1=vRot(p,r), nx=q[1]+Math.floor((s0[0]-s1[0])/2), nz=q[3]+Math.floor((s0[2]-s1[2])/2);
+  if(!vehFreeIn(VE.parts,p,nx,q[2],nz,r,i)){ flashNote('Girada no cabe ahí: muévela primero'); return; } const arr=VE.parts.map(x=>x.slice()); arr[i]=[q[0],nx,q[2],nz,r,q[5]]; const to=vehNorm(arr);
   if(!vehBoundsOK(to)){ flashNote('Girada no cabe'); return; } vehAct({t:'set', from:VE.parts.map(x=>x.slice()), to}); }
 function vehMoveBox(){ const i=VE.mv; if(VE.tool!=='move' || i===null || i===undefined || !VE.parts[i] || !VS.design) return; const q=VE.parts[i], s=vRot(VP_BY[q[0]],q[4]|0);
   const b=new THREE.Box3(new THREE.Vector3(q[1]*VC-.03,q[2]*VC-.03,q[3]*VC-.03), new THREE.Vector3((q[1]+s[0])*VC+.03,(q[2]+s[1])*VC+.03,(q[3]+s[2])*VC+.03)); const bh=new THREE.Box3Helper(b,0xffb400); bh.raycast=()=>{}; VS.design.add(bh); }
@@ -15741,7 +15764,7 @@ function vehAct(act){ if(act.inv) for(const id in act.inv) if(act.inv[id]<0 && (
 function vehTap(ev){ const h=vehHit(ev); if(!h) return;
   if(VE.tool==='put'){ const P=vehPlan(h); if(!P) return;
     if(ev.pointerType==='mouse' || VE.pend===P.key){ vehClearPrev(); vehPut(P); return; }
-    vehPreview(P); VE.pend=P.key; if((VE.pendN=(VE.pendN|0)+1)<=3) flashNote(P.ok?'Así quedará: toca otra vez para ponerla ✓':'Ahí no cabe: prueba en otro lado o gírala'); return; }
+    vehPreview(P); VE.pend=P.key; if((VE.pendN=(VE.pendN|0)+1)<=3 || !P.ok) flashNote(P.ok?'Así quedará: toca otra vez para ponerla ✓':'Ahí no cabe: prueba en otro lado o gírala'); return; }
   if(VE.tool==='move'){ VE.mv=h.pi; vehRebuild(); vehUI(); if(h.pi!==null && (VE.mvN=(VE.mvN|0)+1)<=2) flashNote('Muévela con las flechas de abajo'); return; }
   if(h.pi!==null){ const q=VE.parts[h.pi];
     if(VE.tool==='del'){ const arr=VE.parts.filter((x,i)=>i!==h.pi); vehAct({t:'set', from:VE.parts.map(x=>x.slice()), to:vehNorm(arr), inv:{[q[0]]:1}}); VE.mv=null; try{ audio.getup(); }catch(e){} }
@@ -15771,12 +15794,16 @@ function vThumbPump(){ let n=0; while(VTH.q.length && n<3){ const k=VTH.q.shift(
 function vThumbHTML(p){ const col=VE.col||p.col, k=p.id+'|'+col, url=vThumb(p.id,col);
   return url && url!=='x' ? '<img class="vh-th" alt="" draggable="false" data-vk="'+k+'" src="'+url+'">' : '<span class="vh-ph" style="background:'+col+'"></span><img class="vh-th" alt="" draggable="false" data-vk="'+k+'" hidden>'; }
 function vehUI(){ if(!ui('vehOv')) return; if(!(VE.ren && ui('vehName'))) ui('vehSlots').innerHTML=vehSlotsHTML(); ui('vehCoins').textContent=coins.toLocaleString('es-MX'); ui('vehUndo').disabled=!VE.undo.length; ui('vehRedo').disabled=!VE.redo.length;
-  ui('vehCats').innerHTML=VCATS.map(([id,n,ic])=>'<button class="vh-cat'+(VE.cat===id?' on':'')+'" data-c="'+id+'">'+ic+' '+n+'</button>').join('');
+  const mine=VE.tab==='mine', nMine=VPARTS.reduce((a,p)=>a+((VE.inv[p.id]|0)>0?1:0),0);
+  ui('vehTabs').innerHTML='<button class="vh-tab'+(mine?'':' on')+'" data-tab="shop">🛒 Tienda</button><button class="vh-tab'+(mine?' on':'')+'" data-tab="mine">🎒 Mis piezas <small>'+nMine+'</small></button>';
+  const cats=mine?[['all','Todas','📦']].concat(VCATS.filter(([id])=>VPARTS.some(p=>p.cat===id && (VE.inv[p.id]|0)>0))):VCATS, catOn=mine?(VE.mcat||'all'):VE.cat;
+  ui('vehCats').innerHTML=cats.map(([id,n,ic])=>'<button class="vh-cat'+(catOn===id?' on':'')+'" data-c="'+id+'">'+ic+' '+n+'</button>').join('');
   { const sr=ui('vehSearch'); if(sr && sr.value!==(VE.q||'')) sr.value=VE.q||''; }
   const vNorm=x=>x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''), vq=VE.q?vNorm(VE.q.trim()):'';
-  ui('vehParts').innerHTML=(vq?VPARTS.filter(p=>vNorm(p.n).includes(vq)).slice(0,60):VPARTS.filter(p=>p.cat===VE.cat)).map(p=>'<button class="vh-part'+(VE.sel===p.id&&VE.tool==='put'?' on':'')+'" data-p="'+p.id+'">'+vThumbHTML(p)+'<span class="vh-tx">'+p.n+(p.d.tip?' ⚡':'')+'<small>'+((VE.inv[p.id]|0)>0?'Tienes '+VE.inv[p.id]:p.price+' 🪙')+'</small></span></button>').join('');
+  let list=mine?VPARTS.filter(p=>(VE.inv[p.id]|0)>0 && (vq?vNorm(p.n).includes(vq):(catOn==='all'||p.cat===catOn))):(vq?VPARTS.filter(p=>vNorm(p.n).includes(vq)).slice(0,80):VPARTS.filter(p=>p.cat===VE.cat));
+  ui('vehParts').innerHTML=(mine && !list.length?'<div class="vh-empty">'+(vq?'No tienes piezas con ese nombre.':'Aún no tienes piezas.')+' Cómpralas en la <b>🛒 Tienda</b> (con monedas o viendo un anuncio).</div>':'')+list.map(p=>'<button class="vh-part'+(VE.sel===p.id&&VE.tool==='put'?' on':'')+'" data-p="'+p.id+'">'+vThumbHTML(p)+'<span class="vh-tx">'+p.n+(p.d.tip?' ⚡':'')+'<small>'+((VE.inv[p.id]|0)>0?'Tienes '+VE.inv[p.id]:p.price+' 🪙')+'</small></span></button>').join('');
   { const p=VP_BY[VE.sel], n=vehPack(p), have=VE.inv[p.id]|0, B=ui('vehBuy'); B.classList.toggle('need',!!VE.needBuy && !have); VE.needBuy=false;
-    B.innerHTML='<b>'+p.n+':</b> tienes '+have+'<button class="vh-btn" data-buy="'+p.id+'">+'+n+' · '+(p.price*n)+' 🪙</button><button class="vh-btn ad" data-ad="'+p.id+'">📺 +'+n+' gratis</button>'+(p.d.tip?'<div class="vh-ptip">'+(p.d.tip[0]==='⭐'?'':'⚡ ')+p.d.tip+'</div>':''); }
+    B.innerHTML=mine?'<b>'+p.n+':</b> tienes '+have+' <button class="vh-btn" data-tab="shop" data-shop="'+p.id+'">🛒 Conseguir más</button>'+(p.d.tip?'<div class="vh-ptip">'+(p.d.tip[0]==='⭐'?'':'⚡ ')+p.d.tip+'</div>':''):'<b>'+p.n+':</b> tienes '+have+'<button class="vh-btn" data-buy="'+p.id+'">+'+n+' · '+(p.price*n)+' 🪙</button><button class="vh-btn ad" data-ad="'+p.id+'">📺 +'+n+' gratis</button>'+(p.d.tip?'<div class="vh-ptip">'+(p.d.tip[0]==='⭐'?'':'⚡ ')+p.d.tip+'</div>':''); }
   { const M=ui('vehMove'), p=VP_BY[VE.sel]; let h='';
     if(VE.tool==='move'){ const q=VE.mv!==null && VE.mv!==undefined ? VE.parts[VE.mv] : null;
       h=q?'<b>'+VP_BY[q[0]].n+':</b><button class="vh-btn" data-mv="0,1,0">⬆ Subir</button><button class="vh-btn" data-mv="0,-1,0">⬇ Bajar</button><button class="vh-btn" data-mv="0,0,1">Adelante</button><button class="vh-btn" data-mv="0,0,-1">Atrás</button><button class="vh-btn" data-mv="1,0,0">◀ Izq.</button><button class="vh-btn" data-mv="-1,0,0">Der. ▶</button><button class="vh-btn" data-mvr="1">↻</button>'
@@ -15786,7 +15813,7 @@ function vehUI(){ if(!ui('vehOv')) return; if(!(VE.ren && ui('vehName'))) ui('ve
   ui('vehTools').innerHTML=[['put','🧱 Poner'],['move','✋ Mover'],['paint','🎨 Pintar'],['del','🗑️ Quitar']].map(([t,n])=>'<button class="vh-tool'+(VE.tool===t?' on':'')+'" data-t="'+t+'">'+n+'</button>').join('')+'<button class="vh-tool" data-t="rot">↻ Girar</button>';
   ui('vehColors').innerHTML='<button class="vh-col'+(VE.col===null?' on':'')+'" data-k="" title="Color de la pieza">🎲</button>'+VCOLS.map(c=>'<button class="vh-col'+(VE.col===c?' on':'')+'" data-k="'+c+'" style="background:'+c+'"></button>').join('');
   ui('vehTempl').innerHTML=VTEMPL.map(([n,to],i)=>{ const c=vehPlanSet(to).cost; return '<button class="vh-tpl" data-i="'+i+'">'+n+(c?' · '+c+' 🪙':' ✓')+'</button>'; }).join(''); vehInfo(); }
-function vehOpen(){ vehInit(); VE.ren=false; VE.ret={pos:player.pos.clone(), f:player.facing}; VE.ed=true; VE.dist=innerWidth<innerHeight?13:9; VE.undo.length=0; VE.redo.length=0; show('menu'); menuEl.hidden=true; ui('vehOv').hidden=false; vehRebuild(); vehUI(); try{ audio.door(true); }catch(e){}
+function vehOpen(){ vehInit(); VE.ren=false; if(VE.tab===undefined) VE.tab=Object.keys(VE.inv).length?'mine':'shop'; VE.ret={pos:player.pos.clone(), f:player.facing}; VE.ed=true; VE.dist=innerWidth<innerHeight?13:9; VE.undo.length=0; VE.redo.length=0; show('menu'); menuEl.hidden=true; ui('vehOv').hidden=false; vehRebuild(); vehUI(); try{ audio.door(true); }catch(e){}
   if(!VE.parts.length) flashNote('Escoge una base y tócala en el piso para empezar (o usa una plantilla)'); }
 function vehClose(){ if(!VE.ed) return; if(VE.ren) vehRename(); VE.ed=false; ui('vehOv').hidden=true; vehClearPrev(); show('play'); if(VE.ret){ player.pos.copy(VE.ret.pos); player.facing=VE.ret.f; player.vel.set(0,0,0); }
   if(VE.parts.length){ const S=vehStats(VE.parts); flashNote(S.seat?'¡Guardado! Toca "Sacar mi vehículo" para manejarlo':'Guardado. Le falta un asiento para poder subirte'); } }
@@ -15837,6 +15864,12 @@ function vehInit(){ if(ui('vehOv')) return;
 #vehName{flex:1;min-width:0;border:2px solid #5ec8ff;border-radius:10px;padding:5px 8px;font:inherit;font-weight:800;font-size:14px;}
 .vh-ptip{flex-basis:100%;font-size:12px;font-weight:700;color:#7a2b4b;}
 #vehSearch{border:2px solid #e8d8b8;border-radius:12px;padding:6px 10px;font:inherit;font-weight:700;font-size:14px;background:#fff;color:#3b2a1a;min-width:0;flex:0 0 auto;}
+.vh-tabs{display:flex;gap:6px;}
+@media (max-height:500px){ .vh-tab{padding:4px 6px;font-size:13px;} #vehSearch{padding:4px 8px;font-size:13px;} .vh-slot{padding:2px 6px;font-size:11.5px;} .vh-slot small{font-size:9.5px;} }
+.vh-tab{flex:1;border:2px solid transparent;border-radius:12px;padding:7px 6px;font:inherit;font-weight:800;font-size:14px;background:#f1e4cc;color:#5a3a10;}
+.vh-tab.on{background:#fff;border-color:#ff9a3c;color:#3b2a1a;}
+.vh-tab small{background:#ff9a3c;color:#fff;border-radius:9px;padding:0 6px;font-size:11px;}
+.vh-empty{grid-column:1/-1;font-size:13px;font-weight:700;color:#5a3a10;background:#fff4d6;border-radius:12px;padding:10px;}
 .vh-hint{background:#fff4d6;border-radius:9px;padding:4px 7px;margin-bottom:3px;color:#5a3a10;}
 #vehMove .vh-btn{font-size:12px;padding:5px 8px;}
 .vh-tip{font-size:12.5px;font-weight:700;color:#5a3a10;}
@@ -15848,7 +15881,7 @@ function vehInit(){ if(ui('vehOv')) return;
   document.head.appendChild(st);
   const el=document.createElement('div'); el.id='vehOv'; el.hidden=true;
   el.innerHTML='<div id="vehStage"></div><div id="vehSide"><div class="vh-top"><h2>🔧 Taller</h2><span class="sp"></span><span class="vh-btn">🪙 <b id="vehCoins">0</b></span><button class="vh-btn" id="vehUndo" title="Deshacer">↶</button><button class="vh-btn" id="vehRedo" title="Rehacer">↷</button><button class="vh-btn ok" id="vehClose">✓ Listo</button></div>'
-    +'<div class="vh-row" id="vehSlots"></div><input id="vehSearch" type="search" placeholder="🔎 Buscar pieza (364 piezas)" autocomplete="off"><div id="vehCats"></div><div id="vehParts"></div><div class="vh-row" id="vehBuy"></div><div class="vh-row" id="vehTools"></div><div class="vh-row" id="vehMove"></div><div class="vh-row" id="vehColors"></div><div id="vehInfo"></div><div class="vh-row"><b style="font-size:12px">Plantillas:</b><span id="vehTempl" class="vh-row"></span><button class="vh-btn" id="vehClear" style="font-size:12px;padding:5px 8px">🧹 Vaciar</button></div></div>';
+    +'<div class="vh-row" id="vehSlots"></div><div class="vh-tabs" id="vehTabs"></div><input id="vehSearch" type="search" placeholder="🔎 Buscar pieza (364 piezas)" autocomplete="off"><div id="vehCats"></div><div id="vehParts"></div><div class="vh-row" id="vehBuy"></div><div class="vh-row" id="vehTools"></div><div class="vh-row" id="vehMove"></div><div class="vh-row" id="vehColors"></div><div id="vehInfo"></div><div class="vh-row"><b style="font-size:12px">Plantillas:</b><span id="vehTempl" class="vh-row"></span><button class="vh-btn" id="vehClear" style="font-size:12px;padding:5px 8px">🧹 Vaciar</button></div></div>';
   document.body.appendChild(el);
   ui('vehSearch').addEventListener('input',e=>{ VE.q=e.target.value; vehUI(); });   // v184: buscador
   el.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; e.stopPropagation();
@@ -15856,10 +15889,14 @@ function vehInit(){ if(ui('vehOv')) return;
     if(b.id==='vehClose') return vehClose(); if(b.id==='vehUndo'){ const a=VE.undo.pop(); if(a){ vehUndo1(a); VE.redo.push(a); vehUI(); } return; } if(b.id==='vehRedo'){ const a=VE.redo.pop(); if(a){ if((a.cost||0)>coins){ VE.redo.push(a); flashNote('Te faltan '+(a.cost-coins)+' monedas'); return; } vehDo(a); VE.undo.push(a); vehUI(); } return; }
     if(b.id==='vehClear'){ if(!VE.parts.length) return; const pl=vehPlanSet([]); vehAct({t:'set', from:VE.parts.map(q=>q.slice()), to:[], inv:vehInvDelta(VE.inv,pl.inv), cost:0}); VE.mv=null; return; }
     if(b.dataset.buy){ vehBuy(b.dataset.buy,false); return; } if(b.dataset.ad){ vehBuy(b.dataset.ad,true); return; }
+    if(b.dataset.tab){ VE.tab=b.dataset.tab; VE.q=''; if(b.dataset.shop){ VE.sel=b.dataset.shop; VE.cat=VP_BY[b.dataset.shop].cat; } vehUI(); try{ audio.cam(); }catch(e){} return; }
+    if(b.dataset.c && VE.tab==='mine'){ VE.q=''; VE.mcat=b.dataset.c; vehUI(); return; }
     if(b.dataset.c){ VE.q=''; VE.cat=b.dataset.c; const f=VPARTS.find(p=>p.cat===VE.cat); if(f){ VE.sel=f.id; VE.tool='put'; } vehUI(); return; }
     if(b.dataset.p){ VE.sel=b.dataset.p; VE.tool='put'; VE.mv=null; vehClearPrev(); vehUI(); return; }
     if(b.dataset.mv){ vehMoveSel(b.dataset.mv.split(',').map(Number)); return; } if(b.dataset.mvr){ vehMoveTurn(); return; } if(b.dataset.pair){ VE.pair=VE.pair===false; vehUI(); return; }
-    if(b.dataset.t){ VE.mv=null; vehClearPrev(); if(b.dataset.t==='rot'){ VE.rot=(VE.rot+1)%4; flashNote('Giro: '+(VE.rot*90)+'°'); } else VE.tool=b.dataset.t; vehUI(); return; }
+    if(b.dataset.t){ VE.mv=null; vehClearPrev(); if(b.dataset.t==='rot'){ VE.rot=(VE.rot+1)%4; if(VE.tool!=='put') VE.tool='put'; const P=VE.lastH?vehPlan(VE.lastH):null;
+      if(P && P.auto) flashNote('Esta pieza se acomoda sola a la orilla 👍'); else flashNote('Giro: '+(VE.rot*90)+'°'+(P?' · toca otra vez para ponerla':' · ahora toca dónde ponerla'));
+      vehUI(); if(P){ vehPreview(P); VE.pend=P.key; VE.hovK=P.key; } return; } else { VE.tool=b.dataset.t; VE.lastH=null; } vehUI(); return; }
     if(b.dataset.k!==undefined){ VE.col=b.dataset.k||null; vehUI(); return; }
     if(b.dataset.i!==undefined){ const T=VTEMPL[+b.dataset.i]; const to=T[1].map(q=>q.slice()), pl=vehPlanSet(to); vehAct({t:'set', from:VE.parts.map(q=>q.slice()), to, inv:vehInvDelta(VE.inv,pl.inv), cost:pl.cost}); VE.mv=null; return; } });
   const stg=ui('vehStage'), pts=new Map(); let d0=0, moved=false, sx=0, sy=0, pinch0=0, dist0=0;
