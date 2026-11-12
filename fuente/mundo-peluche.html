@@ -13292,7 +13292,7 @@ body.in-hed #hud, body.in-hed #touch, body.in-hed #hotbar, body.in-hed .tbtns, b
     T('↶','Deshacer',()=>edUndo()); T('↷','Rehacer',()=>edRedo()); T('🪣','Rellenar',()=>edSetTool('fill'),'fill'); T('🖌️','Pintar',()=>edSetTool('paint'),'paint'); T('✋','Mover',()=>edSetTool('move'),'move');
     ED.bRoof=T('🏠','Techo',()=>{ ED.roof=!ED.roof; HS.tick=0; edRender(); },'roof'); T('👁️','Caminar',()=>edWalk()); ED.bDes=T('📐','Diseño 1',()=>edDesign());
     ED.bLvUp=T('⬆️','Subir nivel',()=>edLevel(1)); ED.bLvDn=T('⬇️','Bajar nivel',()=>edLevel(-1));
-    T('❓','Ayuda',()=>{ ED.toolsOpen=false; edRender(); if(TUT.on) tutEnd(false); tutStart('casa'); }); }   // v186: el nivel vive aquí (antes tapaba los avisos)
+    T('❓','Ayuda',()=>{ ED.toolsOpen=false; edRender(); if(TUT.on) tutEnd(false); tutStart('casa',true); }); }   // v186: el nivel vive aquí (antes tapaba los avisos)
   ED.bShop=B('🛒','Tienda',b=>{ ED.shop=!ED.shop; ED.shopK=null; if(ED.invOff) ED.tog.onclick({stopPropagation(){}}); edRender(); });
   B('✓','Listo',()=>edExit(),'ok');
   const lb=(t,f)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=t; b.onclick=e=>{ e.stopPropagation(); f(); }; return b; };
@@ -15913,7 +15913,7 @@ function vehInit(){ if(ui('vehOv')) return;
   ui('vehSearch').addEventListener('input',e=>{ VE.q=e.target.value; vehUI(); });   // v184: buscador
   el.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; e.stopPropagation();
     if(b.dataset.vs!==undefined){ if(VE.ren) vehRename(); vehSlot(+b.dataset.vs); return; } if(b.dataset.ren){ VE.ren=true; vehUI(); const i=ui('vehName'); if(i){ i.focus(); i.select(); } return; } if(b.dataset.rok){ vehRename(); return; }
-    if(b.id==='vehHelp'){ if(TUT.on) tutEnd(false); tutStart('veh'); return; }
+    if(b.id==='vehHelp'){ if(TUT.on) tutEnd(false); tutStart('veh',true); return; }
     if(b.id==='vehClose') return vehClose(); if(b.id==='vehUndo'){ const a=VE.undo.pop(); if(a){ vehUndo1(a); VE.redo.push(a); vehUI(); } return; } if(b.id==='vehRedo'){ const a=VE.redo.pop(); if(a){ if((a.cost||0)>coins){ VE.redo.push(a); flashNote('Te faltan '+(a.cost-coins)+' monedas'); return; } vehDo(a); VE.undo.push(a); vehUI(); } return; }
     if(b.id==='vehClear'){ if(!VE.parts.length) return; const pl=vehPlanSet([]); vehAct({t:'set', from:VE.parts.map(q=>q.slice()), to:[], inv:vehInvDelta(VE.inv,pl.inv), cost:0}); VE.mv=null; return; }
     if(b.dataset.buy){ vehBuy(b.dataset.buy,false); return; } if(b.dataset.ad){ vehBuy(b.dataset.ad,true); return; }
@@ -17990,6 +17990,7 @@ body.tut-casa .toast{top:auto!important;bottom:calc(84px + env(safe-area-inset-b
 .tut-row button{border:none;border-radius:10px;font:800 13px var(--body);padding:6px 11px;cursor:pointer;background:#efe6d2;color:#7a2b2b;touch-action:manipulation;}
 .tut-row button.ok{background:#7ed957;color:#fff;font-size:15px;padding:7px 14px;}
 .tut-prog{font:800 11px var(--body);color:#9a8a6a;margin-right:auto;align-self:center;}
+.tut-bub.choice .tut-row{flex-wrap:wrap;} .tut-bub.choice .tut-prog{display:none;} .tut-bub.choice .tut-alt,.tut-bub.choice .tut-next{flex:1 1 auto;white-space:nowrap;} .tut-bub.choice .tut-skip{order:3;flex:1 1 100%;background:none;padding:2px;font-size:12px;}
 #tutRing{position:fixed;z-index:9290;pointer-events:none;border:4px solid #ff6f91;border-radius:14px;box-shadow:0 0 0 3px rgba(255,255,255,.9),0 0 0 200vmax rgba(25,20,45,.16);animation:tutPulse 1s ease-in-out infinite;}
 #tutRing.round{border-radius:50%;}
 @keyframes tutPulse{50%{border-color:#ffd34d;}}
@@ -18002,11 +18003,12 @@ body.tut-casa #hedTip{display:none!important;}
 `; document.head.appendChild(st); })();
 function tutEls(){ if(TUT.el) return TUT.el; const mk=(id,html)=>{ const e=document.createElement('div'); e.id=id; e.hidden=true; if(html) e.innerHTML=html; document.body.appendChild(e); return e; };
   const ring=mk('tutRing'), arrow=mk('tutArrow','<div>'+TUT_ARROW+'</div>');
-  const box=mk('tutBox','<div class="tut-guide"></div><div class="tut-bub"><p class="tut-name"></p><p class="tut-txt"></p><div class="tut-row"><span class="tut-prog"></span><button type="button" class="tut-skip">Saltar</button><button type="button" class="ok tut-next" hidden>¡Entendido!</button></div></div>');
+  const box=mk('tutBox','<div class="tut-guide"></div><div class="tut-bub"><p class="tut-name"></p><p class="tut-txt"></p><div class="tut-row"><span class="tut-prog"></span><button type="button" class="tut-skip">Saltar</button><button type="button" class="ok tut-alt" hidden>Solo los botones</button><button type="button" class="ok tut-next" hidden>¡Entendido!</button></div></div>');
   box.querySelector('.tut-skip').onclick=e=>{ e.stopPropagation(); tutEnd(true); };
   box.querySelector('.tut-next').onclick=e=>{ e.stopPropagation(); const S=TUT.steps&&TUT.steps[TUT.i]; if(S) S._ok=true; try{ audio.cam(); }catch(err){} };
+  box.querySelector('.tut-alt').onclick=e=>{ e.stopPropagation(); const k=TUT.steps?TUT.steps.findIndex(x=>x.tour):-1; if(k>=0){ TUT.praise=0; TUT.short=true; tutGo(k); } try{ audio.cam(); }catch(err){} };   // v188: repasar solo los botones
   ['pointerdown','pointerup','click'].forEach(ev=>box.addEventListener(ev,e=>e.stopPropagation()));
-  TUT.el={box, ring, arrow, txt:box.querySelector('.tut-txt'), name:box.querySelector('.tut-name'), next:box.querySelector('.tut-next'), prog:box.querySelector('.tut-prog'), guide:box.querySelector('.tut-guide')};
+  TUT.el={box, ring, arrow, alt:box.querySelector('.tut-alt'), txt:box.querySelector('.tut-txt'), name:box.querySelector('.tut-name'), next:box.querySelector('.tut-next'), prog:box.querySelector('.tut-prog'), guide:box.querySelector('.tut-guide')};
   // ¿tocó una pieza de la lista? (para el paso "escoge una pieza")
   document.addEventListener('click',e=>{ if(TUT.on && e.target.closest && e.target.closest('#vehParts [data-p], #hedInv .hed-card')) TUT.picked=true; },true);
   return TUT.el; }
@@ -18060,7 +18062,7 @@ const TUT_VEH=[
   tutVehNext(3),
   tutVehPick(3,'un motor'),
   {say:'Ponlo atrás o adelante, encima de la base ⚙️', t:()=>{ const B=tutVehBox(); return {w:[(B.x0+B.x1)/2, B.top, B.z0+.4], cam:'veh'}; }, done:()=>vehStepDone(3)},
-  {say:'¡Tu carrito ya puede andar! 🎉 Ahora te enseño <b>todos los botones</b> del taller.', next:true, start:()=>{ VE.tab='mine'; VE.tool='put'; vehStepGo(VSTEPS.length-1); }},
+  {say:()=>TUT.short?'Te enseño <b>todos los botones</b> del taller 👇':'¡Tu carrito ya puede andar! 🎉 Ahora te enseño <b>todos los botones</b> del taller.', next:true, tour:true, start:()=>{ VE.tab='mine'; VE.tool='put'; vehStepGo(VSTEPS.length-1); }},
   tutInfo('#vehSteps .vh-steps','Estos son los <b>pasos</b>. Toca un número para ir a ese paso; la palomita ✓ quiere decir que ya está listo.'),
   tutInfo('#vehSteps [data-st="4"]','Paso 5, <b>Carrocería</b> 🚙: paredes, techo y cofre. Se acomodan solas en la orilla de tu carrito.'),
   tutInfo('#vehSteps [data-st="5"]','Paso 6, <b>Adornos</b> ✨: luces, sirena, claxon y piezas <b>⭐ especiales</b> que hacen cosas al manejar (saltar, turbo, confeti…).'),
@@ -18093,7 +18095,7 @@ const TUT_CASA=[
   tutCasaNext(3),
   tutCasaPick(3,'un techo'),
   {say:()=>'Toca arriba de tu casita para ponerle <b>techo</b> 🏠 '+tutCnt('r'), t:()=>{ const e=tutHouseFar(); return e?tutHouseW(e.i,e.j):null; }, done:()=>tutHave('r')>=tutNeed('r')},
-  {say:'¡Tu casita quedó preciosa! 🎉 Ahora te enseño <b>todos los botones</b>.', next:true, start:()=>{ if(ED.toolsOpen){ ED.toolsOpen=false; edRender(); } }},
+  {say:()=>TUT.short?'Te enseño <b>todos los botones</b> 👇':'¡Tu casita quedó preciosa! 🎉 Ahora te enseño <b>todos los botones</b>.', next:true, tour:true, start:()=>{ if(ED.toolsOpen){ ED.toolsOpen=false; edRender(); } }},
   tutInfo('#hedInv .hed-steps','Estos son los <b>pasos</b>. Toca uno para ir directo; la palomita ✓ quiere decir que ya está listo.'),
   tutInfo('#hedInv .hed-card','Cada pieza dice <b>cuántas tienes</b> (×5). Toca la ☆ para marcarla como <b>favorita</b>. Algunas vienen en varios colores.'),
   tutInfo('#hedInv .hed-tabs','En Decoración hay dos listas: <b>🛋️ Casa</b> (muebles) y <b>🌳 Jardín</b> (plantas, cercas y luces).',()=>{ if((ED.hstep|0)!==2) hedStepGo(2); }),
@@ -18117,7 +18119,7 @@ const TUT_CASA=[
 // ---- motor ----
 function tutCtx(m){ return m==='veh' ? !!VE.ed : !!(ED.on && edLot()); }
 function tutAuto(m){ if(TUT.seen[m] || TUT.on) return; setTimeout(()=>{ if(tutCtx(m) && !TUT.on) tutStart(m); },450); }
-function tutStart(m){ if(!tutCtx(m)) return; const E=tutEls(); if(m==='casa'){ const lv=ED.lv; ED.lv=0; const H=tutHouse(); ED.lv=lv; TUT.base={f:H.floors.length, w:H.walls.length, d:H.deco.length, r:H.roofs.length}; } TUT.on=m; TUT.steps=(m==='veh'?TUT_VEH:TUT_CASA).map(s=>({...s})); TUT.i=-1; TUT.praise=0; TUT.last='';
+function tutStart(m,ask){ if(!tutCtx(m)) return; TUT.short=false; const E=tutEls(); if(m==='casa'){ const lv=ED.lv; ED.lv=0; const H=tutHouse(); ED.lv=lv; TUT.base={f:H.floors.length, w:H.walls.length, d:H.deco.length, r:H.roofs.length}; } TUT.on=m; TUT.steps=(ask?[{say:'¡Hola otra vez! 👋 ¿Qué quieres repasar?', next:true, choice:true}]:[]).concat(m==='veh'?TUT_VEH:TUT_CASA).map(s=>({...s})); TUT.i=-1; TUT.praise=0; TUT.last='';
   E.box.className='m-'+m; E.box.classList.remove('alt'); E.box.hidden=false; E.guide.innerHTML=TUT_SVG[m]; E.name.textContent=m==='veh'?'LLANTITA':'ALMOHADITA'; document.body.classList.toggle('tut-casa',m==='casa');
   tutGo(0); clearInterval(TUT.timer); TUT.timer=setInterval(tutTick,90); }
 function tutGo(i){ const T=TUT; // salta los pasos que ya están hechos
@@ -18127,7 +18129,7 @@ function tutGo(i){ const T=TUT; // salta los pasos que ya están hechos
   T.i=i; if(i>=T.steps.length){ tutEnd(false); return; } const S=T.steps[i]; S._ok=false; S._scr=false; S._flip=0; if(T.el) T.el.box.classList.remove('alt'); tutSay(); }
 function tutSay(){ const T=TUT, E=T.el, S=T.steps[T.i]; if(!S) return; const tx=typeof S.say==='function'?S.say():S.say;
   if(tx!==T.last){ const first=T.last===''||!T.last.replace(/\(\d+ de \d+\)/,'').startsWith(tx.replace(/\(\d+ de \d+\)/,'').slice(0,20)); E.txt.innerHTML=tx; T.last=tx; if(first){ E.box.classList.add('tut-talk'); clearTimeout(T.talkT); T.talkT=setTimeout(()=>E.box.classList.remove('tut-talk'),1300); } }
-  E.next.hidden=!S.next; E.next.textContent=S.last?'¡Gracias!':'¡Entendido!'; E.prog.textContent=(T.i+1)+' / '+T.steps.length; }
+  E.next.hidden=!S.next; E.next.textContent=S.choice?'Todo desde el principio':S.last?'¡Gracias!':'¡Entendido!'; E.alt.hidden=!S.choice; E.box.querySelector('.tut-bub').classList.toggle('choice',!!S.choice); E.prog.textContent=(T.i+1)+' / '+T.steps.length; }
 function tutEnd(skipped,done){ const T=TUT; if(!T.on) return; T.seen[T.on]=1;
   if(done && !T.seen['r'+T.on]){ T.seen['r'+T.on]=1; try{ addCoins(200); }catch(e){} try{ if(VE.ed) vehUI(); }catch(e){} setTimeout(()=>flashNote('🎉 ¡Completaste el tutorial! +200 monedas 🪙'),60); }
   tutSave(); clearInterval(T.timer); T.timer=null; const m=T.on; T.on=null; T.steps=null;
