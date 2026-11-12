@@ -279,6 +279,10 @@ body.in-mg #hint{display:none!important;}
 .tbtn{width:90px;height:90px;border-radius:50%;border:none;font-family:var(--display);font-weight:800;font-size:15px;color:var(--thread);background:var(--label);box-shadow:0 5px 0 #c9c2ab;font-size:17px;}
 .tbtn.jump{width:108px;height:108px;background:var(--felt);box-shadow:0 5px 0 var(--felt-dk);font-size:20px;}
 
+.zone-banner{position:fixed;left:50%;top:calc(24% + env(safe-area-inset-top,0px));transform:translate(-50%,-10px) scale(.92);opacity:0;transition:opacity .5s,transform .5s;pointer-events:none;z-index:40;
+  display:flex;flex-direction:column;align-items:center;gap:0;font-family:var(--display);color:#fff;text-shadow:0 2px 0 rgba(10,40,80,.65),0 0 16px rgba(10,40,80,.55);}   /* v191: nombre de la zona del mar */
+.zone-banner.on{opacity:1;transform:translate(-50%,0) scale(1);}
+.zone-banner i{font-style:normal;font-size:40px;line-height:1.1;} .zone-banner b{font-size:30px;font-weight:800;white-space:nowrap;}
 .toast{position:fixed;left:50%;transform:translateX(-50%);top:calc(64px + env(safe-area-inset-top,0px));max-width:calc(100% - 32px);
   font-weight:800;font-size:15px;color:var(--thread);background:var(--label);padding:10px 16px;border-radius:12px;box-shadow:0 6px 18px var(--shadow);text-align:center;pointer-events:none;}
 
@@ -938,6 +942,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <div class="mg-ctl" id="mgCtl" hidden></div>
 <div class="mg-result" id="mgResult" hidden><div class="card"><h2 id="mgResTitle"></h2><div id="mgResText"></div><div class="coins" id="mgResCoinRow"><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="#f6c445" stroke="#b07a12" stroke-width="2.5"/><path d="M20 10l2.9 6 6.5.8-4.8 4.5 1.3 6.4L20 24.6l-5.9 3.1 1.3-6.4-4.8-4.5 6.5-.8z" fill="#fff3c4" stroke="#b07a12" stroke-width="1.4" stroke-linejoin="round"/></svg><b id="mgResCoins"></b></div><div class="row"><button class="btn" id="mgDone">Salir</button><button class="btn primary" id="mgAgain">Otra vez</button></div></div></div>
 <div class="toast" id="toast" role="status" hidden></div>
+<div class="zone-banner" id="zoneBanner" role="status" hidden></div>
 <div class="ad-offer" id="adOffer" hidden><span>¿El doble?</span><button class="btn" id="adOfferBtn" type="button"></button><button class="ad-x" id="adOfferX" type="button" aria-label="No, gracias">×</button></div>
 <div class="ad-screen" id="adScreen" hidden><div><p class="ad-tag">Anuncio de prueba</p><h2>Aquí va un anuncio</h2><p id="adScreenTxt"></p><div class="ad-row"><button class="btn" id="adScreenSkip" type="button">Cerrar sin premio</button><button class="btn primary" id="adScreenDone" type="button" hidden>¡Listo!</button></div></div></div>
 <div class="loader" id="loader" role="status" aria-live="polite">
@@ -1820,8 +1825,13 @@ const farRelief=(()=>{ const E=1560, N=ULTRA?72:MIN_Q?96:128;
 const WAVES=[[.8,.6,.35,1.1,.5,0],[-.5,.866,.55,1.5,.3,1.7],[.196,-.981,.9,2.1,.2,4.1]];   // dirección x,z · número de onda · velocidad · peso · fase
 const waterClock=()=>(Date.now()/1000)%3600;
 const WATER={seaA:.2, lakeA:.04, t:0};
+// v191: olas más grandes mientras más lejos de la costa (isla grande y las otras islas). Igual que seaOpenK de la tarjeta de video.
+const SEA_OPEN_MAX=2.2;
+function seaOpenK(x,z){ let s=Math.hypot(x,z)-coastRN(Math.atan2(z,x));
+  for(const I of [WI,JI,DI]){ const d=Math.hypot(x-I.x,z-I.z)-540; if(d<s) s=d; }
+  return SEA_OPEN_MAX*smooth(80,900,s); }
 function waveH(x,z,A,t){ let h=0; for(const [dx,dz,k,w,a,ph] of WAVES) h+=a*Math.sin(k*(dx*x+dz*z)+w*t+ph); return h*A; }
-function waterSurfaceY(x,z){ if(inLakeWater(x,z)) return WATER_Y+waveH(x,z,WATER.lakeA,WATER.t); const r=riverLevelAt(x,z); return r!==null ? r+waveH(x,z,WATER.lakeA,WATER.t) : SEA_Y+waveH(x,z,WATER.seaA,WATER.t); }
+function waterSurfaceY(x,z){ if(inLakeWater(x,z)) return WATER_Y+waveH(x,z,WATER.lakeA,WATER.t); const r=riverLevelAt(x,z); return r!==null ? r+waveH(x,z,WATER.lakeA,WATER.t) : SEA_Y+waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t); }
 // Profundidad guardada en una textura (se calcula una vez): valor = (nivel - fondo + 2) / 12
 function depthTexture(N,cx,cz,E,level,fast){
   const data=new Uint8Array(N*N);
@@ -1843,11 +1853,15 @@ function waterRipple(x,z,amp){
   if(amp>.14) splashBurst(x,waterSurfaceY(x,z),z,amp);
 }
 const WATER_GLSL=`
-uniform float uT; uniform float uA; uniform vec4 uRip[${RIP_N}];
+uniform float uT; uniform float uA; uniform float uOpen; uniform vec4 uRip[${RIP_N}];
+float seaOpenK(vec2 p){ if(uOpen<.5) return 0.0; float a=atan(p.y,p.x), da=a-${AIRPORT.a.toFixed(3)}; da=atan(sin(da),cos(da));
+  float s=length(p)-(${ISLAND_R2.toFixed(1)}+95.0*sin(3.0*a+.4)+60.0*sin(5.0*a+2.2)+35.0*sin(8.0*a+1.0)+18.0*sin(13.0*a+.5)-190.0*exp(-(da/.22)*(da/.22)));
+  ${[WI,JI,DI].map(I=>`s=min(s,length(p-vec2(${I.x.toFixed(1)},${I.z.toFixed(1)}))-540.0);`).join(' ')}
+  return ${SEA_OPEN_MAX.toFixed(2)}*smoothstep(80.0,900.0,s); }
 float waveSum(vec2 p, out vec2 g){
   float h=0.0; g=vec2(0.0);
   ${WAVES.map(([dx,dz,k,w,a,ph])=>`{ vec2 d=vec2(${dx.toFixed(3)},${dz.toFixed(3)}); float s=${k.toFixed(3)}*dot(d,p)+${w.toFixed(3)}*uT+${ph.toFixed(3)}; h+=${a.toFixed(3)}*sin(s); g+=${(a*k).toFixed(4)}*cos(s)*d; }`).join('\n  ')}
-  g*=uA; return h*uA;
+  float ok=1.0+seaOpenK(p); g*=uA*ok; return h*uA*ok;
 }
 float ripSum(vec2 p, inout vec2 g, out float foam){
   float h=0.0; foam=0.0;
@@ -1860,7 +1874,7 @@ float ripSum(vec2 p, inout vec2 g, out float foam){
   return h;
 }`;
 function makeWaterMat(o){
-  const U={uT:{value:0}, uA:{value:o.A}, uRip:{value:ripples}, uDepth:{value:o.depth.tex}, uRect:{value:o.depth.rect},
+  const U={uT:{value:0}, uA:{value:o.A}, uOpen:{value:o.open?1:0}, uRip:{value:ripples}, uDepth:{value:o.depth.tex}, uRect:{value:o.depth.rect},
     uShallow:{value:hexLin(o.shallow)}, uDeep:{value:hexLin(o.deep)}, uDeepD:{value:o.deepD}, uSky:{value:new THREE.Color()}, uAmb:{value:new THREE.Color(.6,.6,.6)},
     uSunD:{value:new THREE.Vector3(0,1,0)}, uSunC:{value:new THREE.Color(1,1,1)}, uDetail:{value:o.detail}, uTile:{value:o.tile}, uFoamK:{value:o.foam}, uOpacity:{value:o.opacity}};
   return new THREE.ShaderMaterial({
@@ -1928,6 +1942,7 @@ function makeWaterMat(o){
         float foam=(1.0-smoothstep(0.0,.1+.07*sin(uT*1.6+p.x*.07+p.y*.05),depth))*step(-.4,depth)*(.45+.55*smoothstep(.25,.7,det.g));   // línea de espuma fina y rota donde llega el agua
         foam+=smoothstep(.82,1.0,sw)*shore*.75;
         foam+=clamp(rf*6.0,0.0,1.0)*.7;
+        { float ok=seaOpenK(p); foam+=ok*.45*smoothstep(.45,.95,vH/(uA*(1.0+ok)*1.3))*(.4+.6*smoothstep(.3,.7,det.g)); }   // v191: espuma en las crestas, mar adentro
         #if FLOW
         foam+=vFlow.z*smoothstep(.2,.7,det.r)*1.3;   // espuma en los rápidos
         #endif
@@ -1965,7 +1980,7 @@ function splashBurst(x,y,z,amp){ splash.burst(x,y,z,amp); }
 // Quién toca el agua: al entrar salpica fuerte; al moverse deja ondas detrás
 function waterTouch(st,x,y,z,speed,dt){
   const rl=riverLevelAt(x,z), lake=inLakeWater(x,z)||rl!==null, lvl=inLakeWater(x,z)?WATER_Y:rl!==null?rl:SEA_Y, ground=terrainH(x,z);
-  const surf=lvl+(lake?waveH(x,z,WATER.lakeA,WATER.t):waveH(x,z,WATER.seaA,WATER.t));
+  const surf=lvl+(lake?waveH(x,z,WATER.lakeA,WATER.t):waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t));
   const inW = ground<lvl-.05 && y<surf+.05 && y>surf-2.4;
   const vy=st.py===undefined?0:(y-st.py)/Math.max(dt,1e-3); st.py=y;
   if(inW && !st.inW) waterRipple(x,z,.08+Math.min(.27,Math.max(0,-vy)*.03+speed*.012));
@@ -1999,7 +2014,7 @@ const seaSurface=(()=>{
   for(let r=0;r<4;r++){ const pts=[]; for(let x=0;x<=size;x+=4) pts.push([x,32+r*64+Math.sin(x/size*Math.PI*4)*8]); TK.stitch(g,pts,{dash:10,gap:9,lw:3,col:'rgba(255,255,255,.5)',hi:'rgba(255,255,255,.4)',shadow:'rgba(10,40,80,.14)',hole:'rgba(10,40,80,.16)',phase:r*5}); }
   seaTex=new THREE.CanvasTexture(c); seaTex.wrapS=seaTex.wrapT=THREE.RepeatWrapping; seaTex.encoding=THREE.sRGBEncoding;
   const S=3000; seaTex.repeat.set(S/SEA_TILE,S/SEA_TILE);
-  const mat=makeWaterMat({A:WATER.seaA, depth:depthTexture(MIN_Q?768:1024,0,0,2000,SEA_Y,true), shallow:'#78d3df', deep:'#2266a8', deepD:7, detail:seaTex, tile:SEA_TILE, foam:1, opacity:.86});
+  const mat=makeWaterMat({A:WATER.seaA, depth:depthTexture(MIN_Q?768:1024,0,0,2000,SEA_Y,true), shallow:'#78d3df', deep:'#2266a8', deepD:7, detail:seaTex, tile:SEA_TILE, foam:1, opacity:.86, open:1});
   waterMats.push(mat);
   const m=new THREE.Mesh(ringGeometry(1500,MIN_Q?60:110,MIN_Q?64:128,2.4), mat); m.frustumCulled=false;
   m.position.y=SEA_Y; m.renderOrder=2; scene.add(m);
@@ -2825,6 +2840,41 @@ const uwRnd=(i,k)=>rlHash(i*7+31,k*13+5);
   instanced(sphereG, matO, lumps, (o,[x,y,z,r],i)=>{ o.position.set(x,y,z); o.scale.set(r*1.15,r*.85,r); o.rotation.set(uwRnd(i,1)*.6, uwRnd(i,2)*6.3, 0); }, {shadow:false});
   scene.children.slice(n0).forEach(o=>o.traverse(q=>{ q.userData.noCol=true; }));   // tienen su propio choque (uwCollide); el choque automático los taparía
 })();
+// ---------- v191: el Barco Hundido ----------
+// Un barco viejo de madera, ladeado en el talud (a ~50 m), con el mástil roto y un cofre con monedas que brillan en la cubierta.
+const WRECK=(()=>{ const a=-1.13, r=1.45*coastRN(a)+60, x=Math.cos(a)*r, z=Math.sin(a)*r; return {a, x, z, y:terrainH(x,z), yaw:a+1.35, L:22, W:6.4}; })();
+(function wreck(){ const W=WRECK, g=new THREE.Group();
+  const wood=felt('#6b5236','rgba(30,20,10,.25)'), woodD=felt('#4f3c28','rgba(20,12,5,.3)'), deckM=felt('#8a6c48','rgba(30,20,10,.22)'), moss=felt('#5f7a4a','rgba(10,30,10,.2)'), gold=new THREE.MeshBasicMaterial({color:'#ffd34d'});
+  // casco: una caja con el fondo angosto y la proa en punta
+  const hull=new THREE.BoxGeometry(W.W,3.4,W.L,3,3,10), p=hull.attributes.position;
+  for(let i=0;i<p.count;i++){ let x=p.getX(i), y=p.getY(i), z=p.getZ(i); if(y<0) x*=.5+.5*(1+y/1.7); const bow=z>W.L*.22?1-Math.pow((z-W.L*.22)/(W.L*.28),1.6)*.92:1; x*=Math.max(.06,bow); if(z>W.L*.3) y+=(z-W.L*.3)*.25; p.setXYZ(i,x,y,z); }
+  hull.computeVertexNormals(); const hm=new THREE.Mesh(hull,wood); hm.position.y=1.7; g.add(hm);
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(W.W*.9,.25,W.L*.62), deckM); deck.position.set(0,3.35,-1.2); g.add(deck);
+  // tablas rotas (huecos) y musgo
+  for(let k=0;k<5;k++){ const b=new THREE.Mesh(new THREE.BoxGeometry(.6,.1,1.8+k%3), woodD); b.position.set(-2+k*1.1,3.5,-3+(k%2)*2); b.rotation.set(.2*(k%2?1:-1),k*.4,.15); g.add(b); }
+  for(let k=0;k<6;k++){ const m=new THREE.Mesh(new THREE.SphereGeometry(.9,8,6), moss); m.scale.set(1.2,.35,1); m.position.set((k%2?1:-1)*(W.W*.48), .9+(k%3)*.7, -7+k*2.6); g.add(m); }
+  // camarote de atrás
+  const cab=new THREE.Mesh(new THREE.BoxGeometry(W.W*.8,2.6,4), wood); cab.position.set(0,4.6,-W.L*.38); g.add(cab);
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(W.W*.9,.3,4.6), woodD); roof.position.set(0,6,-W.L*.38); roof.rotation.z=.12; g.add(roof);
+  // ventanitas redondas
+  for(const s of [1,-1]) for(let k=0;k<4;k++){ const t=new THREE.Mesh(new THREE.TorusGeometry(.32,.08,6,14), gold.clone()); t.material.color.set('#b08d3a'); t.position.set(s*W.W*.47,2.2,-5+k*3.2); t.rotation.y=Math.PI/2; g.add(t); }
+  // mástil roto (y su pedazo en el suelo, abajo) con su canastita
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(.28,.34,9,8), woodD); mast.position.set(0,7.8,1.5); mast.rotation.z=-.22; g.add(mast);
+  const yard=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,6,6), woodD); yard.position.set(-.8,10.5,1.5); yard.rotation.set(0,0,Math.PI/2-.3); g.add(yard);
+  const nest=new THREE.Mesh(new THREE.CylinderGeometry(.9,.7,.8,10,1,true), wood); nest.material=wood; nest.position.set(-1.1,12,1.5); nest.rotation.z=-.22; g.add(nest);
+  // el cofre del tesoro, abierto, con monedas que brillan
+  const ch=new THREE.Group(); ch.position.set(1.2,3.5,-4.2); ch.rotation.y=.5; g.add(ch);
+  const cb=new THREE.Mesh(new THREE.BoxGeometry(1.6,.9,1), woodD); cb.position.y=.45; ch.add(cb);
+  const lid=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,1.6,12,1,false,0,Math.PI), woodD); lid.rotation.set(-1.1,0,Math.PI/2); lid.position.set(0,1.05,-.45); ch.add(lid);
+  for(let k=0;k<14;k++){ const c=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,.04,10), gold); c.position.set(-.6+(k%5)*.3, .92+(k%3)*.05, -.3+Math.floor(k/5)*.3); c.rotation.set(.3*(k%3),0,.2*(k%2)); ch.add(c); }
+  for(let k=0;k<6;k++){ const c=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,.04,10), gold); c.position.set(-1.2+k*.35,.05,.9+(k%2)*.3); ch.add(c); }
+  g.position.set(W.x, W.y-.8, W.z); g.rotation.set(.06, W.yaw, .2);   // ladeado
+  g.traverse(o=>{ if(o.isMesh){ o.receiveShadow=true; o.userData.noCol=true; } }); scene.add(g);
+  // el pedazo del mástil en el suelo
+  { const c=Math.cos(W.yaw), s=Math.sin(W.yaw), px=W.x+c*7-s*4, pz=W.z-s*7-c*4; const m=new THREE.Mesh(new THREE.CylinderGeometry(.26,.28,6,8), woodD); m.position.set(px,terrainH(px,pz)+.25,pz); m.rotation.set(Math.PI/2,0,.6); m.userData.noCol=true; scene.add(m); }
+  // choque: el casco (se puede nadar encima y alrededor)
+  for(let k=-4;k<=4;k++){ const lz=k*W.L/9.5, rr=k>2?2.2-(k-2)*.6:2.9, c=Math.cos(W.yaw), s=Math.sin(W.yaw), px=W.x+s*lz, pz=W.z+c*lz; obstacles.push({x:px, z:pz, r:Math.max(1,rr), top:W.y+3.4, walk:true}); }
+})();
 // ---------- v191: plantas y corales del mar ----------
 // Arrecife Arcoíris (corales de todos colores), Bosque de Algas (algas altísimas que se mecen), Cuevas Coral, la plataforma de
 // alrededor de la isla y lo hondo (en la Fosa Brillante hay corales que brillan). Todo fijo. Se dibuja por pedacitos de 96 m y solo
@@ -2916,6 +2966,8 @@ const UW_ZONES={reef:{a0:-.82, a1:-.68, c0:1.02, c1:1.28}, kelp:{a0:-.35, a1:-.1
   scatter('fan',220,-.64,-.45,1.38,1.6,1.2,2.4,REEF,2.2,{steep:.45}); scatter('anem',130,-.64,-.45,1.36,1.6,.8,1.4,REEF,.8); scatter('sponge',90,-.64,-.45,1.36,1.6,.9,1.8,SOFT,2);
   scatter('tubes',70,-.64,-.45,1.36,1.6,.9,1.6,REEF,1.2); scatter('brain',50,-.64,-.45,1.36,1.6,.7,1.5,REEF,.7);
   UW.domes.forEach(D=>{ for(let k=0;k<14;k++){ const ph=D.door+(k<7?-1:1)*(D.dW+.08+.05*(k%7)), r=D.R+1.5+2*rnd(), x=D.x+Math.cos(ph)*r, z=D.z+Math.sin(ph)*r; add(pick(['stag','bubble','anem','tubes','brain']),x,terrainH(x,z),z,.9+.6*rnd(),pick(REEF),rnd()*6.3); } });
+  { const W=WRECK, c=Math.cos(W.yaw), s=Math.sin(W.yaw); for(let k=0;k<Math.round(70*QF);k++){ const q=rnd()*6.283, r=6+12*rnd(), lx=Math.cos(q)*r, lz=Math.sin(q)*(r+6);   // el barco: lleno de corales y algas
+      if(Math.abs(lx)<W.W*.7 && Math.abs(lz)<W.L*.55) continue; const x=W.x+lx*c+lz*s, z=W.z-lx*s+lz*c; add(pick(['anem','fan','sponge','tubes','bubble','stag','grass','grass']),x,terrainH(x,z),z,.8+.8*rnd(),pick(rnd()<.5?REEF:SOFT),rnd()*6.283); } }
   // la plataforma de alrededor de la isla: de todo un poco
   { const n=Math.round(1400*QF), KS=['brain','stag','stag','bubble','fan','fan','tubes','table','sponge','anem','anem'];   // manchitas de arrecife regadas por la plataforma
     for(let i=0,t=0;i<n&&t<n*6;t++){ const a=-Math.PI+2*Math.PI*rnd(), c=1.03+.4*rnd(), [x0,z0]=at(a,c), h0=terrainH(x0,z0); if(h0>SEA_Y-4 || blocked(x0,z0,3)) continue; const cols=rnd()<.5?REEF:SOFT, m=12+Math.floor(rnd()*10);
@@ -3045,6 +3097,8 @@ const UWA={sp:[], on:false};
   for(let i=0;i<nQ(5);i++){ const [x,z]=inZ(CZ); school(x,z,terrainH(x,z)+5,10,8+6*rnd(),pick(FCOL),.6); }
   for(let i=0;i<nQ(45);i++){ const [x,z]=at(-Math.PI+2*Math.PI*rnd(),1.05+.35*rnd()); if(deep(x,z)<4) continue; school(x,z,terrainH(x,z)+2.5,6+Math.floor(rnd()*8),6+8*rnd(),pick(FCOL),.55); }
   for(let i=0;i<nQ(10);i++){ const [x,z]=OZ(); school(x,z,SEA_Y-8-20*rnd(),14+Math.floor(rnd()*10),12+10*rnd(),pick(['#9fb7c9','#c8d6e0','#7fa3bf']),.8); }   // sardinas en mar abierto
+  school(WRECK.x,WRECK.z,WRECK.y+5,14,9,'#ffd23f',.6); school(WRECK.x+6,WRECK.z-4,WRECK.y+8,12,12,'#3fa7ff',.6);   // el barco hundido
+  add('octo',{k:'o', x:WRECK.x+Math.sin(WRECK.yaw)*9, z:WRECK.z+Math.cos(WRECK.yaw)*9, y0:terrainH(WRECK.x+Math.sin(WRECK.yaw)*9,WRECK.z+Math.cos(WRECK.yaw)*9), ph:1, s:1.4, col:'#ff8a5c', R:3});
   // peces payaso en sus anémonas del arrecife
   { const A=(UWP.items.anem||[]).filter(e=>{ const a=Math.atan2(e[2],e[0]); return a>RZ.a0 && a<RZ.a1; }); for(let i=0;i<Math.min(A.length,nQ(45));i++){ const e=A[Math.floor(rnd()*A.length)]; for(let j=0;j<2;j++) add('clown',{k:'h', x:e[0], z:e[2], y0:e[1]+.7*e[3]+.3, r:.6+.4*rnd(), w:.5+.4*rnd(), ph:rnd()*6.3, A:.25, s:.5, R:2}); } }
   // tortugas
@@ -3107,6 +3161,31 @@ function uwAnimalsUpdate(){ const cam=camera.position, off=(typeof SP!=='undefin
         n++; } }
     m.count=n; if(n){ m.instanceMatrix.needsUpdate=true; if(m.instanceColor) m.instanceColor.needsUpdate=true; } m.visible=n>0;
     if(S.lure){ S.lure.count=n; S.lure.visible=n>0; if(n) S.lure.instanceMatrix.needsUpdate=true; } } }
+// ---------- v191: zonas del mar con nombre ----------
+// Al entrar a una zona sale su nombre en grande; en el mapa aparecen marcadas.
+const UW_ZONE_LIST=(()=>{ const at=(a,c)=>{ const r=c*coastRN(a); return [Math.cos(a)*r, Math.sin(a)*r]; };
+  const inBand=(Z,x,z)=>{ const a=Math.atan2(z,x), c=Math.hypot(x,z)/coastRN(a); return a>Z.a0 && a<Z.a1 && c>Z.c0-.02 && c<Z.c1+.02; };
+  const R=UW_ZONES.reef, K=UW_ZONES.kelp, C={a0:-.63, a1:-.46, c0:1.36, c1:1.6}, F=SEA_FOSA;
+  const fosaK=(x,z)=>{ const d=Math.hypot(x,z); if(d<F.d0+100 || d>F.d1-100) return false; return Math.abs(d*angD(Math.atan2(z,x),F.a))<F.w*1.1; };
+  return [
+    {id:'arrecife', n:'Arrecife Arcoíris', e:'🪸', c:at((R.a0+R.a1)/2,(R.c0+R.c1)/2), in:(x,z)=>inBand(R,x,z)},
+    {id:'algas', n:'Bosque de Algas', e:'🌿', c:at((K.a0+K.a1)/2,(K.c0+K.c1)/2), in:(x,z)=>inBand(K,x,z)},
+    {id:'cuevas', n:'Cuevas Coral', e:'🪨', c:at((C.a0+C.a1)/2,(C.c0+C.c1)/2), in:(x,z)=>inBand(C,x,z)},
+    {id:'barco', n:'Barco Hundido', e:'⚓', c:[WRECK.x,WRECK.z], in:(x,z)=>Math.hypot(x-WRECK.x,z-WRECK.z)<55},
+    {id:'fosa', n:'Fosa Brillante', e:'✨', c:[Math.cos(F.a)*(F.d0+F.d1)/2, Math.sin(F.a)*(F.d0+F.d1)/2], in:fosaK},
+    {id:'abierto', n:'Mar Abierto', e:'🐋', c:at(-2.6,1.75), in:(x,z)=>{ const d=Math.hypot(x,z), a=Math.atan2(z,x); return seaShelfDist(x,z,d-1.45*coastRN(a))>80; }} ]; })();
+const UWZ={cur:null, t:0, last:new Map()};
+function uwZoneTick(){ if(++UWZ.t%10) return; if(state!=='play' || (typeof SP!=='undefined' && SP.on)) return;
+  const p=player.pos; let z=null;
+  if(p.y<SEA_Y+4 && p.y>CAVE_TOP && terrainH(p.x,p.z)<SEA_Y-1.5 && (player.swim || underwaterView || p.y<SEA_Y+.5) || shipOnDeck)   // en el mar (nadando o en el barco)
+    for(const Z of UW_ZONE_LIST) if(Z.in(p.x,p.z)){ z=Z; break; }
+  if(z!==UWZ.cur){ UWZ.cur=z; if(z){ const now=performance.now(), was=UWZ.last.get(z.id)||-1e9; if(now-was>45000){ UWZ.last.set(z.id,now); uwZoneBanner(z); } } } }
+function uwZoneBanner(Z){ let el=ui('zoneBanner'); if(!el) return; el.innerHTML='<i>'+Z.e+'</i><b></b>'; el.querySelector('b').textContent=Z.n; el.hidden=false; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
+  clearTimeout(uwZoneBanner.t); uwZoneBanner.t=setTimeout(()=>{ el.classList.remove('on'); setTimeout(()=>{ if(!el.classList.contains('on')) el.hidden=true; },600); },3200); }
+// en el mapa
+function drawUwZones(){ for(const Z of UW_ZONE_LIST){ const [px,py]=toScreen(...toMap(Z.c[0],Z.c[1])); if(px<-60||py<-30||px>MAP_PX+60||py>MAP_PX+30) continue;
+    mctx.fillStyle='rgba(30,80,140,.85)'; mctx.beginPath(); mctx.arc(px,py,4.5*mk,0,7); mctx.fill();
+    pillPlace(Z.e+' '+Z.n, [[px,py+14*mk],[px,py-14*mk],[px+8*mk,py,1],[px-8*mk,py,-1]], 'rgba(214,236,250,.94)', '#1d4c78'); } }
 // cada cuadro: qué pedacitos se ven, el vaivén del agua y las almejas
 const _uwM=new THREE.Matrix4(), _uwM2=new THREE.Matrix4(), _uwQ=new THREE.Quaternion(), _uwV=new THREE.Vector3(), _uwS=new THREE.Vector3(), _uwE=new THREE.Euler();
 function uwPlantsUpdate(t){ UW_T.value=WATER.t;
@@ -5536,7 +5615,7 @@ const mapTerrain=document.createElement('canvas'); mapTerrain.width=mapTerrain.h
     let r,g,b; const rl=h>SEA_Y?riverLevelAt(x,z):null;
     if(inLakeWater(x,z) && h<WATER_Y){ r=126; g=186; b=226; }
     else if(rl!==null && h<rl){ r=112; g=180; b=228; }
-    else if(h<SEA_Y){ const t=Math.min(1,(SEA_Y-h)/30); r=150-95*t; g=212-90*t; b=238-70*t; }
+    else if(h<SEA_Y){ const t=Math.min(1,(SEA_Y-h)/30); r=150-95*t; g=212-90*t; b=238-70*t; if(h<-40){ const k=smooth(-40,-170,h)*.75; r=lerp(r,28,k); g=lerp(g,62,k); b=lerp(b,120,k); } }   // v191: lo hondo, más oscuro
     else {
       const slope=Math.hypot(at(i+1,j)-at(i-1,j), at(i,j+1)-at(i,j-1))/(2*step);
       if(coastC(x,z)>.895 && h<4){ r=239; g=217; b=166; }
@@ -5771,6 +5850,7 @@ function drawMap(force){
   tps.sort((a,b)=>(b.hov?1:0)-(a.hov?1:0) || (b.p.isle?1:0)-(a.p.isle?1:0)).forEach(({p,px,py,hov,r})=>{   // v149: las islas, antes que los demás (y siempre con su nombre)
     if(p.isle && !hov){ const t=(p.lock&&p.lock()?'🔒 ':'')+p.isle, c=[[px,py-r-14*mk],[px,py+r+14*mk],[px+r+4*mk,py,1],[px-r-4*mk,py,-1]]; if(!pillPlace(t,c,'rgba(251,243,223,.95)','#5a4426')) pillPlace(t,c,'rgba(251,243,223,.95)','#5a4426',true); return; }
     pillPlace(p.lock&&p.lock()?p.name+' · llega en barco':p.name, [[px,py+r+14*mk],[px,py-r-14*mk],[px+r+4*mk,py,1],[px-r-4*mk,py,-1]], hov?'#5a4426':'rgba(251,243,223,.95)', hov?'#fbf3df':'#5a4426', hov); });
+  drawUwZones();   // v191: zonas del mar
   cars.forEach(c=>{
     const [px,py]=toScreen(...toMap(c.x,c.z)), ang=Math.atan2(-Math.cos(c.h),-Math.sin(c.h)), w=Math.max(14, CAR_L/(2*MAP_E)*MAP_PX*mapView.z), hgt=w*.55;
     mctx.save(); mctx.translate(px,py); mctx.rotate(ang); mctx.scale(mk,mk);
@@ -7732,7 +7812,7 @@ const SHIP_OBS=[{t:'c', x:0, z:1.2, r:.42}, {t:'c', x:0, z:HELM_Z, r:.32}, {t:'b
 })();
 function shipPlace(t){ const G=SH.g; G.position.set(SH.x,0,SH.z); G.rotation.set(0,SH.h,0);
   if(Math.hypot(SH.x-camera.position.x,SH.z-camera.position.z)>240) return;
-  SH.parts.body.rotation.set(Math.sin(t*.9)*.012, 0, Math.sin(t*.7+1)*.02); SH.parts.body.position.y=Math.sin(t*1.1)*.06;
+  { const k=1+seaOpenK(SH.x,SH.z)*1.6; SH.parts.body.rotation.set(Math.sin(t*.9)*.012*k, 0, Math.sin(t*.7+1)*.02*k); SH.parts.body.position.y=Math.sin(t*1.1)*.06*k; }   // v191: mar adentro se mece más
   const q=SH.parts.sail.geometry.attributes.position, b=SH.parts.sail.geometry.userData.base, k=.35+Math.min(1,Math.abs(SH.v)/10)*.9;
   for(let i=0;i<q.count;i++) q.setZ(i,b[i*3+2]*k+Math.sin(t*2+b[i*3]*.8)*.05); q.needsUpdate=true; SH.parts.sail.geometry.computeVertexNormals();
   SH.parts.flag.rotation.x=Math.sin(t*4)*.12; }
@@ -19849,7 +19929,7 @@ const SWIM_EXIT=SEA_Y-.9;     // vuelve a caminar cuando el fondo sube de aquí 
 const FLOAT_Y=SEA_Y-1.07;
 // dónde se nada: el mar, el río, el estanque y la poza de la cascada (en el lago no: es bajito). Devuelve el nivel del agua (v123)
 const swimLevel=(x,z)=>{ if(inLakeWater(x,z)) return null; const r=riverLevelAt(x,z); return r!==null?r:SEA_Y; };
-const swimWave=(x,z)=>riverLevelAt(x,z)!==null?waveH(x,z,WATER.lakeA,WATER.t):waveH(x,z,WATER.seaA,WATER.t);
+const swimWave=(x,z)=>riverLevelAt(x,z)!==null?waveH(x,z,WATER.lakeA,WATER.t):waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t);
 // Al nadar, el peluche se inclina desde el centro del cuerpo (no desde los pies),
 // para que al nadar acostado la espalda quede en la superficie y no se hunda.
 const SWIM_PIVOT=1.12;
@@ -20232,7 +20312,7 @@ function update(dt,t){ myLabelUpdate();
     camera.lookAt(target);
   }
   setUnderwaterView(!SP.on && camera.position.y>CAVE_TOP && camera.position.y < waterLevelAt(camera.position.x,camera.position.z)-.03);
-  uwHud();   // v191: el medidor de profundidad
+  uwHud(); uwZoneTick();   // v191: el medidor de profundidad y las zonas del mar
 
   // Burbujas cuando la cabeza está bajo el agua
   let emitter=null;
