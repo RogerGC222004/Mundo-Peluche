@@ -3258,7 +3258,7 @@ const fishParts=(()=>{
   const n=MAP.fish.length*6, mat=new THREE.MeshStandardMaterial({roughness:1});
   const tailG=new THREE.ConeGeometry(.16,.3,4); tailG.rotateZ(Math.PI/2);
   const mk=(geo,m)=>{ const im=new THREE.InstancedMesh(geo,m,n); im.frustumCulled=false; im.castShadow=false; scene.add(im); return im; };
-  const out={body:mk(sphereG,mat), tail:mk(tailG,mat), eye:mk(sphereG,new THREE.MeshStandardMaterial({color:0x111111, roughness:.5}))}; DECOR.push(out.body,out.tail,out.eye); return out;
+  const out={body:mk(sphereG,mat), tail:mk(tailG,mat), eye:mk((()=>{ const S=new THREE.SphereGeometry(1,8,6), P=[]; for(const z of [1,-1]){ P.push([S.clone(),'#f4f4f2',new THREE.Matrix4().compose(new THREE.Vector3(0,0,z*1.95),new THREE.Quaternion(),new THREE.Vector3(1,1,.45))]); P.push([S.clone(),'#0c0c0c',new THREE.Matrix4().compose(new THREE.Vector3(0,-.36,z*2.25),new THREE.Quaternion(),new THREE.Vector3(.55,.55,.4))]); } return vegMerge(P); })(), new THREE.MeshStandardMaterial({vertexColors:true, roughness:.5}))}; DECOR.push(out.body,out.tail,out.eye); return out;   // v194: un ojito de cada lado
 })();
 (function fish(){
   const cols=['#ffb347','#7fc8f8','#f78fb3'].map(h=>new THREE.Color(h).convertSRGBToLinear());
@@ -3270,7 +3270,7 @@ const fishParts=(()=>{
   });
 })();
 const _fm=new THREE.Matrix4(), _fl=new THREE.Matrix4(), _fp=new THREE.Object3D();
-const FISH_BODY=new THREE.Matrix4().makeScale(.36,.22,.13), FISH_EYE=new THREE.Matrix4().compose(new THREE.Vector3(.22,.05,.11), new THREE.Quaternion(), new THREE.Vector3(.035,.035,.035));
+const FISH_BODY=new THREE.Matrix4().makeScale(.36,.22,.13), FISH_EYE=new THREE.Matrix4().compose(new THREE.Vector3(.2,.05,0), new THREE.Quaternion(), new THREE.Vector3(.055,.055,.055));
 function updateFish(t,force){
   let any=false;
   for(const s of schools){
@@ -8655,8 +8655,9 @@ function googlyEyes(par,x,y,z,r,o={}){ const dir=o.dir||[0,0,1], out=[];
   return out; }
 const _gw=new THREE.Vector3(), _gv=new THREE.Vector3(), _ga=new THREE.Vector3(), _gq=new THREE.Quaternion();
 function googlyTick(dt){ if(!GOOGLY.list.length || dt<=0) return; dt=Math.min(dt,.05); const cam=camera.position;
+  if((GOOGLY.t=(GOOGLY.t||0)+1)%900===0) GOOGLY.list=GOOGLY.list.filter(e=>!(e.off>3000));   // los que llevan mucho fuera de la escena
   for(const e of GOOGLY.list){ let on=false; for(let q=e.g, k=0; q && k<24; q=q.parent, k++){ if(!q.visible) break; if(q===scene){ on=true; break; } }   // (también si ya no está en la escena)
-    if(!on){ e.first=true; continue; } e.g.getWorldPosition(_gw); if(_gw.distanceToSquared(cam)>40*40){ e.first=true; continue; }
+    if(!on){ e.first=true; e.off=(e.off||0)+1; continue; } e.off=0; e.g.getWorldPosition(_gw); if(_gw.distanceToSquared(cam)>40*40){ e.first=true; continue; }
     if(e.first){ e.first=false; e.last.copy(_gw); e.lv.set(0,0,0); continue; }
     _gv.copy(_gw).sub(e.last).divideScalar(dt); _ga.copy(_gv).sub(e.lv).divideScalar(dt).clampLength(0,60); e.last.copy(_gw); e.lv.copy(_gv);
     _ga.set(-_ga.x,-9.8-_ga.y,-_ga.z); e.g.getWorldQuaternion(_gq); _ga.applyQuaternion(_gq.invert());   // fuerza que siente el ojo, en su propio marco
@@ -10307,7 +10308,7 @@ const petShineM=new THREE.MeshBasicMaterial({color:0xffffff});
 const petWingM=new THREE.MeshStandardMaterial({color:0xffffff, transparent:true, opacity:.6, roughness:.3, side:THREE.DoubleSide, depthWrite:false});
 const PETG={cone:new THREE.ConeGeometry(1,1,12), cyl:new THREE.CylinderGeometry(1,1,1,12), half:new THREE.SphereGeometry(1,20,10,0,Math.PI*2,0,Math.PI/2), tor:new THREE.TorusGeometry(1,.22,8,22)};
 function pp(par,geo,mat,x,y,z,sx,sy,sz,rx,ry,rz){ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.scale.set(sx,sy===undefined?sx:sy,sz===undefined?sx:sz); if(rx||ry||rz) m.rotation.set(rx||0,ry||0,rz||0); par.add(m); return m; }
-function petEyes(head,y,z,sep,r,yaw=.3){ [-1,1].forEach(s=>{ pp(head,sphereG,eyeMat,s*sep,y,z,r,r*1.2,r*.7,0,s*yaw); pp(head,sphereG,petShineM,s*sep+r*.35,y+r*.45,z+r*.5,r*.3); }); }
+function petEyes(head,y,z,sep,r,yaw=.3){ googlyEyes(head,sep,y,z+r*.85,r*1.6,{dir:[Math.sin(yaw*1.4),.1,Math.cos(yaw*1.4)]}); }   // v194: ojos saltones (antes puntitos negros)
 function grp(par,x,y,z){ const g=new THREE.Group(); g.position.set(x,y,z); par.add(g); return g; }
 function petLeg(par,M,x,y,z,len,r){ const pv=grp(par,x,y,z); pp(pv,sphereG,M,0,-len/2,0,r,len/2+r*.4,r); pp(pv,sphereG,M,0,-len+.01,r*.35,r*1.15,r*.75,r*1.35); return pv; }
 function buildPet(spec){
@@ -10368,7 +10369,7 @@ function buildPet(spec){
   } else if(spec.k==='frog'){
     const by=.2; pp(body,sphereG,M,0,by,0,.27,.17,.25); pp(body,sphereG,M2,0,by-.05,.06,.22,.11,.19);
     const hd=P.head=grp(body,0,by+.08,.12);
-    [-1,1].forEach(s=>{ pp(hd,sphereG,M,s*.1,.1,0,.075); pp(hd,sphereG,pm('#ffffff'),s*.1,.12,.035,.05); pp(hd,sphereG,eyeMat,s*.1,.125,.07,.025); });
+    [-1,1].forEach(s=>pp(hd,sphereG,M,s*.1,.1,0,.075)); googlyEyes(hd,.1,.13,.05,.058,{dir:[.25,.45,1]});   // v194: ojos saltones sobre sus bolitas
     pp(hd,sphereG,pm('#ff8fa8'),0,-.02,.13,.06,.012,.02);   // sonrisa
     [[-1,1],[1,1]].forEach(([sx])=>P.legs.push(petLeg(body,M,sx*.14,.14,.14,.12,.05)));
     [[-1,-1],[1,-1]].forEach(([sx])=>{ const pv=grp(body,sx*.2,.12,-.1); pp(pv,sphereG,M,0,0,0,.08,.08,.15); pp(pv,sphereG,M,0,-.08,.08,.08,.03,.1); P.legs.push(pv); });
@@ -10384,7 +10385,7 @@ function buildPet(spec){
   } else if(spec.k==='snail'){
     const by=.08; pp(body,sphereG,M2,0,by,.04,.11,.075,.3); pp(body,sphereG,M2,0,by+.05,.3,.08,.09,.08);
     const sh=grp(body,0,by+.2,-.05); pp(sh,sphereG,M,0,0,0,.1,.19,.19); pp(sh,PETG.tor,pm('#a85f2a'),0,0,0,.13,.13,.1,0,Math.PI/2,0); pp(sh,PETG.tor,pm('#a85f2a'),0,.02,.02,.07,.07,.12,0,Math.PI/2,0); pp(sh,sphereG,pm('#a85f2a'),0,.03,.03,.11,.04,.04);
-    const hd=P.head=grp(body,0,by+.1,.32); [-1,1].forEach(s=>{ pp(hd,PETG.cyl,M2,s*.035,.07,0,.012,.14,.012,0,0,-s*.25); pp(hd,sphereG,eyeMat,s*.053,.15,0,.025); pp(hd,sphereG,petShineM,s*.053+.008,.16,.018,.007); });
+    const hd=P.head=grp(body,0,by+.1,.32); [-1,1].forEach(s=>{ pp(hd,PETG.cyl,M2,s*.035,.07,0,.012,.14,.012,0,0,-s*.25); }); googlyEyes(hd,.053,.155,.01,.032,{dir:[.15,.3,1]});   // v194: ojos saltones en la punta de sus antenitas
     pp(hd,sphereG,pm('#ff8fa8'),0,-.01,.07,.03,.01,.012);
   } else if(spec.k==='turtle'){
     const by=.16; pp(body,PETG.half,M,0,by,0,.3,.22,.34); pp(body,PETG.tor,pm('#e7b43e'),0,by,0,.3,.34,.15,Math.PI/2);
@@ -10414,7 +10415,7 @@ function makePetInst(id, name){
   const pet={id, spec, P, label, name:'', x:0, y:-999, z:0, f:0, v:0, ph:0, hidden:true, side:Math.random()<.5?-1:1, idle:0, look:0};
   petSetName(pet, name); return pet; }
 function petSetName(pet,name){ if(pet.name===name) return; pet.name=name; const m=pet.label.material; if(m.map) m.map.dispose(); m.map=labelTexture(name); m.needsUpdate=true; }
-function petDispose(pet){ if(!pet) return; scene.remove(pet.P.root, pet.label); if(pet.label.material.map) pet.label.material.map.dispose(); pet.label.material.dispose(); pet.P.root.traverse(o=>{ if(o.isMesh && o.geometry) o.geometry.dispose(); }); }
+function petDispose(pet){ if(!pet) return; scene.remove(pet.P.root, pet.label); GOOGLY.list=GOOGLY.list.filter(e=>{ let q=e.g; while(q && q!==pet.P.root) q=q.parent; return q!==pet.P.root; }); if(pet.label.material.map) pet.label.material.map.dispose(); pet.label.material.dispose(); pet.P.root.traverse(o=>{ if(o.isMesh && o.geometry) o.geometry.dispose(); }); }
 const _petV=new THREE.Vector3();
 function petFollow(pet, ox, oy, oz, of, vis, dt, t, tgt){
   const R=pet.P.root, sp=pet.spec;
@@ -15750,7 +15751,7 @@ function* wiBuild2(){
   { const black=wiMat('#2a2d36','rgba(255,255,255,.06)'), white=wiMat('#fbfbfd'), orange=wiMat('#f28c28');
     for(let i=0;i<9;i++){ const G=new THREE.Group(), s=.75+rlHash(i,61)*.35;
       wiAdd(G,sphereG,black,0,.6,0,.38,.6,.34); wiAdd(G,sphereG,white,0,.56,.12,.3,.5,.26); wiAdd(G,sphereG,black,0,1.22,.02,.26,.26,.26);
-      [-1,1].forEach(e=>{ wiAdd(G,sphereG,white,e*.1,1.27,.2,.07,.07,.05); wiAdd(G,sphereG,black,e*.1,1.27,.245,.035,.035,.02); wiAdd(G,sphereG,orange,e*.12,.04,.12,.11,.04,.16); });
+      [-1,1].forEach(e=>wiAdd(G,sphereG,orange,e*.12,.04,.12,.11,.04,.16)); googlyEyes(G,.1,1.29,.27,.09,{dir:[.35,.1,1]});   // v194: ojos saltones
       const bk=wiAdd(G,WI_CONEG,orange,0,1.18,.3,.06,.18,.06); bk.rotation.x=Math.PI/2;
       const fl=[-1,1].map(e=>{ const f=new THREE.Group(); f.position.set(e*.36,.85,0); G.add(f); const m=wiAdd(f,sphereG,black,0,-.28,0,.07,.3,.14); return f; });
       G.scale.setScalar(s); G.userData.noBatch=true; scene.add(G);
