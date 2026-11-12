@@ -2541,7 +2541,7 @@ const onCakeSurface=(x,z,y)=>{ const d=Math.hypot(x,z); return d<CAKE.R && !(d<S
       pos.push(x, terrainH(x,z)+.08, z); uv.push(x/5, z/5); } }
     for(let i=0;i<RINGS;i++) for(let j=0;j<SEGS;j++){ const a=i*(SEGS+1)+j, b=a+SEGS+1; idx.push(a,a+1,b, a+1,b+1,b); }
     const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); geo.setIndex(idx); geo.computeVertexNormals();
-    const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:frostTex, roughness:.55, polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-2}));
+    const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:frostTex, roughness:.55, polygonOffset:true, polygonOffsetFactor:0, polygonOffsetUnits:-4}));   // v192: sin «factor» (al verlo de ladito tapaba lo que está encima)
     m.receiveShadow=true; scene.add(m); }
   // Borde de la plaza: copos de crema
   for(let i=0;i<110;i++){ const a=i/110*Math.PI*2, x=Math.cos(a)*CAKE.R, z=Math.sin(a)*CAKE.R; add(deco,sphereG,i%3?creamMat:pinkMat,x,terrainH(x,z)+.02,z,.42*CS,.13*CS,.42*CS); obstacles.push({x,z,r:.4*CS,top:terrainH(x,z)+.02+.13*CS,walk:true,cake:true}); }   // copitos bajitos: se pasan por encima
@@ -3465,7 +3465,7 @@ function updateSky(dt){
   if(useSun) sun.color.copy(C.sunLow).lerp(C.sunNoon, sm(.05,.35,sunDir.y)); else sun.color.copy(C.moon);
   const fp=player.pos;
   (sky.sunD||(sky.sunD=new THREE.Vector3())).set(dir.x,dir.y,dir.z);   // el brillo del agua sigue al sol que se ve en el cielo
-  { const lx=dir.x, ly=dir.y*.7, lz=dir.z+.1, ll=Math.hypot(lx,ly,lz)||1; sun.position.set(fp.x+lx/ll*60, fp.y+ly/ll*60, fp.z+lz/ll*60); }   // la luz llega un poco más de lado: sombras más largas y se notan las formas sun.target.position.copy(fp);
+  { const lx=dir.x, ly=dir.y*.7, lz=dir.z+.1, ll=Math.hypot(lx,ly,lz)||1; sun.position.set(fp.x+lx/ll*60, fp.y+ly/ll*60, fp.z+lz/ll*60); } sun.target.position.copy(fp);   // la luz llega un poco más de lado: sombras más largas y se notan las formas. v192: el «sun.target…» estaba metido en este comentario y no corría: el sol apuntaba al centro de la isla (sombras chuecas, larguísimas o sin sombra lejos del castillo)
   // Sol, luna y estrellas (siempre lejos, alrededor de la cámara)
   const R=camera.far*.82; skyRoot.position.copy(camera.position);
   { const U=skyDome.material.uniforms; skyDome.scale.setScalar(camera.far*.9); skyDome.visible=!under; farRelief.visible=!under;
@@ -7063,7 +7063,7 @@ const pgParts={swing:[], rider:[], see:null};
     for(let i=0;i<RINGS;i++) for(let j=0;j<SEGS;j++){ const a=i*(SEGS+1)+j, b=a+SEGS+1; idx.push(a,a+1,b, a+1,b+1,b); }
     const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); geo.setIndex(idx); geo.computeVertexNormals();
     const sandT=feltTexture('#ead8a4','rgba(150,110,50,.25)',256,9000,1); sandT.wrapS=sandT.wrapT=THREE.RepeatWrapping;
-    const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:sandT, roughness:1, polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-2})); m.receiveShadow=true; scene.add(m); }
+    const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:sandT, roughness:1, polygonOffset:true, polygonOffsetFactor:0, polygonOffsetUnits:-4})); m.receiveShadow=true; scene.add(m); }   // v192: igual que la feria
   const red=felt('#e5534b'), blue=felt('#4f86c6'), yellow=felt('#f6c445'), green=felt('#6fbf5a'), wood=felt('#b88a5a','rgba(80,50,20,.2)'), dark=felt('#3a3d46'), cream=felt('#fbf3e4');
   const cyl=new THREE.CylinderGeometry(1,1,1,12), box=new THREE.BoxGeometry(1,1,1);
   const add=(par,geo,m,x,y,z,sx,sy,sz,rx=0,ry=0,rz=0)=>{ const o=new THREE.Mesh(geo,m); o.position.set(x,y,z); o.scale.set(sx,sy,sz); o.rotation.set(rx,ry,rz); par.add(o); return o; };
@@ -10130,7 +10130,8 @@ function renderShop(){ shopThGen++; shopThN=0; SHOP_THQ.length=0;
     const own=owns(it), on=wardrobe.eq[it.slot]===it.id || (!wardrobe.eq[it.slot] && !!it.def), trying=shopTry&&shopTry.id===it.id;
     const b=document.createElement('button'); b.type='button'; b.className='shop-item'+(on?' on':'')+(trying?' try':'');
     const sw=document.createElement('span'); sw.className='sw'; const bgf=()=>chSwatch(it) || (it.eye ? `url(${canUrl(chEyeThumb(it.eye))}) center/cover` : it.thumb ? `url(${canUrl(it.thumbC||(it.thumbC=avThumb(it.thumb)))}) center/contain no-repeat, ${it.plain}` : swatchCss(it));
-    if(shopThN++<12 || !(it.av==='c'||it.av==='a')) sw.style.background=bgf(); else { sw.style.background='#efe8d4'; SHOP_THQ.push([shopThGen,sw,bgf]); shopThPump(); }   // v190: las miniaturas de abajo se dibujan poco a poco (ya son 100 por lista) if(KIND_IC[it.k]){ const ic=document.createElement('i'); ic.className='ic'; ic.textContent=KIND_IC[it.k]; sw.appendChild(ic); } if(it.neon) sw.style.boxShadow=`0 0 12px ${it.neon}`;
+    if(shopThN++<12 || !(it.av==='c'||it.av==='a')) sw.style.background=bgf(); else { sw.style.background='#efe8d4'; SHOP_THQ.push([shopThGen,sw,bgf]); shopThPump(); }   // v190: las miniaturas de abajo se dibujan poco a poco (ya son 100 por lista)
+    if(KIND_IC[it.k]){ const ic=document.createElement('i'); ic.className='ic'; ic.textContent=KIND_IC[it.k]; sw.appendChild(ic); } if(it.neon) sw.style.boxShadow=`0 0 12px ${it.neon}`;   // v192: esto había quedado dentro del comentario
     const nm=document.createElement('span'); nm.className='nm'; nm.textContent=it.name;
     const st=document.createElement('span'); st.className='st'; st.innerHTML = on ? 'Puesto ✓' : it.soon ? 'Muy pronto' : own ? (it.free && !wardrobe.own.includes(it.id) ? 'Gratis · ponértelo' : 'Tuyo · ponértelo') : `<i class="cn"></i>${it.price}`;
     b.append(sw,nm,st); if(isNewItem(it) && !own){ const n=document.createElement('span'); n.className='nw'; n.textContent='Nuevo'; b.appendChild(n); } b.onclick=()=>shopPick(it); grid.appendChild(b); });
@@ -11710,7 +11711,7 @@ let fairBulbs=null;
     for(let r=40;r<256;r+=44){ const gr=g.createRadialGradient(256,256,r-10,256,256,r+2); gr.addColorStop(0,'rgba(150,90,50,0)'); gr.addColorStop(.85,'rgba(150,90,50,.12)'); gr.addColorStop(1,'rgba(150,90,50,0)'); g.fillStyle=gr; g.beginPath(); g.arc(256,256,r+2,0,7); g.fill();
       TK.stitch(g,TK.circle(256,256,r,Math.round(r*.9)),{dash:12,gap:9,lw:3,col:'rgba(150,90,50,.55)',hi:'rgba(255,230,200,.3)',shadow:'rgba(90,50,20,.18)',hole:'rgba(90,50,20,.22)'}); }
     const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding;
-    const m=new THREE.Mesh(new THREE.CircleGeometry(FAIR.R,72), new THREE.MeshStandardMaterial({map:t, roughness:1, polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-2}));
+    const m=new THREE.Mesh(new THREE.CircleGeometry(FAIR.R,72), new THREE.MeshStandardMaterial({map:t, roughness:1, polygonOffset:true, polygonOffsetFactor:0, polygonOffsetUnits:-4}));   // v192: con «factor -1», vista de ladito, la arena tapaba las placas y el piso del bateo
     m.rotation.x=-Math.PI/2; m.position.set(FAIR.x,FY+.05,FAIR.z); m.receiveShadow=true; root.add(m); }
   // cerca de colores con la entrada hacia el castillo
   const cols=['#e5534b','#f6c445','#4f86c6','#6fbf5a'], fence=new THREE.Group(); root.add(fence);
@@ -15936,7 +15937,8 @@ function* jiBuildPlants(){ const q={min:.35, low:.6, mid:.8, high:1, max:1}[Q0]|
     const x=JI.x+gx+(r1-.5)*6, z=JI.z+gz+(r2-.5)*6, lx=x-JI.x, lz=z-JI.z, cc=Math.hypot(lx,lz)/jiCoastR(Math.atan2(lz,lx)); if(cc>.92) continue;
     const [su,sv]=jiL(x,z); if(near(su,sv,JI_CAMP,6) || near(su,sv,JI_PLAZA,4)) continue; if(su>JI_PLAZA.su && su<JI.rcU+5 && Math.abs(sv)<10) continue;
     const h=jiGridH(x,z); if(h<1.2 || jiWaterLevel(x,z)!==null) continue; const pd=jiPathD(x,z); if(pd<3.5) continue;
-    const rn=jiRiverNear(su,sv); if(rn.d<JI_RIVER.W+2) continue; if(jiNoTree(su,sv,x,z)) continue;   // v142: tirolesa, puentes, templo, cueva, lianas, frutas if(Math.hypot(su-JI_RIVER.lag.su,sv-JI_RIVER.lag.sv)<JI_RIVER.lag.R+4) continue;
+    const rn=jiRiverNear(su,sv); if(rn.d<JI_RIVER.W+2) continue; if(jiNoTree(su,sv,x,z)) continue;   // v142: tirolesa, puentes, templo, cueva, lianas, frutas
+    if(Math.hypot(su-JI_RIVER.lag.su,sv-JI_RIVER.lag.sv)<JI_RIVER.lag.R+4) continue;   // v192: (estaba dentro del comentario) sin árboles en la laguna
     const sl=Math.hypot(jiGridH(x+2,z)-jiGridH(x-2,z), jiGridH(x,z+2)-jiGridH(x,z-2))/4;
     if(sl>.6 || h>95){ if(r3<.05) rocks.push([x,z,1+r2*1.6,r1*6.28]); continue; }
     if(cc>.8 || h<3){ if(r3<.22*q) palms.push([x,z,.85+r1*.4,r2*6.28]); else if(r3>.96) ferns.push([x,z,.7+r1*.5,r2*6.28]); continue; }   // en la playa: palmeras
@@ -16753,7 +16755,8 @@ function vehRide(P,dt){ const W=VE.w; if(!W){ setTimeout(()=>{ if(player.pg===P)
     const floor=deep?wl-.3:g; if(W.y<=floor){ W.y=floor; W.vy=0; W.pitch=0; W.tilt=0; if(deep){ if(S.canWater) W.mode='water'; else { W.mode='water'; W.v*=.3; flashNote('¡Splash! Tu vehículo no flota bien: ponle flotadores'); } } else { W.mode='land'; W.v*=.6; } }
   } else if(W.mode==='water'){
     const ok=S.canWater, vw=S.vWater*vehSpeedMul(W,'water'); W.v+=(f*(f>=0?vw:vw*.4)*(ok?1:0)-W.v)*(1-Math.exp(-dt*(ok?(S.anchor&&!f?3:.9):2)));
-    if(S.sub) W.depth=Math.max(0,Math.min(3,(W.depth||0)+((dn&&!up)?1.5:(up&&!dn&&W.depth>0)?-1.5:0)*dt)); else W.depth=0;   // v184: submarino W.h-=s*dt*.8*Math.min(1,Math.abs(W.v)/3+.3)*Math.sign(W.v||1);
+    if(S.sub) W.depth=Math.max(0,Math.min(3,(W.depth||0)+((dn&&!up)?1.5:(up&&!dn&&W.depth>0)?-1.5:0)*dt)); else W.depth=0;   // v184: submarino
+    W.h-=s*dt*.8*Math.min(1,Math.abs(W.v)/3+.3)*Math.sign(W.v||1);   // v192: girar en el agua (había quedado dentro del comentario desde v184)
     W.x+=Math.sin(W.h)*W.v*dt; W.z+=Math.cos(W.h)*W.v*dt; const wl2=swimLevel(W.x,W.z); W.y=(wl2!==null?wl2:W.y)-(ok?.3:.9)-(W.depth||0)+Math.sin(performance.now()/600)*.05*(W.depth>0?0:1); W.tilt*=.9; W.pitch*=.9;
     const g2=groundAt(W.x,W.z,W.y+1.5); if(wl2===null || g2>wl2-.4){ if(S.canLand){ W.mode='land'; W.y=g2; } else { W.x=px; W.z=pz; W.v=0; if(performance.now()-(W.noteT||0)>3000){ W.noteT=performance.now(); flashNote('Tu vehículo no anda en tierra: ponle llantas'); } } }
     if(S.canAir && up && (W.v>10 || S.heli>0) && !(W.depth>0)){ W.mode='air'; W.vy=3; }
