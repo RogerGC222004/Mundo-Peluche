@@ -13291,7 +13291,8 @@ body.in-hed #hud, body.in-hed #touch, body.in-hed #hotbar, body.in-hed .tbtns, b
   ED.toolsBox=mk('div','hedTools'); { const T=(ic,lab,fn,id)=>{ const b=document.createElement('button'); b.type='button'; b.innerHTML='<span>'+ic+'</span>'+lab; if(id) b.dataset.t=id; b.onclick=e=>{ e.stopPropagation(); fn(); }; ED.toolsBox.appendChild(b); return b; };
     T('↶','Deshacer',()=>edUndo()); T('↷','Rehacer',()=>edRedo()); T('🪣','Rellenar',()=>edSetTool('fill'),'fill'); T('🖌️','Pintar',()=>edSetTool('paint'),'paint'); T('✋','Mover',()=>edSetTool('move'),'move');
     ED.bRoof=T('🏠','Techo',()=>{ ED.roof=!ED.roof; HS.tick=0; edRender(); },'roof'); T('👁️','Caminar',()=>edWalk()); ED.bDes=T('📐','Diseño 1',()=>edDesign());
-    ED.bLvUp=T('⬆️','Subir nivel',()=>edLevel(1)); ED.bLvDn=T('⬇️','Bajar nivel',()=>edLevel(-1)); }   // v186: el nivel vive aquí (antes tapaba los avisos)
+    ED.bLvUp=T('⬆️','Subir nivel',()=>edLevel(1)); ED.bLvDn=T('⬇️','Bajar nivel',()=>edLevel(-1));
+    T('❓','Ayuda',()=>{ ED.toolsOpen=false; edRender(); if(TUT.on) tutEnd(false); tutStart('casa'); }); }   // v186: el nivel vive aquí (antes tapaba los avisos)
   ED.bShop=B('🛒','Tienda',b=>{ ED.shop=!ED.shop; ED.shopK=null; if(ED.invOff) ED.tog.onclick({stopPropagation(){}}); edRender(); });
   B('✓','Listo',()=>edExit(),'ok');
   const lb=(t,f)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=t; b.onclick=e=>{ e.stopPropagation(); f(); }; return b; };
@@ -13454,7 +13455,7 @@ function edRender(){ ED.bDel.classList.toggle('on',ED.del); ED.bShop.classList.t
 function edGrid(){ const L=edLot(); if(!L) return; if(!ED.grid){ ED.grid=new THREE.GridHelper(HZ.H*2,HZ.N,0xffffff,0xffffff); ED.grid.material.transparent=true; ED.grid.material.opacity=.35; ED.grid.material.depthWrite=false; scene.add(ED.grid); }
   ED.grid.position.set(L.x,L.y+ED.lv*HZ.LV+.27,L.z); ED.grid.rotation.y=L.yaw; ED.grid.visible=ED.on; }
 function edEnter(){ const L=edLot(); if(!L || ED.on) return; hLoad(); ED.on=true; if(ED.hstep===undefined){ ED.hstep=HS.str&&HS.str.length>2?2:0; if(hedSteps()){ ED.tab=ED.hstep===2?'casa':'construir'; ED.roof=false; } } ED.lv=0; ED.del=false; ED.sel=null; ED.hov=null; ED.cam={yaw:L.yaw, dist:38, pitch:.95, tx:0, tz:-2};
-  for(const e of [ED.layer,ED.inv,ED.bar,ED.tip,ED.tog]) e.hidden=false; ED.lvBox.hidden=true; document.body.classList.add('in-hed'); edGrid(); edRender(); HS.tick=0; setActions(null,null); }
+  for(const e of [ED.layer,ED.inv,ED.bar,ED.tip,ED.tog]) e.hidden=false; ED.lvBox.hidden=true; document.body.classList.add('in-hed'); edGrid(); edRender(); HS.tick=0; setActions(null,null); try{ tutAuto('casa'); }catch(e){} }
 function edExit(){ if(!ED.on) return; ED.on=false; for(const e of [ED.layer,ED.inv,ED.bar,ED.tip,ED.lvBox,ED.tog,ED.toolsBox]) e.hidden=true; ED.toolsOpen=false; ED.moving=null; ED.line=null; document.body.classList.remove('in-hed'); edGhost(null); if(ED.grid) ED.grid.visible=false; HS.tick=0; HS.dirty=true; hSave(); try{ updateTouchMode(); }catch(e){} }
 // ---- de la pantalla al terreno ----
 const _edRay=new THREE.Raycaster(), _edV=new THREE.Vector2(), _edPl=new THREE.Plane(), _edP=new THREE.Vector3();
@@ -15801,7 +15802,7 @@ function vehUI(){ if(!ui('vehOv')) return; if(!(VE.ren && ui('vehName'))) ui('ve
   ui('vehColors').innerHTML='<button class="vh-col'+(VE.col===null?' on':'')+'" data-k="" title="Color de la pieza">🎲</button>'+VCOLS.map(c=>'<button class="vh-col'+(VE.col===c?' on':'')+'" data-k="'+c+'" style="background:'+c+'"></button>').join('');
   ui('vehTempl').innerHTML=VTEMPL.map(([n,to],i)=>{ const c=vehPlanSet(to).cost; return '<button class="vh-tpl" data-i="'+i+'">'+n+(c?' · '+c+' 🪙':' ✓')+'</button>'; }).join(''); vehInfo(); }
 function vehOpen(){ vehInit(); VE.ren=false; if(VE.parts.length){ if(!VE.vtype) VE.vtype=vehGuessType(); VE.vstep=VSTEPS.length-1; } else { VE.vtype=null; VE.vstep=0; } if(VE.tab===undefined) VE.tab=Object.keys(VE.inv).length?'mine':'shop'; VE.ret={pos:player.pos.clone(), f:player.facing}; VE.ed=true; VE.dist=innerWidth<innerHeight?13:9; VE.undo.length=0; VE.redo.length=0; show('menu'); menuEl.hidden=true; ui('vehOv').hidden=false; vehRebuild(); vehUI(); try{ audio.door(true); }catch(e){}
-  if(!VE.parts.length) flashNote('Escoge una base y tócala en el piso para empezar (o usa una plantilla)'); }
+  if(!VE.parts.length) flashNote('Escoge una base y tócala en el piso para empezar (o usa una plantilla)'); try{ tutAuto('veh'); }catch(e){} }
 function vehClose(){ if(!VE.ed) return; if(VE.ren) vehRename(); VE.ed=false; ui('vehOv').hidden=true; vehClearPrev(); show('play'); if(VE.ret){ player.pos.copy(VE.ret.pos); player.facing=VE.ret.f; player.vel.set(0,0,0); }
   if(VE.parts.length){ const S=vehStats(VE.parts); flashNote(S.seat?'¡Guardado! Toca "Sacar mi vehículo" para manejarlo':'Guardado. Le falta un asiento para poder subirte'); } }
 function vehRender(dt){ vThumbPump(); const W=innerWidth, H=innerHeight, side=ui('vehSide'), r=side?side.getBoundingClientRect():null, land=W>=H;
@@ -15906,12 +15907,13 @@ function vehInit(){ if(ui('vehOv')) return;
 `;
   document.head.appendChild(st);
   const el=document.createElement('div'); el.id='vehOv'; el.hidden=true;
-  el.innerHTML='<div id="vehStage"></div><div id="vehSide"><div class="vh-top"><h2>🔧<span class="lb"> Taller</span></h2><span class="sp"></span><span class="vh-btn">🪙 <b id="vehCoins">0</b></span><button class="vh-btn" id="vehUndo" title="Deshacer">↶</button><button class="vh-btn" id="vehRedo" title="Rehacer">↷</button><button class="vh-btn ok" id="vehClose">✓ Listo</button></div>'
+  el.innerHTML='<div id="vehStage"></div><div id="vehSide"><div class="vh-top"><h2>🔧<span class="lb"> Taller</span></h2><span class="sp"></span><span class="vh-btn">🪙 <b id="vehCoins">0</b></span><button class="vh-btn" id="vehUndo" title="Deshacer">↶</button><button class="vh-btn" id="vehRedo" title="Rehacer">↷</button><button class="vh-btn" id="vehHelp" title="Ayuda: tutorial">❓</button><button class="vh-btn ok" id="vehClose">✓ Listo</button></div>'
     +'<div class="vh-row" id="vehSlots"></div><div id="vehSteps"></div><div class="vh-tabs" id="vehTabs"></div><input id="vehSearch" type="search" placeholder="🔎 Buscar pieza (364 piezas)" autocomplete="off"><div id="vehCats"></div><div id="vehParts"></div><div class="vh-row" id="vehBuy"></div><div class="vh-row" id="vehTools"></div><div class="vh-row" id="vehMove"></div><div class="vh-row" id="vehColors"></div><div id="vehInfo"></div><div class="vh-row" id="vehTplRow"><b style="font-size:14px">Plantillas:</b><span id="vehTempl" class="vh-row"></span><button class="vh-btn" id="vehClear" style="font-size:12px;padding:5px 8px">🧹 Vaciar</button></div></div>';
   document.body.appendChild(el);
   ui('vehSearch').addEventListener('input',e=>{ VE.q=e.target.value; vehUI(); });   // v184: buscador
   el.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; e.stopPropagation();
     if(b.dataset.vs!==undefined){ if(VE.ren) vehRename(); vehSlot(+b.dataset.vs); return; } if(b.dataset.ren){ VE.ren=true; vehUI(); const i=ui('vehName'); if(i){ i.focus(); i.select(); } return; } if(b.dataset.rok){ vehRename(); return; }
+    if(b.id==='vehHelp'){ if(TUT.on) tutEnd(false); tutStart('veh'); return; }
     if(b.id==='vehClose') return vehClose(); if(b.id==='vehUndo'){ const a=VE.undo.pop(); if(a){ vehUndo1(a); VE.redo.push(a); vehUI(); } return; } if(b.id==='vehRedo'){ const a=VE.redo.pop(); if(a){ if((a.cost||0)>coins){ VE.redo.push(a); flashNote('Te faltan '+(a.cost-coins)+' monedas'); return; } vehDo(a); VE.undo.push(a); vehUI(); } return; }
     if(b.id==='vehClear'){ if(!VE.parts.length) return; const pl=vehPlanSet([]); vehAct({t:'set', from:VE.parts.map(q=>q.slice()), to:[], inv:vehInvDelta(VE.inv,pl.inv), cost:0}); VE.mv=null; return; }
     if(b.dataset.buy){ vehBuy(b.dataset.buy,false); return; } if(b.dataset.ad){ vehBuy(b.dataset.ad,true); return; }
@@ -17943,7 +17945,221 @@ ui('spExit').onclick=()=>{ fade(true,500); setTimeout(()=>exitSpace(false),520);
 // ---------- Mi progreso: guardado en la nube (tu cuenta de Claude) y código para pasarlo a otro dispositivo ----------
 // Se guarda todo lo que vas ganando: monedas, ropa, banderas, planetas, especies, tu nombre/color, mejor vuelta y opciones.
 // Al cargar se UNE con lo que ya tienes (nunca se pierde nada): monedas = las más altas, ropa/planetas/especies = todas.
-const SAVE_KEYS=['Monedas','Ropa','Banderas','Especies','Planetas','Jugador','MejorVuelta','Opciones','Peces','Mascotas','Mina','Huerto','Casa','Islas','Baldes','Vehiculo'];   // v182: + islas y baldes   // v166: + tu casita   // v125: + mascotas, mina y huerto
+// ---------------- v188: TUTORIAL con guía — Almohadita (casitas) y Llantita (carritos) ----------------
+// Sale la primera vez que abres el taller o el editor (si está vacío) y con el botón ❓ Ayuda. Una flecha señala qué tocar;
+// cada paso espera a que lo hagas, te felicita y sigue. "Saltar" lo cierra. Si te falta una pieza para el tutorial, te la regala.
+const TUT={on:null, i:0, steps:null, picked:false, praise:0, timer:null, el:null, last:'', seen:{}};
+try{ TUT.seen=JSON.parse(localStorage.getItem('mundoPelucheTutorial')||'{}')||{}; }catch(e){ TUT.seen={}; }
+function tutSave(){ try{ localStorage.setItem('mundoPelucheTutorial', JSON.stringify(TUT.seen)); }catch(e){} }
+const TUT_SVG={
+  casa:'<svg viewBox="0 0 200 180" width="100%" height="100%"><ellipse cx="100" cy="170" rx="58" ry="7" fill="rgba(0,0,0,.15)"/><g class="tut-body">'
+    +'<path d="M30 60 Q22 40 40 36 Q100 26 160 36 Q178 40 170 60 Q176 105 170 140 Q178 160 160 162 Q100 172 40 162 Q22 160 30 140 Q24 100 30 60 Z" fill="#ffd6e6" stroke="#f4a3c4" stroke-width="4"/>'
+    +'<path d="M40 46 Q100 38 160 46" stroke="#f4a3c4" stroke-width="2.5" stroke-dasharray="6 5" fill="none"/><path d="M40 152 Q100 160 160 152" stroke="#f4a3c4" stroke-width="2.5" stroke-dasharray="6 5" fill="none"/>'
+    +'<circle cx="72" cy="88" r="21" fill="#fff" stroke="#3a3f52" stroke-width="3"/><circle cx="128" cy="86" r="24" fill="#fff" stroke="#3a3f52" stroke-width="3"/>'
+    +'<g class="tut-pup"><circle cx="78" cy="96" r="10" fill="#2c3a1a"/><circle cx="120" cy="96" r="11" fill="#2c3a1a"/><circle cx="74" cy="92" r="3" fill="#fff"/><circle cx="116" cy="91" r="3" fill="#fff"/></g>'
+    +'<path class="tut-mouth" d="M86 122 Q100 134 114 122" stroke="#3a3f52" stroke-width="4" fill="none" stroke-linecap="round"/>'
+    +'<circle cx="56" cy="118" r="8" fill="#ff8fb3" opacity=".55"/><circle cx="144" cy="118" r="8" fill="#ff8fb3" opacity=".55"/><circle cx="44" cy="44" r="5" fill="#ffd34d"/><circle cx="156" cy="44" r="5" fill="#ffd34d"/></g></svg>',
+  veh:'<svg viewBox="0 0 200 180" width="100%" height="100%"><ellipse cx="100" cy="170" rx="56" ry="7" fill="rgba(0,0,0,.15)"/><g class="tut-body">'
+    +'<circle cx="100" cy="98" r="68" fill="#3a3f52"/><g stroke="#2a2e3d" stroke-width="6"><line x1="100" y1="30" x2="100" y2="40"/><line x1="148" y1="50" x2="141" y2="57"/><line x1="168" y1="98" x2="158" y2="98"/><line x1="148" y1="146" x2="141" y2="139"/>'
+    +'<line x1="100" y1="166" x2="100" y2="156"/><line x1="52" y1="146" x2="59" y2="139"/><line x1="32" y1="98" x2="42" y2="98"/><line x1="52" y1="50" x2="59" y2="57"/></g>'
+    +'<circle cx="100" cy="98" r="42" fill="#c8ced8" stroke="#9aa6b6" stroke-width="4"/><circle cx="84" cy="88" r="17" fill="#fff" stroke="#2c3a1a" stroke-width="3"/><circle cx="118" cy="86" r="19" fill="#fff" stroke="#2c3a1a" stroke-width="3"/>'
+    +'<g class="tut-pup"><circle cx="89" cy="94" r="8" fill="#2c3a1a"/><circle cx="112" cy="94" r="9" fill="#2c3a1a"/><circle cx="86" cy="91" r="2.5" fill="#fff"/><circle cx="109" cy="90" r="2.5" fill="#fff"/></g>'
+    +'<path class="tut-mouth" d="M88 114 Q100 124 112 114" stroke="#2c3a1a" stroke-width="3.5" fill="none" stroke-linecap="round"/><circle cx="74" cy="110" r="6" fill="#ff8fb3" opacity=".6"/><circle cx="126" cy="110" r="6" fill="#ff8fb3" opacity=".6"/></g></svg>'};
+const TUT_ARROW='<svg viewBox="0 0 60 70" width="100%" height="100%"><path d="M18 4 H42 V34 H56 L30 66 L4 34 H18 Z" fill="#ff6f91" stroke="#fff" stroke-width="5" stroke-linejoin="round"/></svg>';
+(()=>{ const st=document.createElement('style'); st.textContent=`
+#tutBox{position:fixed;z-index:9300;display:flex;align-items:flex-end;gap:6px;pointer-events:none;font-family:var(--body);max-width:min(380px,calc(100vw - 20px));}
+#tutBox.m-veh{top:calc(10px + env(safe-area-inset-top,0px));right:calc(12px + env(safe-area-inset-right,0px));flex-direction:row-reverse;align-items:flex-start;}
+#tutBox.m-casa{left:calc(10px + env(safe-area-inset-left,0px));top:calc(8px + env(safe-area-inset-top,0px));align-items:flex-start;}
+#tutBox.m-casa.alt{top:auto;bottom:calc(80px + env(safe-area-inset-bottom,0px));align-items:flex-end;}
+#tutBox.m-veh.alt{top:auto;bottom:calc(10px + env(safe-area-inset-bottom,0px));align-items:flex-end;}
+body.tut-casa .toast{top:auto!important;bottom:calc(84px + env(safe-area-inset-bottom,0px))!important;}
+.tut-guide{width:92px;height:84px;flex:none;filter:drop-shadow(0 3px 0 rgba(0,0,0,.12));}
+.m-casa .tut-guide .tut-body{animation:tutHop 1.4s ease-in-out infinite;transform-origin:100px 165px;}
+.m-veh .tut-guide .tut-body{animation:tutRock 1.6s ease-in-out infinite;transform-origin:100px 98px;}
+.tut-talk .tut-pup{animation:tutEye .22s ease-in-out infinite alternate;}
+.tut-talk .tut-mouth{animation:tutMouth .25s ease-in-out infinite alternate;transform-origin:100px 120px;}
+@keyframes tutHop{0%,100%{transform:translateY(0) scale(1.05,.95)}45%{transform:translateY(-12px) scale(.97,1.04)}}
+@keyframes tutRock{0%,100%{transform:rotate(-9deg)}50%{transform:rotate(9deg)}}
+@keyframes tutEye{from{transform:translate(-2px,-1px)}to{transform:translate(3px,2px)}}
+@keyframes tutMouth{from{transform:scaleY(1)}to{transform:scaleY(1.7)}}
+.tut-bub{position:relative;background:#fff;border-radius:16px;padding:9px 12px 8px;box-shadow:0 4px 0 #ddd5bd,0 8px 20px rgba(0,0,0,.18);color:#2c3a1a;pointer-events:auto;min-width:150px;}
+.tut-name{font:800 12px var(--body);color:#ff6f91;letter-spacing:.03em;margin:0 0 2px;}
+.tut-txt{font:800 15.5px/1.3 var(--body);margin:0;}
+.tut-txt b{color:#c2185b;}
+.tut-row{display:flex;gap:6px;justify-content:flex-end;margin-top:7px;}
+.tut-row button{border:none;border-radius:10px;font:800 13px var(--body);padding:6px 11px;cursor:pointer;background:#efe6d2;color:#7a2b2b;touch-action:manipulation;}
+.tut-row button.ok{background:#7ed957;color:#fff;font-size:15px;padding:7px 14px;}
+.tut-prog{font:800 11px var(--body);color:#9a8a6a;margin-right:auto;align-self:center;}
+#tutRing{position:fixed;z-index:9290;pointer-events:none;border:4px solid #ff6f91;border-radius:14px;box-shadow:0 0 0 3px rgba(255,255,255,.9),0 0 0 200vmax rgba(25,20,45,.16);animation:tutPulse 1s ease-in-out infinite;}
+#tutRing.round{border-radius:50%;}
+@keyframes tutPulse{50%{border-color:#ffd34d;}}
+#tutArrow{position:fixed;z-index:9295;width:40px;height:48px;pointer-events:none;}
+#tutArrow>div{width:100%;height:100%;animation:tutBounce .7s ease-in-out infinite alternate;}
+#tutArrow.up{transform:rotate(180deg);} #tutArrow.left{transform:rotate(90deg);} #tutArrow.right{transform:rotate(-90deg);}
+@keyframes tutBounce{from{transform:translateY(-6px)}to{transform:translateY(4px)}}
+@media (max-height:500px){ .tut-guide{width:70px;height:64px;} .tut-txt{font-size:14px;} .tut-bub{padding:7px 10px 6px;} .tut-row{margin-top:4px;} #tutBox.m-casa.alt{bottom:calc(74px + env(safe-area-inset-bottom,0px));} }
+body.tut-casa #hedTip{display:none!important;}
+`; document.head.appendChild(st); })();
+function tutEls(){ if(TUT.el) return TUT.el; const mk=(id,html)=>{ const e=document.createElement('div'); e.id=id; e.hidden=true; if(html) e.innerHTML=html; document.body.appendChild(e); return e; };
+  const ring=mk('tutRing'), arrow=mk('tutArrow','<div>'+TUT_ARROW+'</div>');
+  const box=mk('tutBox','<div class="tut-guide"></div><div class="tut-bub"><p class="tut-name"></p><p class="tut-txt"></p><div class="tut-row"><span class="tut-prog"></span><button type="button" class="tut-skip">Saltar</button><button type="button" class="ok tut-next" hidden>¡Entendido!</button></div></div>');
+  box.querySelector('.tut-skip').onclick=e=>{ e.stopPropagation(); tutEnd(true); };
+  box.querySelector('.tut-next').onclick=e=>{ e.stopPropagation(); const S=TUT.steps&&TUT.steps[TUT.i]; if(S) S._ok=true; try{ audio.cam(); }catch(err){} };
+  ['pointerdown','pointerup','click'].forEach(ev=>box.addEventListener(ev,e=>e.stopPropagation()));
+  TUT.el={box, ring, arrow, txt:box.querySelector('.tut-txt'), name:box.querySelector('.tut-name'), next:box.querySelector('.tut-next'), prog:box.querySelector('.tut-prog'), guide:box.querySelector('.tut-guide')};
+  // ¿tocó una pieza de la lista? (para el paso "escoge una pieza")
+  document.addEventListener('click',e=>{ if(TUT.on && e.target.closest && e.target.closest('#vehParts [data-p], #hedInv .hed-card')) TUT.picked=true; },true);
+  return TUT.el; }
+// ---- ayudantes para saber cómo va ----
+const tutVehCount=f=>VE.parts.filter(q=>VP_BY[q[0]] && f(VP_BY[q[0]],VE.vtype)).length;
+function tutHouse(){ let P=[]; try{ P=edPieces(); }catch(e){} const lv=ED.lv|0, at=P.filter(p=>p.lv===lv), K=p=>HK_BY[hkOf(p)];
+  return {P, floors:at.filter(p=>p.t===HT.PISO), walls:at.filter(p=>hIsWallP(p)), deco:at.filter(p=>{ const k=K(p); return k && (k.cat==='casa'||k.cat==='jardin'); }),
+    roofs:at.filter(p=>p.t===HT.TEJA||p.t===HT.CUMBRE||hIsCap(p.t))}; }
+function tutNeed(k){ const B=TUT.base||{f:0,w:0,d:0,r:0}, H=tutHouse(); return k==='f'?(B.f?B.f+2:4):k==='w'?(B.w?B.w+2:4):k==='d'?B.d+1:(B.r?B.r+1:Math.min(4,Math.max(1,H.floors.length))); }
+const tutHave=k=>{ const H=tutHouse(); return k==='f'?H.floors.length:k==='w'?H.walls.length:k==='d'?H.deco.length:H.roofs.length; };
+const tutCnt=k=>{ const b=(TUT.base||{})[k]|0, n=tutNeed(k)-b; return ' ('+Math.max(0,Math.min(n,tutHave(k)-b))+' de '+n+')'; };
+// el piso "de la orilla" (el de más adelante): ahí se agranda la casita
+function tutHouseFar(){ const f=tutHouse().floors; if(!f.length) return null; let e=f[0]; f.forEach(p=>{ if(p.j>e.j || (p.j===e.j && p.i<e.i)) e=p; }); return e; }
+function tutHouseEdge(){ const H=tutHouse(), fs=new Set(H.floors.map(p=>p.i+','+p.j)), wk=new Set(H.walls.map(q=>hEdgeKey(q.i,q.j,q.r)));
+  const f=H.floors.slice().sort((a,b)=>b.j-a.j || a.i-b.i); for(const p of f) for(const r of [0,3,1,2]){ const d=HD[r]; if(fs.has((p.i+d[0])+','+(p.j+d[1]))) continue; if(!wk.has(hEdgeKey(p.i,p.j,r))) return {i:p.i,j:p.j,r,d}; } return null; }
+function tutHouseFree(){ const H=tutHouse(), busy=new Set(H.deco.map(p=>p.i+','+p.j)), f=H.floors.filter(p=>!busy.has(p.i+','+p.j)); if(!f.length) return tutHouseSpot();
+  let si=0,sj=0; H.floors.forEach(p=>{ si+=p.i; sj+=p.j; }); si/=H.floors.length; sj/=H.floors.length; let b=f[0], bd=1e9; f.forEach(p=>{ const d=Math.hypot(p.i-si,p.j-sj); if(d<bd){ bd=d; b=p; } }); return [b.i,b.j]; }
+const tutSelOk=i=>{ const k=ED.sel&&HK_BY[ED.sel.split(':')[0]]; return !!(k && HSTEPS[i].f(k)); };
+// punto del mundo de la casita (cuadro i,j del terreno) → pantalla
+function tutHouseW(i,j,dy=0){ const L=edLot(); if(!L) return null; const [x,z]=lotW(L,-HZ.H+HZ.C*i+HZ.C/2,-HZ.H+HZ.C*j+HZ.C/2); return {w:[x,L.y+(ED.lv|0)*HZ.LV+.25+dy,z], cam:'main'}; }
+function tutHouseSpot(){ const H=tutHouse(), f=H.floors; if(!f.length) return [10,10]; let si=0,sj=0; f.forEach(p=>{ si+=p.i; sj+=p.j; }); si/=f.length; sj/=f.length;
+  let best=f[0], bd=1e9; f.forEach(p=>{ const d=Math.hypot(p.i-si,p.j-sj); if(d<bd){ bd=d; best=p; } }); return [best.i,best.j,f]; }
+function tutVehBox(){ let a=1e9,b=-1e9,c=1e9,d=-1e9,e=0; const base=VE.parts.filter(q=>VP_BY[q[0]] && VSTEPS[0].f(VP_BY[q[0]],VE.vtype)); for(const q of (base.length?base:VE.parts)){ const p=VP_BY[q[0]]; if(!p) continue; const s=vRot(p,q[4]|0); a=Math.min(a,q[1]); b=Math.max(b,q[1]+s[0]); c=Math.min(c,q[3]); d=Math.max(d,q[3]+s[2]); e=Math.max(e,q[2]+s[1]); }
+  return a>b ? {x0:-1,x1:1,z0:-1,z1:1,top:0} : {x0:a*VC,x1:b*VC,z0:c*VC,z1:d*VC,top:e*VC}; }
+// ---- regalos (solo si te falta, una vez por tutorial) ----
+function tutGiftVeh(){ if(TUT.seen.gv) return; const t=VE.vtype||'land'; let n=0;
+  for(let i=0;i<4;i++){ const L=VPARTS.filter(p=>VSTEPS[i].f(p,t)); if(!L.length || L.some(p=>(VE.inv[p.id]|0)>0)) continue; const p=L[0], c=i===1?4:1; VE.inv[p.id]=(VE.inv[p.id]|0)+c; n+=c; }
+  TUT.seen.gv=1; tutSave(); if(n){ vehSave(); vehUI(); flashNote('🎁 Llantita te regaló piezas para empezar'); } }
+function tutGiftCasa(){ if(TUT.seen.gc) return; let n=0;
+  [[0,8],[1,8],[2,1],[3,6]].forEach(([i,c])=>{ const L=HK.filter(K=>HSTEPS[i].f(K) && K.mats && K.mats.length); if(!L.length || L.some(K=>K.mats.some(m=>(HS.inv[K.id+':'+m]|0)>0))) return;
+    const K=L[0]; HS.inv[K.id+':'+K.mats[0]]=(HS.inv[K.id+':'+K.mats[0]]|0)+c; n+=c; });
+  TUT.seen.gc=1; tutSave(); if(n){ hSave(); edRender(); flashNote('🎁 Almohadita te regaló piezas para empezar'); } }
+const tutBtn=(sel,txt)=>()=>[...document.querySelectorAll(sel)].find(b=>b.textContent.includes(txt))||null;
+const tutInfo=(t,say,start,opt=true)=>({t, say, next:true, start, opt});
+// ---- los pasos ----
+const tutVehPick=(i,what)=>({say:()=>'Paso '+(i+1)+': <b>'+VSTEPS[i].n(VE.vtype)+'</b>. Toca '+what+' en la lista 👈', t:()=>document.querySelector('#vehParts [data-p="'+VE.sel+'"]')||document.querySelector('#vehParts [data-p]'), start:()=>{ TUT.picked=false; if(!vehStepDone(i) && (VE.vstep|0)!==i) vehStepGo(i); }, done:()=>TUT.picked||vehStepDone(i)});
+const tutVehNext=i=>({say:'¡Muy bien! 🎉 Ahora toca <b>Siguiente ▶</b>', t:'#vehSteps [data-nav="1"]', done:()=>(VE.vstep|0)>=i});
+const TUT_VEH=[
+  {say:'¡Hola! Soy <b>Llantita</b> 🛞 Te ayudo a armar tu carrito paso a paso.', next:true},
+  tutInfo('#vehTplRow','<b>Plantillas</b>: carritos ya armados para empezar rápido. Las piezas que te falten se compran solas con monedas.',()=>{ if(VE.vfree){ VE.vfree=false; vehUI(); } }),
+  tutInfo('#vehParts [data-free="1"]','<b>🧩 Libre</b>: ves todas las piezas juntas, sin pasos. Ahorita vamos <b>por pasos</b>, que es más fácil 😉'),
+  {say:'¿Qué quieres armar? Toca <b>🚗 Coche</b> (o una lancha o un avión).', t:()=>document.querySelector('#vehParts [data-vt="land"]'), start:()=>{ if(VE.vfree){ VE.vfree=false; vehUI(); } }, done:()=>!!VE.vtype, after:tutGiftVeh},
+  tutVehPick(0,'la base que más te guste'),
+  {say:'Ahora toca el <b>piso</b> donde la quieras. El 1er toque te enseña cómo queda y el 2º la pone ✓', t:()=>({w:[0,0,0], cam:'veh'}), done:()=>vehStepDone(0)},
+  tutVehNext(1),
+  tutVehPick(1,'unas llantas'),
+  {say:()=>'Toca cerca de la <b>orilla</b> de la base: ¡se ponen 2 a la vez! (con el botón 🔁 <b>Llantas en par</b> eso se apaga). Ponle adelante y atrás.'+(VE.vtype==='land'?' ('+tutVehCount(VSTEPS[1].f)+' de 4)':''), t:()=>{ const B=tutVehBox(), n=tutVehCount(VSTEPS[1].f); return {w:[B.x0, Math.max(.1,B.top*.5), n>=2?B.z1-.3:B.z0+.3], cam:'veh'}; }, done:()=>vehStepDone(1) && (VE.vtype!=='land' || tutVehCount(VSTEPS[1].f)>=4)},
+  tutVehNext(2),
+  tutVehPick(2,'un asiento'),
+  {say:'Ponlo <b>encima</b> de tu carrito, en medio: ahí se sienta tu peluche 💺', t:()=>{ const B=tutVehBox(); return {w:[(B.x0+B.x1)/2, B.top, (B.z0+B.z1)/2], cam:'veh'}; }, done:()=>vehStepDone(2)},
+  tutVehNext(3),
+  tutVehPick(3,'un motor'),
+  {say:'Ponlo atrás o adelante, encima de la base ⚙️', t:()=>{ const B=tutVehBox(); return {w:[(B.x0+B.x1)/2, B.top, B.z0+.4], cam:'veh'}; }, done:()=>vehStepDone(3)},
+  {say:'¡Tu carrito ya puede andar! 🎉 Ahora te enseño <b>todos los botones</b> del taller.', next:true, start:()=>{ VE.tab='mine'; VE.tool='put'; vehStepGo(VSTEPS.length-1); }},
+  tutInfo('#vehSteps .vh-steps','Estos son los <b>pasos</b>. Toca un número para ir a ese paso; la palomita ✓ quiere decir que ya está listo.'),
+  tutInfo('#vehSteps [data-st="4"]','Paso 5, <b>Carrocería</b> 🚙: paredes, techo y cofre. Se acomodan solas en la orilla de tu carrito.'),
+  tutInfo('#vehSteps [data-st="5"]','Paso 6, <b>Adornos</b> ✨: luces, sirena, claxon y piezas <b>⭐ especiales</b> que hacen cosas al manejar (saltar, turbo, confeti…).'),
+  tutInfo('#vehTabs [data-tab="shop"]','<b>🛒 Tienda</b>: aquí consigues piezas nuevas con monedas, o gratis viendo un anuncio 📺.'),
+  tutInfo('#vehTabs [data-tab="mine"]','<b>🎒 Mis piezas</b>: solo las piezas que ya tienes.'),
+  tutInfo('#vehParts','La <b>lista de piezas</b> del paso. Toca una para escogerla. Al ponerla se gasta una; si la quitas, te la devuelven.'),
+  tutInfo('#vehBuy','Aquí ves <b>cuántas tienes</b> de la pieza que escogiste y puedes conseguir más.'),
+  tutInfo('#vehTools [data-t="put"]','🧱 <b>Poner</b>: toca tu carrito para poner la pieza (el 1er toque enseña cómo queda, el 2º la pone).'),
+  tutInfo('#vehTools [data-t="move"]','✋ <b>Mover</b>: toca una pieza y muévela con las flechas: subir, bajar, adelante, atrás y a los lados.'),
+  tutInfo('#vehTools [data-t="paint"]','🎨 <b>Pintar</b>: escoge un color y toca las piezas para pintarlas. El 🎲 les regresa su color de siempre.'),
+  tutInfo('#vehTools [data-t="del"]','🗑️ <b>Quitar</b>: toca una pieza para quitarla; regresa a <b>Mis piezas</b>.'),
+  tutInfo('#vehTools [data-t="rot"]','↻ <b>Girar</b>: gira la pieza antes de ponerla.'),
+  tutInfo('#vehUndo','↶ <b>Deshacer</b> y ↷ <b>Rehacer</b>: si te equivocas, regresa lo último que hiciste.'),
+  tutInfo('#vehSlots','<b>Diseños</b>: puedes tener hasta 3 carritos diferentes. Con ✏️ les pones nombre.'),
+  tutInfo('#vehInfo','Aquí ves <b>cómo anda</b> tu carrito: si rueda, flota o vuela, y qué tan rápido va.'),
+  {say:'Para ver tu carrito por todos lados: <b>arrastra el dedo</b> en el fondo para girar, y usa <b>dos dedos</b> para acercar o alejar 🔍', next:true},
+  {say:'¡Listo! 🎉 Toca <b>✓ Listo</b> para guardar y luego <b>"Sacar mi vehículo"</b>. Al manejar tienes <b>Claxon</b>, <b>Luces</b>, <b>Sirena</b> y el botón <b>⭐</b> de tus piezas especiales.', t:'#vehClose', next:true, last:true}];
+const tutCasaNext=i=>({say:'¡Muy bien! 🎉 Toca <b>Siguiente ▶</b>', t:'#hedInv [data-hnav="1"]', done:()=>(ED.hstep|0)>=i});
+const tutCasaPick=(i,what)=>({say:'Paso '+(i+1)+': <b>'+HSTEPS[i].n+'</b>. Toca '+what+' en la lista 👉', t:()=>document.querySelector('#hedInv .hed-card.on')||document.querySelector('#hedInv .hed-card'), start:()=>{ TUT.picked=false; if(tutHave('fwdr'[i])<tutNeed('fwdr'[i]) && (ED.hstep|0)!==i) hedStepGo(i); }, done:()=>(tutSelOk(i)&&TUT.picked) || tutHave('fwdr'[i])>=tutNeed('fwdr'[i])});
+const TUT_CASA=[
+  {say:()=>(TUT.base&&TUT.base.f?'¡Hola! Soy <b>Almohadita</b> 🛏️ Ya tienes una casita: vamos a <b>agrandarla</b> paso a paso y te enseño todos los botones.':'¡Hola! Soy <b>Almohadita</b> 🛏️ Te ayudo a armar tu casita paso a paso.'), next:true, start:()=>{ if(HS.hfree){ HS.hfree=false; hSave(); } if((ED.lv|0)!==0) edLevel(-(ED.lv|0)); edRender(); }, after:tutGiftCasa},
+  tutCasaPick(0,'un piso'),
+  {say:()=>'Toca el terreno para poner piso (1er toque: ves cómo queda; 2º: lo pone ✓). ¡También puedes <b>arrastrar el dedo</b>!'+tutCnt('f'), t:()=>{ const e=tutHouseFar(); return e?tutHouseW(e.i,e.j+1):tutHouseW(10,10); }, done:()=>tutHave('f')>=tutNeed('f')},
+  tutCasaNext(1),
+  tutCasaPick(1,'una pared'),
+  {say:()=>'Toca la <b>orilla</b> de tu piso para poner paredes. Aquí también hay puertas y ventanas 🚪 '+tutCnt('w'), t:()=>{ const e=tutHouseEdge(); if(!e) return null; const L=edLot(), [x,z]=lotW(L,-HZ.H+HZ.C*e.i+HZ.C/2+e.d[0]*HZ.C*.45,-HZ.H+HZ.C*e.j+HZ.C/2+e.d[1]*HZ.C*.45); return {w:[x,L.y+(ED.lv|0)*HZ.LV+.3,z], cam:'main'}; }, done:()=>tutHave('w')>=tutNeed('w')},
+  tutCasaNext(2),
+  {say:'Paso 3: <b>Decoración</b>. Escoge un mueble de la lista 👉 (en <b>🌳 Jardín</b> hay plantas y cercas)', t:()=>document.querySelector('#hedInv .hed-card.on')||document.querySelector('#hedInv .hed-card'), start:()=>{ TUT.picked=false; if(tutHave('d')<tutNeed('d') && (ED.hstep|0)!==2) hedStepGo(2); }, done:()=>(tutSelOk(2)&&TUT.picked) || tutHave('d')>=tutNeed('d')},
+  {say:'Tócalo en el piso, adentro de tu casita 🛋️', t:()=>{ const [i,j]=tutHouseFree(); return tutHouseW(i,j); }, done:()=>tutHave('d')>=tutNeed('d')},
+  tutCasaNext(3),
+  tutCasaPick(3,'un techo'),
+  {say:()=>'Toca arriba de tu casita para ponerle <b>techo</b> 🏠 '+tutCnt('r'), t:()=>{ const e=tutHouseFar(); return e?tutHouseW(e.i,e.j):null; }, done:()=>tutHave('r')>=tutNeed('r')},
+  {say:'¡Tu casita quedó preciosa! 🎉 Ahora te enseño <b>todos los botones</b>.', next:true, start:()=>{ if(ED.toolsOpen){ ED.toolsOpen=false; edRender(); } }},
+  tutInfo('#hedInv .hed-steps','Estos son los <b>pasos</b>. Toca uno para ir directo; la palomita ✓ quiere decir que ya está listo.'),
+  tutInfo('#hedInv .hed-card','Cada pieza dice <b>cuántas tienes</b> (×5). Toca la ☆ para marcarla como <b>favorita</b>. Algunas vienen en varios colores.'),
+  tutInfo('#hedInv .hed-tabs','En Decoración hay dos listas: <b>🛋️ Casa</b> (muebles) y <b>🌳 Jardín</b> (plantas, cercas y luces).',()=>{ if((ED.hstep|0)!==2) hedStepGo(2); }),
+  tutInfo('#hedInv .hed-subs','Estos botoncitos <b>filtran</b> la lista (muebles, cocina…). La ⭐ te enseña tus favoritas.'),
+  tutInfo('#hedInv .hed-free','🧩 <b>Modo libre</b>: ves todas las piezas juntas, sin pasos.'),
+  tutInfo(tutBtn('#hedBar button','Girar'),'⟳ <b>Girar</b>: gira la pieza antes de ponerla.'),
+  tutInfo(tutBtn('#hedBar button','Quitar'),'🗑️ <b>Quitar</b>: toca una pieza para quitarla; regresa a tus piezas.'),
+  tutInfo(tutBtn('#hedBar button','Tienda'),'🛒 <b>Tienda</b>: consigue más piezas con monedas o viendo un anuncio 📺.'),
+  tutInfo(()=>ED.bTools,'🧰 <b>Herramientas</b>: aquí hay más funciones. ¡Vamos a verlas!'),
+  tutInfo(tutBtn('#hedTools button','Deshacer'),'↶ <b>Deshacer</b> y ↷ <b>Rehacer</b>: si te equivocas, regresa lo último que hiciste.',()=>{ if(!ED.toolsOpen){ ED.toolsOpen=true; edRender(); } }),
+  tutInfo(tutBtn('#hedTools button','Rellenar'),'🪣 <b>Rellenar</b>: escoge un piso y toca adentro de un cuarto cerrado: ¡se llena todo de una vez!',()=>{ if(!ED.toolsOpen){ ED.toolsOpen=true; edRender(); } }),
+  tutInfo(tutBtn('#hedTools button','Pintar'),'🖌️ <b>Pintar</b>: escoge un color o material y toca lo que quieras pintar (en un muro, el lado que tocas).',()=>{ if(!ED.toolsOpen){ ED.toolsOpen=true; edRender(); } }),
+  tutInfo(tutBtn('#hedTools button','Mover'),'✋ <b>Mover</b>: toca una pieza y luego toca a dónde la quieres llevar.',()=>{ if(!ED.toolsOpen){ ED.toolsOpen=true; edRender(); } }),
+  tutInfo(()=>ED.bRoof,'🏠 <b>Techo</b>: esconde o enseña el techo para ver bien adentro.',()=>{ if(!ED.toolsOpen){ ED.toolsOpen=true; edRender(); } }),
+  tutInfo(tutBtn('#hedTools button','Caminar'),'👁️ <b>Caminar</b>: entra a tu casita y camina por adentro.',()=>{ if(!ED.toolsOpen){ ED.toolsOpen=true; edRender(); } }),
+  tutInfo(()=>ED.bDes,'📐 <b>Diseño</b>: puedes tener hasta 3 casitas diferentes y cambiar entre ellas.',()=>{ if(!ED.toolsOpen){ ED.toolsOpen=true; edRender(); } }),
+  tutInfo(()=>ED.bLvUp,'⬆️ <b>Subir</b> y ⬇️ <b>Bajar nivel</b>: para hacer pisos de arriba (usa una escalera para subir).',()=>{ if(!ED.toolsOpen){ ED.toolsOpen=true; edRender(); } }),
+  tutInfo(()=>ED.tog,'▶ Esconde o enseña la <b>lista de piezas</b> para ver mejor tu casita.',()=>{ if(ED.toolsOpen){ ED.toolsOpen=false; edRender(); } },false),
+  {say:'Para moverte: <b>arrastra el dedo</b> por el terreno, y usa <b>dos dedos</b> para girar y acercar 🔍', next:true},
+  {say:'¡Ya sabes usar todo! 🎉 Toca <b>✓ Listo</b> para guardar tu casita.', t:()=>tutBtn('#hedBar button','Listo')(), next:true, last:true}];
+// ---- motor ----
+function tutCtx(m){ return m==='veh' ? !!VE.ed : !!(ED.on && edLot()); }
+function tutAuto(m){ if(TUT.seen[m] || TUT.on) return; setTimeout(()=>{ if(tutCtx(m) && !TUT.on) tutStart(m); },450); }
+function tutStart(m){ if(!tutCtx(m)) return; const E=tutEls(); if(m==='casa'){ const lv=ED.lv; ED.lv=0; const H=tutHouse(); ED.lv=lv; TUT.base={f:H.floors.length, w:H.walls.length, d:H.deco.length, r:H.roofs.length}; } TUT.on=m; TUT.steps=(m==='veh'?TUT_VEH:TUT_CASA).map(s=>({...s})); TUT.i=-1; TUT.praise=0; TUT.last='';
+  E.box.className='m-'+m; E.box.classList.remove('alt'); E.box.hidden=false; E.guide.innerHTML=TUT_SVG[m]; E.name.textContent=m==='veh'?'LLANTITA':'ALMOHADITA'; document.body.classList.toggle('tut-casa',m==='casa');
+  tutGo(0); clearInterval(TUT.timer); TUT.timer=setInterval(tutTick,90); }
+function tutGo(i){ const T=TUT; // salta los pasos que ya están hechos
+  while(i<T.steps.length){ const S=T.steps[i]; if(S.start) try{ S.start(); }catch(e){}
+    if(S.opt){ let R=null; S._scr=true; try{ R=tutTarget(S); }catch(e){} S._scr=false; if(!R){ i++; continue; } }   // ese botón no está ahorita: se salta
+    if(S.next || !S.done || !S.done()) break; if(S.after) try{ S.after(); }catch(e){} i++; }
+  T.i=i; if(i>=T.steps.length){ tutEnd(false); return; } const S=T.steps[i]; S._ok=false; S._scr=false; S._flip=0; if(T.el) T.el.box.classList.remove('alt'); tutSay(); }
+function tutSay(){ const T=TUT, E=T.el, S=T.steps[T.i]; if(!S) return; const tx=typeof S.say==='function'?S.say():S.say;
+  if(tx!==T.last){ const first=T.last===''||!T.last.replace(/\(\d+ de \d+\)/,'').startsWith(tx.replace(/\(\d+ de \d+\)/,'').slice(0,20)); E.txt.innerHTML=tx; T.last=tx; if(first){ E.box.classList.add('tut-talk'); clearTimeout(T.talkT); T.talkT=setTimeout(()=>E.box.classList.remove('tut-talk'),1300); } }
+  E.next.hidden=!S.next; E.next.textContent=S.last?'¡Gracias!':'¡Entendido!'; E.prog.textContent=(T.i+1)+' / '+T.steps.length; }
+function tutEnd(skipped,done){ const T=TUT; if(!T.on) return; T.seen[T.on]=1;
+  if(done && !T.seen['r'+T.on]){ T.seen['r'+T.on]=1; try{ addCoins(200); }catch(e){} try{ if(VE.ed) vehUI(); }catch(e){} setTimeout(()=>flashNote('🎉 ¡Completaste el tutorial! +200 monedas 🪙'),60); }
+  tutSave(); clearInterval(T.timer); T.timer=null; const m=T.on; T.on=null; T.steps=null;
+  if(T.el){ T.el.box.hidden=true; T.el.ring.hidden=true; T.el.arrow.hidden=true; } document.body.classList.remove('tut-casa');
+  if(skipped) flashNote('Puedes ver la ayuda otra vez con el botón ❓'); }
+function tutTarget(S){ let t=S.t; if(typeof t==='function') t=t(); if(typeof t==='string') t=document.querySelector(t); if(!t) return null;
+  if(t.w){ const v=new THREE.Vector3(t.w[0],t.w[1],t.w[2]); if(t.cam==='veh'){ v.project(VS.cam); } else v.project(camera); if(v.z>1 || Math.abs(v.x)>1.05 || Math.abs(v.y)>1.05) return null;
+    const x=(v.x+1)/2*innerWidth, y=(1-v.y)/2*innerHeight; return {x:x-26, y:y-26, w:52, h:52, round:true}; }
+  if(!t.getBoundingClientRect) return null; const r=t.getBoundingClientRect(); if(r.width<2 || r.height<2) return null;
+  if(!S._scr){ S._scr=true; try{ t.scrollIntoView({block:'nearest', inline:'nearest'}); }catch(e){} return tutTarget(S); }
+  return {x:r.left, y:r.top, w:r.width, h:r.height}; }
+function tutTick(){ const T=TUT; if(!T.on) return; const E=T.el, S=T.steps&&T.steps[T.i]; if(!tutCtx(T.on)){ tutEnd(false, !!(S && S.last)); return; } if(!S){ tutEnd(false); return; }
+  if(T.praise>0){ T.praise-=.09; if(T.praise<=0){ tutGo(T.i+1); } return; }
+  let ok=false; try{ ok=S.next ? S._ok : S.done(); }catch(e){}
+  if(ok){ if(S.after) try{ S.after(); }catch(e){} if(S.last){ tutEnd(false,true); return; }
+    if(!S.next){ E.txt.innerHTML=['¡Muy bien! 🎉','¡Eso es! ⭐','¡Súper! 🎉','¡Bien hecho! ✨'][T.i%4]; T.last='-'; E.ring.hidden=true; E.arrow.hidden=true; E.next.hidden=true; T.praise=.75; try{ coinSound(1); }catch(e){} return; }
+    tutGo(T.i+1); return; }
+  tutSay();
+  let R=null; try{ R=tutTarget(S); }catch(e){}
+  if(!R){ E.ring.hidden=true; E.arrow.hidden=true; return; }
+  const pad=R.round?0:5; E.ring.hidden=false; E.ring.classList.toggle('round',!!R.round);
+  Object.assign(E.ring.style,{left:(R.x-pad)+'px', top:(R.y-pad)+'px', width:(R.w+pad*2)+'px', height:(R.h+pad*2)+'px'});
+  // la caja de la guía no debe tapar lo que hay que tocar (si lo tapa, se pasa al otro lado una vez)
+  const bx=()=>E.box.getBoundingClientRect(), hit=(b,x,y,w,h)=>!(x+w<b.left-6 || x>b.right+6 || y+h<b.top-6 || y>b.bottom+6);
+  if(hit(bx(),R.x,R.y,R.w,R.h) && (S._flip|0)<1){ S._flip=1; E.box.classList.toggle('alt'); }
+  // flecha: arriba del objetivo apuntando hacia abajo; si ahí estorba la caja o no cabe, abajo o a un lado
+  const cx=R.x+R.w/2, cy=R.y+R.h/2, B=bx(), opts=[['',cx-20,R.y-pad-52],['up',cx-20,R.y+R.h+pad+4],['right',R.x-pad-50,cy-24],['left',R.x+R.w+pad+6,cy-24]];
+  let pick=opts.find(([d,x,y])=>x>=0 && y>=0 && x+40<=innerWidth && y+48<=innerHeight && !hit(B,x,y,40,48)) || opts.find(([d,x,y])=>y>=0 && y+48<=innerHeight) || opts[0];
+  const [dir,ax,ay]=pick;
+  E.arrow.hidden=false; E.arrow.className=dir; E.arrow.style.left=Math.max(2,Math.min(innerWidth-42,ax))+'px'; E.arrow.style.top=Math.max(2,Math.min(innerHeight-50,ay))+'px'; }
+
+const SAVE_KEYS=['Monedas','Ropa','Banderas','Especies','Planetas','Jugador','MejorVuelta','Opciones','Peces','Mascotas','Mina','Huerto','Casa','Islas','Baldes','Vehiculo','Tutorial'];   // v188: + tutoriales vistos   // v182: + islas y baldes   // v166: + tu casita   // v125: + mascotas, mina y huerto
 function saveSnapshot(){ const o={v:1, e:124}; /* e: versión de la economía (v124: precios ×5) */ for(const k of SAVE_KEYS){ try{ const v=localStorage.getItem('mundoPeluche'+k); if(v!=null) o[k]=v; }catch(e){} } return o; }
 const jparse=(s,d)=>{ try{ const v=JSON.parse(s); return v==null?d:v; }catch(e){ return d; } };
 function saveSummary(o){ const own=(jparse(o.Ropa,{}).own||[]).length, pl=Object.keys(jparse(o.Planetas,{})).length, sp=(jparse(o.Especies,[])||[]).length, pe=(jparse(o.Mascotas,{}).own||[]).length;
