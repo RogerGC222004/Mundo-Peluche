@@ -1147,7 +1147,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='193';
+const GAME_VERSION='194';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -3195,7 +3195,7 @@ const UWA={sp:[], on:false};
       for(let i=0;i<p.count;i++,o++){ const x=p.getX(i), y=p.getY(i), z=p.getZ(i); pos[o*3]=x; pos[o*3+1]=y; pos[o*3+2]=z; nor[o*3]=q.getX(i); nor[o*3+1]=q.getY(i); nor[o*3+2]=q.getZ(i);
         const k=cc||hexLin(c(x,y,z)); col[o*3]=k.r; col[o*3+1]=k.g; col[o*3+2]=k.b; aw[o]=typeof w==='function'?w(x,y,z):(w||0); } });
     const G=new THREE.BufferGeometry(); G.setAttribute('position',new THREE.BufferAttribute(pos,3)); G.setAttribute('normal',new THREE.BufferAttribute(nor,3)); G.setAttribute('color',new THREE.BufferAttribute(col,3)); G.setAttribute('aw',new THREE.BufferAttribute(aw,1)); G.computeBoundingSphere(); return G; }
-  const eyes=(x,y,z,r)=>[[sph,'#1b1b22',M(x,y,z,r,r,r)],[sph,'#1b1b22',M(-x,y,z,r,r,r)],[sph,'#ffffff',M(x*1.04,y+r*.35,z+r*.45,r*.35,r*.35,r*.35)],[sph,'#ffffff',M(-x*1.04,y+r*.35,z+r*.45,r*.35,r*.35,r*.35)]];
+  const eyes=()=>[];   // v194: los ojos ya no van pegados a la figura: son ojos saltones aparte (UWA_EYES, abajo)
   // --- figuras (adelante = +z) ---
   const G={};
   G.fish=merge([[sph,'#ffffff',M(0,0,0,.15,.3,.5)],[cone,'#ffffff',M(0,0,-.58,.03,.32,.3,Math.PI/2,0,0),1],[cone,'#ffffff',M(0,.32,-.05,.02,.22,.2,-.3,0,0)],...eyes(.11,.07,.3,.055)]);
@@ -3208,14 +3208,20 @@ const UWA={sp:[], on:false};
     [sph,'#4e6a86',M(.45,-.18,.25,.42,.03,.12,0,-.6,-.3),1],[sph,'#4e6a86',M(-.45,-.18,.25,.42,.03,.12,0,.6,.3),1],[sph,'#3f5973',M(.26,0,-1.28,.32,.03,.14,0,-.55,0)],[sph,'#3f5973',M(-.26,0,-1.28,.32,.03,.14,0,.55,0)],...eyes(.33,-.02,.95,.04)]);
   G.manta=merge([[sph,(x,y,z)=>y>0?'#3c4a66':'#eef1f5',M(0,0,0,1.25,.1,.62)],[sph,'#3c4a66',M(0,0,.45,.35,.12,.3)],[cyl,'#3c4a66',M(0,0,-1.0,.03,1.1,.03,Math.PI/2,0,0)],
     [sph,'#3c4a66',M(.24,0,.72,.06,.05,.2)],[sph,'#3c4a66',M(-.24,0,.72,.06,.05,.2)],...eyes(.3,.08,.55,.04)]);
-  G.octo=(()=>{ const P=[[sph,'#ffffff',M(0,.75,-.08,.5,.6,.55)],...eyes(.22,.78,.36,.09)]; for(let i=0;i<8;i++){ const a=i/8*Math.PI*2+.2; for(let k=0;k<4;k++){ const r=.18+k*.2, h=.32-k*.08; P.push([sph,'#ffffff',M(Math.cos(a)*r,h,Math.sin(a)*r,.11-k*.018,.09-k*.012,.11-k*.018),(k+1)/4]); } } return merge(P); })();
+  const seg=(a,b,r0,r1,c,w)=>{ const A=new THREE.Vector3(...a), B=new THREE.Vector3(...b), d=B.clone().sub(A), L=d.length(); const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());
+    return [new THREE.CylinderGeometry(r1,r0,1,7,1,true),c,new THREE.Matrix4().compose(A.clone().add(B).multiplyScalar(.5),q,new THREE.Vector3(1,L,1)),w]; };
+  G.octo=(()=>{ const P=[[sph,'#ffffff',M(0,.78,-.08,.5,.58,.55)],[sph,'#ffffff',M(0,.42,0,.36,.2,.36)],...eyes(.22,.8,.36,.09)];   // v193: tentáculos seguidos (antes bolitas sueltas)
+    for(let i=0;i<8;i++){ const a=i/8*Math.PI*2+.2, ca=Math.cos(a), sa=Math.sin(a), pts=[[.22,.36],[.42,.22],[.62,.12],[.8,.07],[.92,.12]].map(([r,h])=>[ca*r,h,sa*r]), rad=[.1,.085,.065,.045,.028];
+      for(let k=0;k<pts.length-1;k++){ P.push(seg(pts[k],pts[k+1],rad[k],rad[k+1],'#ffffff',(k+1)/4)); P.push([sph,'#ffffff',M(...pts[k+1],rad[k+1],rad[k+1]*.8,rad[k+1]),(k+1)/4]); } }
+    return merge(P); })();
   G.jelly=(()=>{ const P=[[new THREE.SphereGeometry(1,lo?8:12,6,0,Math.PI*2,0,Math.PI/2),'#ffffff',M(0,0,0,.6,.5,.6)]]; for(let i=0;i<10;i++){ const a=i/10*Math.PI*2; P.push([cyl,'#ffffff',M(Math.cos(a)*.45,-.75,Math.sin(a)*.45,.018,1.5,.018),1]); }
     for(let i=0;i<4;i++){ const a=i/4*Math.PI*2+.4; P.push([sph,'#ffffff',M(Math.cos(a)*.12,-.45,Math.sin(a)*.12,.07,.45,.04,0,-a,0),1]); } return merge(P); })();
   G.seahorse=(()=>{ const P=[]; const C=[[0,.9,.12,.16],[0,.7,.05,.17],[0,.5,0,.18],[0,.3,.02,.15],[0,.14,.08,.12],[0,.02,.06,.09],[0,-.08,-.02,.07],[0,-.12,-.1,.05]];
     C.forEach(([x,y,z,r])=>P.push([sph,'#ffffff',M(x,y,z,r*.9,r,r)])); P.push([sph,'#ffffff',M(0,1.02,.2,.13,.12,.14)],[cyl,'#ffffff',M(0,1.0,.38,.04,.22,.04,Math.PI/2,0,0)],[sph,'#ffffff',M(0,.55,-.17,.02,.16,.1),1],...eyes(.09,1.06,.27,.04)); return merge(P); })();
-  G.crab=(()=>{ const P=[[sph,'#ffffff',M(0,.22,0,.5,.2,.36)],[cyl,'#ffffff',M(.12,.42,.22,.03,.2,.03)],[cyl,'#ffffff',M(-.12,.42,.22,.03,.2,.03)],[sph,'#1b1b22',M(.12,.54,.22,.06,.06,.06)],[sph,'#1b1b22',M(-.12,.54,.22,.06,.06,.06)],
-    [sph,'#ffffff',M(.55,.24,.38,.18,.12,.13),.3],[sph,'#ffffff',M(-.55,.24,.38,.18,.12,.13),.3]];
-    for(const s of [1,-1]) for(let k=0;k<3;k++) P.push([cyl,'#ffffff',M(s*.55,.12,-.2+k*.2,.025,.4,.025,0,0,s*1.0),1]);
+  G.crab=(()=>{ const P=[[sph,'#ffffff',M(0,.3,0,.46,.19,.34)],[sph,'#ffffff',M(0,.36,.02,.38,.13,.28)],[cyl,'#ffffff',M(.11,.48,.24,.025,.16,.025)],[cyl,'#ffffff',M(-.11,.48,.24,.025,.16,.025)],   // v193: patas dobladas y tenazas
+    ];
+    for(const s of [1,-1]){ for(let k=0;k<3;k++){ const z=-.18+k*.15; P.push(seg([s*.36,.28,z],[s*.66,.42,z*1.25],.035,.03,'#ffffff',1)); P.push(seg([s*.66,.42,z*1.25],[s*.86,.02,z*1.45],.03,.018,'#ffffff',1)); }
+      P.push(seg([s*.3,.3,.25],[s*.52,.36,.48],.045,.04,'#ffffff',.3)); P.push([sph,'#ffffff',M(s*.6,.38,.6,.13,.1,.15),.3]); P.push([sph,'#ffffff',M(s*.66,.42,.74,.05,.04,.1,.2,0,0),.3]); P.push([sph,'#ffffff',M(s*.55,.34,.74,.045,.035,.09,-.2,0,0),.3]); }
     return merge(P); })();
   G.angler=merge([[sph,'#3a3550',M(0,0,0,.5,.45,.55)],[sph,'#24203a',M(0,-.12,.42,.32,.12,.14)],[cone,'#3a3550',M(0,0,-.6,.03,.3,.3,Math.PI/2,0,0),1],[cyl,'#3a3550',M(0,.52,.32,.02,.45,.02,.7,0,0)],...eyes(.22,.14,.42,.07)]);
   G.lure=new THREE.SphereGeometry(.1,8,6);
@@ -3294,6 +3300,16 @@ const UWA={sp:[], on:false};
   for(let i=0;i<nQ(24);i++){ const [x,z]=i<16?inF():OZ(); add('squid',circ(x,z,i<16?terrainH(x,z)+8+25*rnd():SEA_Y-60-60*rnd(),10+10*rnd(),.04,4,4,{s:1.2+.8*rnd(), col:pick(['#ff6b6b','#ff9ff3','#7fffd4','#ffd166'])})); }
   // --- armar ---
   const glowKeys={lantern:1, jelly:1, squid:1};
+  const EY={fish:[.12,.08,.3,.075,[1,.1,.6]], lantern:[.12,.08,.3,.075,[1,.1,.6]], clown:[.12,.08,.3,.08,[1,.1,.6]], turtle:[.12,.13,1.04,.065,[1,.25,.8]], dolphin:[.22,.09,.75,.08,[1,.15,.3]],
+    whale:[.36,.05,1.0,.085,[1,.1,.5]], manta:[.27,.11,.56,.06,[1,.5,.4]], octo:[.2,.84,.38,.11,[.4,.1,1]], jelly:[.17,.16,.52,.09,[.3,.1,1]], seahorse:[.1,1.07,.25,.06,[1,.1,.4]],
+    crab:[.11,.6,.25,.06,[.2,.3,1]], angler:[.22,.16,.43,.1,[.6,.1,1]], squid:[.2,.07,-.32,.08,[1,.1,.1]]};
+  UWA.eyeSpec={}; let neyes=0;
+  for(const k in EY){ const [x,y,z,r,d]=EY[k], out=[]; for(const s of [1,-1]){ const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1), new THREE.Vector3(s*d[0],d[1],d[2]).normalize());
+      out.push({pos:new THREE.Vector3(s*x,y,z), q, r, W:new THREE.Matrix4().compose(new THREE.Vector3(s*x,y,z),q,new THREE.Vector3(r,r,r*.42)), D:new THREE.Matrix4().compose(new THREE.Vector3(s*x,y,z),q,new THREE.Vector3(r*1.04,r*1.04,r*.62))}); }
+    UWA.eyeSpec[k]=out; neyes+=(L[k]||[]).length*2; }
+  { const mk=(m,o={})=>{ const im=new THREE.InstancedMesh(o.geo||sph,m,Math.max(1,neyes)); im.frustumCulled=false; im.count=0; im.userData.noCol=true; im.castShadow=false; if(o.ro) im.renderOrder=o.ro; scene.add(im); return im; };
+    UWA.eyeW=mk(new THREE.MeshStandardMaterial({color:0xf4f4f2, roughness:.45, emissive:0x2a2a2a})); UWA.eyeP=mk(new THREE.MeshStandardMaterial({color:0x0c0c0c, roughness:.5}),{geo:new THREE.SphereGeometry(1,8,6)});
+    UWA.eyeD=ULTRA?null:mk(new THREE.MeshStandardMaterial({color:0xffffff, roughness:.04, metalness:.1, transparent:true, opacity:.22, depthWrite:false}),{ro:3}); }
   for(const k in L){ const g=k==='lantern'?G.fish:G[k], m=new THREE.InstancedMesh(g,MAT[k],L[k].length); m.frustumCulled=false; m.userData.noCol=true; m.castShadow=false;
     if(L[k][0].col) m.setColorAt(0,new THREE.Color(1,1,1));   // (antes de poner count=0: el color se arma del tamaño de count)
     m.count=0; scene.add(m);
@@ -3315,17 +3331,23 @@ function uwPose(e,t){ const o=_ua; o.roll=0;
   if(e.k==='j'){ const b=Math.sin(t*2.6+e.ph); o.p.set(e.x+Math.sin(t*.07+e.ph)*4, e.y0+Math.sin(t*.25+e.ph)*2.5+b*.15, e.z+Math.cos(t*.09+e.ph)*4); o.yaw=t*.1+e.ph; o.pitch=0; return o; }
   if(e.k==='w'){ const u=Math.sin(t*e.w+e.ph), x=e.x+Math.cos(e.dir)*u*e.L, z=e.z+Math.sin(e.dir)*u*e.L; o.p.set(x, terrainH(x,z), z); o.yaw=Math.atan2(Math.cos(e.dir),Math.sin(e.dir))+Math.PI/2; o.pitch=0; return o; }
   o.p.set(e.x,e.y0||0,e.z); o.yaw=0; o.pitch=0; return o; }
-function uwAnimalsUpdate(){ const cam=camera.position, off=(typeof SP!=='undefined' && SP.on) || cam.y<CAVE_TOP, under=underwaterView, t=WATER.t;
+const _uaM2=new THREE.Matrix4(), _uaQ2=new THREE.Quaternion(), _uaQ3=new THREE.Quaternion(), _uaDn=new THREE.Vector3(), _uaV=new THREE.Vector3(), _uaS2=new THREE.Vector3();
+function uwAnimalsUpdate(){ const cam=camera.position, off=(typeof SP!=='undefined' && SP.on) || cam.y<CAVE_TOP, under=underwaterView, t=WATER.t; UWA.ne=0;
   const nearSurf=!off && !under && cam.y<SEA_Y+60;
   for(const S of UWA.sp){ const m=S.m; let n=0;
     if(!off && (under || (nearSurf && (S.k==='dolphin'||S.k==='whale'||S.k==='turtle')))){ const R=under?Math.min(S.near,(scene.fog.far||60)+30):Math.min(S.near,140), R2=R*R;
       for(const e of S.list){ const dx=e.x-cam.x, dz=e.z-cam.z; if(dx*dx+dz*dz>(R+e.R+(e.r||0))**2) continue; const o=uwPose(e,t); const ex=o.p.x-cam.x, ey=o.p.y-cam.y, ez=o.p.z-cam.z; if(ex*ex+ey*ey+ez*ez>R2) continue;
         if(!under && o.p.y<SEA_Y-8) continue;
         const s=e.s||1; _uaE.set(o.pitch,o.yaw,o.roll); _uaM.compose(o.p,_uaQ.setFromEuler(_uaE),_uaS.set(s,s,s)); m.setMatrixAt(n,_uaM); if(m.instanceColor) m.setColorAt(n,_uaC.set(e.col||'#ffffff').convertSRGBToLinear());
-        if(S.lure){ _uaL.set(0,.98,.62).applyMatrix4(_uaM); _uaM.makeTranslation(_uaL.x,_uaL.y,_uaL.z); S.lure.setMatrixAt(n,_uaM); }
+        const ES=UWA.eyeSpec[S.k]; if(ES){ _uaQ.setFromEuler(_uaE); for(const E of ES){ _uaM2.multiplyMatrices(_uaM,E.W); UWA.eyeW.setMatrixAt(UWA.ne,_uaM2); if(UWA.eyeD){ _uaM2.multiplyMatrices(_uaM,E.D); UWA.eyeD.setMatrixAt(UWA.ne,_uaM2); }
+            _uaQ2.copy(_uaQ).multiply(E.q); _uaDn.set(0,-1,0).applyQuaternion(_uaQ2.invert()); const wob=Math.sin(t*2.3+e.x+E.pos.x*9)*.18;   // la bolita negra cae hacia abajo (y se mece un poquito)
+            const px=Math.max(-.9,Math.min(.9,_uaDn.x*.9+wob)), py=Math.max(-.9,Math.min(.9,_uaDn.y*.9)); _uaV.set(px*E.r*.42,py*E.r*.42,E.r*.3).applyQuaternion(E.q).add(E.pos);
+            _uaM2.compose(_uaV,_uaQ3.identity(),_uaS2.set(E.r*.56,E.r*.56,E.r*.56)); _uaM2.premultiply(_uaM); UWA.eyeP.setMatrixAt(UWA.ne,_uaM2); UWA.ne++; } }
+        if(S.lure){ _uaL.set(0,.68,.455).applyMatrix4(_uaM); _uaM.compose(_uaL,_uaQ.identity(),_uaS.set(s,s,s)); S.lure.setMatrixAt(n,_uaM); }   // la lucecita, en la punta de su antena
         n++; } }
     m.count=n; if(n){ m.instanceMatrix.needsUpdate=true; if(m.instanceColor) m.instanceColor.needsUpdate=true; } m.visible=n>0;
-    if(S.lure){ S.lure.count=n; S.lure.visible=n>0; if(n) S.lure.instanceMatrix.needsUpdate=true; } } }
+    if(S.lure){ S.lure.count=n; S.lure.visible=n>0; if(n) S.lure.instanceMatrix.needsUpdate=true; } }
+  for(const im of [UWA.eyeW,UWA.eyeP,UWA.eyeD]){ if(!im) continue; im.count=UWA.ne; im.visible=UWA.ne>0; if(UWA.ne) im.instanceMatrix.needsUpdate=true; } }   // v194: ojos saltones del mar
 // ---------- v191: zonas del mar con nombre ----------
 // Al entrar a una zona sale su nombre en grande; en el mapa aparecen marcadas.
 const UW_ZONE_LIST=(()=>{ const at=(a,c)=>{ const r=c*coastRN(a); return [Math.cos(a)*r, Math.sin(a)*r]; };
@@ -3397,7 +3419,7 @@ const fishParts=(()=>{
   const n=MAP.fish.length*6, mat=new THREE.MeshStandardMaterial({roughness:1});
   const tailG=new THREE.ConeGeometry(.16,.3,4); tailG.rotateZ(Math.PI/2);
   const mk=(geo,m)=>{ const im=new THREE.InstancedMesh(geo,m,n); im.frustumCulled=false; im.castShadow=false; scene.add(im); return im; };
-  const out={body:mk(sphereG,mat), tail:mk(tailG,mat), eye:mk(sphereG,new THREE.MeshStandardMaterial({color:0x111111, roughness:.5}))}; DECOR.push(out.body,out.tail,out.eye); return out;
+  const out={body:mk(sphereG,mat), tail:mk(tailG,mat), eye:mk((()=>{ const S=new THREE.SphereGeometry(1,8,6), P=[]; for(const z of [1,-1]){ P.push([S.clone(),'#f4f4f2',new THREE.Matrix4().compose(new THREE.Vector3(0,0,z*1.95),new THREE.Quaternion(),new THREE.Vector3(1,1,.45))]); P.push([S.clone(),'#0c0c0c',new THREE.Matrix4().compose(new THREE.Vector3(0,-.36,z*2.25),new THREE.Quaternion(),new THREE.Vector3(.55,.55,.4))]); } return vegMerge(P); })(), new THREE.MeshStandardMaterial({vertexColors:true, roughness:.5}))}; DECOR.push(out.body,out.tail,out.eye); return out;   // v194: un ojito de cada lado
 })();
 (function fish(){
   const cols=['#ffb347','#7fc8f8','#f78fb3'].map(h=>new THREE.Color(h).convertSRGBToLinear());
@@ -3409,7 +3431,7 @@ const fishParts=(()=>{
   });
 })();
 const _fm=new THREE.Matrix4(), _fl=new THREE.Matrix4(), _fp=new THREE.Object3D();
-const FISH_BODY=new THREE.Matrix4().makeScale(.36,.22,.13), FISH_EYE=new THREE.Matrix4().compose(new THREE.Vector3(.22,.05,.11), new THREE.Quaternion(), new THREE.Vector3(.035,.035,.035));
+const FISH_BODY=new THREE.Matrix4().makeScale(.36,.22,.13), FISH_EYE=new THREE.Matrix4().compose(new THREE.Vector3(.2,.05,0), new THREE.Quaternion(), new THREE.Vector3(.055,.055,.055));
 function updateFish(t,force){
   let any=false;
   for(const s of schools){
@@ -8780,6 +8802,32 @@ function remoteBowPose(r){
   poseBowOn(r.obj,R,{pitch:b[5], draw:b[0]===0?1:0, mode:b[0], target:at, extend:b[0]===1?1:0, pull:b[0]===4?1:0, reachK:1, vel}, at, b[0]>=3);
 }
 
+// ---------- v193: ojos saltones para cualquier animalito (como los de los ositos del inicio) ----------
+// googlyEyes(cabeza, x,y,z, r, {dir, single}): pone dos ojos (espejo en x) mirando hacia «dir» (adelante = +z). La bolita negra cae por
+// su peso y se sacude cuando el animalito se mueve (solo se calcula de cerca: googlyTick).
+const GOOGLY={list:[], W:new THREE.MeshStandardMaterial({color:0xf4f4f2, roughness:.45}), P:new THREE.MeshStandardMaterial({color:0x0c0c0c, roughness:.5}),
+  D:new THREE.MeshStandardMaterial({color:0xffffff, roughness:.04, metalness:.1, transparent:true, opacity:.22, depthWrite:false})};
+function googlyEyes(par,x,y,z,r,o={}){ const dir=o.dir||[0,0,1], out=[];
+  for(const s of (o.single?[1]:[1,-1])){ const g=new THREE.Group(); g.position.set(s*x,y,z);
+    const d=new THREE.Vector3(s*dir[0],dir[1],dir[2]).normalize(); g.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),d);
+    const w=new THREE.Mesh(sphereG,GOOGLY.W); w.scale.set(r,r,r*.42); g.add(w);
+    const p=new THREE.Mesh(sphereLo,GOOGLY.P); p.scale.setScalar(r*.56); p.position.set(0,-r*.38,r*.3); g.add(p);
+    if(!ULTRA){ const dm=new THREE.Mesh(sphereG,GOOGLY.D); dm.scale.set(r*1.04,r*1.04,r*.62); dm.renderOrder=3; g.add(dm); }
+    g.traverse(q=>{ if(q.isMesh){ q.castShadow=false; q.userData.noCol=true; } });
+    par.add(g); const e={g, p, r, root:o.root||null, pp:new THREE.Vector2(0,-.9), v:new THREE.Vector2(), last:new THREE.Vector3(), lv:new THREE.Vector3(), first:true};
+    GOOGLY.list.push(e); out.push(e); }
+  return out; }
+const _gw=new THREE.Vector3(), _gv=new THREE.Vector3(), _ga=new THREE.Vector3(), _gq=new THREE.Quaternion();
+function googlyTick(dt){ if(!GOOGLY.list.length || dt<=0) return; dt=Math.min(dt,.05); const cam=camera.position;
+  if((GOOGLY.t=(GOOGLY.t||0)+1)%900===0) GOOGLY.list=GOOGLY.list.filter(e=>!(e.off>3000));   // los que llevan mucho fuera de la escena
+  for(const e of GOOGLY.list){ let on=false; for(let q=e.g, k=0; q && k<24; q=q.parent, k++){ if(!q.visible) break; if(q===scene){ on=true; break; } }   // (también si ya no está en la escena)
+    if(!on){ e.first=true; e.off=(e.off||0)+1; continue; } e.off=0; e.g.getWorldPosition(_gw); if(_gw.distanceToSquared(cam)>40*40){ e.first=true; continue; }
+    if(e.first){ e.first=false; e.last.copy(_gw); e.lv.set(0,0,0); continue; }
+    _gv.copy(_gw).sub(e.last).divideScalar(dt); _ga.copy(_gv).sub(e.lv).divideScalar(dt).clampLength(0,60); e.last.copy(_gw); e.lv.copy(_gv);
+    _ga.set(-_ga.x,-9.8-_ga.y,-_ga.z); e.g.getWorldQuaternion(_gq); _ga.applyQuaternion(_gq.invert());   // fuerza que siente el ojo, en su propio marco
+    e.v.x+=_ga.x*dt*3.2; e.v.y+=_ga.y*dt*3.2; e.v.multiplyScalar(Math.exp(-dt*2.2)); e.pp.addScaledVector(e.v,dt);
+    const L=e.pp.length(); if(L>1){ e.pp.multiplyScalar(1/L); const vn=e.v.x*e.pp.x+e.v.y*e.pp.y; if(vn>0){ e.v.x-=1.45*vn*e.pp.x; e.v.y-=1.45*vn*e.pp.y; } }
+    e.p.position.set(e.pp.x*e.r*.42, e.pp.y*e.r*.42, e.r*.3); } }
 // ---------- Animalitos de peluche y gomitas vivientes (con ojos saltones) ----------
 // Se mueven solos con la hora del reloj, así que todos los jugadores los ven en el mismo lugar.
 // Los ojos saltones tienen física: la bolita negra cae por su peso y se sacude con cada salto, vuelta o frenón.
@@ -10424,7 +10472,7 @@ const petShineM=new THREE.MeshBasicMaterial({color:0xffffff});
 const petWingM=new THREE.MeshStandardMaterial({color:0xffffff, transparent:true, opacity:.6, roughness:.3, side:THREE.DoubleSide, depthWrite:false});
 const PETG={cone:new THREE.ConeGeometry(1,1,12), cyl:new THREE.CylinderGeometry(1,1,1,12), half:new THREE.SphereGeometry(1,20,10,0,Math.PI*2,0,Math.PI/2), tor:new THREE.TorusGeometry(1,.22,8,22)};
 function pp(par,geo,mat,x,y,z,sx,sy,sz,rx,ry,rz){ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.scale.set(sx,sy===undefined?sx:sy,sz===undefined?sx:sz); if(rx||ry||rz) m.rotation.set(rx||0,ry||0,rz||0); par.add(m); return m; }
-function petEyes(head,y,z,sep,r,yaw=.3){ [-1,1].forEach(s=>{ pp(head,sphereG,eyeMat,s*sep,y,z,r,r*1.2,r*.7,0,s*yaw); pp(head,sphereG,petShineM,s*sep+r*.35,y+r*.45,z+r*.5,r*.3); }); }
+function petEyes(head,y,z,sep,r,yaw=.3){ googlyEyes(head,sep,y,z+r*.85,r*1.6,{dir:[Math.sin(yaw*1.4),.1,Math.cos(yaw*1.4)]}); }   // v194: ojos saltones (antes puntitos negros)
 function grp(par,x,y,z){ const g=new THREE.Group(); g.position.set(x,y,z); par.add(g); return g; }
 function petLeg(par,M,x,y,z,len,r){ const pv=grp(par,x,y,z); pp(pv,sphereG,M,0,-len/2,0,r,len/2+r*.4,r); pp(pv,sphereG,M,0,-len+.01,r*.35,r*1.15,r*.75,r*1.35); return pv; }
 function buildPet(spec){
@@ -10485,7 +10533,7 @@ function buildPet(spec){
   } else if(spec.k==='frog'){
     const by=.2; pp(body,sphereG,M,0,by,0,.27,.17,.25); pp(body,sphereG,M2,0,by-.05,.06,.22,.11,.19);
     const hd=P.head=grp(body,0,by+.08,.12);
-    [-1,1].forEach(s=>{ pp(hd,sphereG,M,s*.1,.1,0,.075); pp(hd,sphereG,pm('#ffffff'),s*.1,.12,.035,.05); pp(hd,sphereG,eyeMat,s*.1,.125,.07,.025); });
+    [-1,1].forEach(s=>pp(hd,sphereG,M,s*.1,.1,0,.075)); googlyEyes(hd,.1,.13,.05,.058,{dir:[.25,.45,1]});   // v194: ojos saltones sobre sus bolitas
     pp(hd,sphereG,pm('#ff8fa8'),0,-.02,.13,.06,.012,.02);   // sonrisa
     [[-1,1],[1,1]].forEach(([sx])=>P.legs.push(petLeg(body,M,sx*.14,.14,.14,.12,.05)));
     [[-1,-1],[1,-1]].forEach(([sx])=>{ const pv=grp(body,sx*.2,.12,-.1); pp(pv,sphereG,M,0,0,0,.08,.08,.15); pp(pv,sphereG,M,0,-.08,.08,.08,.03,.1); P.legs.push(pv); });
@@ -10501,7 +10549,7 @@ function buildPet(spec){
   } else if(spec.k==='snail'){
     const by=.08; pp(body,sphereG,M2,0,by,.04,.11,.075,.3); pp(body,sphereG,M2,0,by+.05,.3,.08,.09,.08);
     const sh=grp(body,0,by+.2,-.05); pp(sh,sphereG,M,0,0,0,.1,.19,.19); pp(sh,PETG.tor,pm('#a85f2a'),0,0,0,.13,.13,.1,0,Math.PI/2,0); pp(sh,PETG.tor,pm('#a85f2a'),0,.02,.02,.07,.07,.12,0,Math.PI/2,0); pp(sh,sphereG,pm('#a85f2a'),0,.03,.03,.11,.04,.04);
-    const hd=P.head=grp(body,0,by+.1,.32); [-1,1].forEach(s=>{ pp(hd,PETG.cyl,M2,s*.035,.07,0,.012,.14,.012,0,0,-s*.25); pp(hd,sphereG,eyeMat,s*.053,.15,0,.025); pp(hd,sphereG,petShineM,s*.053+.008,.16,.018,.007); });
+    const hd=P.head=grp(body,0,by+.1,.32); [-1,1].forEach(s=>{ pp(hd,PETG.cyl,M2,s*.035,.07,0,.012,.14,.012,0,0,-s*.25); }); googlyEyes(hd,.053,.155,.01,.032,{dir:[.15,.3,1]});   // v194: ojos saltones en la punta de sus antenitas
     pp(hd,sphereG,pm('#ff8fa8'),0,-.01,.07,.03,.01,.012);
   } else if(spec.k==='turtle'){
     const by=.16; pp(body,PETG.half,M,0,by,0,.3,.22,.34); pp(body,PETG.tor,pm('#e7b43e'),0,by,0,.3,.34,.15,Math.PI/2);
@@ -10531,7 +10579,7 @@ function makePetInst(id, name){
   const pet={id, spec, P, label, name:'', x:0, y:-999, z:0, f:0, v:0, ph:0, hidden:true, side:Math.random()<.5?-1:1, idle:0, look:0};
   petSetName(pet, name); return pet; }
 function petSetName(pet,name){ if(pet.name===name) return; pet.name=name; const m=pet.label.material; if(m.map) m.map.dispose(); m.map=labelTexture(name); m.needsUpdate=true; }
-function petDispose(pet){ if(!pet) return; scene.remove(pet.P.root, pet.label); if(pet.label.material.map) pet.label.material.map.dispose(); pet.label.material.dispose(); pet.P.root.traverse(o=>{ if(o.isMesh && o.geometry) o.geometry.dispose(); }); }
+function petDispose(pet){ if(!pet) return; scene.remove(pet.P.root, pet.label); GOOGLY.list=GOOGLY.list.filter(e=>{ let q=e.g; while(q && q!==pet.P.root) q=q.parent; return q!==pet.P.root; }); if(pet.label.material.map) pet.label.material.map.dispose(); pet.label.material.dispose(); pet.P.root.traverse(o=>{ if(o.isMesh && o.geometry) o.geometry.dispose(); }); }
 const _petV=new THREE.Vector3();
 function petFollow(pet, ox, oy, oz, of, vis, dt, t, tgt){
   const R=pet.P.root, sp=pet.spec;
@@ -15867,7 +15915,7 @@ function* wiBuild2(){
   { const black=wiMat('#2a2d36','rgba(255,255,255,.06)'), white=wiMat('#fbfbfd'), orange=wiMat('#f28c28');
     for(let i=0;i<9;i++){ const G=new THREE.Group(), s=.75+rlHash(i,61)*.35;
       wiAdd(G,sphereG,black,0,.6,0,.38,.6,.34); wiAdd(G,sphereG,white,0,.56,.12,.3,.5,.26); wiAdd(G,sphereG,black,0,1.22,.02,.26,.26,.26);
-      [-1,1].forEach(e=>{ wiAdd(G,sphereG,white,e*.1,1.27,.2,.07,.07,.05); wiAdd(G,sphereG,black,e*.1,1.27,.245,.035,.035,.02); wiAdd(G,sphereG,orange,e*.12,.04,.12,.11,.04,.16); });
+      [-1,1].forEach(e=>wiAdd(G,sphereG,orange,e*.12,.04,.12,.11,.04,.16)); googlyEyes(G,.1,1.29,.27,.09,{dir:[.35,.1,1]});   // v194: ojos saltones
       const bk=wiAdd(G,WI_CONEG,orange,0,1.18,.3,.06,.18,.06); bk.rotation.x=Math.PI/2;
       const fl=[-1,1].map(e=>{ const f=new THREE.Group(); f.position.set(e*.36,.85,0); G.add(f); const m=wiAdd(f,sphereG,black,0,-.28,0,.07,.3,.14); return f; });
       G.scale.setScalar(s); G.userData.noBatch=true; scene.add(G);
@@ -16390,11 +16438,12 @@ function* jiBuild2(){
   yield;
   // animalitos: tucanes que vuelan, monitos en los árboles grandes, ranitas en la laguna y mariposas
   { const black=wiMat('#22252c'), yel=wiMat('#ffd23f'), ora=wiMat('#ff8a2a'), white=wiMat('#fbfbfd'), brown=wiMat('#8a5a34','rgba(40,20,5,.2)'), tan=wiMat('#e8c08a'), frogM=wiMat('#5fd04a','rgba(20,60,10,.15)');
-    for(let i=0;i<5;i++){ const G=new THREE.Group(); wiAdd(G,sphereG,black,0,0,0,.28,.26,.45); wiAdd(G,sphereG,yel,0,-.02,.28,.2,.18,.14); const bk=wiAdd(G,WI_CONEG,ora,0,.04,.62,.11,.45,.11); bk.rotation.x=Math.PI/2; wiAdd(G,sphereG,white,.12,.1,.36,.05,.05,.05);
+    for(let i=0;i<5;i++){ const G=new THREE.Group(); wiAdd(G,sphereG,black,0,0,0,.28,.26,.45); wiAdd(G,sphereG,yel,0,-.02,.28,.2,.18,.14); const bk=wiAdd(G,WI_CONEG,ora,0,.04,.62,.11,.45,.11); bk.rotation.x=Math.PI/2; googlyEyes(G,.15,.12,.33,.065,{dir:[1,.15,.7]});
       const wl=[-1,1].map(e=>{ const w=new THREE.Group(); w.position.set(e*.22,.05,0); G.add(w); wiAdd(w,sphereG,black,e*.35,0,0,.4,.05,.2); return w; });
       G.userData.noBatch=true; scene.add(G); JI2.animals.push({t:'tucan', G, wl, c:jiS(80+i*40,-60+((i*53)%120)), r:22+i*6, h:16+i*3, ph:i*1.3, sp:.35+i*.05}); }
     JI_TH.forEach(([su,sv],k)=>{ for(let q=0;q<(k%2?2:1);q++){ const G=new THREE.Group(); wiAdd(G,sphereG,brown,0,.45,0,.32,.4,.28); wiAdd(G,sphereG,brown,0,.95,.05,.26,.26,.26); wiAdd(G,sphereG,tan,0,.92,.24,.17,.15,.08);
-      [-1,1].forEach(e=>wiAdd(G,sphereG,tan,e*.26,1,.02,.09,.11,.05)); const tail=wiAdd(G,cylG,brown,0,.3,-.35,.04,.7,.04); tail.rotation.x=.9; G.userData.noBatch=true; scene.add(G);
+      [-1,1].forEach(e=>wiAdd(G,sphereG,tan,e*.26,1,.02,.09,.11,.05)); googlyEyes(G,.09,1.04,.25,.07,{dir:[.15,.12,1]}); [-1,1].forEach(e=>wiAdd(G,sphereG,black,e*.03,.94,.315,.014,.012,.01)); { const sm=wiAdd(G,new THREE.TorusGeometry(.06,.012,6,12,Math.PI),black,0,.88,.31,1,1,1); sm.rotation.z=Math.PI; }   // v193: carita
+      const tail=wiAdd(G,cylG,brown,0,.3,-.35,.04,.7,.04); tail.rotation.x=.9; G.userData.noBatch=true; scene.add(G);
       const P=JI_TREE_PL[k], a=q*2.6+k; JI2.animals.push({t:'mono', G, x:P.x+Math.cos(a)*2.4, z:P.z+Math.sin(a)*2.4, y:P.y, ph:k+q*1.7}); } });
     for(let i=0;i<8;i++){ const G=new THREE.Group(); wiAdd(G,sphereG,frogM,0,.12,0,.18,.12,.22); [-1,1].forEach(e=>{ wiAdd(G,sphereG,white,e*.09,.22,.12,.05,.05,.05); wiAdd(G,sphereG,black,e*.09,.23,.15,.025,.025,.02); }); G.userData.noBatch=true; scene.add(G);
       const L=JI_RIVER.lag, a=i/8*Math.PI*2, [x,z]=jiS(L.su+Math.cos(a)*(L.R+1.5),L.sv+Math.sin(a)*(L.R+1.5)); JI2.animals.push({t:'rana', G, x, z, ph:i*.9, hop:0, h:a}); }
@@ -18055,7 +18104,7 @@ function* diBuild2(){ const ry0=Math.atan2(DI.ux,DI.uz);
       const f=new THREE.Group(); f.position.set(Math.sin(ph)*C.R,1.4,Math.cos(ph)*C.R); f.rotation.y=ph+Math.PI/2; f.scale.setScalar(1.35); spin.add(f); const kind=k%3;
       if(kind===0){ const d=new THREE.Mesh(discG,gum[k%6]); d.rotation.x=Math.PI/2; f.add(d); for(const e of [-1,1]){ const s=new THREE.Mesh(swirlG,white); s.position.z=e*.12; f.add(s); const s2=new THREE.Mesh(swirlG,white); s2.scale.setScalar(.55); s2.position.z=e*.12; f.add(s2); } const st=new THREE.Mesh(cylG,white); st.scale.set(.06,.7,.06); st.position.y=-.65; f.add(st); }   // paleta
       else if(kind===1){ const d=new THREE.Mesh(torusG,dough); d.rotation.y=Math.PI/2; f.add(d); const ic=new THREE.Mesh(torusG,icing[k%3]); ic.rotation.y=Math.PI/2; ic.scale.set(1.04,1.04,.62); ic.position.x=.05; f.add(ic); for(let q=0;q<7;q++){ const a=q/7*Math.PI*2, s=new THREE.Mesh(sphereLo,gum[q%6]); s.scale.setScalar(.05); s.position.set(.2,Math.sin(a)*.42,Math.cos(a)*.42); f.add(s); } }   // dona
-      else { const b=new THREE.Mesh(sphereG,gum[k%6]); b.scale.set(.42,.4,.62); f.add(b); const h=new THREE.Mesh(sphereG,gum[k%6]); h.scale.setScalar(.3); h.position.set(0,.38,.5); f.add(h); for(const e of [-1,1]){ const ear=new THREE.Mesh(sphereG,gum[k%6]); ear.scale.setScalar(.11); ear.position.set(e*.2,.64,.48); f.add(ear); } for(const e of [-1,1]){ const ey=new THREE.Mesh(sphereLo,wiMat('#3a2418')); ey.scale.setScalar(.045); ey.position.set(e*.11,.44,.79); f.add(ey); } }   // osito de gomita
+      else { const b=new THREE.Mesh(sphereG,gum[k%6]); b.scale.set(.42,.4,.62); f.add(b); const h=new THREE.Mesh(sphereG,gum[k%6]); h.scale.setScalar(.3); h.position.set(0,.38,.5); f.add(h); for(const e of [-1,1]){ const ear=new THREE.Mesh(sphereG,gum[k%6]); ear.scale.setScalar(.11); ear.position.set(e*.2,.64,.48); f.add(ear); } googlyEyes(f,.1,.46,.75,.085); }   // osito de gomita (v193: ojos saltones en lugar de puntitos)
       C.figs.push(f); }
     obstacles.push({x:cx,z:cz,r:.75,top:cy+7,walk:false}); obstacles.push({x:cx,z:cz,r:6.1,top:cy+C.H,walk:true});
     { const [sx,sz]=diS(C.su+6.5,C.sv-6.5), sy=terrainH(sx,sz); wiAdd(root,cylG,wiMat('#7a4a2b'),sx-cx,sy-cy+.8,sz-cz,.06,1.6,.06); jiSign(root,sx-cx,sz-cz,sy-cy+1.65,Math.atan2(DI.ux,DI.uz),'Carrusel de dulces 🎠','#d63a7a',3.2,'#fff3f8'); } }
@@ -19934,7 +19983,11 @@ function fxLand(x,y,z,impact,wet){ if(Math.hypot(x-camera.position.x,z-camera.po
 
 // ---------- pájaros: bandadas en V que pasan volando (de día) ----------
 const BIRD_N=14;
-const birdBody=new THREE.InstancedMesh(new THREE.SphereGeometry(1,6,4), new THREE.MeshStandardMaterial({color:0x3a3f52, roughness:1}), BIRD_N);
+const birdBody=new THREE.InstancedMesh((()=>{ const S=new THREE.SphereGeometry(1,8,6), Co=new THREE.ConeGeometry(1,1,6), M=(x,y,z,sx,sy,sz,rx=0)=>new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,0,0)),new THREE.Vector3(sx,sy,sz));
+    const P=[[S,'#4b5a78',M(0,0,0,.42,.4,1)],[S,'#e8ecf2',M(0,-.12,.15,.34,.28,.72)],[S,'#4b5a78',M(0,.28,.92,.4,.38,.4)],[Co,'#ffb43c',M(0,.24,1.38,.11,.32,.11,Math.PI/2)],[S,'#3a4560',M(0,.05,-1.05,.28,.06,.42)]];
+    for(const s of [1,-1]){ P.push([S,'#fbfbfb',M(s*.25,.38,1.1,.15,.15,.08)]); P.push([S,'#101010',M(s*.29,.33,1.15,.08,.08,.06)]); }
+    return vegMerge(P.map(([g,c,m])=>[g.clone(),c,m])); })(), new THREE.MeshStandardMaterial({vertexColors:true, roughness:1}), BIRD_N);   // v193: con cabecita, pico y ojitos
+
 const wingGeo=(()=>{ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute([0,0,-.18, 0,0,.22, .95,0,-.05],3)); g.computeVertexNormals(); return g; })();
 const mirrorGeo=g=>{ const m=g.clone(); m.scale(-1,1,1); const ix=m.index; if(ix){ const a=ix.array; for(let i=0;i<a.length;i+=3){ const t=a[i+1]; a[i+1]=a[i+2]; a[i+2]=t; } } else { const p=m.attributes.position, uv=m.attributes.uv; for(let i=0;i<p.count;i+=3){ for(const at of [p,uv,m.attributes.normal]){ if(!at) continue; const s=at.itemSize; for(let c=0;c<s;c++){ const t=at.array[(i+1)*s+c]; at.array[(i+1)*s+c]=at.array[(i+2)*s+c]; at.array[(i+2)*s+c]=t; } } } } m.computeVertexNormals(); return m; };
 const birdWing=new THREE.InstancedMesh(wingGeo, new THREE.MeshStandardMaterial({color:0x3a3f52, roughness:1, side:THREE.DoubleSide}), BIRD_N);
@@ -19945,7 +19998,7 @@ const _bq=new THREE.Quaternion(), _bp=new THREE.Vector3(), _bs=new THREE.Vector3
 // ---------- peces que brincan fuera del agua ----------
 const jumpFish=[0,1,2].map(()=>{ const g=new THREE.Group(); const b=new THREE.Mesh(sphereG,felt(['#ffb347','#7fc8f8','#f78fb3'][Math.floor(Math.random()*3)])); b.scale.set(.32,.2,.12); g.add(b);
   const tl=new THREE.Mesh(new THREE.ConeGeometry(.13,.22,4),b.material); tl.rotation.z=Math.PI/2; tl.position.x=-.38; g.add(tl);
-  const e=new THREE.Mesh(sphereLo,new THREE.MeshStandardMaterial({color:0x111111})); e.scale.setScalar(.035); e.position.set(.2,.05,.1); g.add(e);
+  googlyEyes(g,.19,.06,.09,.05,{single:true}); googlyEyes(g,.19,.06,-.09,.05,{single:true,dir:[0,0,-1]});   // v193: un ojo saltón de cada lado
   g.visible=false; g.userData.noBatch=true; scene.add(g); return {g, t:-1, from:new THREE.Vector3(), dir:new THREE.Vector2(), dur:1, wy:0}; });
 let fishNext=3;
 function findWaterNear(px,pz,out){ for(let k=0;k<24;k++){ const a=Math.random()*6.283, d=9+Math.random()*24, x=px+Math.cos(a)*d, z=pz+Math.sin(a)*d;
@@ -19959,6 +20012,11 @@ const bfGeo=(()=>{ const g=new THREE.PlaneGeometry(.42,.42); g.translate(.21,0,0
 const bfWing=new THREE.InstancedMesh(bfGeo, new THREE.MeshStandardMaterial({map:bfTex, alphaTest:.4, side:THREE.DoubleSide, roughness:.8}), BF_N);
 const bfWingL=new THREE.InstancedMesh(mirrorGeo(bfGeo), bfWing.material, BF_N);
 [bfWing,bfWingL].forEach(m=>{ m.frustumCulled=false; m.userData.noBatch=true; m.count=0; scene.add(m); });
+const bfBody=new THREE.InstancedMesh((()=>{ const S=new THREE.SphereGeometry(1,8,6), C=new THREE.CylinderGeometry(1,1,1,4), M=(x,y,z,sx,sy,sz,rx=0,rz=0)=>new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,0,rz)),new THREE.Vector3(sx,sy,sz));
+    const P=[[S,'#3b2f3f',M(0,0,-.02,.035,.035,.13)],[S,'#3b2f3f',M(0,.01,.13,.045,.045,.045)]];
+    for(const s of [1,-1]){ P.push([C,'#3b2f3f',M(s*.025,.07,.19,.006,.13,.006,.7,-s*.35)]); P.push([S,'#3b2f3f',M(s*.05,.12,.24,.012,.012,.012)]); P.push([S,'#fbfbfb',M(s*.027,.025,.16,.018,.018,.01)]); P.push([S,'#101010',M(s*.031,.02,.168,.01,.01,.006)]); }
+    return vegMerge(P.map(([g,c,m])=>[g.clone(),c,m])); })(), new THREE.MeshStandardMaterial({vertexColors:true, roughness:.9}), BF_N);   // v193: cuerpito con ojitos y antenas
+bfBody.frustumCulled=false; bfBody.userData.noBatch=true; bfBody.count=0; scene.add(bfBody);
 const BF_COL=['#ff8fc0','#ffd166','#7fc8f8','#c77dff','#ff9a3c','#ffffff'].map(h=>new THREE.Color(h));
 [bfWing,bfWingL].forEach(m=>{ m.count=BF_N; for(let i=0;i<BF_N;i++) m.setColorAt(i,BF_COL[i%BF_COL.length]); m.count=0; });   // (los colores se crean con el total, no con 0)
 const butterflies=Array.from({length:BF_N},(_,i)=>({home:new THREE.Vector3(1e9,0,1e9), p:new THREE.Vector3(), ph:Math.random()*10, sp:.8+Math.random()*.6, k:i}));
@@ -20016,7 +20074,7 @@ function ambientUpdate(dt,t){ if(SP.on || ULTRA) { if(ULTRA) try{ jumpFish.forEa
       F.a+=F.w*dt; F.ph+=dt; const hx=F.c.x+Math.cos(F.a)*F.r, hz=F.c.z+Math.sin(F.a)*F.r, hy=Math.max(F.h,terrainH(hx,hz)+20), dir=Math.atan2(-Math.sin(F.a)*Math.sign(F.w),Math.cos(F.a)*Math.sign(F.w));
       const fx=Math.sin(dir), fz=Math.cos(dir);
       for(let k=0;k<F.n && bi<BIRD_N;k++,bi++){ const row=Math.ceil(k/2), side=k%2?1:-1, bx=hx-fx*row*1.6+fz*side*row*1.3, bz=hz-fz*row*1.6-fx*side*row*1.3, by=hy+Math.sin(F.ph*.7+k)*.4;
-        _be.set(0,dir,0); _bq.setFromEuler(_be); _bmx.compose(_bp.set(bx,by,bz),_bq,_bs.set(.14,.14,.34)); birdBody.setMatrixAt(bi,_bmx);
+        _be.set(0,dir,0); _bq.setFromEuler(_be); _bmx.compose(_bp.set(bx,by,bz),_bq,_bs.set(.34,.34,.34)); birdBody.setMatrixAt(bi,_bmx);
         const flap=Math.sin(F.ph*9+k*.9)*.7;
         for(const s of [-1,1]){ _be.set(0,dir,s*flap,'YXZ'); _bq.setFromEuler(_be); _bmw.compose(_bp.set(bx,by,bz),_bq,_bs.set(.75,1,.75)); (s>0?birdWing:birdWingL).setMatrixAt(bi,_bmw); }
       } } }
@@ -20038,8 +20096,9 @@ function ambientUpdate(dt,t){ if(SP.on || ULTRA) { if(ULTRA) try{ jumpFish.forEa
       b.ph+=dt*b.sp; const tx=b.home.x+Math.sin(b.ph*.9+b.k)*1.4, tz=b.home.z+Math.cos(b.ph*.7+b.k*2)*1.4, ty=b.home.y+.4+Math.sin(b.ph*1.9)*.35;
       const ox=b.p.x, oz=b.p.z; b.p.x+=(tx-b.p.x)*Math.min(1,dt*1.5); b.p.y+=(ty-b.p.y)*Math.min(1,dt*2); b.p.z+=(tz-b.p.z)*Math.min(1,dt*1.5);
       const dir=Math.atan2(b.p.x-ox,b.p.z-oz), flap=.25+Math.abs(Math.sin(_amb.t*16+b.k))*1.1;
-      for(const s of [-1,1]){ _be.set(0,dir,s*flap,'YXZ'); _bq.setFromEuler(_be); _bmw.compose(b.p,_bq,_bs.set(1,1,1)); (s>0?bfWing:bfWingL).setMatrixAt(wi,_bmw); } wi++; } }
-  bfWing.count=bfWingL.count=wi; bfWing.visible=bfWingL.visible=wi>0; if(wi) bfWing.instanceMatrix.needsUpdate=bfWingL.instanceMatrix.needsUpdate=true;
+      for(const s of [-1,1]){ _be.set(0,dir,s*flap,'YXZ'); _bq.setFromEuler(_be); _bmw.compose(b.p,_bq,_bs.set(1,1,1)); (s>0?bfWing:bfWingL).setMatrixAt(wi,_bmw); }
+      _be.set(0,dir,0,'YXZ'); _bq.setFromEuler(_be); _bmw.compose(b.p,_bq,_bs.set(1.6,1.6,1.6)); bfBody.setMatrixAt(wi,_bmw); wi++; } }
+  bfWing.count=bfWingL.count=bfBody.count=wi; bfWing.visible=bfWingL.visible=bfBody.visible=wi>0; if(wi) bfWing.instanceMatrix.needsUpdate=bfWingL.instanceMatrix.needsUpdate=bfBody.instanceMatrix.needsUpdate=true;
 }
 
 // presencia: en qué minijuego estoy (y datos del hockey)
@@ -20159,7 +20218,7 @@ function update(dt,t){ myLabelUpdate();
   const bowMoving = state==='play' && updateMyBow(dt);
   updatePlayground(dt);
   updatePortals(dt);
-  updateCritters(dt);
+  updateCritters(dt); googlyTick(dt);   // v193: ojos saltones de los demás animalitos
   try{ batchTick(); }catch(e){ BATCH.on=false; console.warn('batch',e); }
   try{ lodTick(); }catch(e){ console.warn('lod',e); }
   try{ ambientUpdate(dt,t); }catch(e){ console.warn('ambiente',e); }
