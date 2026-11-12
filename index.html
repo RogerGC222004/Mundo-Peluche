@@ -1140,7 +1140,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='189';
+const GAME_VERSION='190';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -3247,7 +3247,8 @@ function chEyeDraw(g,w,h,st){ const L=[-1,1], cy=300, X=s=>w/2+s*178;
   else if(st==='estrellas') L.forEach(s=>{ anime(s,['#7a3a00','#f0a020','#ffe27a'],false); star(X(s)+s*6,cy+6,34,'#fff6c9'); star(X(s)+s*6,cy+6,20,'#e07000'); });
   else if(st==='corazones') L.forEach(s=>{ anime(s,['#7a0f3a','#e0407a','#ffa6c8'],false); heart(X(s)+s*6,cy+10,34,'#ffffff'); heart(X(s)+s*6,cy+10,22,'#c2185b'); });
   else if(st==='kawaii') L.forEach(s=>{ const cx=X(s); anime(s,['#2a0f4a','#6a2fb0','#c69cf5']); g.fillStyle='#fff';
-      for(const [dx,dy,r] of [[-s*20,-14,20],[s*26,26,11],[-s*30,40,7]]){ g.beginPath(); g.arc(cx+dx,cy+dy,r,0,Math.PI*2); g.fill(); } star(cx+s*28,cy-30,12,'#ffffff'); }); }
+      for(const [dx,dy,r] of [[-s*20,-14,20],[s*26,26,11],[-s*30,40,7]]){ g.beginPath(); g.arc(cx+dx,cy+dy,r,0,Math.PI*2); g.fill(); } star(cx+s*28,cy-30,12,'#ffffff'); }); 
+  else chEyeDraw2(g,w,h,st,{anime,star,heart,X,cy,L}); }
 function chEyeTex(st){ if(CH_EYE_TEX[st]) return CH_EYE_TEX[st];
   const c=document.createElement('canvas'); c.width=1024; c.height=512; const g=c.getContext('2d'); chEyeDraw(g,1024,512,st);
   const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; t.userData={canvas:c}; return CH_EYE_TEX[st]=t; }
@@ -3299,15 +3300,16 @@ const AM_EYES={
 const AM_BTN={}, amBtnMat=hex=>AM_BTN[hex]||(AM_BTN[hex]=new THREE.MeshStandardMaterial({color:new THREE.Color(hex).convertSRGBToLinear(), roughness:.12, metalness:.1}));
 const amWhite=new THREE.MeshBasicMaterial({color:0xffffff});
 // lo bordado se pinta en un lienzo de 512×256: ojos en x=256±90, y=151; cejas arriba; mejillas abajo
-function amEyeDraw(g,st,only){ g.strokeStyle='#2c1c16'; g.fillStyle='#2c1c16'; g.lineCap='round'; g.lineJoin='round'; g.lineWidth=8;
+function amEyeDraw(g,st,only,col){ const K=col||'#2c1c16'; g.strokeStyle=K; g.fillStyle=K; g.lineCap='round'; g.lineJoin='round'; g.lineWidth=8;
   for(const s of [-1,1]){ if(only && s!==only) continue; const cx=256+s*90, cy=151;
     if(st==='felices'){ g.beginPath(); g.moveTo(cx-24,cy+8); g.quadraticCurveTo(cx,cy-24,cx+24,cy+8); g.stroke(); }
     else if(st==='dormidos'){ g.beginPath(); g.moveTo(cx-24,cy-4); g.quadraticCurveTo(cx,cy+20,cx+24,cy-4); g.stroke(); g.lineWidth=4; for(const d of [-16,0,16]){ g.beginPath(); g.moveTo(cx+d,cy+8); g.lineTo(cx+d*1.2,cy+18); g.stroke(); } g.lineWidth=8; }
-    else if(st==='corazon'){ g.fillStyle='#e0406a'; g.beginPath(); g.moveTo(cx,cy+22); g.bezierCurveTo(cx-34,cy,cx-18,cy-26,cx,cy-10); g.bezierCurveTo(cx+18,cy-26,cx+34,cy,cx,cy+22); g.fill();
-      g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=2; g.setLineDash([4,4]); g.stroke(); g.setLineDash([]); g.strokeStyle='#2c1c16'; g.lineWidth=8; } } }
+    else if(st==='corazon'){ g.fillStyle=col||'#e0406a'; g.beginPath(); g.moveTo(cx,cy+22); g.bezierCurveTo(cx-34,cy,cx-18,cy-26,cx,cy-10); g.bezierCurveTo(cx+18,cy-26,cx+34,cy,cx,cy+22); g.fill();
+      g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=2; g.setLineDash([4,4]); g.stroke(); g.setLineDash([]); g.strokeStyle=K; g.fillStyle=K; g.lineWidth=8; }
+    else amEyeDraw2(g,st,s,cx,cy); } }
 function amFaceCanvas(F){ const c=document.createElement('canvas'); c.width=512; c.height=256; const g=c.getContext('2d');
   if(F.ck){ g.save(); g.translate(-77,-65); g.scale(.65,.65); chCheekDraw(g,F.ck); g.restore(); }
-  if(F.eye){ const E=AM_EYES[F.eye]; if(E.st) amEyeDraw(g,E.st); else if(E.wink) amEyeDraw(g,'felices',-1); }
+  if(F.eye){ const E=AM_EYES[F.eye]; if(E.st) amEyeDraw(g,E.st,0,E.col); else if(E.wink) amEyeDraw(g,'felices',-1); }
   if(F.br){ g.save(); g.translate(0,1); g.scale(.5,.5); chBrowDraw(g,F.br,F.bc||'#3b2416'); g.restore(); }
   return c; }
 const AM_FACE={};
@@ -3330,10 +3332,11 @@ function amiguDress(u,eq){ const A=amiguParts(u), B=x=>eq && SHOP_BY[eq[x]] ? SH
   const mH=amKnit(skin,14,9), mB=amKnit(skin,10,6), mL=amKnit(skin,5,6), mN=amKnit(skin,3,2);
   A.torso.material=mB; A.neck.material=mB; A.head.material=mH; A.ears.forEach(m=>m.material=mL); A.nose.material=mN; A.hands.forEach(h=>{ h.material=mL; h.visible=true; });
   const eyeIt=B('aeyes'), E=eyeIt ? AM_EYES[eyeIt.eye] : null;
-  A.eyes.forEach((e,i)=>{ const s=i?1:-1, b=e.userData.base; let show=!!(E && (E.btn||E.star)); if(E && E.wink && s===-1) show=false;   // guiño: el ojo izquierdo va bordado
-    e.visible=show; A.hi[i].visible=show && !E.star;
+  A.eyes.forEach((e,i)=>{ const s=i?1:-1, b=e.userData.base; let show=!!(E && (E.btn||E.star||E.heart)); if(E && E.wink && s===-1) show=false;   // guiño: el ojo izquierdo va bordado
+    e.visible=show; A.hi[i].visible=show && !E.star && !E.heart;
     if(show){ if(E.star){ e.geometry=amStarGeo(); e.material=amBtnMat(E.star); e.scale.set(.07,.07,.07); e.position.set(b[0],b[1],b[2]+.01); }
-      else { e.geometry=sphereG; e.material=amBtnMat(E.btn); const k=E.big?1.3:1; e.scale.set(.075*k,.075*k,.04); e.position.set(...b); A.hi[i].scale.set(.016*k,.016*k,.008); } } });
+      else if(E.heart){ e.geometry=chShapeGeo('heart'); e.material=amBtnMat(E.heart); e.scale.set(.62,.62,2.2); e.position.set(b[0],b[1]+.005,b[2]-.005); }
+      else { e.geometry=sphereG; e.material=amBtnMat(E.btn); const k=E.big?1.3:E.mini?.72:1; e.scale.set(.075*k,.075*k,.04); e.position.set(...b); A.hi[i].scale.set(.016*k,.016*k,.008); } } });
   // cabello, cejas, mejillas y orejitas: los del Chibi, armados para esta cabeza y tejidos
   const colIt=B('ahcol')||SHOP_BY.ahc_castano, hairHex=colIt.c, hairIt=B('ahair'), hs=hairIt?hairIt.hs:null, earIt=B('aears'), es=earIt?earIt.ear:null;
   const hm=amHairMat(u); hm.color.set(hairHex).convertSRGBToLinear();
@@ -3417,6 +3420,36 @@ const CH_HAIR={
   ondas:{ears:1, flare:.18, len:u=>{ const d=Math.abs(((u+.5)%1)-.5); let t=.45+.02*chZig(u*26); t+=(1.0+.035*Math.sin(u*Math.PI*2*20)-t)*chSm(.11,.15,d); return t; }},
   trenza:{len:u=>{ const d=Math.abs(((u+.5)%1)-.5); let t=.45+.03*chZig(u*24); t+=(.5-t)*chSm(.11,.16,d); t+=(.43-t)*chSm(.2,.23,d); t+=(.70-t)*chSm(.27,.31,d); return t; }, extra:'trenza'},
 };
+// ---------- v190 (Parte 4): 90 peinados nuevos (armados con fleco, largo y piezas extra) ----------
+function chHairLen(o){ const short=o.S<.6; return u=>{ const sg=((u+.5)%1)-.5, d=Math.abs(sg), k=sg/.15;
+  let t=o.F+(o.fz||0)*chZig(u*(o.fq||24))+(o.sw||0)*Math.max(-1,Math.min(1,k))*.045-(o.part||0)*Math.max(0,1-Math.abs(k)*2.5);
+  t+=(o.S+(o.sz||0)*chZig(u*(o.sq||20))-t)*chSm(.11,.16,d);
+  if(short) t+=((o.E||.43)-t)*chSm(.2,.23,d);
+  t+=(o.B+(o.bz||0)*chZig(u*(o.bq||14))+(o.wave||0)*Math.sin(u*Math.PI*2*(o.wq||20))+(o.asym||0)*sg*2-t)*chSm(short?.27:.3,short?.31:.4,d);
+  return t; }; }
+const CH_HAIR2_LIST=[];
+{ const FR=[['recto','con fleco recto',{F:.55,fz:.01}],['lado','con fleco de lado',{F:.5,fz:.02,sw:1}],['medio','con raya en medio',{F:.52,fz:.01,part:.09}],['cortito','con fleco cortito',{F:.44,fz:.02,fq:30}],['picos','con picos',{F:.46,fz:.07,fq:22}]];
+  const LN=[['corto','Cortito',{S:.5,B:.72},{}],['melena','Melena',{S:.7,B:.72},{ears:1}],['hombros','A los hombros',{S:.82,B:.85},{ears:1,flare:.11}],['largo','Largo',{S:.95,B:.99},{ears:1,flare:.12}],['ondas','Largo ondulado',{S:1.0,B:1.0,wave:.035},{ears:1,flare:.18}]];
+  const EX=[['cola','Cola de caballo','cola'],['coletas','Coletas','coletas'],['chongos','Chonguitos','chongos',1],['trenza','Trenza','trenza'],['mechon','Mechón parado','ahoge',1],['colaalta','Cola alta','colaalta'],['chongoalto','Chongo alto','chongoalto',1],
+    ['trenzas2','Dos trenzas','trenzas2'],['coletasbajas','Coletas bajas','coletasbajas'],['monobajo','Chongo bajo','monobajo']];
+  const add=(k,n,o,x)=>{ CH_HAIR[k]={len:chHairLen(o), ...x}; CH_HAIR2_LIST.push([k,n]); };
+  LN.forEach(([lk,ln,lo,lx])=>FR.forEach(([fk,fn,fo])=>add('h2_'+lk+'_'+fk,ln+' '+fn,{...fo,...lo,bz:fk==='picos'?.05:0},lx)));
+  EX.forEach(([ek,en,extra,hide])=>FR.forEach(([fk,fn,fo])=>add('h2_'+ek+'_'+fk,en+' '+fn,{...fo,S:.5,B:.7},{extra,hatHide:hide?1:0})));
+  add('h2_rizado_corto','Rizado cortito',{F:.47,fz:.05,fq:34,S:.52,sz:.05,sq:34,B:.74,bz:.06,bq:30},{flare:.2});
+  add('h2_rizado_melena','Melena rizada',{F:.5,fz:.05,fq:34,S:.74,sz:.05,sq:34,B:.76,bz:.06,bq:30},{ears:1,flare:.25});
+  add('h2_rizado_largo','Largo rizado',{F:.5,fz:.05,fq:34,S:.92,sz:.06,sq:34,B:.96,bz:.06,bq:30},{ears:1,flare:.28});
+  add('h2_esponjado','Esponjado',{F:.5,fz:.03,S:.72,B:.74,bz:.03},{ears:1,flare:.42});
+  add('h2_esponjado_largo','Esponjado largo',{F:.5,fz:.03,S:.86,B:.88,bz:.03},{ears:1,flare:.4});
+  add('h2_rapado','Rapadito',{F:.4,fz:.01,S:.44,E:.42,B:.6},{});
+  add('h2_rapado_lado','Rapadito con fleco de lado',{F:.44,fz:.02,sw:1.4,S:.44,E:.42,B:.6},{});
+  add('h2_asim','Melena asimétrica',{F:.5,fz:.01,sw:1,S:.72,B:.74,asym:.08},{ears:1});
+  add('h2_asim_largo','Largo asimétrico',{F:.5,fz:.01,sw:1,S:.86,B:.9,asym:.1},{ears:1,flare:.12});
+  add('h2_mullet','Corto con cola larga',{F:.46,fz:.02,S:.5,B:.92},{});
+  add('h2_mullet_picos','Corto con picos y cola larga',{F:.46,fz:.07,fq:22,S:.5,B:.92,bz:.05},{});
+  add('h2_mechones','Largo con mechones al frente',{F:.52,fz:.01,part:.09,S:1.0,B:.86},{ears:1,flare:.1});
+  add('h2_mechones_cortos','Corto con mechones al frente',{F:.52,fz:.01,part:.09,S:.86,B:.72},{ears:1});
+  add('h2_ondas_trenza','Ondas con trenza',{F:.52,fz:.01,part:.09,S:1.0,B:.7,wave:.03},{ears:1,flare:.16,extra:'trenza'});
+  add('h2_largo_chongo','Largo con chongo alto',{F:.55,fz:.01,S:.95,B:.99},{ears:1,flare:.12,extra:'chongoalto',hatHide:1}); }
 // pieza de cabello: una sola malla cerrada (afuera, adentro y el canto); aSway = cuánto se mece cada punto (solo lo que cuelga)
 function chHairGeo(style){ const S=CH_HAIR[style], hk='geo'+(CH.key||'c'); if(S[hk]) return S[hk];
   const HY=CH.HY, RX=CH.RX, RY=CH.RY, RZ=CH.RZ, TC=.56, DROP=1.8, FLARE=S.flare||.1, OUT=CH.OUT||1.075, IN=CH.IN||1.025, COLS=Q0==='min'||Q0==='low'?150:200, ROWS=22;
@@ -3455,6 +3488,11 @@ function chHairExtras(kind,mat){ const out=[], piv=(x,y,z,rx,rz,k)=>{ const p=ne
   else if(kind==='chongos') for(const s of [-1,1]){ const p=piv(s*RX*.56,H+RY*.86,-.06,0,0,0); M(p,chSph(),0,0,0,.17,.16,.17); }
   else if(kind==='trenza'){ const p=piv(0,H-RY*.25,-RZ*.97,.1,0,2.4); M(p,chBraidGeo(),0,0,0,1,1,.85); M(p,chTailGeo(.17,.08),0,-.63,0,1,1,1); }
   else if(kind==='ahoge'){ const p=piv(.04,H+RY*1.06,.06,0,0,1.6); M(p,chAhogeGeo(),0,0,0,1,1,1); }
+  else if(kind==='colaalta'){ const p=piv(0,H+RY*.95,-RZ*.6,.6,0,2.6); M(p,chSph(),0,0,0,.11,.09,.11); M(p,chTailGeo(.8,.17),0,-.02,0,1,1,1); }   // v190
+  else if(kind==='chongoalto'){ const p=piv(0,H+RY*1.05,-.05,0,0,0); M(p,chSph(),0,0,0,.2,.18,.2); }
+  else if(kind==='trenzas2') for(const s of [-1,1]){ const p=piv(s*RX*.8,H-RY*.2,-RZ*.3,.05,s*.08,2.4); M(p,chBraidGeo(),0,0,0,.8,.8,.7); M(p,chTailGeo(.15,.07),0,-.5,0,1,1,1); }
+  else if(kind==='coletasbajas') for(const s of [-1,1]){ const p=piv(s*RX*.6,H-RY*.35,-RZ*.75,.1,s*.15,3.0); M(p,chSph(),0,0,0,.08,.07,.08); M(p,chTailGeo(.5,.12),0,-.02,0,1,1,1); }
+  else if(kind==='monobajo'){ const p=piv(0,H-RY*.35,-RZ*.95,0,0,0); M(p,chSph(),0,0,0,.18,.16,.15); }
   return out; }
 // el material del cabello es de cada peluche (lleva su propio balanceo); el color se cambia sin rehacerlo
 let chHairLines=null;
@@ -3480,7 +3518,94 @@ function chSwayTick(o,dt){ const u=o.userData, S=u.hsw; if(!S || !u.av || u.av==
   S.U.uSw.value.copy(S.off);
   for(const pv of S.pieces){ const w=pv.userData.sw; if(!w.k) continue; pv.rotation.x=w.bx-S.off.z*w.k+S.off.y*w.k*.4; pv.rotation.z=w.bz+S.off.x*w.k; } }
 // --- la cara: ojos, cejas, boca y mejillas se pintan juntos en una sola calcomanía (una sola pieza que dibujar) ---
-function chBrowDraw(g,st,col){ g.strokeStyle=col; g.fillStyle=col; g.lineCap='round';
+// ---------- v190 (Parte 3): caras nuevas — ojos, cejas, boca y mejillas (dibujados en la calcomanía de la cara) ----------
+// ojos del Chibi: "tipo:colores" (a anime, l anime con pestañas, g de gatito, b botón, p puntitos, h corazones, s estrellas, gal galaxia…)
+function chEyeDraw2(g,w,h,st,K){ const {anime,star,heart,X,cy,L}=K, [t,arg]=st.split(':'), C=arg?arg.split(','):[];
+  const lash=s=>{ const cx=X(s); g.strokeStyle='#1b120c'; g.lineCap='round'; g.lineWidth=7; for(let i=0;i<3;i++){ g.beginPath(); g.moveTo(cx+s*(56+i*10),cy-60+i*14); g.lineTo(cx+s*(84+i*12),cy-86+i*16); g.stroke(); } };
+  if(t==='a') L.forEach(s=>anime(s,C));
+  else if(t==='l') L.forEach(s=>{ anime(s,C); lash(s); });
+  else if(t==='g') L.forEach(s=>{ anime(s,C,false); g.fillStyle='#160904'; g.beginPath(); g.ellipse(X(s)+s*6,cy+4,9,40,0,0,Math.PI*2); g.fill(); g.fillStyle='#fff'; g.beginPath(); g.ellipse(X(s)-s*16,cy-26,13,15,0,0,Math.PI*2); g.fill(); });
+  else if(t==='b') L.forEach(s=>{ const cx=X(s); g.fillStyle=C[0]; g.beginPath(); g.arc(cx,cy,56,0,Math.PI*2); g.fill(); g.fillStyle='#fff'; g.beginPath(); g.ellipse(cx-s*14-6,cy-20,15,15,0,0,Math.PI*2); g.fill(); g.beginPath(); g.arc(cx+18,cy+22,6,0,Math.PI*2); g.fill(); });
+  else if(t==='p') L.forEach(s=>{ const cx=X(s)-s*20; g.fillStyle=C[0]; g.beginPath(); g.ellipse(cx,cy+10,22,30,0,0,Math.PI*2); g.fill(); g.fillStyle='#fff'; g.beginPath(); g.arc(cx-6,cy,6,0,Math.PI*2); g.fill(); });
+  else if(t==='h') L.forEach(s=>{ anime(s,[C[0],C[1],C[2]],false); heart(X(s)+s*6,cy+10,34,'#ffffff'); heart(X(s)+s*6,cy+10,22,C[0]); });
+  else if(t==='s') L.forEach(s=>{ anime(s,[C[0],C[1],C[2]],false); star(X(s)+s*6,cy+6,34,'#fff6c9'); star(X(s)+s*6,cy+6,20,C[0]); });
+  else if(t==='gal') L.forEach(s=>{ anime(s,C,false); g.fillStyle='#fff'; for(const [dx,dy,r] of [[-14,-20,6],[16,10,4],[-4,30,3],[20,-28,3],[-24,14,2.5]]){ g.beginPath(); g.arc(X(s)+s*6+dx,cy+dy,r,0,Math.PI*2); g.fill(); } star(X(s)+s*10,cy-4,12,'#ffffff'); });
+  else if(t==='arcoiris') L.forEach(s=>{ const cx=X(s); g.fillStyle='#ffffff'; g.beginPath(); g.ellipse(cx,cy,82,82,0,0,Math.PI*2); g.fill(); ['#ff5d6c','#ff9a3c','#ffe14d','#7ed957','#4fc3f7','#7d6bff'].forEach((c,i)=>{ g.fillStyle=c; g.beginPath(); g.ellipse(cx+s*6,cy+6,62-i*8,74-i*9,0,0,Math.PI*2); g.fill(); });
+    g.fillStyle='#160904'; g.beginPath(); g.ellipse(cx+s*6,cy+4,18,24,0,0,Math.PI*2); g.fill(); g.fillStyle='#fff'; g.beginPath(); g.ellipse(cx-s*16,cy-26,14,16,0,0,Math.PI*2); g.fill(); });
+  else if(t==='flor') L.forEach(s=>{ const cx=X(s)+s*6; anime(s,['#3a2a1a','#7a5a3a','#b08a5a'],false); g.fillStyle=C[0]; for(let i=0;i<5;i++){ const a=i/5*Math.PI*2; g.beginPath(); g.arc(cx+Math.cos(a)*20,cy+6+Math.sin(a)*20,15,0,Math.PI*2); g.fill(); } g.fillStyle='#ffd23f'; g.beginPath(); g.arc(cx,cy+6,12,0,Math.PI*2); g.fill(); });
+  else if(t==='espiral') L.forEach(s=>{ const cx=X(s); g.strokeStyle='#1b120c'; g.lineWidth=9; g.beginPath(); for(let i=0;i<60;i++){ const a=i*.42, r=4+i*1.05; g.lineTo(cx+Math.cos(a*s)*r,cy+Math.sin(a*s)*r); } g.stroke(); });
+  else if(t==='x') L.forEach(s=>{ const cx=X(s); g.strokeStyle='#1b120c'; g.lineWidth=15; g.lineCap='round'; g.beginPath(); g.moveTo(cx-40,cy-40); g.lineTo(cx+40,cy+40); g.moveTo(cx+40,cy-40); g.lineTo(cx-40,cy+40); g.stroke(); });
+  else if(t==='guino') L.forEach(s=>{ if(s<0){ const cx=X(s); g.strokeStyle='#1b120c'; g.lineWidth=15; g.lineCap='round'; g.beginPath(); g.moveTo(cx-60,cy+20); g.quadraticCurveTo(cx,cy-50,cx+60,cy+20); g.stroke(); } else anime(s,C); });
+  else if(t==='sorpresa') L.forEach(s=>{ const cx=X(s); g.fillStyle='#fff'; g.strokeStyle='#1b120c'; g.lineWidth=9; g.beginPath(); g.arc(cx,cy,60,0,Math.PI*2); g.fill(); g.stroke(); g.fillStyle='#160904'; g.beginPath(); g.arc(cx,cy,18,0,Math.PI*2); g.fill(); });
+  else if(t==='chinitos') L.forEach(s=>{ const cx=X(s); g.strokeStyle='#1b120c'; g.lineWidth=15; g.lineCap='round'; g.lineJoin='round'; g.beginPath(); g.moveTo(cx-s*40,cy-40); g.lineTo(cx+s*30,cy); g.lineTo(cx-s*40,cy+40); g.stroke(); });
+  else if(t==='llorando') L.forEach(s=>{ const cx=X(s); anime(s,['#0d2560','#2f6fd0','#86c6ff']); g.fillStyle='rgba(120,190,255,.85)'; g.beginPath(); g.moveTo(cx+s*30,cy+70); g.quadraticCurveTo(cx+s*52,cy+120,cx+s*30,cy+136); g.quadraticCurveTo(cx+s*8,cy+120,cx+s*30,cy+70); g.fill(); });
+  else if(t==='luna') L.forEach(s=>{ const cx=X(s); g.strokeStyle='#1b120c'; g.lineWidth=15; g.lineCap='round'; g.beginPath(); g.moveTo(cx-60,cy-10); g.quadraticCurveTo(cx,cy+56,cx+60,cy-10); g.stroke(); });
+  else if(t==='diamante') L.forEach(s=>{ const cx=X(s)+s*6; anime(s,[C[0],C[1],C[2]],false); g.fillStyle='#ffffff'; g.beginPath(); g.moveTo(cx,cy-34); g.lineTo(cx+26,cy+6); g.lineTo(cx,cy+42); g.lineTo(cx-26,cy+6); g.closePath(); g.fill(); g.fillStyle=C[0]; g.beginPath(); g.moveTo(cx,cy-20); g.lineTo(cx+14,cy+6); g.lineTo(cx,cy+28); g.lineTo(cx-14,cy+6); g.closePath(); g.fill(); });
+  else if(t==='enojados') L.forEach(s=>{ const cx=X(s); g.save(); g.beginPath(); g.moveTo(cx-s*100,cy-20); g.lineTo(cx+s*100,cy-70); g.lineTo(cx+s*100,cy+120); g.lineTo(cx-s*100,cy+120); g.closePath(); g.clip(); anime(s,C); g.restore(); g.strokeStyle='#1b120c'; g.lineWidth=14; g.beginPath(); g.moveTo(cx-s*84,cy-18); g.lineTo(cx+s*84,cy-62); g.stroke(); });
+  else if(t==='cansados') L.forEach(s=>{ const cx=X(s), ex=78; g.save(); g.beginPath(); g.rect(cx-ex-10,cy-20,ex*2+20,160); g.clip(); anime(s,C); g.restore(); g.strokeStyle='#1b120c'; g.lineWidth=12; g.beginPath(); g.moveTo(cx-ex-6,cy-18); g.lineTo(cx+ex+6,cy-18); g.stroke(); });
+  else if(t==='sueno') L.forEach(s=>{ const cx=X(s); g.strokeStyle='#1b120c'; g.lineWidth=14; g.lineCap='round'; g.lineJoin='round'; g.beginPath(); g.moveTo(cx-50,cy+24); g.lineTo(cx,cy-30); g.lineTo(cx+50,cy+24); g.stroke(); }); }
+// cejas: "p:forma:grosor:altura"
+function chBrowDraw2(g,st,col){ const [,sh,th,ly]=st.split(':'), W=+th||10, dy=+ly||0; g.strokeStyle=col; g.fillStyle=col; g.lineCap='round'; g.lineJoin='round'; g.lineWidth=W;
+  for(const s of [-1,1]){ const cx=512+s*178, I=x=>cx-s*x, y=182+dy;
+    if(sh==='arco'){ g.beginPath(); g.moveTo(I(46),y+6); g.quadraticCurveTo(cx,y-16,I(-50),y+6); g.stroke(); }
+    else if(sh==='recta'){ g.beginPath(); g.moveTo(I(46),y); g.lineTo(I(-50),y); g.stroke(); }
+    else if(sh==='sube'){ g.beginPath(); g.moveTo(I(46),y+10); g.lineTo(I(-50),y-12); g.stroke(); }
+    else if(sh==='baja'){ g.beginPath(); g.moveTo(I(46),y-10); g.lineTo(I(-50),y+12); g.stroke(); }
+    else if(sh==='onda'){ g.beginPath(); g.moveTo(I(50),y); g.bezierCurveTo(I(20),y-22,I(-10),y+18,I(-52),y-4); g.stroke(); }
+    else if(sh==='punto'){ g.beginPath(); g.ellipse(I(18),y-4,W*1.4,W*.9,0,0,Math.PI*2); g.fill(); }
+    else if(sh==='doble'){ g.lineWidth=W*.6; for(const o of [-8,8]){ g.beginPath(); g.moveTo(I(44),y+o); g.quadraticCurveTo(cx,y-12+o,I(-46),y+o); g.stroke(); } }
+    else if(sh==='triangulo'){ g.beginPath(); g.moveTo(I(46),y+8); g.lineTo(I(-50),y+8); g.lineTo(I(-18),y-8-W*.6); g.closePath(); g.fill(); }
+    else if(sh==='corta'){ g.beginPath(); g.moveTo(I(20),y+2); g.quadraticCurveTo(cx,y-10,I(-24),y+2); g.stroke(); }
+    else if(sh==='larga'){ g.beginPath(); g.moveTo(I(64),y+10); g.quadraticCurveTo(cx,y-18,I(-70),y+8); g.stroke(); } } }
+// boca: "m:forma:color"
+function chMouthDraw2(g,st){ const [,sh,col]=st.split(':'), x=512, y=452; g.lineCap='round'; g.lineJoin='round'; g.strokeStyle=col; g.fillStyle=col; g.lineWidth=7;
+  const smile=(w,d)=>{ g.beginPath(); g.moveTo(x-w,y); g.quadraticCurveTo(x,y+d,x+w,y); g.stroke(); };
+  if(sh==='sonrisa') smile(30,18);
+  else if(sh==='grande') smile(44,26);
+  else if(sh==='abierta'){ g.beginPath(); g.moveTo(x-30,y); g.quadraticCurveTo(x,y+4,x+30,y); g.quadraticCurveTo(x,y+44,x-30,y); g.fill(); g.fillStyle='#f07a92'; g.beginPath(); g.ellipse(x,y+22,13,8,0,0,Math.PI*2); g.fill(); }
+  else if(sh==='lengua'){ g.fillStyle='#f07a92'; g.beginPath(); g.ellipse(x-6,y+16,11,12,0,0,Math.PI); g.fill(); smile(30,16); }
+  else if(sh==='gato'){ g.beginPath(); g.moveTo(x-30,y); g.quadraticCurveTo(x-15,y+20,x,y+2); g.quadraticCurveTo(x+15,y+20,x+30,y); g.stroke(); }
+  else if(sh==='uwu'){ g.beginPath(); g.moveTo(x-20,y+2); g.quadraticCurveTo(x-10,y+14,x,y+4); g.quadraticCurveTo(x+10,y+14,x+20,y+2); g.stroke(); }
+  else if(sh==='tres'){ g.beginPath(); g.moveTo(x-6,y-8); g.quadraticCurveTo(x+16,y-4,x,y+6); g.quadraticCurveTo(x+16,y+16,x-6,y+20); g.stroke(); }
+  else if(sh==='o'){ g.lineWidth=6; g.beginPath(); g.ellipse(x,y+8,9,11,0,0,Math.PI*2); g.stroke(); }
+  else if(sh==='beso'){ g.beginPath(); g.moveTo(x+4,y-6); g.quadraticCurveTo(x-14,y-2,x,y+8); g.quadraticCurveTo(x-14,y+14,x+4,y+20); g.stroke(); }
+  else if(sh==='triste'){ g.beginPath(); g.moveTo(x-24,y+14); g.quadraticCurveTo(x,y-4,x+24,y+14); g.stroke(); }
+  else if(sh==='ondulada'){ g.beginPath(); g.moveTo(x-30,y+6); for(let i=1;i<=6;i++) g.lineTo(x-30+i*10,y+6+(i%2?-6:6)); g.stroke(); }
+  else if(sh==='dientes'){ g.fillStyle='#ffffff'; g.beginPath(); g.moveTo(x-32,y); g.quadraticCurveTo(x,y+6,x+32,y); g.quadraticCurveTo(x,y+34,x-32,y); g.fill(); g.stroke(); }
+  else if(sh==='colmillos'){ smile(30,18); g.fillStyle='#ffffff'; g.lineWidth=3; for(const s of [-1,1]){ g.beginPath(); g.moveTo(x+s*8,y+8); g.lineTo(x+s*20,y+5); g.lineTo(x+s*15,y+20); g.closePath(); g.fill(); g.stroke(); } }
+  else if(sh==='sorpresa'){ g.beginPath(); g.ellipse(x,y+8,13,17,0,0,Math.PI*2); g.fill(); g.fillStyle='#e0768a'; g.beginPath(); g.ellipse(x,y+15,8,7,0,0,Math.PI*2); g.fill(); }
+  else if(sh==='ladeada'){ g.beginPath(); g.moveTo(x-24,y+8); g.quadraticCurveTo(x+6,y+18,x+28,y-6); g.stroke(); } }
+// mejillas: "k:forma:color"
+function chCheekDraw2(g,st){ const [,sh,col]=st.split(':'); const rgb=new THREE.Color(col), R=Math.round(rgb.r*255), G=Math.round(rgb.g*255), B=Math.round(rgb.b*255), rgba=a=>`rgba(${R},${G},${B},${a})`;
+  const star=(x,y,r)=>{ g.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*.45:r; g.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } g.closePath(); g.fill(); };
+  const heart=(x,y,r)=>{ g.beginPath(); g.moveTo(x,y+r*.9); g.bezierCurveTo(x-r*1.5,y-r*.1,x-r*.7,y-r*1.25,x,y-r*.45); g.bezierCurveTo(x+r*.7,y-r*1.25,x+r*1.5,y-r*.1,x,y+r*.9); g.fill(); };
+  for(const s of [-1,1]){ const cx=512+s*232, cy=392; g.fillStyle=rgba(.9); g.strokeStyle=rgba(.9); g.lineCap='round';
+    if(sh==='chapitas'){ const rg=g.createRadialGradient(cx,cy,4,cx,cy,52); rg.addColorStop(0,rgba(.8)); rg.addColorStop(1,rgba(0)); g.fillStyle=rg; g.beginPath(); g.ellipse(cx,cy,58,36,0,0,Math.PI*2); g.fill(); }
+    else if(sh==='ovaladas'){ g.fillStyle=rgba(.55); g.beginPath(); g.ellipse(cx,cy,44,26,0,0,Math.PI*2); g.fill(); }
+    else if(sh==='circulos'){ g.fillStyle=rgba(.65); g.beginPath(); g.arc(cx,cy,28,0,Math.PI*2); g.fill(); }
+    else if(sh==='corazon') heart(cx,cy,20);
+    else if(sh==='estrella') star(cx,cy,22);
+    else if(sh==='pecas'){ for(const [dx,dy] of [[-22,-6],[0,-14],[20,-4],[-8,10],[14,14],[-26,12]]){ g.beginPath(); g.arc(cx+dx*s,cy+dy,4.5,0,Math.PI*2); g.fill(); } }
+    else if(sh==='rayitas'){ g.lineWidth=6; for(let i=-1;i<=1;i++){ g.beginPath(); g.moveTo(cx+i*20-10,cy+14); g.lineTo(cx+i*20+8,cy-14); g.stroke(); } }
+    else if(sh==='espiral'){ g.lineWidth=5; g.beginPath(); for(let i=0;i<40;i++){ const a=i*.4, r=2+i*.7; g.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r); } g.stroke(); }
+    else if(sh==='flor'){ for(let i=0;i<5;i++){ const a=i/5*Math.PI*2; g.beginPath(); g.arc(cx+Math.cos(a)*12,cy+Math.sin(a)*12,10,0,Math.PI*2); g.fill(); } g.fillStyle='#ffd23f'; g.beginPath(); g.arc(cx,cy,7,0,Math.PI*2); g.fill(); }
+    else if(sh==='luna'){ g.beginPath(); g.arc(cx,cy,20,0,Math.PI*2); g.fill(); g.globalCompositeOperation='destination-out'; g.beginPath(); g.arc(cx+s*10,cy-6,17,0,Math.PI*2); g.fill(); g.globalCompositeOperation='source-over'; }
+    else if(sh==='notas'){ g.beginPath(); g.ellipse(cx-6,cy+10,8,6,-.4,0,Math.PI*2); g.fill(); g.fillRect(cx,cy-18,4,28); g.fillRect(cx,cy-18,14,5); }
+    else if(sh==='puntitos'){ for(const dx of [-16,0,16]){ g.beginPath(); g.arc(cx+dx,cy,6,0,Math.PI*2); g.fill(); } }
+    else if(sh==='destellos'){ star(cx-s*8,cy-6,16); g.beginPath(); g.arc(cx+s*20,cy+14,5,0,Math.PI*2); g.fill(); g.beginPath(); g.arc(cx-s*22,cy+18,3,0,Math.PI*2); g.fill(); }
+    else if(sh==='arcoiris'){ g.lineWidth=5; ['#ff5d6c','#ffd23f','#7ed957','#4fc3f7'].forEach((c,i)=>{ g.strokeStyle=c; g.beginPath(); g.arc(cx,cy+12,28-i*6,Math.PI,0); g.stroke(); }); }
+    else if(sh==='trazo'){ g.lineWidth=12; g.beginPath(); g.moveTo(cx-30,cy); g.lineTo(cx+30,cy); g.stroke(); } } }
+// ojos nuevos del Amigurumi (botones de colores, botones chiquitos, estrellas, corazones y bordados de colores)
+function amEyeDraw2(g,st,s,cx,cy){ if(st==='x'){ g.beginPath(); g.moveTo(cx-18,cy-18); g.lineTo(cx+18,cy+18); g.moveTo(cx+18,cy-18); g.lineTo(cx-18,cy+18); g.stroke(); }
+  else if(st==='espiral'){ g.lineWidth=5; g.beginPath(); for(let i=0;i<34;i++){ const a=i*.5, r=2+i*.62; g.lineTo(cx+Math.cos(a*s)*r,cy+Math.sin(a*s)*r); } g.stroke(); g.lineWidth=8; }
+  else if(st==='ovalo'){ g.beginPath(); g.ellipse(cx,cy,12,18,0,0,Math.PI*2); g.fill(); }
+  else if(st==='luna'){ g.beginPath(); g.moveTo(cx-24,cy-4); g.quadraticCurveTo(cx,cy+22,cx+24,cy-4); g.stroke(); }
+  else if(st==='flor'){ for(let i=0;i<5;i++){ const a=i/5*Math.PI*2; g.beginPath(); g.arc(cx+Math.cos(a)*10,cy+Math.sin(a)*10,8,0,Math.PI*2); g.fill(); } g.fillStyle='#ffd23f'; g.beginPath(); g.arc(cx,cy,6,0,Math.PI*2); g.fill(); }
+  else if(st==='cruz'){ g.beginPath(); g.moveTo(cx,cy-20); g.lineTo(cx,cy+20); g.moveTo(cx-20,cy); g.lineTo(cx+20,cy); g.stroke(); }
+  else if(st==='sorpresa'){ g.beginPath(); g.arc(cx,cy,18,0,Math.PI*2); g.stroke(); g.beginPath(); g.arc(cx,cy,6,0,Math.PI*2); g.fill(); }
+  else if(st==='llorando'){ g.beginPath(); g.moveTo(cx-24,cy-4); g.quadraticCurveTo(cx,cy+20,cx+24,cy-4); g.stroke(); g.fillStyle='rgba(120,190,255,.9)'; g.beginPath(); g.ellipse(cx+s*10,cy+22,6,10,0,0,Math.PI*2); g.fill(); }
+  else if(st==='chinitos'){ g.beginPath(); g.moveTo(cx-s*18,cy-16); g.lineTo(cx+s*14,cy); g.lineTo(cx-s*18,cy+16); g.stroke(); } }
+function chBrowDraw(g,st,col){ if(st && st.startsWith('p:')) return chBrowDraw2(g,st,col); g.strokeStyle=col; g.fillStyle=col; g.lineCap='round';
   for(const s of [-1,1]){ const cx=512+s*178, I=x=>cx-s*x;   // I(+) = hacia el centro de la cara
     const arc=(a,b,yA,yC,yB,w)=>{ g.lineWidth=w; g.beginPath(); g.moveTo(I(a),yA); g.quadraticCurveTo(cx,yC,I(-b),yB); g.stroke(); };
     if(st==='normal') arc(46,50,186,170,188,10);
@@ -3493,7 +3618,7 @@ function chBrowDraw(g,st,col){ g.strokeStyle=col; g.fillStyle=col; g.lineCap='ro
     else if(st==='puntitos'){ g.beginPath(); g.ellipse(I(22),178,17,11,0,0,Math.PI*2); g.fill(); }
     else if(st==='cortas') arc(22,22,184,172,184,10);
     else if(st==='arqueadas') arc(44,52,192,150,196,7); } }
-function chMouthDraw(g,st){ const x=512, y=452; g.lineCap='round'; g.lineJoin='round'; g.strokeStyle='#5a2a1a'; g.lineWidth=7;
+function chMouthDraw(g,st){ if(st && st.startsWith('m:')) return chMouthDraw2(g,st); const x=512, y=452; g.lineCap='round'; g.lineJoin='round'; g.strokeStyle='#5a2a1a'; g.lineWidth=7;
   const smile=(w,d)=>{ g.beginPath(); g.moveTo(x-w,y); g.quadraticCurveTo(x,y+d,x+w,y); g.stroke(); };
   if(st==='sonrisa') smile(30,18);
   else if(st==='seria'){ g.beginPath(); g.moveTo(x-18,y+6); g.lineTo(x+18,y+6); g.stroke(); }
@@ -3505,7 +3630,7 @@ function chMouthDraw(g,st){ const x=512, y=452; g.lineCap='round'; g.lineJoin='r
   else if(st==='beso'){ g.beginPath(); g.moveTo(x-4,y-6); g.quadraticCurveTo(x+14,y-2,x,y+8); g.quadraticCurveTo(x+14,y+14,x-4,y+20); g.stroke(); }
   else if(st==='triste'){ g.beginPath(); g.moveTo(x-24,y+14); g.quadraticCurveTo(x,y-4,x+24,y+14); g.stroke(); }
   else if(st==='dientes'){ g.fillStyle='#ffffff'; g.beginPath(); g.moveTo(x-32,y); g.quadraticCurveTo(x,y+6,x+32,y); g.quadraticCurveTo(x,y+34,x-32,y); g.fill(); g.stroke(); g.lineWidth=3; g.beginPath(); g.moveTo(x-30,y+5); g.quadraticCurveTo(x,y+12,x+30,y+5); g.stroke(); } }
-function chCheekDraw(g,st){ const star=(x,y,r,col)=>{ g.fillStyle=col; g.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*.45:r; g.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } g.closePath(); g.fill(); };
+function chCheekDraw(g,st){ if(st && st.startsWith('k:')) return chCheekDraw2(g,st); const star=(x,y,r,col)=>{ g.fillStyle=col; g.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*.45:r; g.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } g.closePath(); g.fill(); };
   const heart=(x,y,r,col)=>{ g.fillStyle=col; g.beginPath(); g.moveTo(x,y+r*.9); g.bezierCurveTo(x-r*1.5,y-r*.1,x-r*.7,y-r*1.25,x,y-r*.45); g.bezierCurveTo(x+r*.7,y-r*1.25,x+r*1.5,y-r*.1,x,y+r*.9); g.fill(); };
   for(const s of [-1,1]){ const cx=512+s*232, cy=392;
     if(st==='rosas'||st==='rojas'){ const c=st==='rosas'?'240,120,140':'230,60,80', rg=g.createRadialGradient(cx,cy,4,cx,cy,52); rg.addColorStop(0,`rgba(${c},.8)`); rg.addColorStop(1,`rgba(${c},0)`); g.fillStyle=rg; g.beginPath(); g.ellipse(cx,cy,58,36,0,0,Math.PI*2); g.fill(); }
@@ -3533,19 +3658,64 @@ const CH_EARS={
   gato:{hair:1, col:'#8a7a70', in:'#f2a7b6', k:'cono'}, perrito:{hair:1, col:'#a0703f', k:'caida', sway:2.4}, osito:{hair:1, col:'#8a5a34', in:'#e8c2a0', k:'bola'}, raton:{col:'#a9a6ad', in:'#f2a7b6', k:'disco'},
   conejo:{hair:1, col:'#f2ece4', in:'#f6b3c2', k:'largo', sway:1.2}, zorro:{col:'#e07a2e', in:'#fff3e6', k:'cono', big:1}, panda:{col:'#1e1e22', k:'bola'}, lobo:{col:'#8d929c', in:'#e6e2dc', k:'cono', big:1},
   cerdito:{col:'#f4a6b8', in:'#e57d96', k:'doblada'}, tigre:{col:'#f08a24', in:'#2a2220', k:'redonda'}};
+// ---------- orejitas nuevas: más animales y colores (y formas: de duende, antenitas, aletas y alitas) ----------
+Object.assign(CH_EARS,{
+  gato_negro:{col:'#2a2226', in:'#f2a7b6', k:'cono'}, gato_blanco:{col:'#f6f4ef', in:'#f6b3c2', k:'cono'}, gato_naranja:{col:'#f0943a', in:'#ffd8c0', k:'cono'}, gato_gris:{col:'#9aa0ae', in:'#f2a7b6', k:'cono'},
+  gato_siames:{col:'#5a3a2a', in:'#e8c8b0', k:'cono'}, gato_rosa:{col:'#f7b6cf', in:'#ffffff', k:'cono'}, gato_lila:{col:'#c8a8f0', in:'#ffffff', k:'cono'}, gato_celeste:{col:'#9fd8ff', in:'#ffffff', k:'cono'},
+  lince:{col:'#c8a070', in:'#f4e4d0', k:'cono', big:1, tuft:'#2a2226'}, perro_dalmata:{col:'#f6f4ef', k:'caida', sway:2.4, spot:'#2a2226'}, perro_negro:{col:'#2a2226', k:'caida', sway:2.4}, perro_dorado:{col:'#e0b060', k:'caida', sway:2.4},
+  perro_blanco:{col:'#f6f4ef', k:'caida', sway:2.4}, perro_gris:{col:'#9aa0ae', k:'caida', sway:2.4}, husky:{col:'#5a6070', in:'#f6f4ef', k:'cono', big:1}, chihuahua:{col:'#e0b080', in:'#f4c8b0', k:'cono', big:1, sc:1.25},
+  oso_polar:{col:'#f6f4ef', in:'#e8e0d8', k:'bola'}, oso_cafe:{col:'#6a4024', in:'#c8a080', k:'bola'}, oso_negro:{col:'#2a2226', in:'#5a5050', k:'bola'}, oso_rosa:{col:'#f7b6cf', in:'#ffffff', k:'bola'},
+  oso_miel:{col:'#d89a40', in:'#ffe0a0', k:'bola'}, koala:{col:'#9aa0ae', in:'#f6f4ef', k:'disco', sc:1.15}, mapache:{col:'#6a6a72', in:'#f6f4ef', k:'bola'}, hamster:{col:'#e8b070', in:'#f8d8c0', k:'redonda'},
+  leon:{col:'#e0a040', in:'#8a5a20', k:'redonda'}, tigre_blanco:{col:'#f6f4ef', in:'#2a2220', k:'redonda'}, leopardo:{col:'#e8b040', in:'#2a2220', k:'redonda'}, mono:{col:'#8a5a34', in:'#f0d0b0', k:'disco', sc:.85},
+  elefante:{col:'#9aa0ae', in:'#f2a7b6', k:'disco', sc:1.35}, raton_blanco:{col:'#f6f4ef', in:'#f2a7b6', k:'disco'}, raton_cafe:{col:'#8a6a50', in:'#f2a7b6', k:'disco'}, raton_rosa:{col:'#f7b6cf', in:'#ffffff', k:'disco'},
+  conejo_rosa:{col:'#f7b6cf', in:'#ffffff', k:'largo', sway:1.2}, conejo_cafe:{col:'#a0703f', in:'#f6c8a8', k:'largo', sway:1.2}, conejo_negro:{col:'#2a2226', in:'#f2a7b6', k:'largo', sway:1.2}, conejo_gris:{col:'#9aa0ae', in:'#f6b3c2', k:'largo', sway:1.2},
+  conejo_caido:{col:'#f2ece4', k:'caida', sway:1.6, sc:1.3}, conejo_caido_cafe:{col:'#a0703f', k:'caida', sway:1.6, sc:1.3}, burrito:{col:'#9aa0ae', in:'#5a5a62', k:'largo', sway:1.0}, canguro:{col:'#c08a5a', in:'#f0d0b0', k:'largo', sway:.8, sc:.85},
+  zorro_artico:{col:'#f6f4ef', in:'#e0e8f0', k:'cono', big:1}, zorro_gris:{col:'#7a808e', in:'#f6f4ef', k:'cono', big:1}, lobo_negro:{col:'#2a2226', in:'#5a5a62', k:'cono', big:1}, lobo_blanco:{col:'#f6f4ef', in:'#d8d8e0', k:'cono', big:1},
+  cerdito_claro:{col:'#fbd0dc', in:'#f4a6b8', k:'doblada'}, cerdito_manchas:{col:'#f4c0c8', in:'#2a2226', k:'doblada'}, vaca:{col:'#f6f4ef', in:'#f2a7b6', k:'caida', sway:1.0, sc:.95, spot:'#2a2226'}, oveja:{col:'#f6f0e4', in:'#e8d8c8', k:'caida', sway:1.2, sc:.95},
+  cabra:{col:'#e8dcc8', in:'#c8a890', k:'caida', sway:1.0, sc:.95}, venado:{col:'#b07a4a', in:'#f0d8c0', k:'cono', big:1}, caballo:{col:'#8a5a34', in:'#5a3a20', k:'cono'}, jirafa:{col:'#e8b040', in:'#a0702a', k:'cono'},
+  ardilla:{col:'#c0703a', in:'#f0c8a0', k:'cono', tuft:'#c0703a'}, nutria:{col:'#7a5034', in:'#c8a080', k:'redonda', sc:.8}, foca:{col:'#9aa0ae', k:'redonda', sc:.6}, pinguino:{col:'#2a2226', k:'redonda', sc:.6},
+  duende:{col:'#f3d0b6', in:'#e8b8a0', k:'punta'}, duende_verde:{col:'#9fe0a0', in:'#7ac080', k:'punta'}, hada:{col:'#f3d0b6', in:'#f6b3c2', k:'punta', sc:.85}, elfo:{col:'#e8c4a8', in:'#d0a080', k:'punta', sc:1.2},
+  abeja:{col:'#2a2226', in:'#f2c94c', k:'antena'}, mariposa:{col:'#2a2226', in:'#f49ac1', k:'antena'}, mariquita:{col:'#2a2226', in:'#d8283a', k:'antena'}, alien:{col:'#7ed957', in:'#c8ff8a', k:'antena'},
+  caracol:{col:'#c8b090', in:'#a08060', k:'antena'}, sirena:{col:'#7fd0ff', in:'#c8f0ff', k:'aleta'}, sirena_rosa:{col:'#f49ac1', in:'#ffd0e8', k:'aleta'}, sirena_morada:{col:'#9a70e0', in:'#d8c0ff', k:'aleta'},
+  pez:{col:'#ff9a3c', in:'#ffd0a0', k:'aleta'}, ajolote:{col:'#f7b6cf', in:'#e05a9a', k:'aleta', gill:1}, ajolote_azul:{col:'#9fd0f0', in:'#5a90d0', k:'aleta', gill:1}, dragon:{col:'#7ed957', in:'#f2c94c', k:'aleta'},
+  pajarito:{col:'#ffd23f', in:'#f2a030', k:'ala'}, pajarito_azul:{col:'#5aa8f0', in:'#2a6ac0', k:'ala'}, angelito:{col:'#ffffff', in:'#e8f0ff', k:'ala'}, murcielago:{col:'#4a3a5a', in:'#c8a0d8', k:'cono', big:1, sc:1.2},
+  buho:{col:'#a0703f', in:'#f0d8b0', k:'cono', tuft:'#a0703f', sc:.8}, gato_esfinge:{col:'#e8c0b0', in:'#f6b3c2', k:'cono', big:1, sc:1.25}, panda_rojo:{col:'#c0502a', in:'#f6f4ef', k:'cono', sc:.9}, osito_lavanda:{col:'#c8a8f0', in:'#ffffff', k:'bola'},
+  osito_menta:{col:'#9fe0c0', in:'#ffffff', k:'bola'}, gatito_arcoiris:{col:'#ff9ad5', in:'#7fd0ff', k:'cono'}, perrito_rosa:{col:'#f7b6cf', k:'caida', sway:2.4}, conejo_lila:{col:'#c8a8f0', in:'#ffffff', k:'largo', sway:1.2},
+  koala_rosa:{col:'#f7c6d8', in:'#ffffff', k:'disco', sc:1.15}, raton_azul:{col:'#9fd8ff', in:'#ffffff', k:'disco'}, hamster_blanco:{col:'#f6f4ef', in:'#f6b3c2', k:'redonda'}, leon_blanco:{col:'#f6efe0', in:'#c8b090', k:'redonda'},
+  tigre_rosa:{col:'#f7b6cf', in:'#2a2220', k:'redonda'}, cerdito_lila:{col:'#d8c0f0', in:'#b090e0', k:'doblada'} });
+const CH_EARS2_NAMES={ gato_negro:'gato negro', gato_blanco:'gato blanco', gato_naranja:'gato naranja', gato_gris:'gato gris', gato_siames:'gato siamés', gato_rosa:'gatito rosa', gato_lila:'gatito lila', gato_celeste:'gatito celeste',
+  lince:'lince', perro_dalmata:'dálmata', perro_negro:'perrito negro', perro_dorado:'perrito dorado', perro_blanco:'perrito blanco', perro_gris:'perrito gris', husky:'husky', chihuahua:'chihuahua',
+  oso_polar:'oso polar', oso_cafe:'oso café', oso_negro:'oso negro', oso_rosa:'osito rosa', oso_miel:'osito miel', koala:'koala', mapache:'mapache', hamster:'hámster', leon:'león', tigre_blanco:'tigre blanco',
+  leopardo:'leopardo', mono:'monito', elefante:'elefante', raton_blanco:'ratón blanco', raton_cafe:'ratón café', raton_rosa:'ratoncito rosa', conejo_rosa:'conejo rosa', conejo_cafe:'conejo café', conejo_negro:'conejo negro',
+  conejo_gris:'conejo gris', conejo_caido:'conejo de orejas caídas', conejo_caido_cafe:'conejo café de orejas caídas', burrito:'burrito', canguro:'canguro', zorro_artico:'zorro ártico', zorro_gris:'zorro gris', lobo_negro:'lobo negro',
+  lobo_blanco:'lobo blanco', cerdito_claro:'cerdito rosa claro', cerdito_manchas:'cerdito con manchas', vaca:'vaquita', oveja:'ovejita', cabra:'cabrita', venado:'venado', caballo:'caballo', jirafa:'jirafa', ardilla:'ardilla',
+  nutria:'nutria', foca:'foca', pinguino:'pingüino', duende:'duende', duende_verde:'duende verde', hada:'hada', elfo:'elfo', abeja:'abejita', mariposa:'mariposa', mariquita:'mariquita', alien:'extraterrestre', caracol:'caracol',
+  sirena:'sirena', sirena_rosa:'sirena rosa', sirena_morada:'sirena morada', pez:'pececito', ajolote:'ajolote', ajolote_azul:'ajolote azul', dragon:'dragoncito', pajarito:'pajarito', pajarito_azul:'pajarito azul', angelito:'angelito',
+  murcielago:'murciélago', buho:'búho', gato_esfinge:'gato sin pelo', panda_rojo:'panda rojo', osito_lavanda:'osito lavanda', osito_menta:'osito menta', gatito_arcoiris:'gatito arcoíris', perrito_rosa:'perrito rosa', conejo_lila:'conejo lila',
+  koala_rosa:'koala rosa', raton_azul:'ratoncito azul', hamster_blanco:'hámster blanco', leon_blanco:'león blanco', tigre_rosa:'tigre rosa', cerdito_lila:'cerdito lila' };
+// formas nuevas de orejita (se llaman desde chEarsBuild)
+function chEarsShape2(E,M,A,B,s){ const sph=chSph();
+  if(E.k==='punta'){ const cg=CH_XG.cone||(CH_XG.cone=chPrep(new THREE.ConeGeometry(1,1,14))); M(cg,A,s*.04,.02,.02,.11,.42,.06,0,-s*1.25); M(cg,B,s*.04,.02,.045,.06,.28,.02,0,-s*1.25); return 'side'; }
+  if(E.k==='antena'){ const cy=chCylGeo(); M(cy,A,0,.16,0,.012,.32,.012,0,0); M(sph,chEarMat(E.in||E.col),0,.34,0,.055,.055,.055); return 'top'; }
+  if(E.k==='aleta'){ for(let i=0;i<3;i++) M(sph,i%2?B:A,s*.06*i,.02+i*.03,0,.05,.16-i*.02,.02,0,-s*(1.0+i*.25)); if(E.gill) for(let i=0;i<3;i++) M(sph,B,s*.04,.0+i*.06,0,.03,.09,.02,0,-s*(.7+i*.4)); return 'side'; }
+  if(E.k==='ala'){ M(chShapeGeo('wing'),A,0,0,0,s*.9,.9,2,0,0); M(chShapeGeo('wing'),B,0,-.03,.005,s*.7,-.6,2,0,0); return 'side'; }
+  return null; }
 function chEarsBuild(st,hairHex){ const E=CH_EARS[st], col=E.hair && hairHex ? hairHex : E.col, A=chEarMat(col), B=E.in?chEarMat(E.in):A, out=[], sph=chSph(), H=CH.HY, RX=CH.RX, RY=CH.RY;
   for(const s of [-1,1]){ const p=new THREE.Group(), M=(geo,m,x,y,z,sx,sy,sz,rx=0,rz=0)=>{ const o=new THREE.Mesh(geo,m); o.position.set(x,y,z); o.scale.set(sx,sy,sz); o.rotation.set(rx,0,rz); o.castShadow=true; p.add(o); return o; };
-    let ang=.62, sw=0;   // ángulo desde arriba de la cabeza
-    if(E.k==='cono'){ const b=E.big?1.25:1, cg=CH_XG.cone||(CH_XG.cone=chPrep(new THREE.ConeGeometry(1,1,14))); M(cg,A,0,.13*b,0,.15*b,.28*b,.07); M(cg,B,0,.11*b,.035,.09*b,.18*b,.03); }
+    let ang=.62, sw=0, side=0;   // ángulo desde arriba de la cabeza
+    if(E.k==='cono'){ const b=E.big?1.25:1, cg=CH_XG.cone||(CH_XG.cone=chPrep(new THREE.ConeGeometry(1,1,14))); M(cg,A,0,.13*b,0,.15*b,.28*b,.07); M(cg,B,0,.11*b,.035,.09*b,.18*b,.03); if(E.tuft) M(cg,chEarMat(E.tuft),0,.29*b,0,.03,.1,.03); }
     else if(E.k==='bola'){ M(sph,A,0,.07,0,.14,.13,.08); if(E.in) M(sph,B,0,.065,.05,.08,.075,.03); ang=.7; }
     else if(E.k==='disco'){ M(sph,A,0,.12,0,.2,.19,.05); M(sph,B,0,.115,.03,.13,.12,.025); ang=.78; }
     else if(E.k==='redonda'){ M(sph,A,0,.08,0,.13,.12,.06); M(sph,B,0,.075,.04,.075,.07,.02); ang=.68; }
     else if(E.k==='largo'){ M(sph,A,0,.3,0,.09,.32,.06); M(sph,B,0,.3,.04,.05,.24,.025); ang=.32; sw=E.sway; }
-    else if(E.k==='caida'){ M(sph,A,0,-.2,0,.11,.25,.06,0,0); ang=1.05; sw=E.sway; }
+    else if(E.k==='caida'){ M(sph,A,0,-.2,0,.11,.25,.06,0,0); if(E.spot) M(sph,chEarMat(E.spot),.03,-.24,.04,.05,.07,.025); ang=1.05; sw=E.sway; }
     else if(E.k==='doblada'){ const cg=CH_XG.cone||(CH_XG.cone=chPrep(new THREE.ConeGeometry(1,1,14))); M(cg,A,0,.09,.02,.12,.18,.06,.6,0); M(cg,B,0,.08,.05,.07,.11,.02,.6,0); }
+    else { const r=chEarsShape2(E,M,A,B,s); if(r==='side') side=1; }   // v190: formas nuevas
     const R=1.07, th=ang;   // sobre el cabello
     p.position.set(s*RX*R*Math.sin(th), H+RY*R*Math.cos(th), -.03); p.rotation.set(0,0,-s*th*(E.k==='caida'?.35:.9));
     if(E.k==='caida'){ p.position.x=s*RX*1.02; p.position.y=H+.12; p.rotation.z=s*.18; }
+    if(side){ p.position.set(s*RX*1.0,H-.03,-.02); p.rotation.set(0,0,0); }
+    if(E.sc) p.scale.setScalar(E.sc);
     p.userData.sw={bx:p.rotation.x, bz:p.rotation.z, k:sw}; out.push(p); }
   return out; }
 // arma (o cambia) cabello, cara y orejitas del Chibi según lo que trae puesto
@@ -3601,6 +3771,7 @@ function chPatCanvas(pat,a,b){ const c=document.createElement('canvas'); c.width
   else if(pat==='cuadros'){ g.globalAlpha=.55; for(let i=0;i<128;i+=32){ g.fillRect(i,0,12,128); g.fillRect(0,i,128,12); } g.globalAlpha=1; g.fillStyle='rgba(255,255,255,.5)'; for(let i=0;i<128;i+=32){ g.fillRect(i+20,0,2,128); g.fillRect(0,i+20,128,2); } }
   else if(pat==='mezclilla'){ for(let i=0;i<1400;i++){ g.globalAlpha=.25; g.fillStyle=Math.random()<.5?'#ffffff':'#0e1f40'; g.fillRect(Math.random()*128,Math.random()*128,1+Math.random()*3,1); } g.globalAlpha=1; }
   else if(pat==='estrellas') for(const [x,y] of [[20,24],[84,14],[52,64],[112,80],[24,104],[88,112]]){ g.beginPath(); for(let i=0;i<10;i++){ const t=-Math.PI/2+i*Math.PI/5, r=i%2?4:10; g.lineTo(x+Math.cos(t)*r,y+Math.sin(t)*r); } g.closePath(); g.fill(); }
+  else chPat2(g,pat,a,b);   // v191: más dibujos de tela
   return c; }
 function chClothMat(c,pat,c2,o){ o=o||{}; const key=[c,pat,c2,o.emi,o.rep].join('|'); if(CH_CMAT[key]) return CH_CMAT[key];
   let m; if(pat){ const t=new THREE.CanvasTexture(chPatCanvas(pat,c,c2||'#ffffff')); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(...(o.rep||[4,2])); t.anisotropy=4; m=new THREE.MeshStandardMaterial({map:t, roughness:.9, side:THREE.DoubleSide}); }
@@ -3613,6 +3784,98 @@ function chCatPrintMat(base){ const key='cat|'+base; if(CH_CMAT[key]) return CH_
   if(!chCatTex){ const c=document.createElement('canvas'); c.width=128; c.height=128; const g=c.getContext('2d'); g.fillStyle='#ffffff'; g.beginPath(); g.moveTo(24,52); g.lineTo(34,16); g.lineTo(54,40); g.lineTo(74,40); g.lineTo(94,16); g.lineTo(104,52); g.ellipse(64,72,42,36,0,0,Math.PI); g.closePath(); g.fill();
     g.fillStyle='#2a2226'; g.beginPath(); g.arc(48,64,6,0,Math.PI*2); g.arc(80,64,6,0,Math.PI*2); g.fill(); g.fillStyle='#f07a92'; g.beginPath(); g.moveTo(58,76); g.lineTo(70,76); g.lineTo(64,83); g.fill(); chCatTex=new THREE.CanvasTexture(c); chCatTex.encoding=THREE.sRGBEncoding; }
   return CH_CMAT[key]=new THREE.MeshStandardMaterial({map:chCatTex, transparent:true, alphaTest:.3, roughness:.9, polygonOffset:true, polygonOffsetFactor:-2}); }
+// ---------- v191: ropa nueva del Chibi y el Amigurumi (Parte 2): estampados, prendas y zapatos nuevos ----------
+// dibujos de tela nuevos (usan el color 1 de fondo y el color 2 para el dibujo)
+function chPat2(g,pat,a,b){ const P=(x,y,r,n,f)=>{ g.beginPath(); for(let i=0;i<n*2;i++){ const t=-Math.PI/2+i*Math.PI/n, rr=i%2?r*f:r; g.lineTo(x+Math.cos(t)*rr,y+Math.sin(t)*rr); } g.closePath(); g.fill(); };
+  const heart=(x,y,r)=>{ g.beginPath(); g.moveTo(x,y+r*.9); g.bezierCurveTo(x-r*1.4,y,x-r*.8,y-r*1.1,x,y-r*.35); g.bezierCurveTo(x+r*.8,y-r*1.1,x+r*1.4,y,x,y+r*.9); g.fill(); };
+  const G=[[20,22],[84,18],[52,60],[116,62],[22,102],[86,106]];
+  if(pat==='corazones') G.forEach(([x,y])=>heart(x,y,10));
+  else if(pat==='vichy'){ g.globalAlpha=.45; for(let i=0;i<128;i+=16){ g.fillRect(i,0,8,128); g.fillRect(0,i,128,8); } g.globalAlpha=1; }
+  else if(pat==='zigzag'){ g.lineWidth=7; g.strokeStyle=b; for(let y=10;y<140;y+=32){ g.beginPath(); for(let x=-8;x<=136;x+=16) g.lineTo(x,y+((x/16)%2?-8:8)); g.stroke(); } }
+  else if(pat==='flores') G.forEach(([x,y])=>{ for(let k=0;k<5;k++){ const t=k/5*Math.PI*2; g.beginPath(); g.arc(x+Math.cos(t)*6,y+Math.sin(t)*6,5,0,7); g.fill(); } g.fillStyle='#ffd23f'; g.beginPath(); g.arc(x,y,3.5,0,7); g.fill(); g.fillStyle=b; });
+  else if(pat==='nubes') [[24,30],[90,24],[56,78],[110,100],[16,110]].forEach(([x,y])=>{ g.beginPath(); g.arc(x,y,9,0,7); g.arc(x+10,y-5,11,0,7); g.arc(x+21,y,9,0,7); g.fill(); });
+  else if(pat==='arcoiris'){ const C=['#ff5d6c','#ff9a3c','#ffe14d','#7ed957','#4fc3f7','#7d6bff']; C.forEach((c,i)=>{ g.fillStyle=c; g.fillRect(0,i*128/6,128,128/6+1); }); }
+  else if(pat==='camuflaje'){ const C=[b,'#3f4a2a','#8a7a4a']; for(let i=0;i<26;i++){ g.fillStyle=C[i%3]; g.beginPath(); g.ellipse((i*47)%128,(i*71)%128,10+(i%4)*4,7+(i%3)*3,i,0,7); g.fill(); } }
+  else if(pat==='tiedye'){ const C=['#ff5d9e','#ffd23f','#4fc3f7','#7ed957','#b392e8']; for(let r=90;r>0;r-=9){ g.fillStyle=C[(r/9)%C.length]; g.beginPath(); g.arc(64,64,r,0,7); g.fill(); } }
+  else if(pat==='fresas') G.forEach(([x,y])=>{ g.fillStyle='#e5334b'; g.beginPath(); g.ellipse(x,y,7,9,0,0,7); g.fill(); g.fillStyle='#4fa83a'; g.fillRect(x-5,y-10,10,4); });
+  else if(pat==='huellitas') G.forEach(([x,y])=>{ g.beginPath(); g.ellipse(x,y+3,6,5,0,0,7); g.fill(); for(let k=0;k<4;k++){ g.beginPath(); g.arc(x-7.5+k*5,y-5-(k%3?2:0),2.6,0,7); g.fill(); } });
+  else if(pat==='rombos'){ for(let y=0;y<128;y+=32) for(let x=0;x<128;x+=32){ g.beginPath(); g.moveTo(x+16,y); g.lineTo(x+32,y+16); g.lineTo(x+16,y+32); g.lineTo(x,y+16); g.closePath(); if(((x+y)/32)%2) g.fill(); } }
+  else if(pat==='copos'){ g.strokeStyle=b; g.lineWidth=2.4; G.forEach(([x,y])=>{ for(let k=0;k<3;k++){ const t=k*Math.PI/3; g.beginPath(); g.moveTo(x-Math.cos(t)*9,y-Math.sin(t)*9); g.lineTo(x+Math.cos(t)*9,y+Math.sin(t)*9); g.stroke(); } }); }
+  else if(pat==='rayasv') for(let x=0;x<128;x+=32) g.fillRect(x,0,16,128);
+  else if(pat==='escoces'){ g.globalAlpha=.5; for(let i=0;i<128;i+=32){ g.fillRect(i,0,14,128); g.fillRect(0,i,128,14); } g.globalAlpha=1; g.fillStyle='#ffd23f'; for(let i=0;i<128;i+=32){ g.fillRect(i+22,0,2,128); g.fillRect(0,i+22,128,2); } }
+  else if(pat==='planetas') G.forEach(([x,y],i)=>{ g.beginPath(); g.arc(x,y,7,0,7); g.fill(); g.strokeStyle=b; g.lineWidth=2; g.beginPath(); g.ellipse(x,y,12,4,-.3,0,7); g.stroke(); });
+  else if(pat==='dulces') G.forEach(([x,y],i)=>{ g.fillStyle=['#ff5d9e','#ffd23f','#4fc3f7','#7ed957'][i%4]; g.beginPath(); g.arc(x,y,6,0,7); g.fill(); g.beginPath(); g.moveTo(x-6,y); g.lineTo(x-12,y-5); g.lineTo(x-12,y+5); g.fill(); g.beginPath(); g.moveTo(x+6,y); g.lineTo(x+12,y-5); g.lineTo(x+12,y+5); g.fill(); });
+  else if(pat==='notas') G.forEach(([x,y])=>{ g.beginPath(); g.ellipse(x,y+6,5,4,-.4,0,7); g.fill(); g.fillRect(x+3,y-10,2,16); g.fillRect(x+3,y-10,8,3); });
+  else return false; return true; }
+// estampado al frente (dibujado, sin emojis): corazón, estrella, rayo, carita, planeta, cohete, flor, nota, número…
+const CH_PRINT={};
+function chPrintMat(icon,base,col){ const key='pr|'+icon+'|'+col; if(CH_CMAT[key]) return CH_CMAT[key];
+  const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d'); g.fillStyle=col; g.strokeStyle=col; g.lineWidth=8; g.lineCap='round'; g.lineJoin='round';
+  const star=(x,y,r)=>{ g.beginPath(); for(let i=0;i<10;i++){ const t=-Math.PI/2+i*Math.PI/5, rr=i%2?r*.45:r; g.lineTo(x+Math.cos(t)*rr,y+Math.sin(t)*rr); } g.closePath(); g.fill(); };
+  if(icon==='corazon'){ g.beginPath(); g.moveTo(64,104); g.bezierCurveTo(4,64,30,14,64,42); g.bezierCurveTo(98,14,124,64,64,104); g.fill(); }
+  else if(icon==='estrella') star(64,66,50);
+  else if(icon==='rayo'){ g.beginPath(); g.moveTo(74,10); g.lineTo(34,70); g.lineTo(62,70); g.lineTo(50,118); g.lineTo(94,52); g.lineTo(66,52); g.closePath(); g.fill(); }
+  else if(icon==='carita'){ g.beginPath(); g.arc(64,64,50,0,7); g.fill(); g.fillStyle='#2a2226'; g.beginPath(); g.arc(46,52,7,0,7); g.arc(82,52,7,0,7); g.fill(); g.strokeStyle='#2a2226'; g.lineWidth=7; g.beginPath(); g.arc(64,66,26,.25,Math.PI-.25); g.stroke(); }
+  else if(icon==='planeta'){ g.beginPath(); g.arc(64,64,32,0,7); g.fill(); g.lineWidth=8; g.beginPath(); g.ellipse(64,64,58,16,-.35,0,7); g.stroke(); }
+  else if(icon==='cohete'){ g.beginPath(); g.moveTo(64,8); g.quadraticCurveTo(96,40,86,92); g.lineTo(42,92); g.quadraticCurveTo(32,40,64,8); g.fill(); g.beginPath(); g.moveTo(42,70); g.lineTo(22,104); g.lineTo(46,92); g.fill(); g.beginPath(); g.moveTo(86,70); g.lineTo(106,104); g.lineTo(82,92); g.fill();
+    g.fillStyle='#7fd0ff'; g.beginPath(); g.arc(64,46,11,0,7); g.fill(); g.fillStyle='#ff9a3c'; g.beginPath(); g.moveTo(50,94); g.lineTo(64,122); g.lineTo(78,94); g.fill(); }
+  else if(icon==='flor'){ for(let k=0;k<6;k++){ const t=k/6*Math.PI*2; g.beginPath(); g.arc(64+Math.cos(t)*28,64+Math.sin(t)*28,20,0,7); g.fill(); } g.fillStyle='#ffd23f'; g.beginPath(); g.arc(64,64,18,0,7); g.fill(); }
+  else if(icon==='nota'){ g.beginPath(); g.ellipse(46,96,18,13,-.4,0,7); g.fill(); g.fillRect(58,20,10,78); g.beginPath(); g.moveTo(58,20); g.lineTo(104,34); g.lineTo(104,50); g.lineTo(68,38); g.fill(); }
+  else if(icon==='luna'){ g.beginPath(); g.arc(64,64,46,0,7); g.fill(); g.globalCompositeOperation='destination-out'; g.beginPath(); g.arc(86,50,40,0,7); g.fill(); g.globalCompositeOperation='source-over'; }
+  else if(icon==='huella'){ g.beginPath(); g.ellipse(64,80,26,22,0,0,7); g.fill(); for(let k=0;k<4;k++){ g.beginPath(); g.arc(30+k*22,42-(k%3?8:0),11,0,7); g.fill(); } }
+  else if(icon==='pizza'){ g.fillStyle='#f2c94c'; g.beginPath(); g.moveTo(20,24); g.lineTo(108,24); g.lineTo(64,116); g.closePath(); g.fill(); g.fillStyle='#c98a3a'; g.fillRect(16,16,96,14); g.fillStyle='#d8283a'; [[48,44],[78,46],[62,72]].forEach(([x,y])=>{ g.beginPath(); g.arc(x,y,9,0,7); g.fill(); }); }
+  else if(icon==='dino'){ g.beginPath(); g.ellipse(60,74,34,22,0,0,7); g.fill(); g.beginPath(); g.ellipse(92,44,16,13,0,0,7); g.fill(); g.fillRect(84,48,12,26); g.beginPath(); g.moveTo(28,72); g.lineTo(4,92); g.lineTo(36,86); g.fill(); g.fillRect(40,88,10,22); g.fillRect(68,88,10,22);
+    g.fillStyle='#2a2226'; g.beginPath(); g.arc(96,40,3.5,0,7); g.fill(); }
+  else if(icon.startsWith('n')){ g.font='bold 84px sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText(icon.slice(1),64,70); }
+  const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding;
+  return CH_CMAT[key]=new THREE.MeshStandardMaterial({map:t, transparent:true, alphaTest:.3, roughness:.9, polygonOffset:true, polygonOffsetFactor:-2}); }
+const CH_TOP_LONG=new Set(['shirt','puffer','turtle','cardigan','hoodear','raincoat','pjtop','kimono']), CH_TOP_NOSLV=new Set(['tank']);
+const CH_TOP2={   // detalles de cada prenda de arriba (el cuerpo y las mangas ya están puestos)
+  polo(X){ const {add,C,CM,T,TY}=X; add(C.g,chConeGeo([[.12,.53],[.2,.5],[.24,.46]]),CM(T.c2||T.c),0,TY+.005,0,1.05,1,X.ZS*1.08); for(let i=0;i<2;i++) add(C.g,chSph(),CM('#ffffff'),0,TY+.42-i*.05,.262,.012,.012,.006); },
+  shirt(X){ const {add,C,CM,T,TY}=X; add(C.g,chConeGeo([[.12,.53],[.2,.5],[.24,.46]]),CM(T.c2||'#ffffff'),0,TY+.005,0,1.05,1,X.ZS*1.08); add(C.g,chBoxGeo(),CM(T.c2||'#ffffff'),0,TY+.27,.262,.02,.38,.01,-.04); for(let i=0;i<4;i++) add(C.g,chSph(),CM(T.c3||'#ffffff'),0,TY+.42-i*.09,.27,.013,.013,.006); },
+  tank(X){},
+  jersey(X){ const {add,C,T,TY}=X; add(C.g,new THREE.PlaneGeometry(.22,.22),chPrintMat('n'+(T.num||'7'),T.c,T.c2||'#ffffff'),0,TY+.27,.275,1,1,1,-.18); },
+  print(X){ const {add,C,T,TY}=X; add(C.g,new THREE.PlaneGeometry(.22,.22),chPrintMat(T.icon,T.c,T.c2||'#ffffff'),0,TY+.28,.275,1,1,1,-.18); },
+  puffer(X){ const {add,C,CM,T,TY}=X, m=CM(T.c); for(let i=0;i<4;i++) add(C.g,chRingGeo(.31-i*.012,.025),m,0,TY+.12+i*.1,0,1,X.ZS,1,Math.PI/2); add(C.g,chRingGeo(.17,.04),m,0,TY+.49,0,1,X.ZS,1,Math.PI/2); add(C.g,chBoxGeo(),CM(T.c2||'#2a2226'),0,TY+.27,.27,.012,.4,.01,-.05); },
+  turtle(X){ const {add,C,CM,T,TY}=X; add(C.g,chTubeGeo(.16,.15,.1),CM(T.c),0,TY+.52,0,1,1,X.ZS); },
+  cardigan(X){ const {add,C,CM,T,TY}=X; add(C.g,chBoxGeo(),CM(T.c2||'#ffffff'),0,TY+.27,.262,.06,.4,.01,-.04); for(let i=0;i<4;i++) add(C.g,chSph(),CM(T.c3||'#e8c45a'),0,TY+.42-i*.09,.272,.016,.016,.008); },
+  hoodear(X){ const {add,C,CM,T,TY}=X, m=CM(T.c2||T.c), e=T.ear; const z=-.24, y=TY+.42;
+    if(e==='gato') for(const s of [-1,1]) add(C.g,chConeG(.06,.11),m,s*.1,y,z-.02,1,1,.5,-.6,0,-s*.3);
+    else if(e==='oso'||e==='panda') for(const s of [-1,1]) add(C.g,chSph(),e==='panda'?CM('#2a2226'):m,s*.12,y,z,.06,.06,.035);
+    else if(e==='conejo') for(const s of [-1,1]) add(C.g,chSph(),m,s*.07,y+.08,z-.04,.04,.12,.025,-.7,0,-s*.2);
+    else if(e==='dino'||e==='dragon') for(let i=0;i<4;i++) add(C.g,chConeG(.035,.07),CM(T.c3||'#f2c94c'),0,TY+.44-i*.08,-.27-(i===0?0:.0),.4,1,1,-1.2+i*.15,0,0);
+    else if(e==='tiburon') add(C.g,chConeG(.07,.14),m,0,y+.02,z-.02,.35,1,1,-.4,0,0);
+    else if(e==='unicornio') add(C.g,chConeG(.03,.12),CM('#f2c230',{emi:'#3a2a00'}),0,y+.04,z+.04,1,1,1,-.3,0,0); },
+  raincoat(X){ const {add,C,CM,T,TY}=X; for(let i=0;i<3;i++) add(C.g,chSph(),CM(T.c2||'#2a2226'),0,TY+.38-i*.1,.27,.016,.016,.008); },
+  pjtop(X){ const {add,C,CM,T,TY}=X; add(C.g,chConeGeo([[.12,.53],[.2,.5],[.24,.46]]),CM(T.c2||'#ffffff'),0,TY+.005,0,1.05,1,X.ZS*1.08); for(let i=0;i<3;i++) add(C.g,chSph(),CM(T.c2||'#ffffff'),0,TY+.38-i*.1,.27,.014,.014,.007); },
+  kimono(X){ const {add,C,CM,T,TY}=X; add(C.g,chBoxGeo(),CM(T.c2||'#d8394a'),0,TY+.2,0,.62,.07,.6*X.ZS); add(C.g,chBoxGeo(),CM(T.c2||'#d8394a'),.06,TY+.38,.235,.05,.22,.01,-.2,0,-.5); },
+  apron(X){ const {add,C,CM,T,TY}=X; add(C.g,chBoxGeo(),CM(T.c2||'#ffffff'),0,TY+.22,.268,.26,.3,.012,-.06); add(C.g,chBoxGeo(),CM(T.c3||'#d8394a'),0,TY+.16,.276,.12,.06,.008,-.06); } };
+const CH_BOT_SHORT=new Set(['shorts','bermuda','overallshort']), CH_BOT_PANTS=new Set(['joggers','cargo','leggings','overallshort','bermuda']);
+const CH_BOT2={
+  joggers(X){ const {add,legs,low,CM,B}=X; legs.forEach(l=>add(low(l),chRingGeo(.14,.03),CM(B.c2||B.c),0,-.11,0,1,1,1,Math.PI/2)); },
+  cargo(X){ const {add,legs,up,CM,B}=X; legs.forEach(l=>{ const s=l.userData.side; add(up(l),chBoxGeo(),CM(B.c2||B.c),s*.15,-.07,0,.02,.07,.08); }); },
+  bermuda(X){ const {add,legs,low,CM,B}=X, m=CM(B.c,B.pat,B.c2,{rep:B.rep}); legs.forEach(l=>{ add(low(l),chTubeGeo(.142,.14,.05),m,0,-.02,0); add(low(l),chRingGeo(.14,.012),m,0,-.045,0,1,1,1,Math.PI/2); }); },
+  overallshort(X){ const {add,C,CM,B,TY}=X, m=CM(B.c,B.pat,B.c2,{rep:B.rep}); add(C.g,chBoxGeo(),m,0,TY+.25,.266,.26,.18,.02); for(const s of [-1,1]){ add(C.g,chBoxGeo(),m,s*.1,TY+.38,.22,.045,.2,.02,-.45); add(C.g,chSph(),CM('#e8c45a'),s*.1,TY+.31,.272,.018,.018,.008); } } };
+const CH_SHOE_NOBODY=new Set(['sandalia','chancla','aleta']);
+const CH_SHOE2={
+  sandalia(X){ const {add,J,fx,fy,fz,m,sole}=X; add(J,chCylGeo(),m,fx,fy-.1,fz+.008,.145,.035,.19); for(const dz of [.07,-.03]) add(J,chBoxGeo(),m,fx,fy-.04,fz+dz,.26,.045,.04); add(J,chBoxGeo(),m,fx,fy-.01,fz-.12,.22,.09,.03); },
+  chancla(X){ const {add,J,fx,fy,fz,m,CM}=X, w=CM('#ffffff'); add(J,chCylGeo(),m,fx,fy-.1,fz+.02,.15,.035,.2); for(const s of [-1,1]) add(J,chBoxGeo(),w,fx+s*.05,fy-.055,fz+.07,.035,.045,.13,0,s*.6,0); },
+  aleta(X){ const {add,J,fx,fy,fz,m}=X; add(J,chSph(),m,fx,fy+.0,fz-.02,.15,.11,.15); add(J,chBoxGeo(),m,fx,fy-.08,fz+.22,.22,.02,.34); },
+  patin(X){ const {add,J,fx,fy,fz,CM,Z}=X, w=CM(Z.c2||'#f2c94c'); add(J,chTubeGeo(.14,.138,.11),X.m,0,-.075,0); for(const dz of [-.1,-.03,.04,.11]) add(J,chDiscGeo(.035,.03),w,fx,fy-.14,fz+dz,1,1,1,0,0,Math.PI/2); },
+  patinhielo(X){ const {add,J,fx,fy,fz,CM}=X; add(J,chTubeGeo(.14,.138,.11),X.m,0,-.075,0); add(J,chBoxGeo(),CM('#c9ced8',null,null,{emi:'#202428'}),fx,fy-.15,fz+.01,.012,.04,.3); },
+  tacos(X){ const {add,J,fx,fy,fz,CM,Z}=X; add(J,chBoxGeo(),CM(Z.c2||'#ffffff'),fx,fy+.06,fz+.13,.05,.02,.07,-.5); for(const [dx,dz] of [[-.06,.1],[.06,.1],[-.06,-.08],[.06,-.08]]) add(J,chDiscGeo(.015,.03),CM('#2a2226'),fx+dx,fy-.125,fz+dz); },
+  payaso(X){ const {add,J,fx,fy,fz,m}=X; add(J,chSph(),m,fx,fy+.0,fz+.12,.18,.12,.2); },
+  pantuani(X){ const {add,J,fx,fy,fz,CM,Z}=X, e=Z.ear, m2=CM(Z.c2||'#ffffff');
+    if(e==='oso'||e==='panda') for(const s of [-1,1]) add(J,chSph(),e==='panda'?CM('#2a2226'):X.m,fx+s*.08,fy+.14,fz+.02,.045,.045,.03);
+    else if(e==='gato') for(const s of [-1,1]) add(J,chConeG(.04,.08),X.m,fx+s*.07,fy+.17,fz+.02,1,1,.5,0,0,-s*.3);
+    else if(e==='dino') for(let i=0;i<3;i++) add(J,chConeG(.025,.06),m2,fx,fy+.15,fz+.08-i*.08,.5,1,1);
+    else if(e==='rana') for(const s of [-1,1]){ add(J,chSph(),X.m,fx+s*.06,fy+.14,fz+.1,.045,.045,.045); add(J,chSph(),CM('#2a2226'),fx+s*.06,fy+.15,fz+.14,.02,.02,.01); }
+    else if(e==='unicornio') add(J,chConeG(.02,.09),CM('#f2c230',{emi:'#3a2a00'}),fx,fy+.16,fz+.14,1,1,1,.4,0,0);
+    add(J,chSph(),CM('#2a2226'),fx-.04,fy+.08,fz+.19,.012,.012,.008); add(J,chSph(),CM('#2a2226'),fx+.04,fy+.08,fz+.19,.012,.012,.008); },
+  zueco(X){ const {add,J,fx,fy,fz,CM}=X; for(const [dx,dz] of [[-.05,.12],[.05,.12],[0,.06],[-.06,.02],[.06,.02]]) add(J,chSph(),CM('#ffffff'),fx+dx,fy+.08,fz+dz,.018,.012,.018); },
+  botaalta(X){ const {add,J,m}=X; add(J,chTubeGeo(.14,.138,.16),m,0,-.05,0); add(J,chRingGeo(.138,.016),m,0,.03,0,1,1,1,Math.PI/2); },
+  bota2(X){ const {add,J,m,CM,Z}=X; add(J,chTubeGeo(.14,.138,.11),m,0,-.075,0); add(J,chRingGeo(.138,.016),CM(Z.c2||'#ffffff'),0,-.02,0,1,1,1,Math.PI/2); },
+  converse(X){ const {add,J,fx,fy,fz,m,CM,Z}=X; add(J,chTubeGeo(.14,.138,.09),m,0,-.08,0); add(J,chSph(),CM(Z.c2||'#ffffff'),fx,fy-.02,fz+.15,.1,.06,.06); add(J,chBoxGeo(),CM('#ffffff'),fx,fy+.07,fz+.1,.04,.02,.08,-.5); } };
 // arma la ropa del Chibi; cada pieza se anota en "list" para quitarla al cambiarse
 function chibiClothes(o,eq,list,X){ const u=o.userData, C=X?{g:X.torso}:u.ch; if(!C) return; const CM=X?X.mat:chClothMat, SG=X?X.shell:chShellGeo; const it=k=>eq && SHOP_BY[eq[k]] ? SHOP_BY[eq[k]] : null;
   const add=(par,geo,mat,x,y,z,sx=1,sy=1,sz=1,rx=0,ry=0,rz=0)=>{ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.rotation.set(rx,ry,rz); m.castShadow=true; m.receiveShadow=true; par.add(m); list.push(m); return m; };
@@ -3625,8 +3888,8 @@ function chibiClothes(o,eq,list,X){ const u=o.userData, C=X?{g:X.torso}:u.ch; if
     if(k!=='dress') add(C.g,chRingGeo(.305,.018),m2,0,TY+y0+.005,0,1,ZS,1,Math.PI/2);   // dobladillo
     const sleeve=(long)=>arms.forEach(a=>{ add(up(a),chTubeGeo(.118,.112,long?.17:.12),m,0,long?-.075:-.055,0); add(up(a),chRingGeo(.112,.012),m2,0,long?-.155:-.115,0,1,1,1,Math.PI/2);
       if(long){ add(low(a),chTubeGeo(.122,.118,.14),m,0,-.06,0); add(low(a),chRingGeo(.12,.014),m2,0,-.13,0,1,1,1,Math.PI/2); } });
-    sleeve(k==='long'||k==='hood'||k==='blazer'||k==='cat');
-    if(k==='hood'||k==='cat'){ add(C.g,chSph(),m2,0,TY+.36,-.225,.23,.14,.075,-.25);   // capucha caída atrás
+    if(!CH_TOP_NOSLV.has(k)) sleeve(k==='long'||k==='hood'||k==='blazer'||k==='cat'||CH_TOP_LONG.has(k));
+    if(k==='hood'||k==='cat'||k==='hoodear'||k==='raincoat'){ add(C.g,chSph(),m2,0,TY+.36,-.225,.23,.14,.075,-.25);   // capucha caída atrás
       add(C.g,chBoxGeo(),m2,0,TY+.17,.265,.26,.1,.02);   // bolsa de canguro
       if(k==='cat') add(C.g,new THREE.PlaneGeometry(.2,.2),chCatPrintMat(T.c),0,TY+.31,.275,1,1,1,-.2); }
     if(k==='dress') add(C.g,chConeGeo([[.29,.2],[.36,.08],[.45,-.06],[.47,-.08]]),m,0,TY,0,1,1,ZS);
@@ -3636,31 +3899,36 @@ function chibiClothes(o,eq,list,X){ const u=o.userData, C=X?{g:X.torso}:u.ch; if
     if(k==='blazer'){ add(C.g,chBoxGeo(),CM('#ffffff'),0,TY+.39,.232,.14,.12,.02,-.25); add(C.g,chBoxGeo(),CM(T.c2),0,TY+.32,.25,.045,.2,.015,-.12);
       for(const s of [-1,1]) add(C.g,chSph(),CM('#e8c45a'),s*.07,TY+.18,.278,.018,.018,.008); }
     if(k==='long' && T.knit) add(C.g,chRingGeo(.17,.025),m,0,TY+.49,0,1,ZS,1,Math.PI/2);   // cuello del suéter
+    if(CH_TOP2[k]) CH_TOP2[k]({add,C,CM,T,TY,ZS,arms,up,low});   // v191
   }
   // --- abajo ---
   const B=it('cbot');
   if(B){ const m=CM(B.c,B.pat,B.c2,{rep:B.rep}), k=B.bk;
-    if(k==='shorts'||k==='pants'||k==='overall'){ add(C.g,SG(0,.17,1.06,true),m,0,TY,0,1,1,ZS);
-      legs.forEach(l=>{ add(up(l),chTubeGeo(.15,.142,.13),m,0,-.06,0); if(k!=='shorts'){ add(low(l),chTubeGeo(.142,.138,.12),m,0,-.05,0); add(low(l),chRingGeo(.138,.012),m,0,-.11,0,1,1,1,Math.PI/2); }
+    if(k==='shorts'||k==='pants'||k==='overall'||CH_BOT_PANTS.has(k)){ add(C.g,SG(0,.17,1.06,true),m,0,TY,0,1,1,ZS);
+      legs.forEach(l=>{ add(up(l),chTubeGeo(.15,.142,.13),m,0,-.06,0); if(!CH_BOT_SHORT.has(k)){ add(low(l),chTubeGeo(.142,.138,.12),m,0,-.05,0); add(low(l),chRingGeo(.138,.012),m,0,-.11,0,1,1,1,Math.PI/2); }
         else add(up(l),chRingGeo(.142,.012),m,0,-.125,0,1,1,1,Math.PI/2); });
       if(B.stripe) legs.forEach(l=>{ const s=l.userData.side, w=CM(B.stripe); add(up(l),chBoxGeo(),w,s*.148,-.06,0,.006,.13,.04); add(low(l),chBoxGeo(),w,s*.142,-.05,0,.006,.12,.04); });
       if(k==='overall'){ add(C.g,chBoxGeo(),m,0,TY+.25,.266,.26,.18,.02); for(const s of [-1,1]){ add(C.g,chBoxGeo(),m,s*.1,TY+.38,.22,.045,.2,.02,-.45); add(C.g,chSph(),CM('#e8c45a'),s*.1,TY+.31,.272,.018,.018,.008); } } }
     else if(k==='skirt') add(C.g,chConeGeo([[.32,.2],[.38,.1],[.43,-.02],[.435,-.03]]),m,0,TY,0,1,1,ZS);
+    else if(k==='skirtlong') add(C.g,chConeGeo([[.32,.2],[.39,.06],[.47,-.16],[.475,-.17]]),m,0,TY,0,1,1,ZS);
     else if(k==='tutu'){ add(C.g,SG(0,.16,1.05,true),CM(B.c2),0,TY,0,1,1,ZS); for(let i=0;i<3;i++) add(C.g,chConeGeo([[.3,.12],[.42+i*.03,.08-i*.02],[.55+i*.03,.05-i*.03]]),m,0,TY-.03*i,0,1,1,ZS); }
+    if(CH_BOT2[k]) CH_BOT2[k]({add,C,CM,B,TY,legs,up,low});   // v191
   }
   // --- zapatos ---
   const Z=it('cshoe');
   if(Z){ const m=CM(Z.c,Z.pat,Z.c2), sole=CM(Z.sole||'#f4f1ea',null,null,{emi:Z.emi}), k=Z.sk;
     legs.forEach(l=>{ const J=X?X.foot.get(l):low(l), f=X?X.footPos:l.userData.foot; if(!f) return; const fx=f.position.x, fy=f.position.y, fz=f.position.z;
-      const big=k==='pantufla'||k==='nieve'?1.18:1;
-      add(J,chSph(),m,fx,fy+.008,fz+.005,.155*big,.125*big,.198*big);
-      if(k!=='pantufla' && k!=='ballet') add(J,chCylGeo(),sole,fx,fy-.1,fz+.008,.142,.03,.18);
+      const big=k==='pantufla'||k==='nieve'||k==='pantuani'?1.18:1;
+      if(!CH_SHOE_NOBODY.has(k)) add(J,chSph(),m,fx,fy+.008,fz+.005,.155*big,.125*big,.198*big);
+      if(k!=='pantufla' && k!=='ballet' && k!=='pantuani' && !CH_SHOE_NOBODY.has(k)) add(J,chCylGeo(),sole,fx,fy-.1,fz+.008,.142,.03,.18);
       if(k==='tenis'||k==='luces'){ add(J,chBoxGeo(),CM(Z.c2||'#ffffff'),fx,fy+.06,fz+.13,.05,.02,.07,-.5); }
       if(k==='bota'||k==='lluvia'||k==='nieve'||k==='vaquera'){ add(J,chTubeGeo(.14,.138,.11),m,0,-.075,0); add(J,chRingGeo(.138,.016),k==='nieve'?CM('#ffffff'):m,0,-.02,0,1,1,1,Math.PI/2); }
       if(k==='vaquera') add(J,chBoxGeo(),CM('#5a3a20'),fx,fy-.085,fz-.12,.06,.05,.04);
       if(k==='pantufla') for(const s of [-1,1]) add(J,chSph(),CM('#ffffff'),fx+s*.05,fy+.16,fz+.06,.035,.09,.025,-.3,0,s*.25);
       if(k==='ballet') add(J,chRingGeo(.123,.01),CM(Z.c2||'#f7a6c4'),0,-.09,0,1,1,1,Math.PI/2);
-      if(k==='zapato') add(J,chBoxGeo(),CM(Z.c2||'#2a2226'),fx,fy+.075,fz+.06,.13,.02,.02,-.3); });
+      if(k==='zapato') add(J,chBoxGeo(),CM(Z.c2||'#2a2226'),fx,fy+.075,fz+.06,.13,.02,.02,-.3);
+      if(CH_SHOE2[k]) CH_SHOE2[k]({add,J,fx,fy,fz,m,sole,CM,Z});   // v191
+    });
   }
   if(!X) chibiHatAcc(o,eq,list,C,add);   // v155: gorros y accesorios
 }
@@ -3675,11 +3943,133 @@ function chShapeGeo(kind){ const k='shp'+kind; if(CH_CG[k]) return CH_CG[k]; con
   else if(kind==='star'){ for(let i=0;i<10;i++){ const a=Math.PI/2+i*Math.PI/5, r=i%2?.035:.08; i?s.lineTo(Math.cos(a)*r,Math.sin(a)*r):s.moveTo(Math.cos(a)*r,Math.sin(a)*r); } }
   else if(kind==='wing'){ s.moveTo(0,0); s.bezierCurveTo(.12,.18,.34,.2,.36,.06); s.bezierCurveTo(.36,-.04,.2,-.06,0,0); }
   return CH_CG[k]=new THREE.ExtrudeGeometry(s,{depth:.012, bevelEnabled:false, curveSegments:10}); }
+// ---------- v190: 100 gorros y 100 accesorios nuevos para el Chibi y el Amigurumi (se arman con las mismas figuritas) ----------
+// X: g (cabeza), gb (cuerpo), add, M(color), a/b (materiales del color 1 y 2), H y RX/RY/RZ (cabeza), dome(t,escala), piv (pieza que se mece), hand (la mano)
+const CH_GLASS=(c,op)=>CH_CMAT['vid|'+c+op]||(CH_CMAT['vid|'+c+op]=new THREE.MeshStandardMaterial({color:new THREE.Color(c).convertSRGBToLinear(), transparent:true, opacity:op, roughness:.08, metalness:.1, depthWrite:false}));
+const CH_GOLD=X=>X.M('#f2c230',{emi:'#3a2a00'}), CH_SILVER=X=>X.M('#c9ced8',{emi:'#20242c'});
+const CH_HATS2={
+  gorrareves(X){ const {g,add,a,b,H,RY,RZ}=X; X.dome(.4); add(g,chSph(),a,0,H+.2,-RZ*1.0,.3,.025,.22,-.15); add(g,chSph(),b,0,H+RY*1.11,0,.04,.03,.04); },
+  astro(X){ const {g,add,a,b,H,RX,RY}=X; add(g,chSph(),CH_GLASS('#cfe9ff',.3),0,H+.02,0,RX*1.28,RY*1.4,RX*1.28); add(g,chRingGeo(.5,.07),a,0,H-RY*.98,0,1,1,1,Math.PI/2);
+    add(g,chDiscGeo(.025,.25),b,.32,H+RY*1.35,0,1,1,1,0,0,-.3); add(g,chSph(),X.M('#ff5d6c',{emi:'#601010'}),.37,H+RY*1.55,0,.05,.05,.05); },
+  bombero(X){ const {g,add,a,H,RY,RZ}=X; X.dome(.42,1.13); add(g,chSph(),a,0,H+RY*.32,-RZ*.75,.62,.06,.55); add(g,chBoxGeo(),a,0,H+RY*1.12,0,.07,.08,RZ*1.5);
+    add(g,chShapeGeo('star'),CH_GOLD(X),0,H+RY*.75,RZ*1.07,1.8,1.8,1.4,-.35,0,0); },
+  obra(X){ const {g,add,a,H,RX,RY}=X; X.dome(.4,1.12); add(g,chDiscGeo(RX*1.18,.03),a,0,H+RY*.48,0,1,1,1); add(g,chBoxGeo(),a,0,H+RY*1.13,0,.06,.06,.9); },
+  chef(X){ const {g,add,b,H,RY}=X, w=X.M('#ffffff'); add(g,chTubeGeo(.6,.63,.24),w,0,H+RY*.72,0,1,1,.9); add(g,chSph(),w,0,H+RY*1.4,0,.44,.32,.42);
+    for(const [x,z] of [[.3,0],[-.3,0],[0,.27],[0,-.27]]) add(g,chSph(),w,x,H+RY*1.22,z,.3,.27,.3); },
+  pirata(X){ const {g,add,a,H,RY}=X, w=X.M('#ffffff'); X.dome(.36,1.12); add(g,chSph(),a,0,H+RY*1.0,0,1.0,.36,.24); add(g,chSph(),w,0,H+RY*1.1,.21,.08,.08,.03);
+    for(const s of [-1,1]) add(g,chBoxGeo(),w,0,H+RY*.96,.215,.2,.025,.01,0,0,s*.6); },
+  vaquero(X){ const {g,add,a,b,H,RY}=X; add(g,chDiscGeo(.95,.025),a,0,H+RY*.62,0,1,1,.9); for(const s of [-1,1]) add(g,chSph(),a,s*.83,H+RY*.72,0,.17,.1,.62,0,0,s*.5);
+    add(g,chDiscGeo(.36,.42),a,0,H+RY*.98,0,1,1,.85); add(g,chTubeGeo(.365,.365,.08),b,0,H+RY*.73,0,1,1,.85); add(g,chSph(),a,0,H+RY*1.35,0,.22,.06,.18); },
+  gato(X){ const {g,add,a,b,H,RX,RY}=X; add(g,chArcGeo(RX*1.02,.03),a,0,H+RY*.1,0,1,RY*1.02/RX,1); for(const s of [-1,1]){ add(g,chConeG(.15,.28),a,s*.36,H+RY*1.0,0,1,1,.45,0,0,-s*.42); add(g,chConeG(.09,.17),b,s*.36,H+RY*.99,.035,1,1,.3,0,0,-s*.42); } },
+  conejo(X){ const {g,add,a,b,H,RX,RY}=X; add(g,chArcGeo(RX*1.02,.03),a,0,H+RY*.1,0,1,RY*1.02/RX,1); for(const s of [-1,1]){ add(g,chSph(),a,s*.2,H+RY*1.55,0,.1,.36,.06,0,0,-s*.18); add(g,chSph(),b,s*.2,H+RY*1.55,.03,.06,.28,.04,0,0,-s*.18); } },
+  oso(X){ const {g,add,a,b,H,RX,RY}=X; add(g,chArcGeo(RX*1.02,.03),a,0,H+RY*.1,0,1,RY*1.02/RX,1); for(const s of [-1,1]){ add(g,chSph(),a,s*.42,H+RY*.97,0,.16,.16,.09); add(g,chSph(),b,s*.42,H+RY*.97,.05,.09,.09,.05); } },
+  dino(X){ const {g,add,a,b,H,RY,RZ}=X; X.dome(.44,1.12); for(let i=0;i<6;i++){ const t=-.55+i*.26, s=.13-Math.abs(t)*.06; add(g,chConeG(s,s*1.8),b,0,H+RY*1.12*Math.cos(t)+s*.5,RZ*1.12*Math.sin(t),.35,1,1,t,0,0); } },
+  unicornio(X){ const {g,add,a,b,H,RY,RZ}=X; X.dome(.44,1.12); add(g,chConeG(.08,.42),CH_GOLD(X),0,H+RY*1.22,.25,1,1,1,.5,0,0);
+    for(const s of [-1,1]) add(g,chConeG(.1,.2),a,s*.33,H+RY*1.02,0,1,1,.5,0,0,-s*.4);
+    ['#ff9ad5','#ffd23f','#7fd0ff','#b392e8','#7ed957'].forEach((c,i)=>add(g,chSph(),X.M(c),0,H+RY*(1.1-i*.22),-RZ*(.55+i*.13),.13,.11,.13)); },
+  pollito(X){ const {g,add,a,H,RY,RZ}=X, k=X.M('#1a1416'); X.dome(.44,1.12); add(g,chConeG(.07,.16),X.M('#ff9a3c'),0,H+RY*.82,RZ*1.1,1,1,.7,Math.PI/2,0,0);
+    for(const s of [-1,1]) add(g,chSph(),k,s*.15,H+RY*.98,RZ*.88,.035,.04,.02); for(const s of [-1,0,1]) add(g,chSph(),a,s*.06,H+RY*1.2,0,.05,.12,.04,0,0,s*.4); },
+  tiburon(X){ const {g,add,a,H,RY,RZ}=X, w=X.M('#ffffff'); X.dome(.44,1.12); add(g,chConeG(.2,.38),a,0,H+RY*1.28,-.05,.3,1,1.1,-.2,0,0);
+    for(let i=0;i<9;i++){ const t=-1.1+i*.275; add(g,chConeG(.035,.08),w,Math.sin(t)*.66,H+RY*.32,Math.cos(t)*.6,1,1,1,Math.PI,0,0); } },
+  duende(X){ const {g,add,a,b,H,RY}=X; add(g,chConeG(.42,.95),a,0,H+RY*1.4,-.04,1,1,.9,-.18,0,0); add(g,chRingGeo(.42,.06),b,0,H+RY*.72,0,1,.92,1,Math.PI/2); add(g,chSph(),CH_GOLD(X),0,H+RY*2.15,-.2,.07,.07,.07); },
+  reno(X){ const {g,add,a,H,RX,RY}=X, br=X.M('#8a5a34'); add(g,chArcGeo(RX*1.02,.03),a,0,H+RY*.1,0,1,RY*1.02/RX,1);
+    for(const s of [-1,1]){ add(g,chCylGeo(),br,s*.3,H+RY*1.2,0,.035,.4,.035,0,0,-s*.35); add(g,chCylGeo(),br,s*.44,H+RY*1.42,0,.03,.22,.03,0,0,-s*1.0); add(g,chCylGeo(),br,s*.28,H+RY*1.5,0,.03,.18,.03,0,0,s*.5); } },
+  bebe(X){ const {g,add,a,b,H,RY,RZ}=X; X.dome(.52,1.14); add(g,chRingGeo(.6,.05),b,0,H+.02,RZ*.45,1,1.05,1,0,0,0); for(const s of [-1,1]) add(g,chSph(),b,s*.1,H-RY*.9,RZ*.62,.09,.06,.05,0,0,s*.5); },
+  tiara(X){ const {g,add,b,H,RX,RY,RZ}=X, gd=X.hat.c==='#c9ced8'?CH_SILVER(X):CH_GOLD(X); add(g,chArcGeo(RX*1.0,.025),gd,0,H+RY*.15,-.02,1,RY*1.0/RX,1,-.25,0,0);
+    for(let i=-2;i<=2;i++) add(g,chConeG(.045,.12-Math.abs(i)*.02),gd,i*.11,H+RY*.98-Math.abs(i)*.03,RZ*.6,1,1,1,-.3,0,0); add(g,chSph(),b,0,H+RY*.92,RZ*.68,.045,.045,.03); },
+  vikingo(X){ const {g,add,a,b,H,RY}=X, iv=X.M('#f4ead2'); X.dome(.44,1.12); add(g,chRingGeo(.64,.05),b,0,H+RY*.3,0,1,.92,1,Math.PI/2);
+    for(const s of [-1,1]) add(g,chConeG(.09,.42),iv,s*.66,H+RY*.88,0,1,1,1,0,0,-s*1.05); },
+  mago(X){ const {g,add,a,H,RY}=X, gd=CH_GOLD(X); add(g,chDiscGeo(.85,.02),a,0,H+RY*.66,0,1,1,.92); add(g,chConeG(.42,1.0),a,0,H+RY*1.5,0,1,1,.9,-.05,0,0);
+    [[.1,1.25,.3],[-.14,1.6,.22],[.06,1.95,.12]].forEach(([x,y,z])=>add(g,chShapeGeo('star'),gd,x,H+RY*y,z,1.6,1.6,1.2,-.3,0,0)); },
+  casco(X){ const {g,add,a,b,H,RY,RZ}=X; X.dome(.38,1.18); for(const x of [-.18,0,.18]) add(g,chBoxGeo(),b,x,H+RY*1.16,0,.06,.05,.95); add(g,chSph(),a,0,H+RY*.5,RZ*1.12,.36,.03,.16,.2,0,0); },
+  aviador(X){ const {g,add,a,H,RY,RZ}=X, br=X.M('#3a2a20'), gl=CH_GLASS('#9fd8ff',.6); X.dome(.47,1.12); add(g,chRingGeo(.67,.04),br,0,H+RY*.62,0,1,.92,1,Math.PI/2+.25);
+    for(const s of [-1,1]){ add(g,chRingGeo(.1,.03),br,s*.14,H+RY*.78,RZ*1.02,1,1,1,-.4,0,0); add(g,chDiscGeo(.09,.02),gl,s*.14,H+RY*.78,RZ*1.03,1,1,1,Math.PI/2-.4,0,0); } },
+  solero(X){ const {g,add,a,b,H,RY}=X; add(g,chDiscGeo(1.02,.025),a,0,H+RY*.6,0,1,1,.92); X.dome(.32,1.13); add(g,chRingGeo(.47,.035),b,0,H+RY*.72,0,1,.88,1,Math.PI/2);
+    add(g,chSph(),X.M('#ffd23f'),.38,H+RY*.85,.3,.07,.07,.05); for(let i=0;i<6;i++){ const t=i/6*Math.PI*2; add(g,chSph(),b,.38+Math.cos(t)*.1,H+RY*.85+Math.sin(t)*.1,.29,.07,.05,.03,0,0,t); } },
+  hongo(X){ const {g,add,a,b,H,RX,RY,RZ}=X; add(g,chDomeGeo(.5),a,0,H+RY*.5,0,RX*1.45,RY*.95,RZ*1.45);
+    [[0,1.0,0,.12],[.45,.7,.25,.09],[-.42,.75,.2,.1],[.2,.82,-.4,.08],[-.3,.7,-.38,.09],[.05,.62,.55,.08]].forEach(([x,y,z,r])=>add(g,chSph(),b,x,H+RY*.5+y*RY*.95*.96,z,r,r*.45,r)); },
+  graduacion(X){ const {g,add,a,H,RY}=X; X.dome(.32,1.12); add(g,chBoxGeo(),a,0,H+RY*1.05,0,.95,.04,.95,0,Math.PI/4,0); add(g,chSph(),a,0,H+RY*1.09,0,.04,.03,.04);
+    const p=X.piv(g,.32,H+RY*1.07,.32,0,0,2.4); add(p,chCylGeo(),CH_GOLD(X),0,-.12,0,.012,.24,.012); add(p,chSph(),CH_GOLD(X),0,-.26,0,.04,.06,.04); },
+  antenas(X){ const {g,add,a,b,H,RX,RY}=X; add(g,chArcGeo(RX*1.02,.03),a,0,H+RY*.1,0,1,RY*1.02/RX,1);
+    for(const s of [-1,1]){ const p=X.piv(g,s*.22,H+RY*1.0,0,0,-s*.3,3.2); add(p,chCylGeo(),a,0,.17,0,.018,.34,.018); add(p,chSph(),b,0,.36,0,.07,.07,.07); } },
+  pescador(X){ const {g,add,a,b,H,RY}=X; X.dome(.38,1.12); add(g,chTubeGeo(.95,.7,.16),a,0,H+RY*.48,0,1,1,.92); add(g,chRingGeo(.64,.03),b,0,H+RY*.6,0,1,.9,1,Math.PI/2); },
+  policia(X){ const {g,add,a,H,RY,RZ}=X; add(g,chTubeGeo(.6,.62,.2),a,0,H+RY*.72,0,1,1,.9); add(g,chSph(),a,0,H+RY*1.0,0,.72,.14,.7); add(g,chSph(),X.M('#1a1416'),0,H+RY*.62,RZ*1.02,.32,.03,.16,.2,0,0);
+    add(g,chShapeGeo('star'),CH_GOLD(X),0,H+RY*.85,RZ*1.02,1.5,1.5,1.2,-.2,0,0); },
+  diadema(X){ const {g,add,a,b,H,RX,RY}=X; add(g,chArcGeo(RX*1.02,.035),a,0,H+RY*.1,0,1,RY*1.02/RX,1); const x=RX*.55, y=H+RY*.95;
+    for(const s of [-1,1]) add(g,chSph(),b,x+s*.11,y,.08,.12,.08,.05,0,0,s*.45); add(g,chSph(),b,x,y,.1,.05,.05,.05); },
+  helado(X){ const {g,add,a,H,RY,RZ}=X; X.dome(.44,1.12); for(let i=0;i<10;i++){ const t=i/10*Math.PI*2; add(g,chSph(),a,Math.sin(t)*.66,H+RY*.32-(i%3)*.04,Math.cos(t)*.6,.09,.13+(i%3)*.03,.09); }
+    add(g,chSph(),X.M('#d8283a'),0,H+RY*1.22,0,.1,.1,.1); add(g,chCylGeo(),X.M('#4a7a2a'),.03,H+RY*1.38,0,.012,.14,.012,0,0,-.4);
+    ['#ffd23f','#7fd0ff','#7ed957','#ffffff','#b392e8'].forEach((c,i)=>{ const t=i*1.3; add(g,chBoxGeo(),X.M(c),Math.sin(t)*.4,H+RY*(1.0-i*.04),Math.cos(t)*.36,.05,.015,.015,0,t,0); }); },
+  pastel(X){ const {g,add,a,b,H,RY}=X; add(g,chDiscGeo(.5,.22),a,0,H+RY*1.0,0,1,1,.95); add(g,chDiscGeo(.34,.18),b,0,H+RY*1.0+.2,0,1,1,.95);
+    add(g,chDiscGeo(.025,.18),X.M('#7fd0ff'),0,H+RY*1.0+.38,0); add(g,chSph(),X.M('#ffb23f',{emi:'#ff7a00'}),0,H+RY*1.0+.5,0,.035,.06,.035);
+    for(let i=0;i<10;i++){ const t=i/10*Math.PI*2; add(g,chSph(),X.M('#ffffff'),Math.sin(t)*.5,H+RY*1.0+.11,Math.cos(t)*.47,.06,.05,.06); } },
+  calabaza(X){ const {g,add,a,H,RY}=X; for(let i=0;i<8;i++){ const t=i/8*Math.PI*2; add(g,chSph(),a,Math.sin(t)*.32,H+RY*.95,Math.cos(t)*.3,.3,.32,.3); } add(g,chSph(),a,0,H+RY*1.05,0,.4,.3,.4);
+    add(g,chCylGeo(),X.M('#4a7a2a'),0,H+RY*1.55,0,.05,.18,.05,0,0,.2); },
+  pompones(X){ const {g,add,a,b,H,RX,RY}=X; X.dome(.44,1.12); add(g,chRingGeo(RX*1.06,.05),b,0,H+RY*.27,0,1,X.RZ/RX,1,Math.PI/2); for(const s of [-1,1]) add(g,chSph(),b,s*.38,H+RY*1.08,0,.13,.13,.13); },
+  sombrero(X){ const {g,add,a,b,H,RY}=X; add(g,chDiscGeo(1.15,.03),a,0,H+RY*.62,0,1,1,1); add(g,chRingGeo(1.1,.05),b,0,H+RY*.65,0,1,1,1,Math.PI/2);
+    add(g,chConeG(.38,.55),a,0,H+RY*1.05,0,1,1,1); add(g,chRingGeo(.33,.04),b,0,H+RY*.88,0,1,1,1,Math.PI/2); } };
+const CH_ACC2={
+  pcorazon(X){ const {g,add,a,H,RX,RY}=X; add(g,chShapeGeo('heart'),a,RX*.62,H+RY*.75,.24,1.8,1.8,2,-.2,.5,-.2); },
+  florpelo(X){ const {g,add,a,b,H,RX,RY}=X, x=RX*.72, y=H+RY*.55, z=.32; add(g,chSph(),b,x,y,z,.07,.07,.05); for(let i=0;i<6;i++){ const t=i/6*Math.PI*2; add(g,chSph(),a,x+Math.cos(t)*.1,y+Math.sin(t)*.1,z-.01,.08,.055,.035,0,.4,t); } },
+  halo(X){ const {g,add,H,RY}=X; const p=X.piv(g,0,H+RY*1.32,0,0,0,1.2); add(p,chRingGeo(.32,.035),X.it.c==='#c9ced8'?CH_SILVER(X):X.M('#ffe27a',{emi:'#a07a00'}),0,0,0,1,1,1,Math.PI/2); },
+  fresas(X){ const {g,add,H,RX,RY}=X, r=X.M('#e5334b'), v=X.M('#4fa83a'); for(const s of [-1,1]){ const x=s*RX*.62, y=H+RY*.7; add(g,chSph(),r,x,y,.22,.07,.09,.06); add(g,chConeG(.05,.04),v,x,y+.08,.22,1,1,1); } },
+  cuernitos(X){ const {g,add,a,H,RY}=X; for(const s of [-1,1]) add(g,chConeG(.06,.18),a,s*.3,H+RY*1.04,.05,1,1,1,0,0,-s*.35); },
+  sol(X){ const {g,add,a,b,EY,ex,EZ,RX}=X, gl=CH_GLASS(X.it.c2||'#1a1416',.85); for(const s of [-1,1]){ add(g,chDiscGeo(.11,.02),gl,s*ex,EY,EZ+.01,1,1,.85,Math.PI/2,s*.36,0); add(g,chRingGeo(.11,.014),a,s*ex,EY,EZ+.01,1,.85,1,0,s*.36,0); add(g,chBoxGeo(),a,s*RX*.86,EY+.02,.2,.012,.012,.42,0,s*.12,0); } add(g,chBoxGeo(),a,0,EY+.03,EZ+.04,.14,.014,.014); },
+  lestrella(X){ const {g,add,a,EY,ex,EZ,RX}=X; for(const s of [-1,1]){ add(g,chShapeGeo('star'),a,s*ex,EY,EZ+.02,2.4,2.4,1,0,s*.36,0); add(g,chBoxGeo(),a,s*RX*.86,EY+.02,.2,.012,.012,.42,0,s*.12,0); } add(g,chBoxGeo(),a,0,EY+.03,EZ+.04,.14,.012,.012); },
+  antifaz(X){ const {g,add,a,EY,ex,EZ}=X; add(g,chBoxGeo(),a,0,EY,EZ-.01,.62,.11,.05); for(const s of [-1,1]) add(g,chSph(),a,s*ex,EY,EZ,.13,.09,.03,0,s*.36,0);
+    for(const s of [-1,1]) add(g,chSph(),X.M('#ffffff'),s*ex,EY,EZ+.025,.06,.035,.01,0,s*.36,0); },
+  parche(X){ const {g,add,a,H,EY,ex,EZ,RX,RY}=X; add(g,chSph(),a,ex,EY,EZ+.01,.1,.09,.025,0,.36,0); add(g,chArcGeo(RX*1.02,.012),a,0,H,0,1,RY*1.02/RX,1,0,0,-.55); },
+  bigote(X){ const {g,add,a,H,EZ}=X, y=H-.27; for(const s of [-1,1]){ add(g,chSph(),a,s*.07,y,EZ-.03,.08,.035,.03,0,s*.2,-s*.25); add(g,chSph(),a,s*.15,y+.02,EZ-.06,.04,.03,.025,0,s*.4,-s*.6); } },
+  monoculo(X){ const {g,add,EY,ex,EZ}=X, gd=CH_GOLD(X); add(g,chRingGeo(.11,.016),gd,ex,EY,EZ+.01,1,1,1,0,.36,0); add(g,chDiscGeo(.1,.01),CH_GLASS('#e8f4ff',.35),ex,EY,EZ+.01,1,1,1,Math.PI/2,.36,0);
+    const p=X.piv(g,ex+.05,EY-.1,EZ,0,0,2); add(p,chCylGeo(),gd,0,-.12,0,.006,.24,.006); },
+  goggles(X){ const {g,add,a,EY,ex,EZ,RX}=X, gl=CH_GLASS('#7fd0ff',.5); for(const s of [-1,1]){ add(g,chRingGeo(.1,.028),a,s*ex,EY,EZ+.015,1,.8,1,0,s*.36,0); add(g,chDiscGeo(.09,.015),gl,s*ex,EY,EZ+.015,1,1,.8,Math.PI/2,s*.36,0); }
+    add(g,chRingGeo(RX*1.0,.02),a,0,EY,0,1,.9,1,Math.PI/2); },
+  l3d(X){ const {g,add,EY,ex,EZ,RX}=X, w=X.M('#ffffff'); [[-1,'#e5334b'],[1,'#3a8ae8']].forEach(([s,c])=>{ add(g,chBoxGeo(),CH_GLASS(c,.75),s*ex,EY,EZ+.01,.2,.14,.01,0,s*.36,0); add(g,chBoxGeo(),w,s*RX*.86,EY+.02,.2,.012,.02,.42,0,s*.12,0); }); add(g,chBoxGeo(),w,0,EY+.03,EZ+.04,.1,.03,.015); },
+  payaso(X){ const {g,add,H,EZ}=X; add(g,chSph(),X.M('#e5233a',{emi:'#300000'}),0,H-.17,EZ+.02,.09,.09,.08); },
+  cuadrados(X){ const {g,add,a,EY,ex,EZ,RX}=X; for(const s of [-1,1]){ for(const [dx,dy,w,h] of [[0,.075,.2,.02],[0,-.075,.2,.02],[-.1,0,.02,.17],[.1,0,.02,.17]]) add(g,chBoxGeo(),a,s*ex+dx,EY+dy,EZ+.01,w,h,.02,0,s*.36,0); add(g,chBoxGeo(),a,s*RX*.86,EY+.02,.2,.012,.012,.42,0,s*.12,0); } add(g,chBoxGeo(),a,0,EY+.03,EZ+.04,.12,.014,.014); },
+  corbatin(X){ const {gb,add,a,b}=X; for(const s of [-1,1]) add(gb,chConeG(.06,.12),a,s*.07,.79,.27,1,1,.5,0,0,s*Math.PI/2); add(gb,chSph(),b,0,.79,.28,.03,.03,.025); },
+  corbata(X){ const {gb,add,a,b}=X; add(gb,chSph(),a,0,.79,.27,.04,.035,.03); add(gb,chBoxGeo(),a,0,.62,.29,.08,.3,.02,-.12,0,0); add(gb,chConeG(.06,.08),a,0,.45,.31,1,1,.3,Math.PI,0,0); add(gb,chBoxGeo(),b,0,.66,.3,.082,.02,.022,-.12,0,0); },
+  perlas(X){ const {gb,add}=X, w=X.M('#fbf6ee',{emi:'#1a1a1a'}); for(let i=0;i<16;i++){ const t=i/16*Math.PI*2; add(gb,chSph(),w,Math.sin(t)*.25,.77-Math.max(0,Math.cos(t))*.06,Math.cos(t)*.25,.03,.03,.03); } },
+  lei(X){ const {gb,add}=X, C=X.it.c2==='multi'?['#ff9ad5','#ffd23f','#ffffff','#b392e8','#ff7a5a']:[X.it.c,'#ffffff']; for(let i=0;i<18;i++){ const t=i/18*Math.PI*2; add(gb,chSph(),X.M(C[i%C.length]),Math.sin(t)*.27,.76-Math.max(0,Math.cos(t))*.1,Math.cos(t)*.27,.05,.04,.05); } },
+  medalla(X){ const {gb,add,a}=X, r=X.M('#d8394a'), bl=X.M('#3a6ae8'); add(gb,chBoxGeo(),r,-.05,.7,.27,.05,.18,.01,-.1,0,.3); add(gb,chBoxGeo(),bl,.05,.7,.27,.05,.18,.01,-.1,0,-.3);
+    add(gb,chDiscGeo(.07,.02),X.M(X.it.c,{emi:'#2a2000'}),0,.58,.29,1,1,1,Math.PI/2-.1,0,0); add(gb,chShapeGeo('star'),X.M('#ffffff'),0,.58,.3,.8,.8,1,-.1,0,0); },
+  panuelo(X){ const {gb,add,a,b}=X; add(gb,chRingGeo(.25,.04),a,0,.8,0,1,.85,1,Math.PI/2); add(gb,chConeG(.16,.22),a,0,.66,.24,1,1,.25,Math.PI,0,0); add(gb,chSph(),b,.05,.68,.27,.02,.02,.01); add(gb,chSph(),b,-.05,.72,.27,.02,.02,.01); },
+  cascabel(X){ const {gb,add,a}=X; add(gb,chRingGeo(.25,.035),a,0,.8,0,1,.85,1,Math.PI/2); add(gb,chSph(),CH_GOLD(X),0,.73,.27,.06,.06,.06); },
+  ccorazon(X){ const {gb,add,a}=X, gd=CH_GOLD(X); for(let i=0;i<20;i++){ const t=i/20*Math.PI*2; if(Math.cos(t)>.92) continue; add(gb,chSph(),gd,Math.sin(t)*.25,.78-Math.max(0,Math.cos(t))*.1,Math.cos(t)*.25,.012,.012,.012); }
+    add(gb,chShapeGeo('heart'),a,0,.66,.27,1.4,1.4,2); },
+  capa(X){ const {gb,add,a,b}=X; const m=CH_CMAT['capa|'+X.it.c]||(CH_CMAT['capa|'+X.it.c]=new THREE.MeshStandardMaterial({color:new THREE.Color(X.it.c).convertSRGBToLinear(), roughness:.85, side:THREE.DoubleSide}));
+    const p=X.piv(gb,0,.82,-.26,.12,0,1.4); p.userData.sw.k=.9; add(p,chTubeGeo(.36,.16,.62),m,0,-.3,-.04,1,1,.45); add(gb,chRingGeo(.25,.03),b,0,.82,0,1,.85,1,Math.PI/2); },
+  murcielago(X){ const {gb,add,a,piv}=X; for(const s of [-1,1]){ const p=piv(gb,s*.06,.68,-.26,0,0,0); p.userData.sw.k=0; for(const [y,sc] of [[0,1.9],[-.05,1.6],[-.1,1.3]]) add(p,chShapeGeo('wing'),a,0,y,0,s*sc,sc*.8,1,0,s*.6,-s*.25); } },
+  angel(X){ const {gb,add,piv}=X, w=X.M('#ffffff'); for(const s of [-1,1]){ const p=piv(gb,s*.06,.7,-.26,0,0,0); p.userData.sw.k=0; for(let i=0;i<4;i++) add(p,chSph(),w,s*(.1+i*.08),.06+i*.04,0,.09,.06+i*.01,.03,0,0,-s*(.3+i*.2)); } },
+  caparazon(X){ const {gb,add,a,b}=X; add(gb,chDomeGeo(.5),a,0,.58,-.26,.32,.36,.18,-Math.PI/2,0,0); for(const [x,y] of [[0,.58],[.14,.7],[-.14,.7],[.14,.46],[-.14,.46]]) add(gb,chSph(),b,x,y,-.43+Math.abs(x)*.25,.07,.07,.02); },
+  mosito(X){ const {gb,add,a,b}=X; add(gb,chSph(),a,0,.6,-.34,.2,.22,.12); for(const s of [-1,1]){ add(gb,chSph(),a,s*.13,.8,-.36,.07,.07,.04); add(gb,chBoxGeo(),a,s*.15,.68,.25,.035,.3,.02,.2,0,0); add(gb,chSph(),X.M('#1a1416'),s*.06,.64,-.45,.02,.02,.01); } add(gb,chSph(),b,0,.56,-.45,.07,.05,.03); },
+  jetpack(X){ const {gb,add,a,b}=X, fl=X.M('#ffb23f',{emi:'#ff6a00'}); for(const s of [-1,1]){ add(gb,chDiscGeo(.09,.36),a,s*.1,.6,-.36); add(gb,chConeG(.07,.1),b,s*.1,.38,-.36,1,1,1,Math.PI,0,0); add(gb,chConeG(.05,.14),fl,s*.1,.28,-.36,1,1,1,Math.PI,0,0); } add(gb,chBoxGeo(),b,0,.62,-.32,.18,.2,.06); },
+  conejito(X){ const {gb,add,a}=X; add(gb,chSph(),a,0,.38,-.3,.1,.1,.1); },
+  zorro(X){ const {gb,add,a,b}=X; const p=X.piv(gb,0,.42,-.25,2.0,0,2.2); add(p,chSph(),a,0,-.18,-.02,.1,.22,.1); add(p,chSph(),b,0,-.38,0,.07,.08,.07); },
+  coladino(X){ const {gb,add,a,b}=X; const p=X.piv(gb,0,.42,-.25,1.7,0,1.6); add(p,chConeG(.12,.42),a,0,-.2,0,1,1,1,Math.PI,0,0); for(let i=0;i<3;i++) add(p,chConeG(.03,.07),b,0,-.08-i*.1,-.08+i*.02,.4,1,1,-Math.PI/2,0,0); },
+  // en la mano
+  globo(X){ const {add,gb,a,s}=X, w=X.M('#ffffff'), hx=s*.46, hy=.37, bx=s*.86, by=1.62, h=Math.hypot(bx-hx,by-hy), ang=Math.atan2(bx-hx,by-hy); add(gb,chCylGeo(),w,(hx+bx)/2,(hy+by)/2,.08,.006,h,.006,0,0,-ang); add(gb,X.it.ak==='globoc'?chShapeGeo('heart'):chSph(),a,bx,by+.2,.08,...(X.it.ak==='globoc'?[3.2,3.2,8]:[.22,.26,.22])); },
+  varita(X){ const {add,hand,a}=X; add(hand,chCylGeo(),X.M('#3a2d4a'),0,-.36,.17,.015,.32,.015,Math.PI/2,0,0); add(hand,chShapeGeo('star'),X.M(X.it.c,{emi:'#4a3a00'}),0,-.36,.36,2.4,2.4,3,0,0,0); },
+  paleta(X){ const {add,hand}=X; add(hand,chCylGeo(),X.M('#ffffff'),0,-.36,.15,.015,.3,.015,Math.PI/2,0,0); add(hand,chDiscGeo(.14,.04),X.M(X.it.c),0,-.36,.38,1,1,1,0,0,0);
+    add(hand,chRingGeo(.08,.02),X.M(X.it.c2),0,-.34,.38,1,1,1,Math.PI/2,0,0); },
+  osito(X){ const {add,hand,a,b}=X; const z=.16, y=-.36; add(hand,chSph(),a,0,y,z,.1,.12,.09); add(hand,chSph(),a,0,y+.15,z,.09,.09,.08); for(const s of [-1,1]) add(hand,chSph(),a,s*.07,y+.23,z,.035,.035,.03); add(hand,chSph(),b,0,y+.13,z+.07,.03,.025,.02); },
+  flor(X){ const {add,hand,a}=X; add(hand,chCylGeo(),X.M('#4fa83a'),0,-.2,.12,.012,.36,.012,-.3,0,0); const y=-.02, z=.18; add(hand,chSph(),X.M('#ffd23f'),0,y,z,.05,.05,.04); for(let i=0;i<6;i++){ const t=i/6*Math.PI*2; add(hand,chSph(),a,Math.cos(t)*.07,y+Math.sin(t)*.07,z,.05,.035,.03,0,0,t); } },
+  helado(X){ const {add,hand,a}=X; add(hand,chConeG(.06,.18),X.M('#e0b070'),0,-.36,.16,1,1,1,-Math.PI/2,0,0); add(hand,chSph(),a,0,-.36,.27,.07,.07,.07); add(hand,chSph(),X.M('#d8283a'),0,-.29,.29,.025,.025,.025); },
+  espada(X){ const {add,hand,a,b}=X; add(hand,chBoxGeo(),a,0,-.36,.34,.04,.012,.36); add(hand,chBoxGeo(),b,0,-.36,.14,.14,.03,.03); add(hand,chCylGeo(),b,0,-.36,.08,.02,.1,.02,Math.PI/2,0,0); },
+  linterna(X){ const {add,hand,a}=X; add(hand,chCylGeo(),a,0,-.36,.14,.04,.2,.04,Math.PI/2,0,0); add(hand,chDiscGeo(.055,.04),X.M('#fff6c8',{emi:'#ffe080'}),0,-.36,.26,1,1,1,Math.PI/2,0,0); },
+  sombrilla(X){ const {add,gb,a,b,s}=X, hx=s*.46, hy=.37, bx=s*.36, by=2.0, h=Math.hypot(bx-hx,by-hy), ang=Math.atan2(bx-hx,by-hy); add(gb,chCylGeo(),X.M('#5a4a3a'),(hx+bx)/2,(hy+by)/2,.12,.014,h,.014,0,0,-ang); add(gb,chDomeGeo(.42),a,bx,by,.12,.62,.36,.62); add(gb,chSph(),b,bx,by+.36,.12,.03,.03,.03); },
+  bandera(X){ const {add,gb,a,b,s}=X, hx=s*.46, hy=.37, bx=s*.58, by=1.05, h=Math.hypot(bx-hx,by-hy), ang=Math.atan2(bx-hx,by-hy); add(gb,chCylGeo(),X.M('#ffffff'),(hx+bx)/2,(hy+by)/2,.12,.012,h,.012,0,0,-ang); const p=X.piv(gb,bx,by-.06,.12,0,0,1.6); add(p,chBoxGeo(),a,s*.12,0,0,.24,.15,.01); add(p,chShapeGeo('star'),b,s*.12,0,.008,1,1,1); },
+  algodon(X){ const {add,hand,a}=X; add(hand,chCylGeo(),X.M('#ffffff'),0,-.12,.12,.012,.42,.012); for(const [x,y,z,r] of [[0,.14,.12,.13],[.08,.1,.15,.09],[-.08,.12,.1,.1],[0,.24,.12,.09]]) add(hand,chSph(),a,x,y,z,r,r,r); },
+  red(X){ const {add,gb,s}=X, wd=X.M('#c9965f'), hx=s*.46, hy=.37, bx=s*.62, by=1.15, h=Math.hypot(bx-hx,by-hy), ang=Math.atan2(bx-hx,by-hy); add(gb,chCylGeo(),wd,(hx+bx)/2,(hy+by)/2,.14,.012,h,.012,0,0,-ang); add(gb,chRingGeo(.13,.012),wd,bx,by+.13,.14,1,1,1,0,0,0); add(gb,chConeG(.13,.24),CH_GLASS('#ffffff',.5),bx,by+.13,.03,1,1,1,-Math.PI/2,0,0); },
+  libro(X){ const {add,hand,a}=X; add(hand,chBoxGeo(),a,0,-.36,.14,.04,.2,.16); add(hand,chBoxGeo(),X.M('#fbf3e4'),.005,-.36,.14,.03,.18,.15); },
+  micro(X){ const {add,hand,a}=X; add(hand,chCylGeo(),X.M('#2a2226'),0,-.36,.12,.025,.16,.025,Math.PI/2-.4,0,0); add(hand,chSph(),a,0,-.3,.22,.055,.055,.055); } };
+CH_ACC2.globoc=CH_ACC2.globo;
 function chibiHatAcc(o,eq,list,C,add){ const u=o.userData, it=k=>eq && SHOP_BY[eq[k]] ? SHOP_BY[eq[k]] : null, H=CH.HY, RX=CH.RX, RY=CH.RY, RZ=CH.RZ, g=C.g, gb=C.gb||C.g, CMX=C.mat||chClothMat, M=(c,o2)=>CMX(c,null,null,o2);
   const pivots=[], piv=(par,x,y,z,rx,rz,k)=>{ const p=new THREE.Group(); p.position.set(x,y,z); p.rotation.set(rx,0,rz); p.userData.sw={bx:rx, bz:rz, k}; par.add(p); list.push(p); pivots.push(p); return p; };
-  const hat=it('chat'), acc=it('cacc');
+  const hat=it('chat'), accs=['cacc','cacf','cacn','cacb','cach'].map(it).filter(Boolean);   // v190: varios accesorios a la vez (cabeza, cara, cuello, espalda y mano)
+  const arm=(u.arms||[]).find(x=>x.userData && x.userData.side>0)||(u.arms||[])[0], hand=arm&&arm.userData.joint;
   // con gorro: lo que va arriba de la cabeza se esconde (chonguitos, mechón, orejitas), para que nada atraviese el gorro
-  const hideTop=!!hat; (C.hairX||[]).forEach(p=>{ if(C.hairStyle==='chongos'||C.hairStyle==='picudo') p.visible=!hideTop; }); (C.earX||[]).forEach(p=>p.visible=!hideTop);
+  const hideTop=!!hat; (C.hairX||[]).forEach(p=>{ if(C.hairStyle==='chongos'||C.hairStyle==='picudo'||(CH_HAIR[C.hairStyle]||{}).hatHide) p.visible=!hideTop; }); (C.earX||[]).forEach(p=>p.visible=!hideTop);
   if(hat){ const k=hat.hk, a=M(hat.c), b=M(hat.c2||'#ffffff'), S=1.11;
     const dome=(t1,sc=S,mat=a)=>add(g,chDomeGeo(t1),mat,0,H,0,RX*sc,RY*sc,RZ*sc);
     if(k==='gorra'){ dome(.4); add(g,chSph(),a,0,H+.2,RZ*1.0,.3,.025,.22,.15); add(g,chSph(),b,0,H+RY*1.11,0,.04,.03,.04); }
@@ -3695,8 +4085,9 @@ function chibiHatAcc(o,eq,list,C,add){ const u=o.userData, it=k=>eq && SHOP_BY[e
       add(g,chConeG(.22,.5),m,.12,H+RY*1.25,0,1,1,1,0,0,-.25); add(g,chSph(),M('#ffd23f'),.24,H+RY*1.25+.27,0,.07,.07,.07); }
     else if(k==='copa'){ add(g,chDiscGeo(.55,.025),a,0,H+RY*.95,0,1,1,.9); add(g,chDiscGeo(.3,.42),a,0,H+RY*.95+.22,0,1,1,.9); add(g,chTubeGeo(.305,.305,.08),b,0,H+RY*.95+.07,0,1,1,.9); }
     else if(k==='dormir'){ dome(.42,1.12); add(g,chRingGeo(RX*1.06,.05),b,0,H+RY*.3,0,1,RZ/RX,1,Math.PI/2);
-      const p=piv(g,0,H+RY*1.05,-.05,-.6,.9,2.6); add(p,chConeG(.17,.7),a,0,-.35,0,1,1,1,Math.PI,0,0); add(p,chSph(),b,0,-.72,0,.09,.09,.09); } }
-  if(acc){ const k=acc.ak, a=M(acc.c), b=M(acc.c2||'#ffffff');
+      const p=piv(g,0,H+RY*1.05,-.05,-.6,.9,2.6); add(p,chConeG(.17,.7),a,0,-.35,0,1,1,1,Math.PI,0,0); add(p,chSph(),b,0,-.72,0,.09,.09,.09); }
+    else if(CH_HATS2[k]) CH_HATS2[k]({g,gb,add,M,a,b,H,RX,RY,RZ,dome,piv,hat,it:hat}); }
+  for(const acc of accs){ const k=acc.ak, a=M(acc.c), b=M(acc.c2&&acc.c2!=='multi'?acc.c2:'#ffffff');
     // la altura de los ojos y de la frente (sobre la superficie de la cabeza)
     const EY=H-(C.eyDrop||.105), ex=C.ex||.23, ez=RZ*.93, EZ=C.ez||.56;
     if(k==='mono'){ const x=RX*.62, y=H+RY*.72; for(const s of [-1,1]) add(g,chSph(),a,x+s*.09,y+.03,.24,.1,.07,.04,0,0,s*.4); add(g,chSph(),a,x,y+.03,.26,.045,.045,.04); }
@@ -3714,7 +4105,8 @@ function chibiHatAcc(o,eq,list,C,add){ const u=o.userData, it=k=>eq && SHOP_BY[e
     else if(k==='audifonos'){ add(g,chArcGeo(RX*1.1,.03),a,0,H-.02,0,1,RY*1.12/RX,1); for(const s of [-1,1]){ add(g,chDiscGeo(.13,.09),a,s*RX*1.1,H-.05,0,1,1,1,0,0,Math.PI/2); add(g,chDiscGeo(.1,.02),b,s*RX*1.155,H-.05,0,1,1,1,0,0,Math.PI/2); } }
     else if(k==='colita'){ const p=piv(gb,0,.42,-.25,2.0,0,2.2); p.scale.setScalar(1.6); const cv=new THREE.CatmullRomCurve3([new THREE.Vector3(0,0,0),new THREE.Vector3(0,-.12,-.04),new THREE.Vector3(.04,-.26,0),new THREE.Vector3(.02,-.38,.08)]);
       const tg=CH_CG.tail||(CH_CG.tail=new THREE.TubeGeometry(cv,14,.045,8,false)); add(p,tg,a,0,0,0); add(p,chSph(),b,.02,-.38,.08,.05,.05,.05); }
-    else if(k==='estrella'){ add(g,chShapeGeo('star'),M(acc.c,{emi:'#4a3a00'}),.5,H+RY*.5,.4,1.7,1.7,1.4,-.3,.75,-.2); } }
+    else if(k==='estrella'){ add(g,chShapeGeo('star'),M(acc.c,{emi:'#4a3a00'}),.5,H+RY*.5,.4,1.7,1.7,1.4,-.3,.75,-.2); }
+    else if(CH_ACC2[k] && (acc.as!=='mano' || hand)) CH_ACC2[k]({g,gb,add,M,a,b,H,RX,RY,RZ,piv,EY,ex,EZ,ez,hand,it:acc,s:arm&&arm.userData.side<0?-1:1}); }
   const S=u.hsw; if(S) S.pieces=[...(C.hairX||[]),...(C.earX||[]),...pivots]; }
 // v158: la ropa del Amigurumi: las prendas del Chibi, estiradas a su cuerpo (más alto y delgado) y tejidas con estambre
 const AM_CLOTH={};
@@ -3738,7 +4130,7 @@ function amiguClothes(o,eq,list){ const u=o.userData, A=u.am; if(!A || !eq) retu
   chibiClothes(o,{ctop:eq.atop, cbot:eq.abot, cshoe:eq.ashoe},list,X);
   { const kx=AM.RX/CH.RX, ky=AM.RY/CH.RY, kz=AM.RZ/CH.RZ, HG=wrap(A.g,0,AM.HY-CH.HY*ky,0,kx,ky,kz);   // gorros y accesorios (v159)
     const add=(par,geo,mat,x,y,z,sx=1,sy=1,sz=1,rx=0,ry=0,rz=0)=>{ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.rotation.set(rx,ry,rz); m.castShadow=true; m.receiveShadow=true; par.add(m); list.push(m); return m; };
-    chibiHatAcc(o,{chat:eq.ahat, cacc:eq.aacc},list,{g:HG, gb:X.torso, hairX:A.hairX, earX:A.earX, hairStyle:A.hairStyle, mat:amClothMat, eyDrop:.047, ex:.215, ez:.54},add); } }
+    chibiHatAcc(o,{chat:eq.ahat, cacc:eq.aacc, cacf:eq.aacf, cacn:eq.aacn, cacb:eq.aacb, cach:eq.aach},list,{g:HG, gb:X.torso, hairX:A.hairX, earX:A.earX, hairStyle:A.hairStyle, mat:amClothMat, eyDrop:.047, ex:.215, ez:.54},add); } }
 // Chibi sentado en el piso (k: 0 de pie … 1 sentado): piernas estiradas al frente y manos apoyadas atrás
 function chibiSitPose(o,k){ if(k<.002 || o.userData.av!=='c') return; const {arms,legs}=o.userData;
   legs.forEach(l=>{ const j=l.userData.joint; l.rotation.x+=(-1.45-l.rotation.x)*k; j.rotation.x+=(.06-j.rotation.x)*k; });
@@ -8523,6 +8915,95 @@ I('cuerpo','av_amigu','Amigurumi',0,{free:1, thumb:'amigu', plain:'#f4efe6'});
  ['lluvia','Botas de lluvia',12,{sk:'lluvia',c:'#f2c94c',sole:'#c99a20'}],['conejito','Pantuflas de conejito',14,{sk:'pantufla',c:'#fbe3ec'}],['ballet','Zapatillas de ballet',12,{sk:'ballet',c:'#f7b6cf',c2:'#f49ac1'}],
  ['luces','Tenis con luces',16,{sk:'luces',c:'#6aa8ef',c2:'#ffffff',sole:'#ffffff',emi:'#40c0ff'}],['nieve','Botas de nieve',14,{sk:'nieve',c:'#c8506a',sole:'#5a4040'}],['vaquera','Botas vaqueras',14,{sk:'vaquera',c:'#a0703f',sole:'#5a3a20'}]]
   .forEach(([k,n,p,o])=>I('czapatos','rz_'+k,n,p,p?o:{...o, free:1}));
+// v191: 90 prendas nuevas de Arriba, 90 de Abajo y 90 zapatos (con las 10 de antes, 100 de cada una); el Amigurumi recibe la copia tejida
+{ const R='#d8394a', AZ='#4b6fb5', VE='#4fa83a', NE='#2a2226', RO='#f49ac1', AM='#f2c94c', MO='#8a5ad8', BL='#f6f4ef', GR='#9aa0ae', CA='#8a5a34', CE='#7fc8f0', NA='#ff9a3c', LI='#c8a8f0', MN='#9fe0c0', BE='#e3d4b4', VI='#7a2a3a', MZ='#3c5a8e', MS='#d9a62a';
+  const T=(k,n,p,o)=>I('carriba','ra2_'+k,n,p,{...o,nw:1}), B=(k,n,p,o)=>I('cabajo','rb2_'+k,n,p,{...o,nw:1}), Z=(k,n,p,o)=>I('czapatos','rz2_'+k,n,p,{...o,nw:1});
+  // ---- arriba ----
+  [['roja',R],['verde',VE],['amarilla',AM],['rosa',RO],['morada',MO],['negra',NE],['celeste',CE],['naranja',NA]].forEach(([k,c])=>T('tee_'+k,'Camiseta '+k,10,{tk:'tee',c}));
+  [['corazones','Playera de corazones','#ffffff','corazones','#e8414f',[3,2]],['vichy','Playera de cuadritos','#ffffff','vichy','#d8394a',[3,2]],['zigzag','Playera de zigzag','#4b6fb5','zigzag','#ffd23f',[2,2]],
+   ['flores','Playera de flores','#fbe3ec','flores','#f49ac1',[3,2]],['nubes','Playera de nubes','#9fd8ff','nubes','#ffffff',[2,2]],['arcoiris','Playera arcoíris','#ffffff','arcoiris','#ffffff',[1,1]],
+   ['camuflaje','Playera de camuflaje','#6a7a4a','camuflaje','#4a5a2a',[2,2]],['tiedye','Playera tie-dye','#ffffff','tiedye','#ffffff',[1,1]],['fresas','Playera de fresas','#fff3e0','fresas','#e5334b',[3,2]],['huellitas','Playera de huellitas','#e8f4ff','huellitas','#4b6fb5',[3,2]]]
+    .forEach(([k,n,c,pat,c2,rep])=>T('pat_'+k,n,12,{tk:'tee',c,pat,c2,rep}));
+  [['corazon','corazón','#ffffff','#e8414f'],['estrella','estrella','#2c4a86','#ffd23f'],['rayo','rayo','#2a2226','#ffd23f'],['carita','carita feliz','#7fc8f0','#ffd23f'],['planeta','planeta','#3a2d6e','#ff9ad5'],
+   ['cohete','cohete','#26407a','#ffffff'],['flor','flor','#fbe3ec','#f49ac1'],['nota','música','#ffd23f','#2a2226'],['huella','huellita','#9fe0c0','#2a2226'],['dino','dinosaurio','#f2c94c','#4fa83a']]
+    .forEach(([k,n,c,c2])=>T('print_'+k,'Playera de '+n,14,{tk:'print',icon:k,c,c2}));
+  [['7','Jersey rojo #7',R,'#ffffff'],['10','Jersey azul #10',AZ,'#ffffff'],['23','Jersey amarillo #23',AM,'#2a2226'],['1','Jersey verde #1',VE,'#ffffff']].forEach(([k,n,c,c2])=>T('jersey_'+k,n,14,{tk:'jersey',num:k,c,c2}));
+  [['blanco',BL,'#e2ddd2'],['azul',AZ,'#ffffff'],['rojo',R,'#ffffff'],['verde',VE,'#ffffff']].forEach(([k,c,c2])=>T('polo_'+k,'Polo '+k,12,{tk:'polo',c,c2}));
+  T('camisa_ce','Camisa celeste',14,{tk:'shirt',c:'#b8dcf4',c2:'#ffffff'}); T('camisa_bl','Camisa blanca',14,{tk:'shirt',c:BL,c2:'#ffffff',c3:'#d9d4c8'});
+  T('camisa_vi','Camisa de cuadritos',14,{tk:'shirt',c:'#ffffff',pat:'vichy',c2:R,rep:[3,2]}); T('camisa_es','Camisa escocesa',14,{tk:'shirt',c:'#c62f3a',pat:'escoces',c2:'#1a2a4a',rep:[3,2]});
+  T('hawaiana','Camisa hawaiana',16,{tk:'shirt',c:'#2fb5b0',pat:'flores',c2:'#ffffff',rep:[3,2]});
+  [['blanca',BL],['negra',NE],['roja',R],['amarilla',AM]].forEach(([k,c])=>T('tank_'+k,'Camiseta sin mangas '+k,10,{tk:'tank',c}));
+  [['rojo',R],['azul',AZ],['rosa',RO],['gris',GR],['mostaza',MS]].forEach(([k,c])=>T('sueter_'+k,'Suéter '+k,14,{tk:'long',c,knit:1}));
+  T('sueter_rombos','Suéter de rombos',16,{tk:'long',c:'#c62f3a',pat:'rombos',c2:'#f2e6c8',rep:[3,2],knit:1}); T('sueter_copos','Suéter de copos',16,{tk:'long',c:'#26407a',pat:'copos',c2:'#ffffff',rep:[3,2],knit:1});
+  T('sueter_cor','Suéter de corazones',16,{tk:'long',c:'#fbe3ec',pat:'corazones',c2:'#e8414f',rep:[3,2],knit:1}); T('sueter_rayas','Suéter de rayas',16,{tk:'long',c:'#ffffff',pat:'rayas',c2:'#4b6fb5',rep:[1,3],knit:1});
+  [['negro',NE],['blanco',BL],['vino',VI]].forEach(([k,c])=>T('tortuga_'+k,'Cuello de tortuga '+k,14,{tk:'turtle',c}));
+  [['beige',BE],['gris',GR],['rosa',RO],['verde',VE]].forEach(([k,c])=>T('cardigan_'+k,'Cárdigan '+k,16,{tk:'cardigan',c,c2:'#ffffff'}));
+  [['roja',R],['azul',AZ],['rosa',RO],['morada',MO]].forEach(([k,c])=>T('sudadera_'+k,'Sudadera '+k,14,{tk:'hood',c}));
+  [['gato','Sudadera de gato','#9aa0ae','#878d9b'],['oso','Sudadera de oso','#a8743a','#8a5a34'],['conejo','Sudadera de conejo','#fbe3ec','#f4c6d8'],['dino','Sudadera de dinosaurio','#5fb35a','#4a9a46','#f2c94c'],
+   ['tiburon','Sudadera de tiburón','#7a8ca6','#65778f'],['panda','Sudadera de panda','#f6f4ef','#e2ddd2'],['unicornio','Sudadera de unicornio','#fbe3f4','#f0d0e8'],['dragon','Sudadera de dragón','#8a5ad8','#7448c0','#7ed957']]
+    .forEach(([k,n,c,c2,c3])=>T('animal_'+k,n,18,{tk:'hoodear',ear:k,c,c2,c3}));
+  [['rojo',R],['negro',NE],['menta',MN]].forEach(([k,c])=>T('inflable_'+k,'Chaleco inflable '+k,16,{tk:'puffer',c,c2:'#2a2226'}));
+  T('imper_am','Impermeable amarillo',16,{tk:'raincoat',c:'#f2c94c',c2:'#2a2226'}); T('imper_ro','Impermeable rojo',16,{tk:'raincoat',c:R,c2:'#ffffff'});
+  [['celeste','Vestido celeste','#9fd8ff'],['amarillo','Vestido amarillo','#ffe27a']].forEach(([k,n,c])=>T('vestido_'+k,n,16,{tk:'dress',c}));
+  T('vestido_flores','Vestido de flores',18,{tk:'dress',c:'#fbe3ec',pat:'flores',c2:'#f49ac1',rep:[3,2]}); T('vestido_vichy','Vestido de cuadritos',18,{tk:'dress',c:'#ffffff',pat:'vichy',c2:'#4b6fb5',rep:[3,2]});
+  T('vestido_lunares','Vestido de lunares',18,{tk:'dress',c:'#d8394a',pat:'lunares',c2:'#ffffff',rep:[3,2]});
+  T('pijama_est','Pijama de estrellas (arriba)',14,{tk:'pjtop',c:'#3b3f8a',pat:'estrellas',c2:'#ffe27a',rep:[2,2]}); T('pijama_nub','Pijama de nubes (arriba)',14,{tk:'pjtop',c:'#9fd8ff',pat:'nubes',c2:'#ffffff',rep:[2,2]});
+  T('kimono_ro','Kimono rosa',18,{tk:'kimono',c:'#f7b6cf',c2:'#d8394a'}); T('kimono_az','Kimono azul',18,{tk:'kimono',c:'#5a8fd6',c2:'#ffd23f'});
+  T('delantal','Delantal de cocinero',14,{tk:'apron',c:'#f6f4ef',c2:'#ffffff',c3:'#d8394a'}); T('marinero_ro','Traje de marinero rojo',18,{tk:'sailor',c:'#ffffff',c2:'#c62f3a'}); T('saco_ve','Saco escolar verde',18,{tk:'blazer',c:'#2f5a3a',c2:'#f2c94c'});
+  // ---- abajo ----
+  [['rojos',R],['verdes',VE],['amarillos',AM],['rosas',RO],['negros',NE],['blancos',BL]].forEach(([k,c])=>B('shorts_'+k,'Shorts '+k,10,{bk:'shorts',c}));
+  [['rayas','rayas','#ffffff','rayas','#4b6fb5',[2,3]],['lunares','lunares','#d8394a','lunares','#ffffff',[3,2]],['flores','flores','#fbe3ec','flores','#f49ac1',[3,2]],['camuflaje','camuflaje','#6a7a4a','camuflaje','#4a5a2a',[2,2]],
+   ['vichy','cuadritos','#ffffff','vichy','#4fa83a',[3,2]],['estrellas','estrellas','#26407a','estrellas','#ffd23f',[2,2]],['fresas','fresas','#fff3e0','fresas','#e5334b',[3,2]],['zigzag','zigzag','#f2c94c','zigzag','#d8394a',[2,2]]]
+    .forEach(([k,n,c,pat,c2,rep])=>B('shortsp_'+k,'Shorts de '+n,12,{bk:'shorts',c,pat,c2,rep}));
+  [['cafe','café',CA],['beige','beige',BE],['rojo','rojo',R],['verde','verde',VE],['gris','gris',GR],['blanco','blanco',BL],['marino','azul marino','#1f2f5a'],['morado','morado',MO],['mostaza','mostaza',MS]].forEach(([k,n,c])=>B('pants_'+k,'Pantalón '+n,12,{bk:'pants',c}));
+  [['escoces','Pantalón escocés','#c62f3a','escoces','#1a2a4a',[3,2]],['rayasv','Pantalón de rayas','#ffffff','rayasv','#2c4a86',[3,1]],['camuflaje','Pantalón de camuflaje','#6a7a4a','camuflaje','#4a5a2a',[2,2]],
+   ['corazones','Pantalón de corazones','#fbe3ec','corazones','#e8414f',[3,2]],['copos','Pijama de copos','#26407a','copos','#ffffff',[3,2]],['nubes','Pijama de nubes','#9fd8ff','nubes','#ffffff',[2,2]],['huellitas','Pantalón de huellitas','#e8f4ff','huellitas','#4b6fb5',[3,2]]]
+    .forEach(([k,n,c,pat,c2,rep])=>B('pantsp_'+k,n,14,{bk:'pants',c,pat,c2,rep}));
+  B('mez_clara','Pantalón de mezclilla clara',12,{bk:'pants',c:'#8aaee0',pat:'mezclilla',c2:'#ffffff',rep:[2,2]}); B('mez_negra','Pantalón de mezclilla negra',12,{bk:'pants',c:'#3a3a44',pat:'mezclilla',c2:'#8a8a9a',rep:[2,2]});
+  [['gris',GR,'#7a808e'],['negro',NE,'#4a4a52'],['azul',AZ,'#3a5a9a'],['rosa',RO,'#e080a8'],['verde',VE,'#3a8a3a']].forEach(([k,c,c2])=>B('jogger_'+k,'Jogger '+k,12,{bk:'joggers',c,c2}));
+  B('jogger_camu','Jogger de camuflaje',14,{bk:'joggers',c:'#6a7a4a',pat:'camuflaje',c2:'#4a5a2a',rep:[2,2]}); B('jogger_rayas','Jogger de rayas',14,{bk:'joggers',c:'#2a2226',stripe:'#ffffff'});
+  [['beige',BE,'#c8b48a'],['olivo','#6a7a3a','#4a5a2a'],['negro',NE,'#3a3a3a']].forEach(([k,c,c2])=>B('cargo_'+k,'Pantalón cargo '+(k==='olivo'?'verde olivo':k),14,{bk:'cargo',c,c2}));
+  [['negros',NE],['rosas',RO],['morados',MO]].forEach(([k,c])=>B('mallas_'+k,'Mallas '+k,10,{bk:'leggings',c}));
+  [['arcoiris','arcoíris','#ffffff','arcoiris','#ffffff',[1,2]],['estrellas','estrellas','#3b3f8a','estrellas','#ffe27a',[2,3]],['tiedye','tie-dye','#ffffff','tiedye','#ffffff',[1,2]],['lunares','lunares','#2a2226','lunares','#ffffff',[3,3]],['corazones','corazones','#f7b6cf','corazones','#ffffff',[3,3]]]
+    .forEach(([k,n,c,pat,c2,rep])=>B('mallasp_'+k,'Mallas de '+n,12,{bk:'leggings',c,pat,c2,rep}));
+  [['beige','Bermuda beige',BE],['azul','Bermuda azul',AZ],['verde','Bermuda verde',VE]].forEach(([k,n,c])=>B('bermuda_'+k,n,12,{bk:'bermuda',c})); B('bermuda_cuadros','Bermuda de cuadros',14,{bk:'bermuda',c:'#3a5a9e',pat:'cuadros',c2:'#ffffff',rep:[3,2]});
+  [['rosa',RO],['rojo',R],['verde',VE],['amarillo',AM],['morado',MO]].forEach(([k,c])=>B('overol_'+k,'Overol '+k,16,{bk:'overall',c}));
+  B('overolc_mez','Overol corto de mezclilla',16,{bk:'overallshort',c:'#5a7fbf',pat:'mezclilla',c2:'#ffffff',rep:[2,2]}); B('overolc_rosa','Overol corto rosa',16,{bk:'overallshort',c:RO}); B('overolc_am','Overol corto amarillo',16,{bk:'overallshort',c:AM});
+  [['rosa',RO],['azul',AZ],['amarilla',AM],['morada',MO],['negra',NE],['blanca',BL]].forEach(([k,c])=>B('falda_'+k,'Falda '+k,10,{bk:'skirt',c}));
+  [['lunares','lunares','#d8394a','lunares','#ffffff',[4,1]],['flores','flores','#fbe3ec','flores','#f49ac1',[4,1]],['rayas','rayas','#ffffff','rayas','#26407a',[4,2]],['vichy','cuadritos','#ffffff','vichy','#d8394a',[4,1]],
+   ['corazones','corazones','#f7b6cf','corazones','#ffffff',[4,1]],['escocesa','escocesa','#2f5a3a','escoces','#1a2a4a',[4,1]],['mezclilla','mezclilla','#5a7fbf','mezclilla','#ffffff',[3,1]],['zigzag','zigzag','#9fd8ff','zigzag','#ffffff',[4,1]],
+   ['fresas','fresas','#fff3e0','fresas','#e5334b',[4,1]],['estrellas','estrellas','#3b3f8a','estrellas','#ffe27a',[4,1]]]
+    .forEach(([k,n,c,pat,c2,rep])=>B('faldap_'+k,k==='escocesa'||k==='mezclilla'?'Falda '+(k==='escocesa'?'escocesa':'de mezclilla'):'Falda de '+n,12,{bk:'skirt',c,pat,c2,rep}));
+  [['azul','Falda larga azul',AZ],['lila','Falda larga lila',LI],['negra','Falda larga negra',NE],['rosa','Falda larga rosa',RO]].forEach(([k,n,c])=>B('fl_'+k,n,14,{bk:'skirtlong',c}));
+  B('fl_flores','Falda larga de flores',16,{bk:'skirtlong',c:'#fbe3ec',pat:'flores',c2:'#f49ac1',rep:[4,1]}); B('fl_mez','Falda larga de mezclilla',16,{bk:'skirtlong',c:'#5a7fbf',pat:'mezclilla',c2:'#ffffff',rep:[3,1]});
+  [['celeste','#bfe3ff','#8ec8f0'],['lila','#e3d0ff','#c0a0f0'],['amarillo','#fff0a8','#f2d36a'],['blanco','#ffffff','#e8e4dc'],['menta','#c8f0d8','#9fe0c0'],['negro','#3a3a44','#2a2226']].forEach(([k,c,c2])=>B('tutu_'+k,'Tutú '+k,16,{bk:'tutu',c,c2}));
+  // ---- zapatos ----
+  [['negros',NE,'#ffffff'],['azules',AZ,'#ffffff'],['rosas',RO,'#ffffff'],['verdes',VE,'#ffffff'],['amarillos',AM,'#ffffff'],['morados',MO,'#ffffff'],['grises',GR,'#ffffff'],['naranjas',NA,'#ffffff'],['celestes',CE,'#ffffff'],['blancos y negros','#ffffff','#2a2226']]
+    .forEach(([k,c,c2])=>Z('tenis_'+k.replace(/ /g,'_'),'Tenis '+k,10,{sk:'tenis',c,c2}));
+  [['estrellas','#26407a','estrellas','#ffd23f'],['corazones','#f7b6cf','corazones','#ffffff'],['camuflaje','#6a7a4a','camuflaje','#4a5a2a'],['arcoíris','#ffffff','arcoiris','#ffffff'],['tie-dye','#ffffff','tiedye','#ffffff'],['cuadros','#d8394a','cuadros','#ffffff']]
+    .forEach(([k,c,pat,c2],i)=>Z('tenisp_'+i,'Tenis de '+k,14,{sk:'tenis',c,pat,c2}));
+  [['rojos',R],['negros',NE],['azules',AZ],['rosas',RO],['blancos','#f6f4ef'],['verdes',VE],['amarillos',AM]].forEach(([k,c])=>Z('bota_tenis_'+k,'Tenis de bota '+k,14,{sk:'converse',c,c2:'#ffffff'}));
+  [['rosas','#f49ac1','#ff40a0'],['verdes','#7ed957','#40ff60'],['morados','#b392e8','#a040ff']].forEach(([k,c,e])=>Z('luces_'+k,'Tenis con luces '+k,16,{sk:'luces',c,c2:'#ffffff',sole:'#ffffff',emi:e}));
+  [['cafes','Zapatos cafés',CA,'#4a301c'],['rojos','Zapatos de charol rojos','#c62f3a','#5a1a1a'],['blancos','Zapatos blancos','#f6f4ef','#c8c0b0'],['marino','Zapatos azul marino','#1f2f5a','#10182a'],['moño','Zapatos con moño','#2a2226','#1a1416'],['dorados','Zapatos dorados','#e8c45a','#8a6a20']]
+    .forEach(([k,n,c,sole],i)=>Z('zapato_'+i,n,14,{sk:'zapato',c,sole,c2:k==='moño'?'#f49ac1':sole}));
+  [['negras',NE,'#1a1416'],['rosas',RO,'#a85a7a'],['blancas','#f6f4ef','#c8c0b0']].forEach(([k,c,sole])=>Z('botas_'+k,'Botitas '+k,12,{sk:'bota',c,sole}));
+  [['negras',NE,'#1a1416'],['cafes',CA,'#4a301c'],['rojas','#c62f3a','#5a1a1a']].forEach(([k,c,sole])=>Z('botaalta_'+k,'Botas altas '+(k==='cafes'?'cafés':k),16,{sk:'botaalta',c,sole}));
+  Z('botin_lila','Botines lilas',14,{sk:'bota2',c:LI,c2:'#ffffff',sole:'#8a6aa8'}); Z('botin_mostaza','Botines mostaza',14,{sk:'bota2',c:MS,c2:'#f6efe0',sole:'#7a5a20'});
+  [['rojas',R,'#8a1a1a'],['verdes',VE,'#2a6a2a'],['azules',AZ,'#2a3f7a'],['rosas',RO,'#a85a7a'],['moradas',MO,'#4a2a7a'],['de lunares','#f2c94c','#c99a20']].forEach(([k,c,sole],i)=>Z('lluvia_'+i,'Botas de lluvia '+k,12,{sk:'lluvia',c,sole,pat:k==='de lunares'?'lunares':null,c2:'#ffffff'}));
+  [['celestes','#9fd8ff','#4a6a8a'],['lilas','#d8c0ff','#5a4a7a'],['blancas','#f6f4ef','#8a8a8a']].forEach(([k,c,sole])=>Z('nieve_'+k,'Botas de nieve '+k,14,{sk:'nieve',c,sole}));
+  [['negras',NE,'#1a1416'],['rosas',RO,'#a85a7a'],['blancas','#f6f4ef','#a89a80']].forEach(([k,c,sole])=>Z('vaquera_'+k,'Botas vaqueras '+k,14,{sk:'vaquera',c,sole}));
+  Z('pantufla_ce','Pantuflas celestes',12,{sk:'pantufla',c:'#cfe8f8'}); Z('pantufla_li','Pantuflas lilas',12,{sk:'pantufla',c:'#e3d0ff'});
+  [['oso','de oso','#a8743a','#e8c8a0'],['oso_rosa','de osito rosa','#f7b6cf','#ffffff'],['gato','de gato','#9aa0ae','#ffffff'],['gato_negro','de gato negro','#3a3a44','#ffffff'],['dino','de dinosaurio','#5fb35a','#f2c94c'],['rana','de rana','#7ed957','#ffffff'],['unicornio','de unicornio','#fbe3f4','#f2c230'],['panda','de panda','#f6f4ef','#2a2226']]
+    .forEach(([k,n,c,c2])=>Z('pantuani_'+k,'Pantuflas '+n,16,{sk:'pantuani',ear:k.split('_')[0],c,c2}));
+  Z('ballet_bl','Zapatillas de ballet blancas',12,{sk:'ballet',c:'#f6f4ef',c2:'#e0d8cc'}); Z('ballet_li','Zapatillas de ballet lilas',12,{sk:'ballet',c:'#e3d0ff',c2:'#c0a0f0'});
+  [['cafe','Sandalias cafés',CA,'#5a3a20'],['rosa','Sandalias rosas',RO,'#f6e0e8'],['negra','Sandalias negras',NE,'#3a3a3a'],['blanca','Sandalias blancas','#f6f4ef','#d8d0c0']].forEach(([k,n,c,sole])=>Z('sandalia_'+k,n,12,{sk:'sandalia',c,sole}));
+  [['celestes',CE],['rosas',RO],['amarillas',AM],['verdes',VE],['moradas',MO]].forEach(([k,c])=>Z('chancla_'+k,'Chanclas '+k,10,{sk:'chancla',c,sole:'#f6f4ef'}));
+  Z('aleta_az','Aletas azules',14,{sk:'aleta',c:'#3a8ae8'}); Z('aleta_am','Aletas amarillas',14,{sk:'aleta',c:'#f2c94c'});
+  [['rosas',RO,'#f2c94c'],['blancos','#f6f4ef','#f49ac1'],['negros',NE,'#7fd0ff']].forEach(([k,c,c2])=>Z('patin_'+k,'Patines '+k,16,{sk:'patin',c,c2,sole:'#ffffff'}));
+  Z('hielo_bl','Patines de hielo blancos',16,{sk:'patinhielo',c:'#f6f4ef',sole:'#c8c0b0'}); Z('hielo_ne','Patines de hielo negros',16,{sk:'patinhielo',c:NE,sole:'#3a3a3a'});
+  [['negros',NE,'#ffffff'],['blancos','#f6f4ef','#2a2226'],['rojos',R,'#ffffff']].forEach(([k,c,c2])=>Z('tacos_'+k,'Tacos de fútbol '+k,14,{sk:'tacos',c,c2,sole:'#2a2226'}));
+  [['rojos',R],['azules',AZ],['verdes',VE]].forEach(([k,c])=>Z('payaso_'+k,'Zapatos de payaso '+k,14,{sk:'payaso',c,sole:'#f6f4ef'}));
+  [['verdes',VE],['rosas',RO],['amarillos',AM],['celestes',CE]].forEach(([k,c])=>Z('zueco_'+k,'Zuecos '+k,12,{sk:'zueco',c,sole:'#f6f4ef'})); }
 // v155: gorros y accesorios del Chibi (los primeros 4, gratis)
 [['gorra','Gorra roja',0,{hk:'gorra',c:'#d8394a',c2:'#ffffff'}],['lana','Gorro de lana',0,{hk:'lana',c:'#4b6fb5',c2:'#ffffff'}],['paja','Sombrero de paja',0,{hk:'paja',c:'#e8cf8a',c2:'#d8394a'}],['boina','Boina rosa',0,{hk:'boina',c:'#f49ac1'}],
  ['corona','Corona dorada',20,{hk:'corona',c:'#f2c230'}],['bruja','Sombrero de bruja',18,{hk:'bruja',c:'#4a2d6e',c2:'#9c6ad8'}],['rana','Gorro de rana',16,{hk:'rana',c:'#6cbf5a',c2:'#ffffff'}],
@@ -8532,21 +9013,174 @@ I('cuerpo','av_amigu','Amigurumi',0,{free:1, thumb:'amigu', plain:'#f4efe6'});
  ['corazon','Lentes de corazón',14,{ak:'corazon',c:'#e8414f',c2:'#ff8fb0',view:'cara'}],['flores','Corona de flores',16,{ak:'flores',view:'gorro'}],['alitas','Alitas de hada',20,{ak:'alitas',c:'#bfe3ff',view:'espalda'}],
  ['audifonos','Audífonos',16,{ak:'audifonos',c:'#5a5f6e',c2:'#f49ac1',view:'gorro'}],['colita','Colita de gato',16,{ak:'colita',c:'#9aa0ae',c2:'#ffffff',view:'espalda'}],['estrella','Pasador de estrella',10,{ak:'estrella',c:'#ffd23f',view:'gorro'}]]
   .forEach(([k,n,p,o])=>I('caccesorios','rc_'+k,n,p,p?o:{...o, free:1}));
+// v190: 100 gorros y 100 accesorios nuevos del Chibi (el Amigurumi recibe una copia tejida de cada uno)
+{ const R='#d8394a', AZ='#4b6fb5', VE='#4fa83a', NE='#26232b', RO='#f49ac1', AM='#f2c94c', MO='#8a5ad8', BL='#ffffff', GR='#8a8f9e', CA='#8a5a34', CE='#7fc8f0', NA='#ff9a3c', OR='#f2c230', PL='#c9ced8';
+  const H=(k,n,p,hk,c,c2)=>I('cgorros','rg2_'+k,n,p,{hk,c,c2:c2||BL,nw:1});
+  [['azul',AZ],['verde',VE],['negra',NE],['rosa',RO],['amarilla',AM],['morada',MO]].forEach(([k,c])=>H('gorra_'+k,'Gorra '+k,10,'gorra',c));
+  [['roja',R],['azul',AZ],['verde',VE],['negra',NE]].forEach(([k,c])=>H('reves_'+k,'Gorra al revés '+k,12,'gorrareves',c));
+  [['rojo',R],['verde',VE],['rosa',RO],['amarillo',AM],['morado',MO],['gris',GR]].forEach(([k,c])=>H('lana_'+k,'Gorro de lana '+k,10,'lana',c));
+  [['roja',R],['negra',NE],['azul',AZ],['verde',VE]].forEach(([k,c])=>H('boina_'+k,'Boina '+k,10,'boina',c));
+  H('paja_az','Sombrero de paja con listón azul',12,'paja','#e8cf8a',AZ); H('paja_ve','Sombrero de paja con listón verde',12,'paja','#e8cf8a',VE);
+  H('copa_mo','Sombrero de copa morado',18,'copa','#4a2d6e',OR); H('copa_bl','Sombrero de copa blanco',18,'copa','#f6f4ef',NE);
+  [['rosa',RO],['verde',VE],['morado',MO]].forEach(([k,c])=>H('fiesta_'+k,'Gorrito de fiesta '+k,12,'fiesta',c));
+  H('santa','Gorro de Santa',16,'dormir',R,BL); H('dormir_ve','Gorrito de dormir verde',14,'dormir',VE,BL); H('dormir_ro','Gorrito de dormir rosa',14,'dormir',RO,BL);
+  H('bruja_ne','Sombrero de bruja negro',18,'bruja',NE,'#e8743a'); H('bruja_ve','Sombrero de bruja verde',18,'bruja','#2f6b45',MO);
+  H('corona_pl','Corona plateada',20,'corona',PL);
+  H('astro_bl','Casco de astronauta',22,'astro',BL,R); H('astro_ro','Casco de astronauta rosa',22,'astro',RO,BL);
+  H('bombero_ro','Casco de bombero',18,'bombero',R); H('bombero_am','Casco de bombero amarillo',18,'bombero',AM);
+  H('obra_am','Casco de obra',14,'obra',AM); H('obra_na','Casco de obra naranja',14,'obra',NA);
+  H('chef','Gorro de chef',16,'chef',BL); H('pirata','Sombrero de pirata',18,'pirata',NE);
+  [['cafe',CA,'café'],['negro',NE,'negro'],['blanco','#f2ece0','blanco'],['rosa',RO,'rosa']].forEach(([k,c,n])=>H('vaquero_'+k,'Sombrero vaquero '+n,16,'vaquero',c,k==='negro'?OR:'#5a3a20'));
+  [['negras',NE,RO],['blancas',BL,RO],['rosas',RO,'#ffd6e6'],['naranjas',NA,'#ffe0c0']].forEach(([k,c,c2])=>H('gato_'+k,'Orejitas de gato '+k,12,'gato',c,c2));
+  [['blancas',BL,RO],['rosas',RO,'#fff0f6'],['cafes','#b08a60','#f4dcc0']].forEach(([k,c,c2])=>H('conejo_'+k,'Orejitas de conejo '+(k==='cafes'?'cafés':k),12,'conejo',c,c2));
+  [['cafe',CA,'#e8c8a0'],['panda',NE,'#3a3a3a'],['polar',BL,'#f0e8e0']].forEach(([k,c,c2])=>H('oso_'+k,'Orejitas de oso '+(k==='cafe'?'café':k),12,'oso',c,c2));
+  [['verde',VE,'#f2c94c'],['azul','#5aa0e0','#ffffff'],['morado',MO,'#7ed957']].forEach(([k,c,c2])=>H('dino_'+k,'Gorro de dinosaurio '+k,18,'dino',c,c2));
+  H('unicornio','Gorro de unicornio',20,'unicornio',BL); H('unicornio_ro','Gorro de unicornio rosa',20,'unicornio','#fbd0e4');
+  H('pollito','Gorro de pollito',16,'pollito','#ffd84d'); H('tiburon','Gorro de tiburón',18,'tiburon','#7a8ca6');
+  H('duende_ve','Gorro de duende',14,'duende',VE,R); H('duende_ro','Gorro de duende rojo',14,'duende',R,VE);
+  H('reno','Diadema de reno',14,'reno',CA);
+  [['rosa','#fbd0e4'],['celeste','#cfe8f8'],['amarillo','#fff0b0']].forEach(([k,c])=>H('bebe_'+k,'Gorrito de bebé '+k,12,'bebe',c,BL));
+  H('tiara_or','Tiara de princesa',20,'tiara',OR,'#e8414f'); H('tiara_pl','Tiara plateada',20,'tiara',PL,'#5ac8f0');
+  H('vikingo','Casco vikingo',18,'vikingo','#9aa0ae',CA);
+  H('mago_az','Sombrero de mago azul',18,'mago','#2f4f9e'); H('mago_mo','Sombrero de mago morado',18,'mago','#5a2d8e');
+  [['rojo',R],['azul',AZ],['verde',VE]].forEach(([k,c])=>H('casco_'+k,'Casco de bici '+k,14,'casco',c,BL));
+  H('aviador','Gorro de aviador',16,'aviador','#8a5a34');
+  H('solero_bl','Sombrero de sol con flor',14,'solero','#f6efe0',RO); H('solero_am','Sombrero de sol amarillo',14,'solero','#f2d36a',BL);
+  H('hongo_ro','Gorro de hongo',16,'hongo','#d8394a',BL); H('hongo_ca','Gorro de hongo café',16,'hongo','#a8743a','#f6efe0');
+  H('grad_ne','Birrete de graduación',16,'graduacion',NE); H('grad_az','Birrete de graduación azul',16,'graduacion','#2a3f7a');
+  H('abeja','Antenitas de abeja',12,'antenas',NE,AM); H('alien','Antenitas de extraterrestre',12,'antenas','#7ed957','#c8ff8a');
+  [['amarillo',AM],['beige','#e8dcc0'],['mezclilla','#5a7fbf']].forEach(([k,c])=>H('pesc_'+k,'Sombrero de pescador '+k,12,'pescador',c,'#5a4a3a'));
+  H('policia','Gorra de policía',16,'policia','#2a3f7a');
+  [['rosa',RO,'#f49ac1'],['roja',R,'#d8283a'],['azul',AZ,'#7fb0ff']].forEach(([k,c,c2])=>H('diadema_'+k,'Diadema con moño '+k,10,'diadema',c,c2));
+  [['fresa','#fbb6cc'],['chocolate','#8a5634'],['menta','#b8f0d0']].forEach(([k,c])=>H('helado_'+k,'Gorro de helado de '+k,14,'helado',c));
+  H('pastel','Gorro de pastel',18,'pastel','#fbd0e4','#ffffff'); H('calabaza','Gorro de calabaza',16,'calabaza',NA);
+  H('pomp_ro','Gorro con pompones rosa',12,'pompones',RO,BL); H('pomp_az','Gorro con pompones azul',12,'pompones',AZ,BL);
+  H('sombrero','Sombrero de mariachi',18,'sombrero','#2a2226',OR);
+  // accesorios: as = dónde van (cabeza, cara, cuello, espalda, mano) — se pueden usar varios a la vez, uno de cada lugar
+  const A=(k,n,p,ak,as,c,c2,view)=>I('caccesorios','rc2_'+k,n,p,{ak,as,c,c2:c2||BL,view:view||({cabeza:'cabeza',cara:'cara',cuello:'cuerpo',espalda:'espalda',mano:'cuerpo'})[as],nw:1});
+  [['rosa',RO],['azul',AZ],['amarillo',AM],['morado',MO],['verde',VE],['negro',NE]].forEach(([k,c])=>A('mono_'+k,'Moño '+k,10,'mono','cabeza',c));
+  A('estrella_ro','Pasador de estrella rosa',10,'estrella','cabeza',RO); A('estrella_ce','Pasador de estrella celeste',10,'estrella','cabeza',CE);
+  A('pcor_ro','Pasador de corazón rojo',10,'pcorazon','cabeza','#e8414f'); A('pcor_rs','Pasador de corazón rosa',10,'pcorazon','cabeza',RO);
+  A('florp_ro','Flor en el pelo rosa',12,'florpelo','cabeza',RO,AM); A('florp_gi','Girasol en el pelo',12,'florpelo','cabeza',AM,CA);
+  A('aud_ro','Audífonos rosas',16,'audifonos','cabeza',RO,BL); A('aud_ve','Audífonos verdes',16,'audifonos','cabeza',VE,NE);
+  A('halo','Aureola dorada',20,'halo','cabeza',OR); A('halo_pl','Aureola plateada',20,'halo','cabeza',PL);
+  A('fresas','Pinzas de fresa',12,'fresas','cabeza',R); A('cuernitos','Cuernitos de monstruito',14,'cuernitos','cabeza','#e5233a');
+  [['rojos',R],['azules',AZ],['dorados',OR]].forEach(([k,c])=>A('lentes_'+k,'Lentes redondos '+k,10,'lentes','cara',c));
+  A('corazon_mo','Lentes de corazón morados',14,'corazon','cara','#8a5ad8','#c8a0ff');
+  A('sol_ne','Lentes de sol',14,'sol','cara',NE,NE); A('sol_ro','Lentes de sol rosas',14,'sol','cara',RO,'#a83a6a');
+  A('lest_am','Lentes de estrella',14,'lestrella','cara',AM); A('lest_ro','Lentes de estrella rosas',14,'lestrella','cara',RO);
+  [['rojo',R],['negro',NE],['azul',AZ],['morado',MO]].forEach(([k,c])=>A('antifaz_'+k,'Antifaz '+k,14,'antifaz','cara',c));
+  A('parche','Parche de pirata',12,'parche','cara',NE); A('bigote_ca','Bigote chistoso',10,'bigote','cara',CA); A('bigote_ne','Bigote negro',10,'bigote','cara',NE);
+  A('monoculo','Monóculo',16,'monoculo','cara',OR); A('goggles','Goggles de natación',14,'goggles','cara',AZ); A('l3d','Lentes 3D',12,'l3d','cara',BL);
+  A('payaso','Nariz de payaso',10,'payaso','cara',R); A('cuadrados','Lentes cuadrados',12,'cuadrados','cara',NE);
+  [['azul',AZ,BL],['verde',VE,BL],['rosa',RO,BL],['amarilla',AM,'#e8743a']].forEach(([k,c,c2])=>A('bufanda_'+k,'Bufanda '+k,12,'bufanda','cuello',c,c2));
+  [['rojo',R,'#a8202a'],['negro',NE,'#3a3a3a'],['rosa',RO,'#e86aa0'],['azul',AZ,'#2a4f8e'],['amarillo',AM,'#c99a20']].forEach(([k,c,c2])=>A('corbatin_'+k,'Corbatín '+k,12,'corbatin','cuello',c,c2));
+  A('corbata_ro','Corbata roja',12,'corbata','cuello',R,'#ffd23f'); A('corbata_az','Corbata azul',12,'corbata','cuello',AZ,BL);
+  A('perlas','Collar de perlas',18,'perlas','cuello',BL); A('lei_ro','Collar hawaiano rosa',14,'lei','cuello',RO); A('lei_mu','Collar hawaiano de colores',14,'lei','cuello',RO,'multi');
+  A('medalla_or','Medalla de oro',20,'medalla','cuello','#f2c230'); A('medalla_pl','Medalla de plata',16,'medalla','cuello','#c9ced8'); A('medalla_br','Medalla de bronce',14,'medalla','cuello','#c08040');
+  A('panuelo_ro','Pañuelo vaquero rojo',12,'panuelo','cuello',R,BL); A('panuelo_az','Pañuelo vaquero azul',12,'panuelo','cuello',AZ,BL);
+  A('cascabel','Collar con cascabel',12,'cascabel','cuello',R); A('ccorazon','Collar de corazón',16,'ccorazon','cuello','#e8414f');
+  [['roja',R,AM],['verde',VE,AM],['rosa',RO,BL]].forEach(([k,c,c2])=>A('mochila_'+k,'Mochila '+k,14,'mochila','espalda',c,c2));
+  A('alitas_ro','Alitas de hada rosas',20,'alitas','espalda','#ffc8e6'); A('alitas_ve','Alitas de hada verdes',20,'alitas','espalda','#c8ffd8');
+  A('colita_na','Colita de gato naranja',16,'colita','espalda',NA,BL); A('colita_ne','Colita de gato negra',16,'colita','espalda',NE,BL);
+  [['roja',R,AM],['azul',AZ,AM],['morada',MO,OR],['negra',NE,R],['rosa',RO,BL]].forEach(([k,c,c2])=>A('capa_'+k,'Capa de héroe '+k,18,'capa','espalda',c,c2));
+  A('murcielago','Alas de murciélago',18,'murcielago','espalda','#3a2a4a'); A('angel','Alas de ángel',22,'angel','espalda',BL);
+  A('caparazon','Caparazón de tortuga',18,'caparazon','espalda','#4f8a3a','#8ac860'); A('mosito','Mochila de osito',16,'mosito','espalda',CA,'#3a2a20');
+  A('jetpack','Mochila cohete',22,'jetpack','espalda','#c9ced8',R); A('conejito','Colita de conejo',10,'conejito','espalda',BL);
+  A('zorro','Cola de zorro',16,'zorro','espalda',NA,BL); A('coladino','Cola de dinosaurio',16,'coladino','espalda',VE,AM);
+  [['rojo',R],['rosa',RO]].forEach(([k,c])=>A('globoc_'+k,'Globo de corazón '+k,12,'globoc','mano',c));
+  [['azul',AZ],['amarillo',AM],['verde',VE],['morado',MO]].forEach(([k,c])=>A('globo_'+k,'Globo '+k,10,'globo','mano',c));
+  A('varita','Varita mágica',16,'varita','mano','#ffd23f'); A('varita_ro','Varita mágica rosa',16,'varita','mano',RO);
+  A('paleta','Paleta gigante',12,'paleta','mano','#ff7aa8',BL); A('osito','Osito de peluche',16,'osito','mano','#c08a5a','#3a2a20');
+  A('flor','Flor',10,'flor','mano',RO); A('helado','Helado',12,'helado','mano','#fbb6cc'); A('espada','Espada de juguete',14,'espada','mano','#cfd6e0',CA);
+  A('linterna','Linterna',12,'linterna','mano','#3a6ae8'); A('sombrilla_ro','Sombrilla rosa',16,'sombrilla','mano',RO,BL); A('sombrilla_az','Sombrilla azul',16,'sombrilla','mano',AZ,AM);
+  A('bandera','Banderita',10,'bandera','mano',R,BL); A('algodon','Algodón de azúcar',12,'algodon','mano','#ffc0dc');
+  A('red','Red para mariposas',14,'red','mano',VE); A('libro','Libro',10,'libro','mano','#3a8ae8'); A('micro','Micrófono',14,'micro','mano','#9aa0ae'); }
 // v156: el Amigurumi: tonos de piel tejidos (los 6 naturales, gratis) y ojos (4 gratis)
 [['porcelana','Porcelana','#f8e1d0'],['durazno','Durazno','#efc2a2'],['miel','Miel','#dba57c'],['canela','Canela','#b97c52'],['cacao','Cacao','#8a5634'],['chocolate','Chocolate','#5e3a24']]
   .forEach(([k,n,c])=>I('apiel','ap_'+k,'Estambre '+n.toLowerCase(),0,{free:1, c, def:k==='durazno'?1:0}));
 [['celeste','Celeste','#b8d9f7'],['lavanda','Lavanda','#cdb8f2'],['menta','Menta','#bfe9cc'],['chicle','Rosa chicle','#f7b6cf']].forEach(([k,n,c])=>I('apiel','ap_'+k,'Estambre '+n.toLowerCase(),12,{c}));
 [['negro','Botones negros',0],['cafe','Botones cafés',0],['felices','Bordados felices',0],['dormidos','Bordados dormidos',0],['azul','Botones azules',12],['verde','Botones verdes',12],['grandes','Botones grandes',14],['estrella','Botones de estrella',16],['corazon','Corazones bordados',14],['guino','Guiño',14]]
   .forEach(([k,n,p])=>I('aojos','ae_'+k,n,p,p?{eye:k, aeye:1}:{eye:k, aeye:1, free:1}));
+// v190 (Parte 3): 90 ojos, 90 cejas, 90 bocas y 90 mejillas nuevas para el Chibi (cejas y mejillas también para el Amigurumi)
+{ const nw={nw:1};
+  const AN=[['gris',['#2a2a30','#6a7080','#b8c0d0']],['rosa',['#6a0a3a','#e05a9a','#ffb8d8']],['morado',['#2a0f4a','#7a3ac0','#c8a0f5']],['dorado',['#5a3a00','#d8a020','#ffe08a']],['rojo',['#4a0a0a','#c0303a','#ff9a9a']],
+    ['turquesa',['#0a3a3a','#20a8a0','#90f0e0']],['hielo',['#1a3a5a','#7ab8e8','#e0f4ff']],['ámbar',['#4a2a00','#c87a10','#ffc860']],['menta',['#0a3a2a','#40c090','#b8f8d8']],['lila',['#3a2a5a','#a080d8','#e8d8ff']],
+    ['negro',['#000000','#1a1a20','#4a4a55']],['miel',['#4a2a0a','#b07a2a','#f0c080']],['cielo',['#0a2a6a','#4a90f0','#b8e0ff']],['esmeralda',['#003a1a','#109a4a','#70e8a0']],['coral',['#5a1a0a','#f0705a','#ffc0a8']],
+    ['naranja',['#4a1a00','#f07a1a','#ffc080']],['plata',['#3a3a44','#9aa0b0','#f0f2f8']],['fucsia',['#5a003a','#e0208a','#ff9ad0']],['chocolate',['#1a0a04','#5a3018','#a0703a']],['avellana',['#2a2a0a','#7a7a2a','#c8c070']],
+    ['vino',['#3a0010','#8a1a3a','#d07090']],['oliva',['#2a3000','#6a7a20','#c0d080']],['marino',['#000a30','#1a2f7a','#7a90d0']],['durazno',['#5a2a10','#f0a070','#ffe0c8']],['lavanda',['#3a3060','#9a90e0','#e8e4ff']],
+    ['jade',['#003028','#10806a','#80d8c0']],['ciruela',['#2a0030','#701a80','#d080e0']],['cian',['#003a4a','#10b0d8','#a0f0ff']],['rubí',['#3a0008','#b00828','#ff7090']],['zafiro',['#000a3a','#1030b0','#80a0ff']],
+    ['bosque',['#0a2a0a','#2a6a2a','#90c890']],['arena',['#3a2a10','#b09060','#f0e0b8']],['caramelo',['#3a1a00','#a05a10','#f0b060']]];
+  AN.forEach(([n,C])=>I('cojos','co2_a_'+n,'Ojos anime '+n,10,{eye:'a:'+C.join(','),...nw}));
+  [['rosa','rosa'],['morado','morado'],['cielo','azul'],['esmeralda','verde'],['miel','café'],['gris','gris'],['dorado','dorado'],['rojo','rojo'],['turquesa','turquesa'],['lila','lila']]
+    .forEach(([k,n])=>{ const C=AN.find(a=>a[0]===k)[1]; I('cojos','co2_l_'+k,'Ojos con pestañas '+n,12,{eye:'l:'+C.join(','),...nw}); });
+  [['amarillo',['#4a3a00','#d8b020','#fff08a']],['verde',['#0b4122','#2f9a55','#93e3a4']],['azul',['#0d2560','#2f6fd0','#86c6ff']],['morado',['#2a0f4a','#7a3ac0','#c8a0f5']],['rosa',['#6a0a3a','#e05a9a','#ffb8d8']],['naranja',['#4a1a00','#f07a1a','#ffc080']]]
+    .forEach(([n,C])=>I('cojos','co2_g_'+n,'Ojos de gatito '+n,14,{eye:'g:'+C.join(','),...nw}));
+  [['azul','#1d4fa8'],['rojo','#a8202a'],['verde','#1f7a43'],['morado','#6a2ab0'],['rosa','#d0407a'],['café','#5a3018']].forEach(([n,c])=>I('cojos','co2_b_'+n,'Ojos botón '+n,10,{eye:'b:'+c,...nw}));
+  [['azules','#1d4fa8'],['verdes','#1f7a43'],['morados','#6a2ab0'],['cafés','#5a3018']].forEach(([n,c])=>I('cojos','co2_p_'+n,'Ojos puntitos '+n,10,{eye:'p:'+c,...nw}));
+  [['morados',['#4a0a6a','#a050e0','#e0b0ff']],['azules',['#0a2a6a','#4a90f0','#b8e0ff']],['rojos',['#6a0a0a','#e03040','#ffb0b0']],['naranjas',['#6a2a00','#f08a20','#ffd0a0']]]
+    .forEach(([n,C])=>I('cojos','co2_h_'+n,'Ojos de corazón '+n,14,{eye:'h:'+C.join(','),...nw}));
+  [['rosas',['#a02a6a','#f070b0','#ffd0e8']],['azules',['#1a3a8a','#5a9af0','#c8e4ff']],['verdes',['#0a5a2a','#40c070','#c0f8d0']],['morados',['#4a1a8a','#9a60f0','#e0c8ff']]]
+    .forEach(([n,C])=>I('cojos','co2_s_'+n,'Ojos de estrella '+n,14,{eye:'s:'+C.join(','),...nw}));
+  [['morada',['#1a0a3a','#5a2ab0','#c070ff']],['azul',['#000a2a','#1a3aa0','#60b0ff']],['rosa',['#3a0a2a','#c02a8a','#ff90d0']]].forEach(([n,C])=>I('cojos','co2_gal_'+n,'Ojos de galaxia '+n,16,{eye:'gal:'+C.join(','),...nw}));
+  I('cojos','co2_arcoiris','Ojos arcoíris',16,{eye:'arcoiris',...nw});
+  [['rosas','#f49ac1'],['amarillas','#ffd23f'],['celestes','#7fd0ff']].forEach(([n,c])=>I('cojos','co2_flor_'+n,'Ojos de florecita '+n,14,{eye:'flor:'+c,...nw}));
+  I('cojos','co2_espiral','Ojos mareados',10,{eye:'espiral',...nw}); I('cojos','co2_x','Ojos de equis',10,{eye:'x',...nw});
+  I('cojos','co2_guino_cafe','Guiño café',12,{eye:'guino:#5a240a,#b85a1c,#e59a3c',...nw}); I('cojos','co2_guino_azul','Guiño azul',12,{eye:'guino:#0d2560,#2f6fd0,#86c6ff',...nw});
+  I('cojos','co2_sorpresa','Ojos de sorpresa',10,{eye:'sorpresa',...nw}); I('cojos','co2_chinitos','Ojos apretaditos',10,{eye:'chinitos',...nw}); I('cojos','co2_llorando','Ojos llorones',12,{eye:'llorando',...nw});
+  I('cojos','co2_luna','Ojos de lunita',10,{eye:'luna',...nw}); I('cojos','co2_sueno','Ojos contentos',10,{eye:'sueno',...nw});
+  [['azules',['#0a2a6a','#4a90f0','#b8e0ff']],['rosas',['#6a0a3a','#e05a9a','#ffb8d8']],['verdes',['#003a1a','#109a4a','#70e8a0']]].forEach(([n,C])=>I('cojos','co2_dia_'+n,'Ojos de diamante '+n,16,{eye:'diamante:'+C.join(','),...nw}));
+  I('cojos','co2_enojados_rojo','Ojos enojados rojos',10,{eye:'enojados:#4a0a0a,#c0303a,#ff9a9a',...nw}); I('cojos','co2_enojados_cafe','Ojos enojados cafés',10,{eye:'enojados:#5a240a,#b85a1c,#e59a3c',...nw});
+  I('cojos','co2_cansados_cafe','Ojos cansados cafés',10,{eye:'cansados:#5a240a,#b85a1c,#e59a3c',...nw}); I('cojos','co2_cansados_gris','Ojos cansados grises',10,{eye:'cansados:#2a2a30,#6a7080,#b8c0d0',...nw});
+  // cejas: 10 formas × 3 grosores × 3 alturas
+  const BS=[['arco','en arco'],['recta','rectas'],['sube','hacia arriba'],['baja','hacia abajo'],['onda','onduladas'],['punto','de bolita'],['doble','dobles'],['triangulo','de triángulo'],['corta','chiquitas'],['larga','largas']];
+  BS.forEach(([sh,n])=>[[5,'finas'],[10,'medianas'],[18,'gruesas']].forEach(([th,tn])=>[[0,''],[-14,' altas'],[10,' bajas']].forEach(([ly,ln])=>I('ccejas','cj2_'+sh+'_'+th+'_'+(ly<0?'a':ly>0?'b':'n'),'Cejas '+n+' '+tn+ln,6,{br:'p:'+sh+':'+th+':'+ly,...nw}))));
+  // bocas: 15 formas × 6 colores
+  const MS=[['sonrisa','Sonrisa',1],['grande','Sonrisota',1],['abierta','Boca abierta feliz',1],['lengua','Lengüita',1],['gato','Boquita de gato',1],['uwu','Boquita uwu',1],['tres','Boquita :3',1],['o','Boquita en O',1],
+    ['beso','Besito',0],['triste','Carita triste',1],['ondulada','Boca nerviosa',1],['dientes','Sonrisa con dientes',1],['colmillos','Dos colmillitos',0],['sorpresa','Boca de sorpresa',1],['ladeada','Sonrisa de lado',1]];
+  const MC=[['cafe','#5a2a1a','café','café'],['roja','#c62f3a','roja','rojo'],['rosa','#e0607a','rosa','rosa'],['morada','#7a3a8a','morada','morado'],['negra','#2a2226','negra','negro'],['coral','#ff7a5a','coral','coral']];
+  MS.forEach(([sh,n,fem])=>MC.forEach(([k,c,f,m])=>I('cboca','bo2_'+sh+'_'+k,n+' '+(fem?f:m)+(sh==='colmillos'?'':''),6,{mo:'m:'+sh+':'+c,...nw})));
+  // mejillas: 14 formas × 6 colores (+ arcoíris y 5 verdes)
+  const CC=[['rosa','#f0788c',['rosa','rosa','rosas','rosas']],['roja','#e03c50',['roja','rojo','rojas','rojos']],['durazno','#ffa070',['durazno','durazno','durazno','durazno']],['morada','#b080e0',['morada','morado','moradas','morados']],
+    ['azul','#6aa8f0',['azul','azul','azules','azules']],['amarilla','#f2c230',['amarilla','amarillo','amarillas','amarillos']]], VERDE=['verde','#5fc07a',['verde','verde','verdes','verdes']];
+  const KS=[['chapitas','Chapitas',2],['ovaladas','Mejillas ovaladas',2],['circulos','Circulitos',3],['corazon','Corazón',1],['estrella','Estrella',0],['pecas','Pecas',2],['rayitas','Rayitas',2],['espiral','Espiral',0],
+    ['flor','Florecita',0],['luna','Lunita',0],['notas','Notas musicales',2],['puntitos','Puntitos',3],['destellos','Destellos',3],['trazo','Rayita de pintura',0]];
+  KS.forEach(([sh,n,g])=>CC.concat(['chapitas','corazon','estrella','flor','destellos'].includes(sh)?[VERDE]:[]).forEach(([k,c,F])=>I('cmejillas','mj2_'+sh+'_'+k,n+' '+F[g],6,{ck:'k:'+sh+':'+c,...nw})));
+  I('cmejillas','mj2_arcoiris','Arcoíris en las mejillas',8,{ck:'k:arcoiris:#ffffff',...nw});
+  // ojos del Amigurumi
+  const AE=(k,n,p,E)=>{ AM_EYES['n_'+k]=E; I('aojos','ae2_'+k,n,p,{eye:'n_'+k, aeye:1,...nw}); };
+  [['rojos','#a8202a'],['rosas','#e05a9a'],['morados','#6a2ab0'],['grises','#6a6a72'],['dorados','#d8a020'],['plateados','#b8bcc8'],['turquesa','#18a0a0'],['naranjas','#e06a10'],['amarillos','#e8c020'],['vino','#6a1a2a'],['celestes','#5aa8e8'],['lilas','#a080d8'],['menta','#40c090'],['perla','#f4efe6']]
+    .forEach(([n,c])=>AE('b_'+n,'Botones '+n,10,{btn:c}));
+  [['negros','#0d0d10'],['cafés','#3a2112'],['azules','#1d4fa8'],['verdes','#1f7a43'],['rojos','#a8202a'],['rosas','#e05a9a'],['morados','#6a2ab0'],['dorados','#d8a020'],['turquesa','#18a0a0'],['grises','#6a6a72']]
+    .forEach(([n,c])=>AE('g_'+n,'Botones grandes '+n,12,{btn:c, big:1}));
+  [['negros','#0d0d10'],['cafés','#3a2112'],['azules','#1d4fa8'],['rosas','#e05a9a'],['verdes','#1f7a43'],['morados','#6a2ab0'],['rojos','#a8202a'],['grises','#6a6a72']]
+    .forEach(([n,c])=>AE('m_'+n,'Botoncitos '+n,10,{btn:c, mini:1}));
+  [['plateadas','#c9ced8'],['rosas','#f49ac1'],['azules','#4b8ae8'],['verdes','#4fc070'],['moradas','#9a60f0'],['rojas','#e04050'],['blancas','#f6f4ef'],['naranjas','#f08a20']]
+    .forEach(([n,c])=>AE('s_'+n,'Ojos de estrella '+n,14,{star:c}));
+  [['rojos','#d8283a'],['rosas','#f06aa0'],['morados','#8a3ac0'],['azules','#3a7ae8'],['dorados','#e8b020'],['negros','#1a1416'],['verdes','#3aa860'],['naranjas','#f07a20']]
+    .forEach(([n,c])=>AE('h_'+n,'Ojos de corazón '+n,14,{heart:c}));
+  [['café','#3a2112'],['azul','#1d4fa8'],['verde','#1f7a43'],['rojo','#a8202a'],['rosa','#e05a9a'],['morado','#6a2ab0'],['dorado','#d8a020'],['gris','#6a6a72']]
+    .forEach(([n,c])=>AE('w_'+n,'Guiño con botón '+n,12,{btn:c, wink:1}));
+  const ES=[['felices','Bordados felices'],['dormidos','Bordados dormidos'],['corazon','Corazones bordados'],['x','Equis bordadas'],['espiral','Espirales bordadas'],['ovalo','Óvalos bordados'],['luna','Lunitas bordadas'],['flor','Florecitas bordadas'],
+    ['cruz','Crucecitas bordadas'],['sorpresa','Bordados de sorpresa'],['llorando','Bordados llorones'],['chinitos','Bordados apretaditos']];
+  ES.forEach(([st,n])=>[['cafes','#2c1c16','cafés'],['rosas','#d0407a','rosas'],['azules','#2a5ab0','azules']].forEach(([k,c,cn])=>{ if((st==='felices'||st==='dormidos')&&k==='cafes') return; if(st==='corazon'&&k==='rosas') return; AE('e_'+st+'_'+k,n+' '+cn,10,{st, col:c}); }));
+  AE('e_corazon_morados','Corazones bordados morados',10,{st:'corazon', col:'#8a3ac0'}); }
+// v190 (Parte 4): 90 peinados, 90 orejitas, 90 tonos de piel (y 90 de estambre), 90 colores de cabello
+{ const nw={nw:1};
+  CH_HAIR2_LIST.forEach(([k,n])=>I('cpelo','hp2_'+k.slice(3),n,16,{hs:k,...nw}));
+  Object.keys(CH_EARS2_NAMES).forEach(k=>I('corejas','or2_'+k,'Orejas de '+CH_EARS2_NAMES[k],14,{ear:k,...nw}));
+  [["Marfil", "#fbe8dc"], ["Vainilla", "#f8dcc4"], ["Crema", "#f4d4b8"], ["Melocotón", "#f2c4a4"], ["Almendra", "#e8b894"], ["Avena", "#e0c0a0"], ["Arena", "#dcb08a"], ["Galleta", "#d4a27a"], ["Trigo", "#d8b07c"], ["Caramelo claro", "#cc9468"], ["Dorado", "#c8945a"], ["Bronce", "#b47a4a"], ["Canela clara", "#c08660"], ["Nuez", "#a06a44"], ["Tostado", "#946038"], ["Café con leche", "#a87a5a"], ["Moca", "#7e5238"], ["Avellana", "#8e623e"], ["Castaña", "#6e4428"], ["Cacao claro", "#704a32"], ["Chocolate con leche", "#6a4430"], ["Café", "#55341f"], ["Espresso", "#45281a"], ["Ébano", "#3a2216"], ["Rosado claro", "#f8d0c8"], ["Rosado", "#f0b8ac"], ["Oliva claro", "#d8b890"], ["Oliva", "#b8966a"], ["Ámbar", "#d09a5a"], ["Cobre", "#b06a40"], ["Lila", "#d1b8ea"], ["Lavanda clara", "#d4caf2"], ["Uva", "#ba89d2"], ["Ciruela", "#c78ac7"], ["Rosa pastel", "#f9c8d8"], ["Fresa", "#f0a8b4"], ["Algodón de azúcar", "#f4c2e4"], ["Chicle", "#f2a6cc"], ["Coral", "#f4a99a"], ["Salmón", "#f0baa8"], ["Durazno pastel", "#f9d0b4"], ["Mandarina", "#f5bd84"], ["Limón", "#f7f0a1"], ["Vainilla amarilla", "#f8ecbf"], ["Pistache", "#cce3ab"], ["Menta clara", "#c2ebd6"], ["Verde manzana", "#b1e198"], ["Jade", "#86cbb4"], ["Turquesa", "#8cd9d2"], ["Aqua", "#ade5eb"], ["Cielo", "#b1dcf1"], ["Celeste pastel", "#c4dff3"], ["Azul bebé", "#bed6ef"], ["Azul cielo", "#9dbce7"], ["Bígaro", "#b0b5e8"], ["Índigo claro", "#9d97d8"], ["Gris perla", "#d2d5da"], ["Plata", "#bdc0c7"], ["Nube", "#e7ebef"], ["Nieve", "#f2f6f8"], ["Blanco hueso", "#f3ede2"], ["Arena rosada", "#e3c5bf"], ["Melón", "#eec7a0"], ["Sandía", "#e89299"], ["Frambuesa", "#dd88a4"], ["Mora", "#ad7ab8"], ["Arándano", "#7784c5"], ["Kiwi", "#bed47d"], ["Lima", "#c7e689"], ["Hierba", "#86cb86"], ["Bosque claro", "#7ab88f"], ["Océano", "#6ba8c7"], ["Laguna", "#85c9d6"], ["Hielo", "#d6edf5"], ["Glaciar", "#cde5ea"], ["Malva", "#d1a9ca"], ["Orquídea", "#dcaee0"], ["Magnolia", "#f0dbe6"], ["Rubor", "#edc9cf"], ["Caramelo rosa", "#e6b3bf"], ["Pétalo", "#f5d6e3"], ["Mantequilla", "#f4ecc2"], ["Miel clara", "#eecd8b"], ["Sol", "#f7dc6e"], ["Calabaza", "#eea463"], ["Duraznito", "#f8d2bf"], ["Lavanda gris", "#c3bcd2"], ["Pizarra", "#8a96a8"], ["Grafito claro", "#757c8a"], ["Galaxia", "#7853ac"]].forEach(([n,c],i)=>{ I('cpiel','cp2_'+i,'Piel '+n.toLowerCase(),10,{c,...nw}); I('apiel','ap2_'+i,'Estambre '+n.toLowerCase(),10,{c,...nw}); });
+  [["Negro azulado", "#1c2230"], ["Café oscuro", "#3a2418"], ["Chocolate", "#4a2c1a"], ["Café", "#5a3820"], ["Avellana", "#7a4e2a"], ["Caramelo", "#9a6234"], ["Miel", "#c08a44"], ["Rubio oscuro", "#b08a4e"], ["Rubio dorado", "#d8a850"], ["Rubio claro", "#ecca7a"], ["Rubio platino", "#f2e4be"], ["Cobrizo", "#b4562a"], ["Rojo cereza", "#a8242e"], ["Rojizo", "#c0482a"], ["Caoba", "#6a2a1e"], ["Canoso", "#a8a8ae"], ["Gris", "#7a7a82"], ["Plateado", "#c8ccd4"], ["Blanco", "#f4f2ee"], ["Castaño rojizo", "#7a3a22"], ["Fresa rubio", "#e8a07a"], ["Arena", "#c8a878"], ["Moca", "#6a4a34"], ["Ceniza", "#8a8478"], ["Champaña", "#e8d4a8"], ["rosa chicle", "#f17eb8"], ["rosa pastel", "#f3bacd"], ["fucsia", "#ee2bad"], ["magenta", "#d926d9"], ["lila", "#bf99e6"], ["lavanda", "#beb0e8"], ["morado", "#7e2eb8"], ["uva", "#702d86"], ["violeta", "#8357db"], ["índigo", "#2e2e9e"], ["azul marino", "#1d3272"], ["azul rey", "#1d56c9"], ["azul cielo", "#79bcec"], ["celeste", "#a6d9f2"], ["turquesa", "#42d7d2"], ["aqua", "#86e1ea"], ["menta", "#90dfbe"], ["verde esmeralda", "#24a866"], ["verde bosque", "#2a6f41"], ["verde lima", "#8cdd3c"], ["verde manzana", "#94db70"], ["pistache", "#bed590"], ["amarillo", "#f5dc3d"], ["limón", "#f9f586"], ["mostaza", "#c39b22"], ["naranja", "#f48525"], ["mandarina", "#f58747"], ["durazno", "#f7b797"], ["coral", "#ef7e6c"], ["rojo fuego", "#ec1a13"], ["rojo vino", "#7a1f2e"], ["cereza", "#c91d48"], ["frambuesa", "#d22d72"], ["salmón", "#eca293"], ["algodón de azúcar", "#f2c0e1"], ["nube", "#dfe6ec"], ["hielo", "#d0e9f1"], ["plata azulada", "#b3bdcc"], ["grafito", "#454a54"], ["carbón", "#262626"], ["chocolate menta", "#3e7462"], ["caramelo rosa", "#df9faa"], ["miel dorada", "#e2af36"], ["ámbar", "#ec9213"], ["bronce", "#a66b30"], ["cobre brillante", "#d05e25"], ["oro", "#eec42b"], ["arcoíris pastel", "#e8bae8"], ["galaxia", "#462673"], ["océano", "#27749b"], ["laguna", "#39aec6"], ["jade", "#3fa684"], ["kiwi", "#92b234"], ["oliva", "#7d833f"], ["arena dorada", "#d9bf8c"], ["malva", "#b87aad"], ["orquídea", "#cf85d6"], ["ciruela", "#7d367d"], ["mora", "#582e60"], ["arándano", "#384794"], ["pizarra", "#5c6f8a"], ["perla", "#eae3d7"], ["vainilla", "#f1e6c6"], ["mantequilla", "#f1e39d"], ["crema", "#f2ead9"]].forEach(([n,c],i)=>I('ccolor','hc2_'+i,'Cabello '+n.toLowerCase(),10,{c,...nw})); }
 // v157: lo mismo que el Chibi, en versión tejida para el Amigurumi (copiado de su lista, con su propio id)
 { const cp=(cat,pre,np)=>SHOP.filter(it=>it.cat===cat).forEach(it=>{ const o={...it}; delete o.id; delete o.cat; delete o.name; delete o.price; I(np,pre+it.id.slice(it.id.indexOf('_')+1),it.name,it.price,o); });
   cp('cgorros','arg_','agorros'); cp('caccesorios','arc_','aaccesorios');
   cp('carriba','ara_','aarriba'); cp('cabajo','arb_','aabajo'); cp('czapatos','arz_','azapatos');
   cp('cpelo','ahp_','apelo'); cp('ccolor','ahc_','acolor'); cp('ccejas','acj_','acejas'); cp('cmejillas','amj_','amejillas'); cp('corejas','aor_','aorejas'); }
 const SHOP_BY={}; SHOP.forEach(it=>{ it.slot=SLOT_OF[it.cat]; it.av=(SHOP_CATS.find(c=>c.id===it.cat)||{}).av||'f'; if(it.price>0) it.price=Math.max(15,it.price*5); SHOP_BY[it.id]=it; });   // v124: precios ×5 (economía más justa)
-const OUT_SLOTS=['top','hat','gloves','socks','shoes','glasses','skin','tex','body','cskin','ceyes','chair','chcol','cbrows','cmouth','ccheeks','cears','ctop','cbot','cshoe','chat','cacc','askin','aeyes','ahair','ahcol','abrows','acheeks','aears','atop','abot','ashoe','ahat','aacc'];
+SHOP.forEach(it=>{ if(!it.ak) return; const as=it.as||({gorro:'cabeza',cara:'cara',cuerpo:'cuello',espalda:'espalda'})[it.view]||'cabeza'; it.as=as; it.slot=(it.av==='a'?'a':'c')+({cabeza:'acc',cara:'acf',cuello:'acn',espalda:'acb',mano:'ach'})[as]; });   // v190: cada accesorio va en su lugar (se pueden usar varios)
+const OUT_SLOTS=['top','hat','gloves','socks','shoes','glasses','skin','tex','body','cskin','ceyes','chair','chcol','cbrows','cmouth','ccheeks','cears','ctop','cbot','cshoe','chat','cacc','askin','aeyes','ahair','ahcol','abrows','acheeks','aears','atop','abot','ashoe','ahat','aacc','cacf','cacn','cacb','cach','aacf','aacn','aacb','aach'];
 // lo comprado y lo puesto
-const wardrobe=(()=>{ let w={own:[], eq:{}}; try{ const s=JSON.parse(localStorage.getItem('mundoPelucheRopa')||'null'); if(s){ w.own=(s.own||[]).filter(id=>SHOP_BY[id]); for(const k of OUT_SLOTS) if(s.eq && SHOP_BY[s.eq[k]] && (w.own.includes(s.eq[k]) || SHOP_BY[s.eq[k]].free)) w.eq[k]=s.eq[k]; } }catch(e){} return w; })();
+const wardrobe=(()=>{ let w={own:[], eq:{}}; try{ const s=JSON.parse(localStorage.getItem('mundoPelucheRopa')||'null'); if(s){ w.own=(s.own||[]).filter(id=>SHOP_BY[id]); for(const k of OUT_SLOTS) if(s.eq && SHOP_BY[s.eq[k]] && (w.own.includes(s.eq[k]) || SHOP_BY[s.eq[k]].free)) w.eq[SHOP_BY[s.eq[k]].slot]=s.eq[k]; } }catch(e){} return w; })();
 function saveWardrobe(){ try{ localStorage.setItem('mundoPelucheRopa', JSON.stringify(wardrobe)); }catch(e){} }
 const outfitList=eq=>OUT_SLOTS.map(k=>eq[k]).filter(Boolean);
 function parseOutfit(a){ const eq={}; if(Array.isArray(a)) a.slice(0,52).forEach(id=>{ const it=typeof id==='string' && SHOP_BY[id]; if(it) eq[it.slot]=id; }); return eq; }
@@ -9054,7 +9688,7 @@ const owns=it=>!!it.free || wardrobe.own.includes(it.id);
 const diShopVis=it=>shopOnly ? (it.dulce===1 || (!!it.dulce && wardrobe.own.includes(it.id))) : ((it.cat==='cuerpo' || it.av===myAv()) && (!it.dulce || wardrobe.own.includes(it.id)));   // v152: solo lo del cuerpo que traes
 // ---- Filtros de la tienda: buscar por nombre o color, lo nuevo, lo mío y lo que me alcanza ----
 const NEW_RE=/^(arg_|arc_|ara_|arb_|arz_|ahp_|ahc_|acj_|amj_|aor_|ap_|ae_|rg_|rc_|ra_|rb_|rz_|hp_|hc_|cj_|bo_|mj_|or_|cp_|co_|sdd_|cmd_|sud_|god_|gud_|cad_|hn_|gln_|gun_|zn_|zp_dino$|sdn_|pln_|cmn_|sun2_|can_|dg_(aurora|chicle|caribe|volcan)$|pa_(salmon|pistache)$|ne_(dorado|menta)$|fo_amarillo$|ar_rayas$|tx_(huellitas|mezclilla|vichy|hojas|notas|burbujas|fresas|sandia|cuadritos|metalazul)$)/;
-const isNewItem=it=>NEW_RE.test(it.id), isNewPet=p=>p.i>=12;
+const isNewItem=it=>!!it.nw, isNewPet=p=>p.i>=12;
 const shopF={q:'', new:false, mine:false, afford:false};
 // quita acentos y la terminación (roja/rojo/rojas → roj) para que «rojo» encuentre «Gorra roja»
 const fStem=w=>{ w=w.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); return w.length>4 ? w.replace(/(es|as|os|a|o|s)$/,'') : w.length>3 ? w.replace(/(a|o|s)$/,'') : w; };
@@ -9108,13 +9742,16 @@ function chSwatch(it){ const e=wardrobe.eq, base={body:'av_chibi', cskin:e.cskin
     if(it.tk||it.bk) return `url(${canUrl(avPortrait({...base, chair:e.chair, ctop:it.tk?it.id:e.ctop, cbot:it.bk?it.id:e.cbot, cshoe:e.cshoe},'cuerpo'))}) center/cover`;
     if(it.sk) return `url(${canUrl(avPortrait({...base, cbot:e.cbot, cshoe:it.id},'pies'))}) center/cover`;
     if(it.hk) return `url(${canUrl(avPortrait({...base, chair:e.chair, chat:it.id},'gorro'))}) center/cover`;
-    if(it.ak) return `url(${canUrl(avPortrait({...base, chair:e.chair, ctop:e.ctop, cbot:e.cbot, cacc:it.id},it.view))}) center/cover`;
+    if(it.ak) return `url(${canUrl(avPortrait({...base, chair:e.chair, ctop:e.ctop, cbot:e.cbot, [it.slot]:it.id},it.view))}) center/cover`;
     const hx=(SHOP_BY[e.chcol]||SHOP_BY.hc_castano).c, bc='#'+new THREE.Color(hx).multiplyScalar(.5).getHexString();
     if(it.br){ const k='th_'+bc; return `url(${canUrl(it[k]||(it[k]=chPartThumb({br:it.br, bc, eye:'puntos'},[250,120,290,200])))}) center/cover`; }
     if(it.mo) return `url(${canUrl(it.thC||(it.thC=chPartThumb({mo:it.mo},[442,405,140,100])))}) center/cover`;
     if(it.ck) return `url(${canUrl(it.thC||(it.thC=chPartThumb({ck:it.ck, eye:'puntos'},[150,250,360,200])))}) center/cover`;
   }catch(err){} return null; }
-function renderShop(){
+let shopAs='';
+const SHOP_THQ=[]; let shopThGen=0, shopThN=0, shopThT=null;
+function shopThPump(){ if(shopThT) return; shopThT=setTimeout(()=>{ shopThT=null; const t0=performance.now(); while(SHOP_THQ.length && performance.now()-t0<12){ const [g,sw,f]=SHOP_THQ.shift(); if(g!==shopThGen || !sw.isConnected) continue; try{ sw.style.background=f(); }catch(e){} } if(SHOP_THQ.length) shopThPump(); },16); }
+function renderShop(){ shopThGen++; shopThN=0; SHOP_THQ.length=0;
   shopCoinsUI();
   const tabs=ui('shopTabs'); tabs.textContent='';
   ui('shopFilter').querySelectorAll('.fchip').forEach(b=>b.classList.toggle('on',!!shopF[b.dataset.f]));
@@ -9128,12 +9765,17 @@ function renderShop(){
   const grid=ui('shopGrid'); grid.textContent='';
   if(shopCat==='mascotas'){ renderPetShop(grid); return; }
   ui('shopPetName').hidden=true; petTry=null;
-  const inCat=SHOP.filter(it=>it.cat===shopCat && diShopVis(it)), list=inCat.filter(it=>shopMatch(it.name, wardrobe.own.includes(it.id), it.price, isNewItem(it)));
+  const accCat=shopCat==='caccesorios'||shopCat==='aaccesorios';   // v190: filtro por lugar (cabeza, cara, cuello, espalda, mano)
+  { let box=document.getElementById('shopAccF'); if(!box){ box=document.createElement('div'); box.id='shopAccF'; box.className='shop-filter'; ui('shopFilter').after(box); } box.hidden=!accCat;
+    if(accCat){ box.innerHTML=[['','Todos'],['cabeza','🎀 Cabeza'],['cara','👓 Cara'],['cuello','🧣 Cuello'],['espalda','🎒 Espalda'],['mano','🎈 Mano']].map(([k,n])=>'<button type="button" class="fchip'+((shopAs||'')===k?' on':'')+'" data-as="'+k+'">'+n+'</button>').join('');
+      box.querySelectorAll('button').forEach(b=>b.onclick=()=>{ shopAs=b.dataset.as; renderShop(); }); } }
+  const inCat=SHOP.filter(it=>it.cat===shopCat && diShopVis(it) && (!accCat || !shopAs || it.as===shopAs)), list=inCat.filter(it=>shopMatch(it.name, wardrobe.own.includes(it.id), it.price, isNewItem(it)));
   shopCountTxt(list.length, inCat.length); if(!list.length) shopEmpty(grid);
   list.forEach(it=>{
     const own=owns(it), on=wardrobe.eq[it.slot]===it.id || (!wardrobe.eq[it.slot] && !!it.def), trying=shopTry&&shopTry.id===it.id;
     const b=document.createElement('button'); b.type='button'; b.className='shop-item'+(on?' on':'')+(trying?' try':'');
-    const sw=document.createElement('span'); sw.className='sw'; sw.style.background=chSwatch(it) || (it.eye ? `url(${canUrl(chEyeThumb(it.eye))}) center/cover` : it.thumb ? `url(${canUrl(it.thumbC||(it.thumbC=avThumb(it.thumb)))}) center/contain no-repeat, ${it.plain}` : swatchCss(it)); if(KIND_IC[it.k]){ const ic=document.createElement('i'); ic.className='ic'; ic.textContent=KIND_IC[it.k]; sw.appendChild(ic); } if(it.neon) sw.style.boxShadow=`0 0 12px ${it.neon}`;
+    const sw=document.createElement('span'); sw.className='sw'; const bgf=()=>chSwatch(it) || (it.eye ? `url(${canUrl(chEyeThumb(it.eye))}) center/cover` : it.thumb ? `url(${canUrl(it.thumbC||(it.thumbC=avThumb(it.thumb)))}) center/contain no-repeat, ${it.plain}` : swatchCss(it));
+    if(shopThN++<12 || !(it.av==='c'||it.av==='a')) sw.style.background=bgf(); else { sw.style.background='#efe8d4'; SHOP_THQ.push([shopThGen,sw,bgf]); shopThPump(); }   // v190: las miniaturas de abajo se dibujan poco a poco (ya son 100 por lista) if(KIND_IC[it.k]){ const ic=document.createElement('i'); ic.className='ic'; ic.textContent=KIND_IC[it.k]; sw.appendChild(ic); } if(it.neon) sw.style.boxShadow=`0 0 12px ${it.neon}`;
     const nm=document.createElement('span'); nm.className='nm'; nm.textContent=it.name;
     const st=document.createElement('span'); st.className='st'; st.innerHTML = on ? 'Puesto ✓' : it.soon ? 'Muy pronto' : own ? (it.free && !wardrobe.own.includes(it.id) ? 'Gratis · ponértelo' : 'Tuyo · ponértelo') : `<i class="cn"></i>${it.price}`;
     b.append(sw,nm,st); if(isNewItem(it) && !own){ const n=document.createElement('span'); n.className='nw'; n.textContent='Nuevo'; b.appendChild(n); } b.onclick=()=>shopPick(it); grid.appendChild(b); });
