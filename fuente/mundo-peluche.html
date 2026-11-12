@@ -141,6 +141,7 @@ kbd{font-family:var(--body);font-weight:800;font-size:13px;background:#fff;borde
   padding:8px 14px;box-shadow:0 4px 0 #c9c2ab,0 6px 14px var(--shadow);outline:2px dashed #b9b29a;outline-offset:-6px;cursor:pointer;}
 .hint{font-size:13px;font-weight:800;color:var(--thread);background:rgba(251,248,239,.8);padding:6px 10px;border-radius:10px;}
 body.not-play .mg-hud, body.not-play .mg-ctl, body.not-play .mg-result{display:none!important;}
+.depth-chip{cursor:default;font-variant-numeric:tabular-nums;background:#cfe9f7;color:#16466b;}   /* v191 */
 .coin-chip{display:flex;align-items:center;gap:6px;cursor:default;padding:6px 12px 6px 8px;font-variant-numeric:tabular-nums;}
 .coin-chip svg{width:24px;height:24px;}
 .coin-chip.bump{animation:coinbump .5s;}
@@ -837,6 +838,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <button class="chip" id="pauseChip">Pausa</button>
     <span class="hint fps" id="fps" hidden>60 FPS</span>
     <span class="hint fps coords" id="coordsEl" hidden></span>
+    <span class="chip depth-chip" id="depthChip" hidden title="Qué tan hondo vas"></span>
     <span class="chip coin-chip" id="coinChip" title="Monedas de peluche"><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="#f6c445" stroke="#b07a12" stroke-width="2.5"/><circle cx="20" cy="20" r="13" fill="none" stroke="#b07a12" stroke-width="1.6" stroke-dasharray="3 2.5"/><path d="M20 10l2.9 6 6.5.8-4.8 4.5 1.3 6.4L20 24.6l-5.9 3.1 1.3-6.4-4.8-4.5 6.5-.8z" fill="#fff3c4" stroke="#b07a12" stroke-width="1.4" stroke-linejoin="round"/></svg><span id="coinN">0</span></span>
     <button class="chip room-chip" id="roomChip" hidden title="Copiar el código de la sala"><span class="dot" id="roomDot"></span><span id="roomLabel">Sala</span></button>
   </div>
@@ -1404,7 +1406,7 @@ function terrainExact(x,z){
   if(ld<LAKE.R){ const u=ld/LAKE.R; h -= LAKE.depth*Math.pow(1-u*u,1.5); }
   // ondulación suave del fondo marino
   const sea = cN>1 ? .8*Math.sin(x*.03+1)*Math.cos(z*.027) * smooth(1,1.15,cN) * (1-smooth(1.35,1.45,cN)) : 0;
-  return mgPad(x,z, h + reliefH(x,z) + shoreBaseN(cN) + sea);   // + montañas, cañones, colinas y el río (v119)
+  return mgPad(x,z, h + reliefH(x,z) + shoreBaseN(cN) + sea + (cN>1.2?seaAbyss(x,z,d,cN):0));   // + montañas, cañones, colinas y el río (v119)
 }
 const coastC=(x,z)=>Math.hypot(x,z)/coastR(x,z);
 // dónde empieza el mar mirando desde el centro en la dirección a (se busca desde afuera, así no confunde lagunas o el río con la costa)
@@ -1451,7 +1453,29 @@ function shoreBaseN(c){
   if(c<1.45) return lerp(-25,DEEP_Y,smooth(1.3,1.45,c));
   return DEEP_Y;
 }
-const COAST_X=.9588;   // en c≈0.959 la playa llega al nivel del mar
+const COAST_X=.9588;
+// ---------- v191: el mar hondo ----------
+// Pasando la plataforma (donde antes el fondo se quedaba plano a 45 m) el fondo sigue bajando poco a poco hasta ~150–195 m, con lomas,
+// crestas y cañones que bajan de la plataforma; hacia el norte, la Fosa Brillante llega a 200 m. Entre la isla grande y las otras islas
+// (donde sus plataformas se juntan) se queda como antes. Todo es fijo: igual para todos los jugadores.
+const ABYSS_Y=-201;
+const SEA_FOSA={a:1.42, d0:1800, d1:2900, w:75};
+function seaShelfDist(x,z,sm){ let sd=sm;
+  for(const I of [WI,JI,DI]){ const lx=x-I.x, lz=z-I.z; if(lx>2300||lx<-2300||lz>2300||lz<-2300) continue;
+    const a=Math.atan2(lz,lx), R=I===WI?wiCoastR(a):I===JI?jiCoastR(a):diCoastR(a), s=Math.hypot(lx,lz)-1.34*R; if(s<sd) sd=s; }
+  return sd; }
+function seaAbyss(x,z,d,cN){ const sm=d-1.45*d/cN; let e=0;
+  if(sm>-280 && sm<460){ const a=Math.atan2(z,x), v=rlNoise(a*11+3.3, sm/340+.7), g=1-Math.abs(2*v-1);   // cañones que bajan de la plataforma
+    e-=36*smooth(.88,.975,g)*smooth(-280,-140,sm)*(1-smooth(220,460,sm)); }
+  const sd=sm<-60?sm:seaShelfDist(x,z,sm);
+  if(sd>0){ const k=smooth(0,430,sd);
+    e+=k*(-110+66*(rlFbm(x/560+11,z/560-7,3)-.5));   // lomas
+    const r=1-Math.abs(2*rlNoise(x/310-4,z/310+9)-1); e+=k*32*r*r*r*r*r;   // crestas
+    if(e<ABYSS_Y+6-DEEP_Y) e=ABYSS_Y+6-DEEP_Y;
+    const F=SEA_FOSA; if(d>F.d0-50 && d<F.d1+50){ const p=Math.abs(d*angD(Math.atan2(z,x),F.a)); if(p<F.w*1.6){
+      const m=(1-smooth(F.w*.45,F.w*1.6,p))*smooth(F.d0,F.d0+260,d)*(1-smooth(F.d1-260,F.d1,d)); e+=(ABYSS_Y-DEEP_Y-e)*m; } } }   // la Fosa Brillante
+  return e; }
+   // en c≈0.959 la playa llega al nivel del mar
 // ruido suave (siempre el mismo)
 function rlHash(i,j){ let h=Math.imul(i|0,374761393)+Math.imul(j|0,668265263)|0; h=Math.imul(h^(h>>>13),1274126177); return ((h^(h>>>16))>>>0)/4294967296; }
 function rlNoise(x,z){ const i=Math.floor(x), j=Math.floor(z), fx=x-i, fz=z-j, sx=fx*fx*(3-2*fx), sz=fz*fz*(3-2*fz);
@@ -1666,7 +1690,7 @@ let GROUND_MAT=null; const TERRAIN_LOD=[];
   const SAND=hexLin('#efd9a6'), WET=hexLin('#d7c08e'), SEAF=hexLin('#cdb98a'), DEEP=hexLin('#5f7f97'), MUD=hexLin('#7fa27a');
   const ALP=hexLin('#6f9c52'), ROCK=[hexLin('#a0958a'),hexLin('#8c8279'),hexLin('#978a80')], SNOW=hexLin('#f6f8fc'), PEB=hexLin('#b7aa8e'), RBED=hexLin('#6f7f63'), ROCKD=hexLin('#6f6862');
   const STRATA=['#e8b27a','#d48a5c','#f1cb98','#c97c52','#e09d68','#f4d6a8'].map(hexLin), MTOP=hexLin('#cdbf78'), CFLOOR=hexLin('#e6cd9a');
-  const tmpC=new THREE.Color(), c2=new THREE.Color(), rn={d:0,s:0,i:0};
+  const tmpC=new THREE.Color(), c2=new THREE.Color(), rn={d:0,s:0,i:0}, ABY_C=hexLin('#3f5672'), ABY_R=hexLin('#5d6680'), ABY_T=hexLin('#2c3a55');
   for(let i=0;i<n;i++){ const x=warp(pos.getX(i)), z=warp(pos.getZ(i)), h=terrainExact(x,z); pos.setXYZ(i,x,h,z); uv.setXY(i,x/16,-z/16); HH[i]=h; }
   { const xs=new Float64Array(GW), zs=new Float64Array(GW); for(let i=0;i<GW;i++){ xs[i]=pos.getX(i); zs[i]=pos.getZ(i*GW); } TMESH={xs, zs, H:HH, GW}; }
   for(let iy=0;iy<GW;iy++) for(let ix=0;ix<GW;ix++){ const k=iy*GW+ix, x=pos.getX(k), z=pos.getZ(k), h=HH[k], cc=coastC(x,z);
@@ -1694,7 +1718,8 @@ let GROUND_MAT=null; const TERRAIN_LOD=[];
     }
     sw=smooth(.895,.925,cc)*(1-smooth(3,6,h)); tmpC.lerp(SAND, sw); gw*=1-sw;   // playa
     if(h<SEA_Y) tmpC.lerp(WET, smooth(SEA_Y, SEA_Y-1, h));
-    if(cc>1){ tmpC.lerp(SEAF, smooth(1,1.06,cc)); tmpC.lerp(DEEP, smooth(-6,-40,h)); gw=0; sw=1; }
+    if(cc>1){ tmpC.lerp(SEAF, smooth(1,1.06,cc)); tmpC.lerp(DEEP, smooth(-6,-40,h)); gw=0; sw=1;
+      if(h<-46){ tmpC.lerp(ABY_C, smooth(-46,-170,h)*.9); if(slope>.42) tmpC.lerp(ABY_R, smooth(.42,.9,slope)*.65); tmpC.lerp(ABY_T, smooth(-186,-200,h)); } }   // v191: lo hondo, más oscuro; las paredes, de roca
     col[k*3]=tmpC.r; col[k*3+1]=tmpC.g; col[k*3+2]=tmpC.b; grassW[k]=gw; sandW[k]=sw; snowW[k]=snw;
   }
   // variación del pasto: tonos que cambian poco a poco, valles en sombra y lomas más claras (se calcula una vez al cargar)
@@ -1742,10 +1767,23 @@ let GROUND_MAT=null; const TERRAIN_LOD=[];
   }
 })();
 
-// Fondo del océano abierto: sigue al jugador para que el mar no tenga fin
+// Fondo del océano abierto: muy lejos, un piso plano y oscuro (casi no se ve: queda debajo de todo)
 const farFloor=new THREE.Mesh(new THREE.PlaneGeometry(6000,6000),
-  new THREE.MeshStandardMaterial({color:'#5f7f97', roughness:1, polygonOffset:true, polygonOffsetFactor:4, polygonOffsetUnits:8}));
-farFloor.rotation.x=-Math.PI/2; farFloor.position.y=DEEP_Y-.05; scene.add(farFloor);
+  new THREE.MeshStandardMaterial({color:'#2f4462', roughness:1, polygonOffset:true, polygonOffsetFactor:4, polygonOffsetUnits:8}));
+farFloor.rotation.x=-Math.PI/2; farFloor.position.y=ABYSS_Y-8; scene.add(farFloor);
+// v191: cerca de ti, fuera de la malla de la isla grande, el fondo hondo con sus lomas, crestas y la fosa (se rehace al moverte ~100 m)
+const deepFloor=(()=>{ const N=MIN_Q?36:56, S=1500, geo=new THREE.PlaneGeometry(S,S,N,N); geo.rotateX(-Math.PI/2);
+  geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array((N+1)*(N+1)*3),3));
+  const m=new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors:true, roughness:1, polygonOffset:true, polygonOffsetFactor:2, polygonOffsetUnits:4}));
+  m.frustumCulled=false; m.receiveShadow=true; m.userData={N, S, cx:NaN, cz:NaN, base:Float32Array.from(geo.attributes.position.array)}; scene.add(m); return m; })();
+function deepFloorAt(px,pz){ const D=deepFloor.userData, st=D.S/D.N*4, cx=Math.round(px/st)*st, cz=Math.round(pz/st)*st;
+  if(cx===D.cx && cz===D.cz) return; D.cx=cx; D.cz=cz;
+  const geo=deepFloor.geometry, pos=geo.attributes.position, col=geo.attributes.color, B=D.base, c=new THREE.Color();
+  const SH=deepFloorAt.C||(deepFloorAt.C=[hexLin('#5f7f97'),hexLin('#3f5672'),hexLin('#2c3a55')]), E=TMESH?TMESH.xs[TMESH.GW-1]-2:2098;
+  for(let i=0;i<pos.count;i++){ const x=cx+B[i*3], z=cz+B[i*3+2], inM=Math.abs(x)<E && Math.abs(z)<E, h=terrainExact(x,z);
+    pos.setXYZ(i, x, h-(inM?1.5:.12), z);
+    c.copy(SH[0]).lerp(SH[1], smooth(-46,-170,h)).lerp(SH[2], smooth(-185,-200,h)); col.setXYZ(i,c.r,c.g,c.b); }
+  pos.needsUpdate=true; col.needsUpdate=true; geo.computeVertexNormals(); }
 
 // ---------- Montañas a lo lejos (v119) ----------
 // Más allá de la distancia de visión no se dibuja el mundo. Para que las montañas se vean desde toda la isla hay una copia sencilla
@@ -1971,7 +2009,7 @@ let seaDrift=0;
 function updateSea(dt,px,pz){
   seaDrift+=dt*.012;
   seaSurface.position.x=px; seaSurface.position.z=pz;
-  farFloor.position.x=px; farFloor.position.z=pz;
+  farFloor.position.x=px; farFloor.position.z=pz; deepFloorAt(px,pz);
 }
 
 // Lago de agua dulce con nenúfares (posiciones fijas)
@@ -2714,6 +2752,107 @@ MAP.seaRocks.forEach(([x,z,s])=>{ const base=terrainH(x,z)-.2*s; obstacles.push(
 
 // Bancos de peces de fieltro que nadan en círculos
 DECOR.push(...scene.children.slice(_dec0));   // flores, algas, corales, estrellas y rocas del fondo
+// ---------- v191: Cuevas Coral y recovecos del mar ----------
+// En el talud del mar (donde la plataforma baja a lo hondo) hay cuevas de roca con su puerta, túneles para cruzar nadando,
+// arcos de piedra y peñascos. Todo fijo. Se choca con ellos al nadar y la cámara no se sale de la cueva.
+const UW={domes:[], tubes:[], arches:[]};
+const uwAt=(a,sm)=>{ const r=1.45*coastRN(a)+sm; return [Math.cos(a)*r, Math.sin(a)*r]; };
+const uwRnd=(i,k)=>rlHash(i*7+31,k*13+5);
+(function uwRocks(){
+  const mat=felt('#7f8aa0','rgba(20,30,55,.22)'); mat.side=THREE.DoubleSide;
+  const matO=felt('#8e97ad','rgba(20,30,50,.18)');
+  const lumps=[];   // piedras sueltas (orillas de las puertas, pies de los arcos y peñascos)
+  const bump=(geo,amp,f,seed)=>{ const p=geo.attributes.position, nr=geo.attributes.normal;
+    for(let i=0;i<p.count;i++){ const x=p.getX(i), y=p.getY(i), z=p.getZ(i), n=(rlNoise(x*f+seed,z*f-seed+y*f*.7)-.5)*2*amp;
+      p.setXYZ(i, x+nr.getX(i)*n, y+nr.getY(i)*n, z+nr.getZ(i)*n); }
+    geo.computeVertexNormals(); return geo; };
+  // --- cuevas (domos de roca con puerta) ---
+  function dome(a,sm,R,to){ const [x,z]=uwAt(a,sm), [tx,tz]=uwAt(to[0],to[1]);
+    const door=Math.atan2(tz-z,tx-x);   // la puerta, mirando hacia el cañón
+    const y0=terrainH(x+Math.cos(door)*R*.9, z+Math.sin(door)*R*.9)-.8, dW=.36, dEl=.78, NP=46, NT=15, pos=[], uv=[], idx=[], seed=x*.013;
+    const rad=(ph,el)=>R*(1+.065*(rlNoise(Math.cos(ph)*2.6+seed, el*2.6+Math.sin(ph)*2.6)-.5)*2);
+    for(let j=0;j<=NT;j++){ const el=-.2+(Math.PI/2+.2)*j/NT; for(let i=0;i<=NP;i++){ const ph=i/NP*Math.PI*2, rr=rad(ph,el), ce=Math.cos(el);
+      pos.push(Math.cos(ph)*ce*rr, Math.sin(el)*rr, Math.sin(ph)*ce*rr); uv.push(i/NP*R*.7, j/NT*R*.45); } }
+    for(let j=0;j<NT;j++) for(let i=0;i<NP;i++){ const ph=(i+.5)/NP*Math.PI*2, el=-.2+(Math.PI/2+.2)*(j+.5)/NT;
+      if(el<dEl && Math.abs(angD(ph,door))<dW) continue;   // la puerta
+      const A=j*(NP+1)+i, B=A+1, C=A+NP+1, D=C+1; idx.push(A,C,B, B,C,D); }
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); g.setIndex(idx); g.computeVertexNormals();
+    const m=new THREE.Mesh(g,mat); m.position.set(x,y0,z); m.receiveShadow=true; scene.add(m);
+    // piedras alrededor de la puerta: así no se ve delgada la pared
+    for(let s=-1;s<=1;s+=2) for(let k=0;k<7;k++){ const el=-.1+k/6*(dEl-.02), ph=door+s*dW, rr=R, ce=Math.cos(el); lumps.push([x+Math.cos(ph)*ce*rr, y0+Math.sin(el)*rr, z+Math.sin(ph)*ce*rr, 1.15+.3*uwRnd(k,s+3)]); }
+    for(let k=1;k<6;k++){ const ph=door-dW+2*dW*k/6, el=dEl, ce=Math.cos(el); lumps.push([x+Math.cos(ph)*ce*R, y0+Math.sin(el)*R, z+Math.sin(ph)*ce*R, 1.1+.3*uwRnd(k,9)]); }
+    UW.domes.push({x, y:y0, z, R, T:2.0, door, dW, dEl}); }
+  // --- túneles (tubos de roca medio enterrados, se cruzan nadando) ---
+  function tube(pts,R){ const c0=new THREE.CatmullRomCurve3(pts.map(([a,sm])=>{ const [x,z]=uwAt(a,sm); return new THREE.Vector3(x,0,z); }));
+    const Q=c0.getSpacedPoints(Math.max(6,Math.round(c0.getLength()/6))), Y=Q.map(p=>terrainH(p.x,p.z));   // sigue el suelo (medio enterrado)
+    const P=Q.map((p,i)=>{ let s=0, n=0; for(let k=-2;k<=2;k++){ const j=i+k; if(j>=0&&j<Q.length){ s+=Y[j]; n++; } } return new THREE.Vector3(p.x, Math.max(s/n, Y[i]-R*.2)+R*.42, p.z); });
+    const cv=new THREE.CatmullRomCurve3(P), segs=Math.max(24, Math.round(cv.getLength()/2.2));
+    const g=bump(new THREE.TubeGeometry(cv, segs, R, 14, false), .45, .22, P[0].x*.01);
+    const m=new THREE.Mesh(g,mat); m.receiveShadow=true; scene.add(m);
+    const S=cv.getSpacedPoints(Math.max(8, Math.round(cv.getLength()/4)));
+    let bx0=1e9,bz0=1e9,bx1=-1e9,bz1=-1e9; S.forEach(p=>{ bx0=Math.min(bx0,p.x); bz0=Math.min(bz0,p.z); bx1=Math.max(bx1,p.x); bz1=Math.max(bz1,p.z); });
+    [S[0], S[S.length-1]].forEach((p,e)=>{ for(let k=0;k<9;k++){ const t=k/9*Math.PI*2, q=e?S[S.length-2]:S[1], tx=p.x-q.x, tz=p.z-q.z, tl=Math.hypot(tx,tz)||1, sx=-tz/tl, sz=tx/tl;
+      const py=p.y+Math.sin(t)*R; if(py<terrainH(p.x,p.z)-1) continue; lumps.push([p.x+sx*Math.cos(t)*R, py, p.z+sz*Math.cos(t)*R, 1.0+.35*uwRnd(k,e+20)]); } });
+    UW.tubes.push({P:S, R, T:1.6, bx0:bx0-R-3, bz0:bz0-R-3, bx1:bx1+R+3, bz1:bz1+R+3}); }
+  // --- arcos de piedra ---
+  function arch(a,sm,R,r,turn,yawW){ const [x,z]=uwAt(a,sm), yaw=yawW!==undefined?yawW:a+turn, c=Math.cos(yaw), s=Math.sin(yaw);
+    const fx=[x+R*c, z-R*s], gx=[x-R*c, z+R*s], y0=Math.min(terrainH(...fx),terrainH(...gx))-r*.5;   // se para en sus dos pies (si abajo hay cañón, queda de puente)
+    const g=bump(new THREE.TorusGeometry(R, r, 10, 30, Math.PI), r*.28, .45, x*.01);
+    const m=new THREE.Mesh(g,matO); m.position.set(x,y0,z); m.rotation.y=yaw; m.receiveShadow=true; scene.add(m);
+    [fx,gx].forEach(([px,pz],e)=>{ for(let k=0;k<3;k++) lumps.push([px+(uwRnd(k,e)-.5)*r, terrainH(px,pz)+.2, pz+(uwRnd(k,e+5)-.5)*r, r*(.9+.4*uwRnd(k,e+7))]); });
+    UW.arches.push({x, y:y0, z, yaw, R, r:r*1.05}); }
+
+  // Cuevas Coral: al este-sureste, entre la Isla Selva y la Isla Invierno
+  // (un cañón baja en diagonal por en medio: las cuevas se asoman a él y dos arcos lo cruzan de puente)
+  const CA=-.55, cAt=sm=>-.516-.08*(sm+140)/340;   // el centro del cañón según qué tan lejos
+  dome(-.498,0,14,[cAt(0),0]); dome(-.603,-15,12,[cAt(-15),-15]); dome(-.488,62,11,[cAt(62),62]);
+  tube([[-.47,-130],[-.474,-70],[-.466,-10],[-.47,40]],3.9);
+  tube([[-.532,70],[-.515,95],[-.497,122]],3.4);
+  for(const [sm,R] of [[-60,17],[-110,15]]){ const [x0,z0]=uwAt(cAt(sm-10),sm-10), [x1,z1]=uwAt(cAt(sm+10),sm+10), ax=-(z1-z0), az=x1-x0;
+    arch(cAt(sm),sm,R,2.1,0,Math.atan2(-az,ax)); }
+  arch(-.585,-100,9,1.6,1.3); arch(-.51,150,11,1.9,1.0);
+  // arcos sueltos alrededor de la isla (en la orilla de la plataforma) y dos en la orilla de la Fosa Brillante
+  [[.62,-40,8,.3],[1.05,-30,9.5,1.2],[2.05,-45,8.5,.6],[3.35,-35,10,1.4],[-2.2,-38,7.5,.9],[-.95,-50,9,.1],[-1.7,-25,8,1.1]].forEach(([a,sm,R,t])=>arch(a,sm,R,1.5,t));
+  { const F=SEA_FOSA; [[F.d0+420,F.w*1.2],[F.d0+760,-F.w*1.15]].forEach(([d,p],i)=>{ const a=F.a+p/d, r=1.45*coastRN(a); arch(a,d-r,10,1.8,i?.4:1.4); }); }
+  // peñascos: en Cuevas Coral y regados por el talud
+  const spires=[];
+  for(let i=0;i<34;i++){ const a=CA-.07+.12*uwRnd(i,1), sm=-130+300*uwRnd(i,2); spires.push([a,sm,1.4+2.2*uwRnd(i,3),2+Math.floor(3*uwRnd(i,4))]); }
+  for(let i=0;i<70;i++){ const a=-Math.PI+i/70*Math.PI*2+.03*(uwRnd(i,6)-.5), sm=-60+150*uwRnd(i,7); spires.push([a,sm,1.2+2.4*uwRnd(i,8),1+Math.floor(3*uwRnd(i,9))]); }
+  spires.forEach(([a,sm,s,n],i)=>{ const [x,z]=uwAt(a,sm), y=terrainH(x,z);
+    if(UW.domes.some(D=>Math.hypot(x-D.x,z-D.z)<D.R+s+5) || UW.tubes.some(U=>U.P.some(p=>Math.hypot(x-p.x,z-p.z)<U.R+s+3)) || UW.arches.some(A=>Math.hypot(x-A.x,z-A.z)<A.R+s+3)) return;   // que no tapen cuevas, túneles ni arcos
+    let top=y; for(let k=0;k<n;k++){ const r=s*(1-k*.22); lumps.push([x+(uwRnd(i,k+40)-.5)*s*.4, top+r*.55, z+(uwRnd(i,k+50)-.5)*s*.4, r]); top+=r*1.15; }
+    obstacles.push({x, z, r:s*1.05, top:top+.2, walk:true}); });
+  const lm=instanced(sphereG, matO, lumps, (o,[x,y,z,r],i)=>{ o.position.set(x,y,z); o.scale.set(r*1.15,r*.85,r); o.rotation.set(uwRnd(i,1)*.6, uwRnd(i,2)*6.3, 0); }, {shadow:false});
+})();
+// chocar con las cuevas, túneles y arcos (p = pies; el centro del cuerpo está .7 más arriba)
+function uwCollide(p){ if(p.y>SEA_Y-2 || p.y<CAVE_TOP) return; const cy=p.y+.7;
+  for(const D of UW.domes){ const dx=p.x-D.x, dz=p.z-D.z; if(dx>D.R+3||dx<-D.R-3||dz>D.R+3||dz<-D.R-3) continue; const dy=cy-D.y; if(dy<-1.5) continue;
+    const dist=Math.hypot(dx,dy,dz), lim=D.T*.5+.5; if(Math.abs(dist-D.R)>lim) continue;
+    const el=Math.asin(Math.max(-1,Math.min(1,dy/Math.max(dist,.01)))); if(el<D.dEl && Math.abs(angD(Math.atan2(dz,dx),D.door))<D.dW) continue;   // por la puerta sí se pasa
+    const k=(dist<D.R?D.R-lim:D.R+lim)/Math.max(dist,.01); p.x=D.x+dx*k; p.z=D.z+dz*k; p.y=D.y+dy*k-.7; }
+  for(const U of UW.tubes){ if(p.x<U.bx0||p.x>U.bx1||p.z<U.bz0||p.z>U.bz1) continue; const P=U.P, n=P.length-1; let best=1e9, bx=0, by=0, bz=0, out=false;
+    for(let i=0;i<n;i++){ const A=P[i], B=P[i+1], ex=B.x-A.x, ey=B.y-A.y, ez=B.z-A.z, l2=ex*ex+ey*ey+ez*ez; let t=((p.x-A.x)*ex+(cy-A.y)*ey+(p.z-A.z)*ez)/l2;
+      const o=(i===0&&t<0)||(i===n-1&&t>1); t=t<0?0:t>1?1:t; const qx=A.x+ex*t, qy=A.y+ey*t, qz=A.z+ez*t, d2=(qx-p.x)**2+(qy-cy)**2+(qz-p.z)**2; if(d2<best){ best=d2; bx=qx; by=qy; bz=qz; out=o; } }
+    if(out) continue; const dist=Math.sqrt(best), lim=U.T*.5+.5; if(Math.abs(dist-U.R)>lim) continue;
+    const k=(dist<U.R?U.R-lim:U.R+lim)/Math.max(dist,.01); p.x=bx+(p.x-bx)*k; p.z=bz+(p.z-bz)*k; p.y=by+(cy-by)*k-.7; }
+  for(const A of UW.arches){ const dx=p.x-A.x, dz=p.z-A.z, L=A.R+A.r+2; if(dx>L||dx<-L||dz>L||dz<-L) continue; const c=Math.cos(A.yaw), s=Math.sin(A.yaw), ly=cy-A.y;
+    const lx=dx*c-dz*s, lz=dx*s+dz*c; let an=Math.atan2(ly,lx); if(an<0) an=lx>0?0:Math.PI;
+    const ax=A.R*Math.cos(an), ay=A.R*Math.sin(an), qx=lx-ax, qy=ly-ay, d=Math.hypot(qx,qy,lz), lim=A.r+.5; if(d>=lim||d<.001) continue;
+    const k=lim/d, nx=ax+qx*k, nz=lz*k; p.x=A.x+nx*c+nz*s; p.z=A.z-nx*s+nz*c; p.y=A.y+ay+qy*k-.7; } }
+// la cámara no atraviesa las paredes de las cuevas y los túneles
+function uwShellSide(x,y,z,out){ let i=0;
+  for(const D of UW.domes){ const s=Math.hypot(x-D.x,y-D.y,z-D.z)-D.R; out[i++]= y<D.y-1 ? 2 : Math.abs(s)<1.25 ? 0 : s<0?-1:1; }
+  for(const U of UW.tubes){ let best=1e9; const P=U.P; for(let k=0;k<P.length-1;k++){ const A=P[k], B=P[k+1], ex=B.x-A.x, ey=B.y-A.y, ez=B.z-A.z; let t=((x-A.x)*ex+(y-A.y)*ey+(z-A.z)*ez)/(ex*ex+ey*ey+ez*ez); if((k===0&&t<0)||(k===P.length-2&&t>1)){ best=-1; break; } t=t<0?0:t>1?1:t; const d2=(A.x+ex*t-x)**2+(A.y+ey*t-y)**2+(A.z+ez*t-z)**2; if(d2<best) best=d2; }
+    if(best<0){ out[i++]=2; continue; } const s=Math.sqrt(best)-U.R; out[i++]=Math.abs(s)<1.1?0:s<0?-1:1; }
+  return i; }
+const _uwS0=[], _uwS1=[];
+function uwClampCam(target,want){ if(target.y>SEA_Y-1 || target.y<CAVE_TOP) return; let near=false;
+  for(const D of UW.domes) if(Math.hypot(target.x-D.x,target.z-D.z)<D.R+12){ near=true; break; }
+  if(!near) for(const U of UW.tubes) if(target.x>U.bx0-10&&target.x<U.bx1+10&&target.z>U.bz0-10&&target.z<U.bz1+10){ near=true; break; }
+  if(!near) return;
+  const n=uwShellSide(target.x,target.y,target.z,_uwS0), N=14;
+  for(let i=1;i<=N;i++){ const t=i/N; uwShellSide(target.x+(want.x-target.x)*t, target.y+(want.y-target.y)*t, target.z+(want.z-target.z)*t, _uwS1);
+    for(let k=0;k<n;k++){ const a=_uwS0[k], b=_uwS1[k]; if(a===2||b===2) continue; if(b===0 || a!==b){ const f=Math.max(0,(i-1)/N); want.set(target.x+(want.x-target.x)*f, target.y+(want.y-target.y)*f, target.z+(want.z-target.z)*f); return; } } } }
 const schools=[];
 const fishParts=(()=>{
   const n=MAP.fish.length*6, mat=new THREE.MeshStandardMaterial({roughness:1});
@@ -2772,7 +2911,7 @@ function updateBubbles(dt, emitter){
 
 // Altura del suelo donde está el jugador: terreno, o la cima de una roca/botón/cofre si está encima
 var PIER_GROUND=null, TRAMP_GROUND=null, FI_GROUND=null, CAVE_GROUND=null, SHIP_GROUND=null, JI_DOCK_GROUND=null, JI_DECK_GROUND=null, DI_DOCK_GROUND=null;   // (MX_FLAG y VEG_GEO se declaran antes: aquí las borraba)   // (la mina: más abajo de CAVE_TOP)
-const CAVE_TOP=-150;   // el muelle y la casita de Tortu (se define más abajo)
+const CAVE_TOP=-250;   // v191: el mar ahora llega a 200 m; la mina está a -300   // el muelle y la casita de Tortu (se define más abajo)
 function groundAt(x,z,y){
   if(CAVE_GROUND && y!==undefined && y<CAVE_TOP) return CAVE_GROUND(x,z,y);   // dentro de la mina
   let g=terrainH(x,z);
@@ -2960,6 +3099,7 @@ function updateSky(dt){
     U.glowK.value=(useSun ? .55*sunUp+.5*dusk : .15*moonUp)*(1-sm(.4,.9,W.cov+W.fog*.5));
     FELT_RIM.value=(.08+.16*day)*(1-.4*W.cov); }
   if(camera.position.y<CAVE_TOP && !SP.on) caveSky();   // en la mina: oscuro, con niebla cercana
+  else if(under && !SP.on) uwDeepSky(day);   // v191: bajo el mar, más oscuro mientras más hondo
   const clearSky=1-sm(.55,.95,W.cov+W.fog*.5);
   sunSprite.position.set(sunDir.x*R, sunDir.y*R, sunDir.z*R); sunSprite.scale.setScalar(R*.16);
   sunSprite.material.opacity=sm(-.08,.02,sunDir.y)*(.25+.75*clearSky); sunSprite.visible=sunSprite.material.opacity>.01 && !under;
@@ -5824,7 +5964,7 @@ function scanActions(){
     setActions({label: moving?'Frena para bajar':'Bajar', disabled:moving, run:exitCar}, null);
     return;
   }
-  if(player.swim || player.dive){ const fb=pierFallback(); setActions(fb?fb[0]:null, fb?fb[1]:null); return; }
+  if(player.swim || player.dive){ const fb=pierFallback(), up=!fb && player.swim && !player.rise && uwDepth()>9 ? {label:'⬆️ Subir a la superficie', run:uwRise} : null; setActions(fb?fb[0]:up, fb?fb[1]:null); return; }
   // puerta más cercana
   let best=null, bd=2.6;
   for(const c of cars){
@@ -19426,6 +19566,21 @@ function refreshFog(){
   if(underwaterView){ scene.fog.color.set(0x2f7fae); scene.background.set(0x2f7fae); scene.fog.near=1; scene.fog.far=Math.min(60,settings.draw); }
   else { scene.fog.color.copy(skyNow); scene.background.copy(skyNow); const k=1-.68*weatherNow.fog; scene.fog.near=settings.draw*.32*k*k; scene.fog.far=settings.draw*k; }
 }
+// v191: bajo el mar, mientras más hondo más oscuro y azul (y de noche, más oscuro todavía)
+const UW_C0=new THREE.Color(0x2f7fae), UW_C1=new THREE.Color(0x06162c), _uwc=new THREE.Color();
+const inSeaAt=(x,z)=>!inLakeWater(x,z) && riverLevelAt(x,z)===null;
+function uwDeepSky(day){ const cx=camera.position.x, cz=camera.position.z; if(!inSeaAt(cx,cz)) return;
+  const k=smooth(3,185,SEA_Y-camera.position.y);
+  _uwc.copy(UW_C0).lerp(UW_C1,Math.pow(k,.75)).multiplyScalar(.45+.55*day);
+  scene.fog.color.copy(_uwc); scene.background.copy(_uwc); scene.fog.near=1; scene.fog.far=Math.min(60,settings.draw)*(1-.3*k);
+  hemi.intensity*=1-.6*k; sun.intensity*=1-.85*k; }
+// qué tan hondo vas (metros desde la superficie hasta la cabeza), el medidor y el botón para subir rápido
+const uwDepth=()=>player.swim && inSeaAt(player.pos.x,player.pos.z) ? Math.max(0, SEA_Y-(player.pos.y+1.25)) : 0;
+let uwLastM=-1, uwDeepNote=false;
+function uwHud(){ if(!player.swim) player.rise=false; const d=state==='play' && !(typeof SP!=='undefined' && SP.on) ? uwDepth() : 0, m=d>2.5?Math.round(d):0;
+  if(m!==uwLastM){ uwLastM=m; const el=ui('depthChip'); el.hidden=!m; if(m) el.textContent='🌊 '+m+' m'; }
+  if(m>22 && !uwDeepNote){ uwDeepNote=true; flashNote('¡Qué hondo! Mientras más bajas, más oscuro se pone. Con «Subir a la superficie» vuelves rapidito'); } }
+function uwRise(){ if(!player.swim) return; player.rise=true; try{ audio.splash(.3); }catch(e){} }
 function setUnderwaterView(on){ if(on===underwaterView) return; underwaterView=on; refreshFog(); audio.underwater(on); }
 
 let camAim=0;
@@ -19482,16 +19637,18 @@ function update(dt,t){ myLabelUpdate();
     if(player.swim){
       // Nadando: Espacio sube, Q baja; sin tocar nada, el peluche flota hacia la superficie
       const up = keys.Space || touchHold.up, down = keys.KeyQ || touchHold.down;
-      const sp=(run?5.2:3.3)*mag;
+      const dpk=1+Math.min(2.2, Math.max(0, uwDepth()-8)/45);   // v191: en lo hondo se nada y se baja más rápido (si no, tardarías mucho)
+      const sp=(run?5.2:3.3)*mag*(1+(dpk-1)*.45);
       const target=tmp.set(0,0,0); if(dl>.01) target.set(dx/dl*sp,0,dz/dl*sp);
       player.vel.lerp(target, 1-Math.exp(-dt*3));
       let vyT;
-      if(up && !down) vyT=run?4:2.8;
-      else if(down && !up) vyT=run?-4.2:-3;
+      if(up && !down) vyT=(run?4:2.8)*dpk;
+      else if(down && !up) vyT=(run?-4.2:-3)*dpk;
       else {
         vyT=THREE.MathUtils.clamp(((swimLevel(player.pos.x,player.pos.z)??SEA_Y)-1.07+swimWave(player.pos.x,player.pos.z)-player.pos.y)*1.6,-1.6,1.6);
         if(camMode==='first' && f!==0) vyT=Math.sin(pitch)*sp*Math.sign(f);   // en 1ª persona nadas hacia donde miras
       }
+      if(player.rise){ if(down && !up) player.rise=false; else vyT=26; }   // v191: «Subir a la superficie»
       player.vy += (vyT-player.vy)*(1-Math.exp(-dt*3.5));
       const horiz=Math.hypot(player.vel.x,player.vel.z);
       moving=Math.min(1, horiz/3.3);
@@ -19554,11 +19711,12 @@ function update(dt,t){ myLabelUpdate();
     wiCollide(player.pos);   // v139: la cabaña de la Isla Invierno
     jiCollide(player.pos);   // v142: el templo y la cueva de la Isla Selva
     diCollide(player.pos);   // v144: las casitas de galleta
+    uwCollide(player.pos);   // v191: cuevas, túneles y arcos del mar
     const g=groundAt(player.pos.x, player.pos.z, player.pos.y);
     if(player.swim){
       player.pos.y += player.vy*dt;
       const SL=swimLevel(player.pos.x,player.pos.z)??SEA_Y;
-      { const top=SL-1.07+.05+swimWave(player.pos.x,player.pos.z); if(player.pos.y>top){ player.pos.y=top; if(player.vy>0) player.vy=0; } }
+      { const top=SL-1.07+.05+swimWave(player.pos.x,player.pos.z); if(player.pos.y>top){ player.pos.y=top; if(player.vy>0) player.vy=0; player.rise=false; } }
       if(player.pos.y<g+.15){ player.pos.y=g+.15; if(player.vy<0) player.vy=0; }
       // Salir caminando al llegar a la orilla
       if(terrainH(player.pos.x,player.pos.z) > SL-.9 && player.pos.y-g < 1){
@@ -19771,13 +19929,14 @@ function update(dt,t){ myLabelUpdate();
     const want=_camW.copy(target).add(off);
     if(player.pos.y<CAVE_TOP) caveClampCam(target,want);   // en la mina: la cámara no atraviesa la roca
     else { const floorY=Math.max(terrainH(want.x,want.z), inLake(want.x,want.z,4)?WATER_Y:-999)+.45; if(want.y<floorY) want.y=floorY;
-    clampCamToCake(target,want); clampCamToObstacles(target,want); wiClampCam(target,want); clampCamToHouses(target,want); }
+    clampCamToCake(target,want); clampCamToObstacles(target,want); wiClampCam(target,want); clampCamToHouses(target,want); uwClampCam(target,want); }
     if(camera.position.distanceTo(want)>40) camera.position.copy(want);   // recién teletransportado: sin volar la cámara por toda la isla
     camera.position.lerp(want, 1-Math.exp(-dt*14));
     if(cakeSolid(camera.position.x,camera.position.y,camera.position.z)) camera.position.copy(want);   // nunca quedarse dentro del pastel
     camera.lookAt(target);
   }
   setUnderwaterView(!SP.on && camera.position.y>CAVE_TOP && camera.position.y < waterLevelAt(camera.position.x,camera.position.z)-.03);
+  uwHud();   // v191: el medidor de profundidad
 
   // Burbujas cuando la cabeza está bajo el agua
   let emitter=null;
