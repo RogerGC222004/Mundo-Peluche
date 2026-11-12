@@ -3034,7 +3034,7 @@ const UWA={sp:[], on:false};
       for(let i=0;i<p.count;i++,o++){ const x=p.getX(i), y=p.getY(i), z=p.getZ(i); pos[o*3]=x; pos[o*3+1]=y; pos[o*3+2]=z; nor[o*3]=q.getX(i); nor[o*3+1]=q.getY(i); nor[o*3+2]=q.getZ(i);
         const k=cc||hexLin(c(x,y,z)); col[o*3]=k.r; col[o*3+1]=k.g; col[o*3+2]=k.b; aw[o]=typeof w==='function'?w(x,y,z):(w||0); } });
     const G=new THREE.BufferGeometry(); G.setAttribute('position',new THREE.BufferAttribute(pos,3)); G.setAttribute('normal',new THREE.BufferAttribute(nor,3)); G.setAttribute('color',new THREE.BufferAttribute(col,3)); G.setAttribute('aw',new THREE.BufferAttribute(aw,1)); G.computeBoundingSphere(); return G; }
-  const eyes=(x,y,z,r)=>[[sph,'#1b1b22',M(x,y,z,r,r,r)],[sph,'#1b1b22',M(-x,y,z,r,r,r)],[sph,'#ffffff',M(x*1.04,y+r*.35,z+r*.45,r*.35,r*.35,r*.35)],[sph,'#ffffff',M(-x*1.04,y+r*.35,z+r*.45,r*.35,r*.35,r*.35)]];
+  const eyes=()=>[];   // v194: los ojos ya no van pegados a la figura: son ojos saltones aparte (UWA_EYES, abajo)
   // --- figuras (adelante = +z) ---
   const G={};
   G.fish=merge([[sph,'#ffffff',M(0,0,0,.15,.3,.5)],[cone,'#ffffff',M(0,0,-.58,.03,.32,.3,Math.PI/2,0,0),1],[cone,'#ffffff',M(0,.32,-.05,.02,.22,.2,-.3,0,0)],...eyes(.11,.07,.3,.055)]);
@@ -3058,7 +3058,7 @@ const UWA={sp:[], on:false};
   G.seahorse=(()=>{ const P=[]; const C=[[0,.9,.12,.16],[0,.7,.05,.17],[0,.5,0,.18],[0,.3,.02,.15],[0,.14,.08,.12],[0,.02,.06,.09],[0,-.08,-.02,.07],[0,-.12,-.1,.05]];
     C.forEach(([x,y,z,r])=>P.push([sph,'#ffffff',M(x,y,z,r*.9,r,r)])); P.push([sph,'#ffffff',M(0,1.02,.2,.13,.12,.14)],[cyl,'#ffffff',M(0,1.0,.38,.04,.22,.04,Math.PI/2,0,0)],[sph,'#ffffff',M(0,.55,-.17,.02,.16,.1),1],...eyes(.09,1.06,.27,.04)); return merge(P); })();
   G.crab=(()=>{ const P=[[sph,'#ffffff',M(0,.3,0,.46,.19,.34)],[sph,'#ffffff',M(0,.36,.02,.38,.13,.28)],[cyl,'#ffffff',M(.11,.48,.24,.025,.16,.025)],[cyl,'#ffffff',M(-.11,.48,.24,.025,.16,.025)],   // v193: patas dobladas y tenazas
-    [sph,'#1b1b22',M(.11,.58,.24,.05,.05,.05)],[sph,'#1b1b22',M(-.11,.58,.24,.05,.05,.05)],[sph,'#ffffff',M(.125,.6,.27,.015,.015,.015)],[sph,'#ffffff',M(-.095,.6,.27,.015,.015,.015)]];
+    ];
     for(const s of [1,-1]){ for(let k=0;k<3;k++){ const z=-.18+k*.15; P.push(seg([s*.36,.28,z],[s*.66,.42,z*1.25],.035,.03,'#ffffff',1)); P.push(seg([s*.66,.42,z*1.25],[s*.86,.02,z*1.45],.03,.018,'#ffffff',1)); }
       P.push(seg([s*.3,.3,.25],[s*.52,.36,.48],.045,.04,'#ffffff',.3)); P.push([sph,'#ffffff',M(s*.6,.38,.6,.13,.1,.15),.3]); P.push([sph,'#ffffff',M(s*.66,.42,.74,.05,.04,.1,.2,0,0),.3]); P.push([sph,'#ffffff',M(s*.55,.34,.74,.045,.035,.09,-.2,0,0),.3]); }
     return merge(P); })();
@@ -3139,6 +3139,16 @@ const UWA={sp:[], on:false};
   for(let i=0;i<nQ(24);i++){ const [x,z]=i<16?inF():OZ(); add('squid',circ(x,z,i<16?terrainH(x,z)+8+25*rnd():SEA_Y-60-60*rnd(),10+10*rnd(),.04,4,4,{s:1.2+.8*rnd(), col:pick(['#ff6b6b','#ff9ff3','#7fffd4','#ffd166'])})); }
   // --- armar ---
   const glowKeys={lantern:1, jelly:1, squid:1};
+  const EY={fish:[.12,.08,.3,.075,[1,.1,.6]], lantern:[.12,.08,.3,.075,[1,.1,.6]], clown:[.12,.08,.3,.08,[1,.1,.6]], turtle:[.12,.13,1.04,.065,[1,.25,.8]], dolphin:[.22,.09,.75,.08,[1,.15,.3]],
+    whale:[.36,.05,1.0,.085,[1,.1,.5]], manta:[.27,.11,.56,.06,[1,.5,.4]], octo:[.2,.84,.38,.11,[.4,.1,1]], jelly:[.17,.16,.52,.09,[.3,.1,1]], seahorse:[.1,1.07,.25,.06,[1,.1,.4]],
+    crab:[.11,.6,.25,.06,[.2,.3,1]], angler:[.22,.16,.43,.1,[.6,.1,1]], squid:[.2,.07,-.32,.08,[1,.1,.1]]};
+  UWA.eyeSpec={}; let neyes=0;
+  for(const k in EY){ const [x,y,z,r,d]=EY[k], out=[]; for(const s of [1,-1]){ const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1), new THREE.Vector3(s*d[0],d[1],d[2]).normalize());
+      out.push({pos:new THREE.Vector3(s*x,y,z), q, r, W:new THREE.Matrix4().compose(new THREE.Vector3(s*x,y,z),q,new THREE.Vector3(r,r,r*.42)), D:new THREE.Matrix4().compose(new THREE.Vector3(s*x,y,z),q,new THREE.Vector3(r*1.04,r*1.04,r*.62))}); }
+    UWA.eyeSpec[k]=out; neyes+=(L[k]||[]).length*2; }
+  { const mk=(m,o={})=>{ const im=new THREE.InstancedMesh(o.geo||sph,m,Math.max(1,neyes)); im.frustumCulled=false; im.count=0; im.userData.noCol=true; im.castShadow=false; if(o.ro) im.renderOrder=o.ro; scene.add(im); return im; };
+    UWA.eyeW=mk(new THREE.MeshStandardMaterial({color:0xf4f4f2, roughness:.45, emissive:0x2a2a2a})); UWA.eyeP=mk(new THREE.MeshStandardMaterial({color:0x0c0c0c, roughness:.5}),{geo:new THREE.SphereGeometry(1,8,6)});
+    UWA.eyeD=ULTRA?null:mk(new THREE.MeshStandardMaterial({color:0xffffff, roughness:.04, metalness:.1, transparent:true, opacity:.22, depthWrite:false}),{ro:3}); }
   for(const k in L){ const g=k==='lantern'?G.fish:G[k], m=new THREE.InstancedMesh(g,MAT[k],L[k].length); m.frustumCulled=false; m.userData.noCol=true; m.castShadow=false;
     if(L[k][0].col) m.setColorAt(0,new THREE.Color(1,1,1));   // (antes de poner count=0: el color se arma del tamaño de count)
     m.count=0; scene.add(m);
@@ -3160,17 +3170,23 @@ function uwPose(e,t){ const o=_ua; o.roll=0;
   if(e.k==='j'){ const b=Math.sin(t*2.6+e.ph); o.p.set(e.x+Math.sin(t*.07+e.ph)*4, e.y0+Math.sin(t*.25+e.ph)*2.5+b*.15, e.z+Math.cos(t*.09+e.ph)*4); o.yaw=t*.1+e.ph; o.pitch=0; return o; }
   if(e.k==='w'){ const u=Math.sin(t*e.w+e.ph), x=e.x+Math.cos(e.dir)*u*e.L, z=e.z+Math.sin(e.dir)*u*e.L; o.p.set(x, terrainH(x,z), z); o.yaw=Math.atan2(Math.cos(e.dir),Math.sin(e.dir))+Math.PI/2; o.pitch=0; return o; }
   o.p.set(e.x,e.y0||0,e.z); o.yaw=0; o.pitch=0; return o; }
-function uwAnimalsUpdate(){ const cam=camera.position, off=(typeof SP!=='undefined' && SP.on) || cam.y<CAVE_TOP, under=underwaterView, t=WATER.t;
+const _uaM2=new THREE.Matrix4(), _uaQ2=new THREE.Quaternion(), _uaQ3=new THREE.Quaternion(), _uaDn=new THREE.Vector3(), _uaV=new THREE.Vector3(), _uaS2=new THREE.Vector3();
+function uwAnimalsUpdate(){ const cam=camera.position, off=(typeof SP!=='undefined' && SP.on) || cam.y<CAVE_TOP, under=underwaterView, t=WATER.t; UWA.ne=0;
   const nearSurf=!off && !under && cam.y<SEA_Y+60;
   for(const S of UWA.sp){ const m=S.m; let n=0;
     if(!off && (under || (nearSurf && (S.k==='dolphin'||S.k==='whale'||S.k==='turtle')))){ const R=under?Math.min(S.near,(scene.fog.far||60)+30):Math.min(S.near,140), R2=R*R;
       for(const e of S.list){ const dx=e.x-cam.x, dz=e.z-cam.z; if(dx*dx+dz*dz>(R+e.R+(e.r||0))**2) continue; const o=uwPose(e,t); const ex=o.p.x-cam.x, ey=o.p.y-cam.y, ez=o.p.z-cam.z; if(ex*ex+ey*ey+ez*ez>R2) continue;
         if(!under && o.p.y<SEA_Y-8) continue;
         const s=e.s||1; _uaE.set(o.pitch,o.yaw,o.roll); _uaM.compose(o.p,_uaQ.setFromEuler(_uaE),_uaS.set(s,s,s)); m.setMatrixAt(n,_uaM); if(m.instanceColor) m.setColorAt(n,_uaC.set(e.col||'#ffffff').convertSRGBToLinear());
+        const ES=UWA.eyeSpec[S.k]; if(ES){ _uaQ.setFromEuler(_uaE); for(const E of ES){ _uaM2.multiplyMatrices(_uaM,E.W); UWA.eyeW.setMatrixAt(UWA.ne,_uaM2); if(UWA.eyeD){ _uaM2.multiplyMatrices(_uaM,E.D); UWA.eyeD.setMatrixAt(UWA.ne,_uaM2); }
+            _uaQ2.copy(_uaQ).multiply(E.q); _uaDn.set(0,-1,0).applyQuaternion(_uaQ2.invert()); const wob=Math.sin(t*2.3+e.x+E.pos.x*9)*.18;   // la bolita negra cae hacia abajo (y se mece un poquito)
+            const px=Math.max(-.9,Math.min(.9,_uaDn.x*.9+wob)), py=Math.max(-.9,Math.min(.9,_uaDn.y*.9)); _uaV.set(px*E.r*.42,py*E.r*.42,E.r*.3).applyQuaternion(E.q).add(E.pos);
+            _uaM2.compose(_uaV,_uaQ3.identity(),_uaS2.set(E.r*.56,E.r*.56,E.r*.56)); _uaM2.premultiply(_uaM); UWA.eyeP.setMatrixAt(UWA.ne,_uaM2); UWA.ne++; } }
         if(S.lure){ _uaL.set(0,.68,.455).applyMatrix4(_uaM); _uaM.compose(_uaL,_uaQ.identity(),_uaS.set(s,s,s)); S.lure.setMatrixAt(n,_uaM); }   // la lucecita, en la punta de su antena
         n++; } }
     m.count=n; if(n){ m.instanceMatrix.needsUpdate=true; if(m.instanceColor) m.instanceColor.needsUpdate=true; } m.visible=n>0;
-    if(S.lure){ S.lure.count=n; S.lure.visible=n>0; if(n) S.lure.instanceMatrix.needsUpdate=true; } } }
+    if(S.lure){ S.lure.count=n; S.lure.visible=n>0; if(n) S.lure.instanceMatrix.needsUpdate=true; } }
+  for(const im of [UWA.eyeW,UWA.eyeP,UWA.eyeD]){ if(!im) continue; im.count=UWA.ne; im.visible=UWA.ne>0; if(UWA.ne) im.instanceMatrix.needsUpdate=true; } }   // v194: ojos saltones del mar
 // ---------- v191: zonas del mar con nombre ----------
 // Al entrar a una zona sale su nombre en grande; en el mapa aparecen marcadas.
 const UW_ZONE_LIST=(()=>{ const at=(a,c)=>{ const r=c*coastRN(a); return [Math.cos(a)*r, Math.sin(a)*r]; };
