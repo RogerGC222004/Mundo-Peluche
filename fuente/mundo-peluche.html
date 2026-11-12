@@ -3086,7 +3086,8 @@ function chEyeDraw(g,w,h,st){ const L=[-1,1], cy=300, X=s=>w/2+s*178;
   else if(st==='estrellas') L.forEach(s=>{ anime(s,['#7a3a00','#f0a020','#ffe27a'],false); star(X(s)+s*6,cy+6,34,'#fff6c9'); star(X(s)+s*6,cy+6,20,'#e07000'); });
   else if(st==='corazones') L.forEach(s=>{ anime(s,['#7a0f3a','#e0407a','#ffa6c8'],false); heart(X(s)+s*6,cy+10,34,'#ffffff'); heart(X(s)+s*6,cy+10,22,'#c2185b'); });
   else if(st==='kawaii') L.forEach(s=>{ const cx=X(s); anime(s,['#2a0f4a','#6a2fb0','#c69cf5']); g.fillStyle='#fff';
-      for(const [dx,dy,r] of [[-s*20,-14,20],[s*26,26,11],[-s*30,40,7]]){ g.beginPath(); g.arc(cx+dx,cy+dy,r,0,Math.PI*2); g.fill(); } star(cx+s*28,cy-30,12,'#ffffff'); }); }
+      for(const [dx,dy,r] of [[-s*20,-14,20],[s*26,26,11],[-s*30,40,7]]){ g.beginPath(); g.arc(cx+dx,cy+dy,r,0,Math.PI*2); g.fill(); } star(cx+s*28,cy-30,12,'#ffffff'); }); 
+  else chEyeDraw2(g,w,h,st,{anime,star,heart,X,cy,L}); }
 function chEyeTex(st){ if(CH_EYE_TEX[st]) return CH_EYE_TEX[st];
   const c=document.createElement('canvas'); c.width=1024; c.height=512; const g=c.getContext('2d'); chEyeDraw(g,1024,512,st);
   const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; t.userData={canvas:c}; return CH_EYE_TEX[st]=t; }
@@ -3138,15 +3139,16 @@ const AM_EYES={
 const AM_BTN={}, amBtnMat=hex=>AM_BTN[hex]||(AM_BTN[hex]=new THREE.MeshStandardMaterial({color:new THREE.Color(hex).convertSRGBToLinear(), roughness:.12, metalness:.1}));
 const amWhite=new THREE.MeshBasicMaterial({color:0xffffff});
 // lo bordado se pinta en un lienzo de 512×256: ojos en x=256±90, y=151; cejas arriba; mejillas abajo
-function amEyeDraw(g,st,only){ g.strokeStyle='#2c1c16'; g.fillStyle='#2c1c16'; g.lineCap='round'; g.lineJoin='round'; g.lineWidth=8;
+function amEyeDraw(g,st,only,col){ const K=col||'#2c1c16'; g.strokeStyle=K; g.fillStyle=K; g.lineCap='round'; g.lineJoin='round'; g.lineWidth=8;
   for(const s of [-1,1]){ if(only && s!==only) continue; const cx=256+s*90, cy=151;
     if(st==='felices'){ g.beginPath(); g.moveTo(cx-24,cy+8); g.quadraticCurveTo(cx,cy-24,cx+24,cy+8); g.stroke(); }
     else if(st==='dormidos'){ g.beginPath(); g.moveTo(cx-24,cy-4); g.quadraticCurveTo(cx,cy+20,cx+24,cy-4); g.stroke(); g.lineWidth=4; for(const d of [-16,0,16]){ g.beginPath(); g.moveTo(cx+d,cy+8); g.lineTo(cx+d*1.2,cy+18); g.stroke(); } g.lineWidth=8; }
-    else if(st==='corazon'){ g.fillStyle='#e0406a'; g.beginPath(); g.moveTo(cx,cy+22); g.bezierCurveTo(cx-34,cy,cx-18,cy-26,cx,cy-10); g.bezierCurveTo(cx+18,cy-26,cx+34,cy,cx,cy+22); g.fill();
-      g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=2; g.setLineDash([4,4]); g.stroke(); g.setLineDash([]); g.strokeStyle='#2c1c16'; g.lineWidth=8; } } }
+    else if(st==='corazon'){ g.fillStyle=col||'#e0406a'; g.beginPath(); g.moveTo(cx,cy+22); g.bezierCurveTo(cx-34,cy,cx-18,cy-26,cx,cy-10); g.bezierCurveTo(cx+18,cy-26,cx+34,cy,cx,cy+22); g.fill();
+      g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=2; g.setLineDash([4,4]); g.stroke(); g.setLineDash([]); g.strokeStyle=K; g.fillStyle=K; g.lineWidth=8; }
+    else amEyeDraw2(g,st,s,cx,cy); } }
 function amFaceCanvas(F){ const c=document.createElement('canvas'); c.width=512; c.height=256; const g=c.getContext('2d');
   if(F.ck){ g.save(); g.translate(-77,-65); g.scale(.65,.65); chCheekDraw(g,F.ck); g.restore(); }
-  if(F.eye){ const E=AM_EYES[F.eye]; if(E.st) amEyeDraw(g,E.st); else if(E.wink) amEyeDraw(g,'felices',-1); }
+  if(F.eye){ const E=AM_EYES[F.eye]; if(E.st) amEyeDraw(g,E.st,0,E.col); else if(E.wink) amEyeDraw(g,'felices',-1); }
   if(F.br){ g.save(); g.translate(0,1); g.scale(.5,.5); chBrowDraw(g,F.br,F.bc||'#3b2416'); g.restore(); }
   return c; }
 const AM_FACE={};
@@ -3169,10 +3171,11 @@ function amiguDress(u,eq){ const A=amiguParts(u), B=x=>eq && SHOP_BY[eq[x]] ? SH
   const mH=amKnit(skin,14,9), mB=amKnit(skin,10,6), mL=amKnit(skin,5,6), mN=amKnit(skin,3,2);
   A.torso.material=mB; A.neck.material=mB; A.head.material=mH; A.ears.forEach(m=>m.material=mL); A.nose.material=mN; A.hands.forEach(h=>{ h.material=mL; h.visible=true; });
   const eyeIt=B('aeyes'), E=eyeIt ? AM_EYES[eyeIt.eye] : null;
-  A.eyes.forEach((e,i)=>{ const s=i?1:-1, b=e.userData.base; let show=!!(E && (E.btn||E.star)); if(E && E.wink && s===-1) show=false;   // guiño: el ojo izquierdo va bordado
-    e.visible=show; A.hi[i].visible=show && !E.star;
+  A.eyes.forEach((e,i)=>{ const s=i?1:-1, b=e.userData.base; let show=!!(E && (E.btn||E.star||E.heart)); if(E && E.wink && s===-1) show=false;   // guiño: el ojo izquierdo va bordado
+    e.visible=show; A.hi[i].visible=show && !E.star && !E.heart;
     if(show){ if(E.star){ e.geometry=amStarGeo(); e.material=amBtnMat(E.star); e.scale.set(.07,.07,.07); e.position.set(b[0],b[1],b[2]+.01); }
-      else { e.geometry=sphereG; e.material=amBtnMat(E.btn); const k=E.big?1.3:1; e.scale.set(.075*k,.075*k,.04); e.position.set(...b); A.hi[i].scale.set(.016*k,.016*k,.008); } } });
+      else if(E.heart){ e.geometry=chShapeGeo('heart'); e.material=amBtnMat(E.heart); e.scale.set(.62,.62,2.2); e.position.set(b[0],b[1]+.005,b[2]-.005); }
+      else { e.geometry=sphereG; e.material=amBtnMat(E.btn); const k=E.big?1.3:E.mini?.72:1; e.scale.set(.075*k,.075*k,.04); e.position.set(...b); A.hi[i].scale.set(.016*k,.016*k,.008); } } });
   // cabello, cejas, mejillas y orejitas: los del Chibi, armados para esta cabeza y tejidos
   const colIt=B('ahcol')||SHOP_BY.ahc_castano, hairHex=colIt.c, hairIt=B('ahair'), hs=hairIt?hairIt.hs:null, earIt=B('aears'), es=earIt?earIt.ear:null;
   const hm=amHairMat(u); hm.color.set(hairHex).convertSRGBToLinear();
@@ -3319,7 +3322,94 @@ function chSwayTick(o,dt){ const u=o.userData, S=u.hsw; if(!S || !u.av || u.av==
   S.U.uSw.value.copy(S.off);
   for(const pv of S.pieces){ const w=pv.userData.sw; if(!w.k) continue; pv.rotation.x=w.bx-S.off.z*w.k+S.off.y*w.k*.4; pv.rotation.z=w.bz+S.off.x*w.k; } }
 // --- la cara: ojos, cejas, boca y mejillas se pintan juntos en una sola calcomanía (una sola pieza que dibujar) ---
-function chBrowDraw(g,st,col){ g.strokeStyle=col; g.fillStyle=col; g.lineCap='round';
+// ---------- v190 (Parte 3): caras nuevas — ojos, cejas, boca y mejillas (dibujados en la calcomanía de la cara) ----------
+// ojos del Chibi: "tipo:colores" (a anime, l anime con pestañas, g de gatito, b botón, p puntitos, h corazones, s estrellas, gal galaxia…)
+function chEyeDraw2(g,w,h,st,K){ const {anime,star,heart,X,cy,L}=K, [t,arg]=st.split(':'), C=arg?arg.split(','):[];
+  const lash=s=>{ const cx=X(s); g.strokeStyle='#1b120c'; g.lineCap='round'; g.lineWidth=7; for(let i=0;i<3;i++){ g.beginPath(); g.moveTo(cx+s*(56+i*10),cy-60+i*14); g.lineTo(cx+s*(84+i*12),cy-86+i*16); g.stroke(); } };
+  if(t==='a') L.forEach(s=>anime(s,C));
+  else if(t==='l') L.forEach(s=>{ anime(s,C); lash(s); });
+  else if(t==='g') L.forEach(s=>{ anime(s,C,false); g.fillStyle='#160904'; g.beginPath(); g.ellipse(X(s)+s*6,cy+4,9,40,0,0,Math.PI*2); g.fill(); g.fillStyle='#fff'; g.beginPath(); g.ellipse(X(s)-s*16,cy-26,13,15,0,0,Math.PI*2); g.fill(); });
+  else if(t==='b') L.forEach(s=>{ const cx=X(s); g.fillStyle=C[0]; g.beginPath(); g.arc(cx,cy,56,0,Math.PI*2); g.fill(); g.fillStyle='#fff'; g.beginPath(); g.ellipse(cx-s*14-6,cy-20,15,15,0,0,Math.PI*2); g.fill(); g.beginPath(); g.arc(cx+18,cy+22,6,0,Math.PI*2); g.fill(); });
+  else if(t==='p') L.forEach(s=>{ const cx=X(s)-s*20; g.fillStyle=C[0]; g.beginPath(); g.ellipse(cx,cy+10,22,30,0,0,Math.PI*2); g.fill(); g.fillStyle='#fff'; g.beginPath(); g.arc(cx-6,cy,6,0,Math.PI*2); g.fill(); });
+  else if(t==='h') L.forEach(s=>{ anime(s,[C[0],C[1],C[2]],false); heart(X(s)+s*6,cy+10,34,'#ffffff'); heart(X(s)+s*6,cy+10,22,C[0]); });
+  else if(t==='s') L.forEach(s=>{ anime(s,[C[0],C[1],C[2]],false); star(X(s)+s*6,cy+6,34,'#fff6c9'); star(X(s)+s*6,cy+6,20,C[0]); });
+  else if(t==='gal') L.forEach(s=>{ anime(s,C,false); g.fillStyle='#fff'; for(const [dx,dy,r] of [[-14,-20,6],[16,10,4],[-4,30,3],[20,-28,3],[-24,14,2.5]]){ g.beginPath(); g.arc(X(s)+s*6+dx,cy+dy,r,0,Math.PI*2); g.fill(); } star(X(s)+s*10,cy-4,12,'#ffffff'); });
+  else if(t==='arcoiris') L.forEach(s=>{ const cx=X(s); g.fillStyle='#ffffff'; g.beginPath(); g.ellipse(cx,cy,82,82,0,0,Math.PI*2); g.fill(); ['#ff5d6c','#ff9a3c','#ffe14d','#7ed957','#4fc3f7','#7d6bff'].forEach((c,i)=>{ g.fillStyle=c; g.beginPath(); g.ellipse(cx+s*6,cy+6,62-i*8,74-i*9,0,0,Math.PI*2); g.fill(); });
+    g.fillStyle='#160904'; g.beginPath(); g.ellipse(cx+s*6,cy+4,18,24,0,0,Math.PI*2); g.fill(); g.fillStyle='#fff'; g.beginPath(); g.ellipse(cx-s*16,cy-26,14,16,0,0,Math.PI*2); g.fill(); });
+  else if(t==='flor') L.forEach(s=>{ const cx=X(s)+s*6; anime(s,['#3a2a1a','#7a5a3a','#b08a5a'],false); g.fillStyle=C[0]; for(let i=0;i<5;i++){ const a=i/5*Math.PI*2; g.beginPath(); g.arc(cx+Math.cos(a)*20,cy+6+Math.sin(a)*20,15,0,Math.PI*2); g.fill(); } g.fillStyle='#ffd23f'; g.beginPath(); g.arc(cx,cy+6,12,0,Math.PI*2); g.fill(); });
+  else if(t==='espiral') L.forEach(s=>{ const cx=X(s); g.strokeStyle='#1b120c'; g.lineWidth=9; g.beginPath(); for(let i=0;i<60;i++){ const a=i*.42, r=4+i*1.05; g.lineTo(cx+Math.cos(a*s)*r,cy+Math.sin(a*s)*r); } g.stroke(); });
+  else if(t==='x') L.forEach(s=>{ const cx=X(s); g.strokeStyle='#1b120c'; g.lineWidth=15; g.lineCap='round'; g.beginPath(); g.moveTo(cx-40,cy-40); g.lineTo(cx+40,cy+40); g.moveTo(cx+40,cy-40); g.lineTo(cx-40,cy+40); g.stroke(); });
+  else if(t==='guino') L.forEach(s=>{ if(s<0){ const cx=X(s); g.strokeStyle='#1b120c'; g.lineWidth=15; g.lineCap='round'; g.beginPath(); g.moveTo(cx-60,cy+20); g.quadraticCurveTo(cx,cy-50,cx+60,cy+20); g.stroke(); } else anime(s,C); });
+  else if(t==='sorpresa') L.forEach(s=>{ const cx=X(s); g.fillStyle='#fff'; g.strokeStyle='#1b120c'; g.lineWidth=9; g.beginPath(); g.arc(cx,cy,60,0,Math.PI*2); g.fill(); g.stroke(); g.fillStyle='#160904'; g.beginPath(); g.arc(cx,cy,18,0,Math.PI*2); g.fill(); });
+  else if(t==='chinitos') L.forEach(s=>{ const cx=X(s); g.strokeStyle='#1b120c'; g.lineWidth=15; g.lineCap='round'; g.lineJoin='round'; g.beginPath(); g.moveTo(cx-s*40,cy-40); g.lineTo(cx+s*30,cy); g.lineTo(cx-s*40,cy+40); g.stroke(); });
+  else if(t==='llorando') L.forEach(s=>{ const cx=X(s); anime(s,['#0d2560','#2f6fd0','#86c6ff']); g.fillStyle='rgba(120,190,255,.85)'; g.beginPath(); g.moveTo(cx+s*30,cy+70); g.quadraticCurveTo(cx+s*52,cy+120,cx+s*30,cy+136); g.quadraticCurveTo(cx+s*8,cy+120,cx+s*30,cy+70); g.fill(); });
+  else if(t==='luna') L.forEach(s=>{ const cx=X(s); g.strokeStyle='#1b120c'; g.lineWidth=15; g.lineCap='round'; g.beginPath(); g.moveTo(cx-60,cy-10); g.quadraticCurveTo(cx,cy+56,cx+60,cy-10); g.stroke(); });
+  else if(t==='diamante') L.forEach(s=>{ const cx=X(s)+s*6; anime(s,[C[0],C[1],C[2]],false); g.fillStyle='#ffffff'; g.beginPath(); g.moveTo(cx,cy-34); g.lineTo(cx+26,cy+6); g.lineTo(cx,cy+42); g.lineTo(cx-26,cy+6); g.closePath(); g.fill(); g.fillStyle=C[0]; g.beginPath(); g.moveTo(cx,cy-20); g.lineTo(cx+14,cy+6); g.lineTo(cx,cy+28); g.lineTo(cx-14,cy+6); g.closePath(); g.fill(); });
+  else if(t==='enojados') L.forEach(s=>{ const cx=X(s); g.save(); g.beginPath(); g.moveTo(cx-s*100,cy-20); g.lineTo(cx+s*100,cy-70); g.lineTo(cx+s*100,cy+120); g.lineTo(cx-s*100,cy+120); g.closePath(); g.clip(); anime(s,C); g.restore(); g.strokeStyle='#1b120c'; g.lineWidth=14; g.beginPath(); g.moveTo(cx-s*84,cy-18); g.lineTo(cx+s*84,cy-62); g.stroke(); });
+  else if(t==='cansados') L.forEach(s=>{ const cx=X(s), ex=78; g.save(); g.beginPath(); g.rect(cx-ex-10,cy-20,ex*2+20,160); g.clip(); anime(s,C); g.restore(); g.strokeStyle='#1b120c'; g.lineWidth=12; g.beginPath(); g.moveTo(cx-ex-6,cy-18); g.lineTo(cx+ex+6,cy-18); g.stroke(); });
+  else if(t==='sueno') L.forEach(s=>{ const cx=X(s); g.strokeStyle='#1b120c'; g.lineWidth=14; g.lineCap='round'; g.lineJoin='round'; g.beginPath(); g.moveTo(cx-50,cy+24); g.lineTo(cx,cy-30); g.lineTo(cx+50,cy+24); g.stroke(); }); }
+// cejas: "p:forma:grosor:altura"
+function chBrowDraw2(g,st,col){ const [,sh,th,ly]=st.split(':'), W=+th||10, dy=+ly||0; g.strokeStyle=col; g.fillStyle=col; g.lineCap='round'; g.lineJoin='round'; g.lineWidth=W;
+  for(const s of [-1,1]){ const cx=512+s*178, I=x=>cx-s*x, y=182+dy;
+    if(sh==='arco'){ g.beginPath(); g.moveTo(I(46),y+6); g.quadraticCurveTo(cx,y-16,I(-50),y+6); g.stroke(); }
+    else if(sh==='recta'){ g.beginPath(); g.moveTo(I(46),y); g.lineTo(I(-50),y); g.stroke(); }
+    else if(sh==='sube'){ g.beginPath(); g.moveTo(I(46),y+10); g.lineTo(I(-50),y-12); g.stroke(); }
+    else if(sh==='baja'){ g.beginPath(); g.moveTo(I(46),y-10); g.lineTo(I(-50),y+12); g.stroke(); }
+    else if(sh==='onda'){ g.beginPath(); g.moveTo(I(50),y); g.bezierCurveTo(I(20),y-22,I(-10),y+18,I(-52),y-4); g.stroke(); }
+    else if(sh==='punto'){ g.beginPath(); g.ellipse(I(18),y-4,W*1.4,W*.9,0,0,Math.PI*2); g.fill(); }
+    else if(sh==='doble'){ g.lineWidth=W*.6; for(const o of [-8,8]){ g.beginPath(); g.moveTo(I(44),y+o); g.quadraticCurveTo(cx,y-12+o,I(-46),y+o); g.stroke(); } }
+    else if(sh==='triangulo'){ g.beginPath(); g.moveTo(I(46),y+8); g.lineTo(I(-50),y+8); g.lineTo(I(-18),y-8-W*.6); g.closePath(); g.fill(); }
+    else if(sh==='corta'){ g.beginPath(); g.moveTo(I(20),y+2); g.quadraticCurveTo(cx,y-10,I(-24),y+2); g.stroke(); }
+    else if(sh==='larga'){ g.beginPath(); g.moveTo(I(64),y+10); g.quadraticCurveTo(cx,y-18,I(-70),y+8); g.stroke(); } } }
+// boca: "m:forma:color"
+function chMouthDraw2(g,st){ const [,sh,col]=st.split(':'), x=512, y=452; g.lineCap='round'; g.lineJoin='round'; g.strokeStyle=col; g.fillStyle=col; g.lineWidth=7;
+  const smile=(w,d)=>{ g.beginPath(); g.moveTo(x-w,y); g.quadraticCurveTo(x,y+d,x+w,y); g.stroke(); };
+  if(sh==='sonrisa') smile(30,18);
+  else if(sh==='grande') smile(44,26);
+  else if(sh==='abierta'){ g.beginPath(); g.moveTo(x-30,y); g.quadraticCurveTo(x,y+4,x+30,y); g.quadraticCurveTo(x,y+44,x-30,y); g.fill(); g.fillStyle='#f07a92'; g.beginPath(); g.ellipse(x,y+22,13,8,0,0,Math.PI*2); g.fill(); }
+  else if(sh==='lengua'){ g.fillStyle='#f07a92'; g.beginPath(); g.ellipse(x-6,y+16,11,12,0,0,Math.PI); g.fill(); smile(30,16); }
+  else if(sh==='gato'){ g.beginPath(); g.moveTo(x-30,y); g.quadraticCurveTo(x-15,y+20,x,y+2); g.quadraticCurveTo(x+15,y+20,x+30,y); g.stroke(); }
+  else if(sh==='uwu'){ g.beginPath(); g.moveTo(x-20,y+2); g.quadraticCurveTo(x-10,y+14,x,y+4); g.quadraticCurveTo(x+10,y+14,x+20,y+2); g.stroke(); }
+  else if(sh==='tres'){ g.beginPath(); g.moveTo(x-6,y-8); g.quadraticCurveTo(x+16,y-4,x,y+6); g.quadraticCurveTo(x+16,y+16,x-6,y+20); g.stroke(); }
+  else if(sh==='o'){ g.lineWidth=6; g.beginPath(); g.ellipse(x,y+8,9,11,0,0,Math.PI*2); g.stroke(); }
+  else if(sh==='beso'){ g.beginPath(); g.moveTo(x+4,y-6); g.quadraticCurveTo(x-14,y-2,x,y+8); g.quadraticCurveTo(x-14,y+14,x+4,y+20); g.stroke(); }
+  else if(sh==='triste'){ g.beginPath(); g.moveTo(x-24,y+14); g.quadraticCurveTo(x,y-4,x+24,y+14); g.stroke(); }
+  else if(sh==='ondulada'){ g.beginPath(); g.moveTo(x-30,y+6); for(let i=1;i<=6;i++) g.lineTo(x-30+i*10,y+6+(i%2?-6:6)); g.stroke(); }
+  else if(sh==='dientes'){ g.fillStyle='#ffffff'; g.beginPath(); g.moveTo(x-32,y); g.quadraticCurveTo(x,y+6,x+32,y); g.quadraticCurveTo(x,y+34,x-32,y); g.fill(); g.stroke(); }
+  else if(sh==='colmillos'){ smile(30,18); g.fillStyle='#ffffff'; g.lineWidth=3; for(const s of [-1,1]){ g.beginPath(); g.moveTo(x+s*8,y+8); g.lineTo(x+s*20,y+5); g.lineTo(x+s*15,y+20); g.closePath(); g.fill(); g.stroke(); } }
+  else if(sh==='sorpresa'){ g.beginPath(); g.ellipse(x,y+8,13,17,0,0,Math.PI*2); g.fill(); g.fillStyle='#e0768a'; g.beginPath(); g.ellipse(x,y+15,8,7,0,0,Math.PI*2); g.fill(); }
+  else if(sh==='ladeada'){ g.beginPath(); g.moveTo(x-24,y+8); g.quadraticCurveTo(x+6,y+18,x+28,y-6); g.stroke(); } }
+// mejillas: "k:forma:color"
+function chCheekDraw2(g,st){ const [,sh,col]=st.split(':'); const rgb=new THREE.Color(col), R=Math.round(rgb.r*255), G=Math.round(rgb.g*255), B=Math.round(rgb.b*255), rgba=a=>`rgba(${R},${G},${B},${a})`;
+  const star=(x,y,r)=>{ g.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*.45:r; g.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } g.closePath(); g.fill(); };
+  const heart=(x,y,r)=>{ g.beginPath(); g.moveTo(x,y+r*.9); g.bezierCurveTo(x-r*1.5,y-r*.1,x-r*.7,y-r*1.25,x,y-r*.45); g.bezierCurveTo(x+r*.7,y-r*1.25,x+r*1.5,y-r*.1,x,y+r*.9); g.fill(); };
+  for(const s of [-1,1]){ const cx=512+s*232, cy=392; g.fillStyle=rgba(.9); g.strokeStyle=rgba(.9); g.lineCap='round';
+    if(sh==='chapitas'){ const rg=g.createRadialGradient(cx,cy,4,cx,cy,52); rg.addColorStop(0,rgba(.8)); rg.addColorStop(1,rgba(0)); g.fillStyle=rg; g.beginPath(); g.ellipse(cx,cy,58,36,0,0,Math.PI*2); g.fill(); }
+    else if(sh==='ovaladas'){ g.fillStyle=rgba(.55); g.beginPath(); g.ellipse(cx,cy,44,26,0,0,Math.PI*2); g.fill(); }
+    else if(sh==='circulos'){ g.fillStyle=rgba(.65); g.beginPath(); g.arc(cx,cy,28,0,Math.PI*2); g.fill(); }
+    else if(sh==='corazon') heart(cx,cy,20);
+    else if(sh==='estrella') star(cx,cy,22);
+    else if(sh==='pecas'){ for(const [dx,dy] of [[-22,-6],[0,-14],[20,-4],[-8,10],[14,14],[-26,12]]){ g.beginPath(); g.arc(cx+dx*s,cy+dy,4.5,0,Math.PI*2); g.fill(); } }
+    else if(sh==='rayitas'){ g.lineWidth=6; for(let i=-1;i<=1;i++){ g.beginPath(); g.moveTo(cx+i*20-10,cy+14); g.lineTo(cx+i*20+8,cy-14); g.stroke(); } }
+    else if(sh==='espiral'){ g.lineWidth=5; g.beginPath(); for(let i=0;i<40;i++){ const a=i*.4, r=2+i*.7; g.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r); } g.stroke(); }
+    else if(sh==='flor'){ for(let i=0;i<5;i++){ const a=i/5*Math.PI*2; g.beginPath(); g.arc(cx+Math.cos(a)*12,cy+Math.sin(a)*12,10,0,Math.PI*2); g.fill(); } g.fillStyle='#ffd23f'; g.beginPath(); g.arc(cx,cy,7,0,Math.PI*2); g.fill(); }
+    else if(sh==='luna'){ g.beginPath(); g.arc(cx,cy,20,0,Math.PI*2); g.fill(); g.globalCompositeOperation='destination-out'; g.beginPath(); g.arc(cx+s*10,cy-6,17,0,Math.PI*2); g.fill(); g.globalCompositeOperation='source-over'; }
+    else if(sh==='notas'){ g.beginPath(); g.ellipse(cx-6,cy+10,8,6,-.4,0,Math.PI*2); g.fill(); g.fillRect(cx,cy-18,4,28); g.fillRect(cx,cy-18,14,5); }
+    else if(sh==='puntitos'){ for(const dx of [-16,0,16]){ g.beginPath(); g.arc(cx+dx,cy,6,0,Math.PI*2); g.fill(); } }
+    else if(sh==='destellos'){ star(cx-s*8,cy-6,16); g.beginPath(); g.arc(cx+s*20,cy+14,5,0,Math.PI*2); g.fill(); g.beginPath(); g.arc(cx-s*22,cy+18,3,0,Math.PI*2); g.fill(); }
+    else if(sh==='arcoiris'){ g.lineWidth=5; ['#ff5d6c','#ffd23f','#7ed957','#4fc3f7'].forEach((c,i)=>{ g.strokeStyle=c; g.beginPath(); g.arc(cx,cy+12,28-i*6,Math.PI,0); g.stroke(); }); }
+    else if(sh==='trazo'){ g.lineWidth=12; g.beginPath(); g.moveTo(cx-30,cy); g.lineTo(cx+30,cy); g.stroke(); } } }
+// ojos nuevos del Amigurumi (botones de colores, botones chiquitos, estrellas, corazones y bordados de colores)
+function amEyeDraw2(g,st,s,cx,cy){ if(st==='x'){ g.beginPath(); g.moveTo(cx-18,cy-18); g.lineTo(cx+18,cy+18); g.moveTo(cx+18,cy-18); g.lineTo(cx-18,cy+18); g.stroke(); }
+  else if(st==='espiral'){ g.lineWidth=5; g.beginPath(); for(let i=0;i<34;i++){ const a=i*.5, r=2+i*.62; g.lineTo(cx+Math.cos(a*s)*r,cy+Math.sin(a*s)*r); } g.stroke(); g.lineWidth=8; }
+  else if(st==='ovalo'){ g.beginPath(); g.ellipse(cx,cy,12,18,0,0,Math.PI*2); g.fill(); }
+  else if(st==='luna'){ g.beginPath(); g.moveTo(cx-24,cy-4); g.quadraticCurveTo(cx,cy+22,cx+24,cy-4); g.stroke(); }
+  else if(st==='flor'){ for(let i=0;i<5;i++){ const a=i/5*Math.PI*2; g.beginPath(); g.arc(cx+Math.cos(a)*10,cy+Math.sin(a)*10,8,0,Math.PI*2); g.fill(); } g.fillStyle='#ffd23f'; g.beginPath(); g.arc(cx,cy,6,0,Math.PI*2); g.fill(); }
+  else if(st==='cruz'){ g.beginPath(); g.moveTo(cx,cy-20); g.lineTo(cx,cy+20); g.moveTo(cx-20,cy); g.lineTo(cx+20,cy); g.stroke(); }
+  else if(st==='sorpresa'){ g.beginPath(); g.arc(cx,cy,18,0,Math.PI*2); g.stroke(); g.beginPath(); g.arc(cx,cy,6,0,Math.PI*2); g.fill(); }
+  else if(st==='llorando'){ g.beginPath(); g.moveTo(cx-24,cy-4); g.quadraticCurveTo(cx,cy+20,cx+24,cy-4); g.stroke(); g.fillStyle='rgba(120,190,255,.9)'; g.beginPath(); g.ellipse(cx+s*10,cy+22,6,10,0,0,Math.PI*2); g.fill(); }
+  else if(st==='chinitos'){ g.beginPath(); g.moveTo(cx-s*18,cy-16); g.lineTo(cx+s*14,cy); g.lineTo(cx-s*18,cy+16); g.stroke(); } }
+function chBrowDraw(g,st,col){ if(st && st.startsWith('p:')) return chBrowDraw2(g,st,col); g.strokeStyle=col; g.fillStyle=col; g.lineCap='round';
   for(const s of [-1,1]){ const cx=512+s*178, I=x=>cx-s*x;   // I(+) = hacia el centro de la cara
     const arc=(a,b,yA,yC,yB,w)=>{ g.lineWidth=w; g.beginPath(); g.moveTo(I(a),yA); g.quadraticCurveTo(cx,yC,I(-b),yB); g.stroke(); };
     if(st==='normal') arc(46,50,186,170,188,10);
@@ -3332,7 +3422,7 @@ function chBrowDraw(g,st,col){ g.strokeStyle=col; g.fillStyle=col; g.lineCap='ro
     else if(st==='puntitos'){ g.beginPath(); g.ellipse(I(22),178,17,11,0,0,Math.PI*2); g.fill(); }
     else if(st==='cortas') arc(22,22,184,172,184,10);
     else if(st==='arqueadas') arc(44,52,192,150,196,7); } }
-function chMouthDraw(g,st){ const x=512, y=452; g.lineCap='round'; g.lineJoin='round'; g.strokeStyle='#5a2a1a'; g.lineWidth=7;
+function chMouthDraw(g,st){ if(st && st.startsWith('m:')) return chMouthDraw2(g,st); const x=512, y=452; g.lineCap='round'; g.lineJoin='round'; g.strokeStyle='#5a2a1a'; g.lineWidth=7;
   const smile=(w,d)=>{ g.beginPath(); g.moveTo(x-w,y); g.quadraticCurveTo(x,y+d,x+w,y); g.stroke(); };
   if(st==='sonrisa') smile(30,18);
   else if(st==='seria'){ g.beginPath(); g.moveTo(x-18,y+6); g.lineTo(x+18,y+6); g.stroke(); }
@@ -3344,7 +3434,7 @@ function chMouthDraw(g,st){ const x=512, y=452; g.lineCap='round'; g.lineJoin='r
   else if(st==='beso'){ g.beginPath(); g.moveTo(x-4,y-6); g.quadraticCurveTo(x+14,y-2,x,y+8); g.quadraticCurveTo(x+14,y+14,x-4,y+20); g.stroke(); }
   else if(st==='triste'){ g.beginPath(); g.moveTo(x-24,y+14); g.quadraticCurveTo(x,y-4,x+24,y+14); g.stroke(); }
   else if(st==='dientes'){ g.fillStyle='#ffffff'; g.beginPath(); g.moveTo(x-32,y); g.quadraticCurveTo(x,y+6,x+32,y); g.quadraticCurveTo(x,y+34,x-32,y); g.fill(); g.stroke(); g.lineWidth=3; g.beginPath(); g.moveTo(x-30,y+5); g.quadraticCurveTo(x,y+12,x+30,y+5); g.stroke(); } }
-function chCheekDraw(g,st){ const star=(x,y,r,col)=>{ g.fillStyle=col; g.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*.45:r; g.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } g.closePath(); g.fill(); };
+function chCheekDraw(g,st){ if(st && st.startsWith('k:')) return chCheekDraw2(g,st); const star=(x,y,r,col)=>{ g.fillStyle=col; g.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*.45:r; g.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } g.closePath(); g.fill(); };
   const heart=(x,y,r,col)=>{ g.fillStyle=col; g.beginPath(); g.moveTo(x,y+r*.9); g.bezierCurveTo(x-r*1.5,y-r*.1,x-r*.7,y-r*1.25,x,y-r*.45); g.bezierCurveTo(x+r*.7,y-r*1.25,x+r*1.5,y-r*.1,x,y+r*.9); g.fill(); };
   for(const s of [-1,1]){ const cx=512+s*232, cy=392;
     if(st==='rosas'||st==='rojas'){ const c=st==='rosas'?'240,120,140':'230,60,80', rg=g.createRadialGradient(cx,cy,4,cx,cy,52); rg.addColorStop(0,`rgba(${c},.8)`); rg.addColorStop(1,`rgba(${c},0)`); g.fillStyle=rg; g.beginPath(); g.ellipse(cx,cy,58,36,0,0,Math.PI*2); g.fill(); }
@@ -8768,6 +8858,69 @@ I('cuerpo','av_amigu','Amigurumi',0,{free:1, thumb:'amigu', plain:'#f4efe6'});
 [['celeste','Celeste','#b8d9f7'],['lavanda','Lavanda','#cdb8f2'],['menta','Menta','#bfe9cc'],['chicle','Rosa chicle','#f7b6cf']].forEach(([k,n,c])=>I('apiel','ap_'+k,'Estambre '+n.toLowerCase(),12,{c}));
 [['negro','Botones negros',0],['cafe','Botones cafés',0],['felices','Bordados felices',0],['dormidos','Bordados dormidos',0],['azul','Botones azules',12],['verde','Botones verdes',12],['grandes','Botones grandes',14],['estrella','Botones de estrella',16],['corazon','Corazones bordados',14],['guino','Guiño',14]]
   .forEach(([k,n,p])=>I('aojos','ae_'+k,n,p,p?{eye:k, aeye:1}:{eye:k, aeye:1, free:1}));
+// v190 (Parte 3): 90 ojos, 90 cejas, 90 bocas y 90 mejillas nuevas para el Chibi (cejas y mejillas también para el Amigurumi)
+{ const nw={nw:1};
+  const AN=[['gris',['#2a2a30','#6a7080','#b8c0d0']],['rosa',['#6a0a3a','#e05a9a','#ffb8d8']],['morado',['#2a0f4a','#7a3ac0','#c8a0f5']],['dorado',['#5a3a00','#d8a020','#ffe08a']],['rojo',['#4a0a0a','#c0303a','#ff9a9a']],
+    ['turquesa',['#0a3a3a','#20a8a0','#90f0e0']],['hielo',['#1a3a5a','#7ab8e8','#e0f4ff']],['ámbar',['#4a2a00','#c87a10','#ffc860']],['menta',['#0a3a2a','#40c090','#b8f8d8']],['lila',['#3a2a5a','#a080d8','#e8d8ff']],
+    ['negro',['#000000','#1a1a20','#4a4a55']],['miel',['#4a2a0a','#b07a2a','#f0c080']],['cielo',['#0a2a6a','#4a90f0','#b8e0ff']],['esmeralda',['#003a1a','#109a4a','#70e8a0']],['coral',['#5a1a0a','#f0705a','#ffc0a8']],
+    ['naranja',['#4a1a00','#f07a1a','#ffc080']],['plata',['#3a3a44','#9aa0b0','#f0f2f8']],['fucsia',['#5a003a','#e0208a','#ff9ad0']],['chocolate',['#1a0a04','#5a3018','#a0703a']],['avellana',['#2a2a0a','#7a7a2a','#c8c070']],
+    ['vino',['#3a0010','#8a1a3a','#d07090']],['oliva',['#2a3000','#6a7a20','#c0d080']],['marino',['#000a30','#1a2f7a','#7a90d0']],['durazno',['#5a2a10','#f0a070','#ffe0c8']],['lavanda',['#3a3060','#9a90e0','#e8e4ff']],
+    ['jade',['#003028','#10806a','#80d8c0']],['ciruela',['#2a0030','#701a80','#d080e0']],['cian',['#003a4a','#10b0d8','#a0f0ff']],['rubí',['#3a0008','#b00828','#ff7090']],['zafiro',['#000a3a','#1030b0','#80a0ff']],
+    ['bosque',['#0a2a0a','#2a6a2a','#90c890']],['arena',['#3a2a10','#b09060','#f0e0b8']],['caramelo',['#3a1a00','#a05a10','#f0b060']]];
+  AN.forEach(([n,C])=>I('cojos','co2_a_'+n,'Ojos anime '+n,10,{eye:'a:'+C.join(','),...nw}));
+  [['rosa','rosa'],['morado','morado'],['cielo','azul'],['esmeralda','verde'],['miel','café'],['gris','gris'],['dorado','dorado'],['rojo','rojo'],['turquesa','turquesa'],['lila','lila']]
+    .forEach(([k,n])=>{ const C=AN.find(a=>a[0]===k)[1]; I('cojos','co2_l_'+k,'Ojos con pestañas '+n,12,{eye:'l:'+C.join(','),...nw}); });
+  [['amarillo',['#4a3a00','#d8b020','#fff08a']],['verde',['#0b4122','#2f9a55','#93e3a4']],['azul',['#0d2560','#2f6fd0','#86c6ff']],['morado',['#2a0f4a','#7a3ac0','#c8a0f5']],['rosa',['#6a0a3a','#e05a9a','#ffb8d8']],['naranja',['#4a1a00','#f07a1a','#ffc080']]]
+    .forEach(([n,C])=>I('cojos','co2_g_'+n,'Ojos de gatito '+n,14,{eye:'g:'+C.join(','),...nw}));
+  [['azul','#1d4fa8'],['rojo','#a8202a'],['verde','#1f7a43'],['morado','#6a2ab0'],['rosa','#d0407a'],['café','#5a3018']].forEach(([n,c])=>I('cojos','co2_b_'+n,'Ojos botón '+n,10,{eye:'b:'+c,...nw}));
+  [['azules','#1d4fa8'],['verdes','#1f7a43'],['morados','#6a2ab0'],['cafés','#5a3018']].forEach(([n,c])=>I('cojos','co2_p_'+n,'Ojos puntitos '+n,10,{eye:'p:'+c,...nw}));
+  [['morados',['#4a0a6a','#a050e0','#e0b0ff']],['azules',['#0a2a6a','#4a90f0','#b8e0ff']],['rojos',['#6a0a0a','#e03040','#ffb0b0']],['naranjas',['#6a2a00','#f08a20','#ffd0a0']]]
+    .forEach(([n,C])=>I('cojos','co2_h_'+n,'Ojos de corazón '+n,14,{eye:'h:'+C.join(','),...nw}));
+  [['rosas',['#a02a6a','#f070b0','#ffd0e8']],['azules',['#1a3a8a','#5a9af0','#c8e4ff']],['verdes',['#0a5a2a','#40c070','#c0f8d0']],['morados',['#4a1a8a','#9a60f0','#e0c8ff']]]
+    .forEach(([n,C])=>I('cojos','co2_s_'+n,'Ojos de estrella '+n,14,{eye:'s:'+C.join(','),...nw}));
+  [['morada',['#1a0a3a','#5a2ab0','#c070ff']],['azul',['#000a2a','#1a3aa0','#60b0ff']],['rosa',['#3a0a2a','#c02a8a','#ff90d0']]].forEach(([n,C])=>I('cojos','co2_gal_'+n,'Ojos de galaxia '+n,16,{eye:'gal:'+C.join(','),...nw}));
+  I('cojos','co2_arcoiris','Ojos arcoíris',16,{eye:'arcoiris',...nw});
+  [['rosas','#f49ac1'],['amarillas','#ffd23f'],['celestes','#7fd0ff']].forEach(([n,c])=>I('cojos','co2_flor_'+n,'Ojos de florecita '+n,14,{eye:'flor:'+c,...nw}));
+  I('cojos','co2_espiral','Ojos mareados',10,{eye:'espiral',...nw}); I('cojos','co2_x','Ojos de equis',10,{eye:'x',...nw});
+  I('cojos','co2_guino_cafe','Guiño café',12,{eye:'guino:#5a240a,#b85a1c,#e59a3c',...nw}); I('cojos','co2_guino_azul','Guiño azul',12,{eye:'guino:#0d2560,#2f6fd0,#86c6ff',...nw});
+  I('cojos','co2_sorpresa','Ojos de sorpresa',10,{eye:'sorpresa',...nw}); I('cojos','co2_chinitos','Ojos apretaditos',10,{eye:'chinitos',...nw}); I('cojos','co2_llorando','Ojos llorones',12,{eye:'llorando',...nw});
+  I('cojos','co2_luna','Ojos de lunita',10,{eye:'luna',...nw}); I('cojos','co2_sueno','Ojos contentos',10,{eye:'sueno',...nw});
+  [['azules',['#0a2a6a','#4a90f0','#b8e0ff']],['rosas',['#6a0a3a','#e05a9a','#ffb8d8']],['verdes',['#003a1a','#109a4a','#70e8a0']]].forEach(([n,C])=>I('cojos','co2_dia_'+n,'Ojos de diamante '+n,16,{eye:'diamante:'+C.join(','),...nw}));
+  I('cojos','co2_enojados_rojo','Ojos enojados rojos',10,{eye:'enojados:#4a0a0a,#c0303a,#ff9a9a',...nw}); I('cojos','co2_enojados_cafe','Ojos enojados cafés',10,{eye:'enojados:#5a240a,#b85a1c,#e59a3c',...nw});
+  I('cojos','co2_cansados_cafe','Ojos cansados cafés',10,{eye:'cansados:#5a240a,#b85a1c,#e59a3c',...nw}); I('cojos','co2_cansados_gris','Ojos cansados grises',10,{eye:'cansados:#2a2a30,#6a7080,#b8c0d0',...nw});
+  // cejas: 10 formas × 3 grosores × 3 alturas
+  const BS=[['arco','en arco'],['recta','rectas'],['sube','hacia arriba'],['baja','hacia abajo'],['onda','onduladas'],['punto','de bolita'],['doble','dobles'],['triangulo','de triángulo'],['corta','chiquitas'],['larga','largas']];
+  BS.forEach(([sh,n])=>[[5,'finas'],[10,'medianas'],[18,'gruesas']].forEach(([th,tn])=>[[0,''],[-14,' altas'],[10,' bajas']].forEach(([ly,ln])=>I('ccejas','cj2_'+sh+'_'+th+'_'+(ly<0?'a':ly>0?'b':'n'),'Cejas '+n+' '+tn+ln,6,{br:'p:'+sh+':'+th+':'+ly,...nw}))));
+  // bocas: 15 formas × 6 colores
+  const MS=[['sonrisa','Sonrisa',1],['grande','Sonrisota',1],['abierta','Boca abierta feliz',1],['lengua','Lengüita',1],['gato','Boquita de gato',1],['uwu','Boquita uwu',1],['tres','Boquita :3',1],['o','Boquita en O',1],
+    ['beso','Besito',0],['triste','Carita triste',1],['ondulada','Boca nerviosa',1],['dientes','Sonrisa con dientes',1],['colmillos','Dos colmillitos',0],['sorpresa','Boca de sorpresa',1],['ladeada','Sonrisa de lado',1]];
+  const MC=[['cafe','#5a2a1a','café','café'],['roja','#c62f3a','roja','rojo'],['rosa','#e0607a','rosa','rosa'],['morada','#7a3a8a','morada','morado'],['negra','#2a2226','negra','negro'],['coral','#ff7a5a','coral','coral']];
+  MS.forEach(([sh,n,fem])=>MC.forEach(([k,c,f,m])=>I('cboca','bo2_'+sh+'_'+k,n+' '+(fem?f:m)+(sh==='colmillos'?'':''),6,{mo:'m:'+sh+':'+c,...nw})));
+  // mejillas: 14 formas × 6 colores (+ arcoíris y 5 verdes)
+  const CC=[['rosa','#f0788c',['rosa','rosa','rosas','rosas']],['roja','#e03c50',['roja','rojo','rojas','rojos']],['durazno','#ffa070',['durazno','durazno','durazno','durazno']],['morada','#b080e0',['morada','morado','moradas','morados']],
+    ['azul','#6aa8f0',['azul','azul','azules','azules']],['amarilla','#f2c230',['amarilla','amarillo','amarillas','amarillos']]], VERDE=['verde','#5fc07a',['verde','verde','verdes','verdes']];
+  const KS=[['chapitas','Chapitas',2],['ovaladas','Mejillas ovaladas',2],['circulos','Circulitos',3],['corazon','Corazón',1],['estrella','Estrella',0],['pecas','Pecas',2],['rayitas','Rayitas',2],['espiral','Espiral',0],
+    ['flor','Florecita',0],['luna','Lunita',0],['notas','Notas musicales',2],['puntitos','Puntitos',3],['destellos','Destellos',3],['trazo','Rayita de pintura',0]];
+  KS.forEach(([sh,n,g])=>CC.concat(['chapitas','corazon','estrella','flor','destellos'].includes(sh)?[VERDE]:[]).forEach(([k,c,F])=>I('cmejillas','mj2_'+sh+'_'+k,n+' '+F[g],6,{ck:'k:'+sh+':'+c,...nw})));
+  I('cmejillas','mj2_arcoiris','Arcoíris en las mejillas',8,{ck:'k:arcoiris:#ffffff',...nw});
+  // ojos del Amigurumi
+  const AE=(k,n,p,E)=>{ AM_EYES['n_'+k]=E; I('aojos','ae2_'+k,n,p,{eye:'n_'+k, aeye:1,...nw}); };
+  [['rojos','#a8202a'],['rosas','#e05a9a'],['morados','#6a2ab0'],['grises','#6a6a72'],['dorados','#d8a020'],['plateados','#b8bcc8'],['turquesa','#18a0a0'],['naranjas','#e06a10'],['amarillos','#e8c020'],['vino','#6a1a2a'],['celestes','#5aa8e8'],['lilas','#a080d8'],['menta','#40c090'],['perla','#f4efe6']]
+    .forEach(([n,c])=>AE('b_'+n,'Botones '+n,10,{btn:c}));
+  [['negros','#0d0d10'],['cafés','#3a2112'],['azules','#1d4fa8'],['verdes','#1f7a43'],['rojos','#a8202a'],['rosas','#e05a9a'],['morados','#6a2ab0'],['dorados','#d8a020'],['turquesa','#18a0a0'],['grises','#6a6a72']]
+    .forEach(([n,c])=>AE('g_'+n,'Botones grandes '+n,12,{btn:c, big:1}));
+  [['negros','#0d0d10'],['cafés','#3a2112'],['azules','#1d4fa8'],['rosas','#e05a9a'],['verdes','#1f7a43'],['morados','#6a2ab0'],['rojos','#a8202a'],['grises','#6a6a72']]
+    .forEach(([n,c])=>AE('m_'+n,'Botoncitos '+n,10,{btn:c, mini:1}));
+  [['plateadas','#c9ced8'],['rosas','#f49ac1'],['azules','#4b8ae8'],['verdes','#4fc070'],['moradas','#9a60f0'],['rojas','#e04050'],['blancas','#f6f4ef'],['naranjas','#f08a20']]
+    .forEach(([n,c])=>AE('s_'+n,'Ojos de estrella '+n,14,{star:c}));
+  [['rojos','#d8283a'],['rosas','#f06aa0'],['morados','#8a3ac0'],['azules','#3a7ae8'],['dorados','#e8b020'],['negros','#1a1416'],['verdes','#3aa860'],['naranjas','#f07a20']]
+    .forEach(([n,c])=>AE('h_'+n,'Ojos de corazón '+n,14,{heart:c}));
+  [['café','#3a2112'],['azul','#1d4fa8'],['verde','#1f7a43'],['rojo','#a8202a'],['rosa','#e05a9a'],['morado','#6a2ab0'],['dorado','#d8a020'],['gris','#6a6a72']]
+    .forEach(([n,c])=>AE('w_'+n,'Guiño con botón '+n,12,{btn:c, wink:1}));
+  const ES=[['felices','Bordados felices'],['dormidos','Bordados dormidos'],['corazon','Corazones bordados'],['x','Equis bordadas'],['espiral','Espirales bordadas'],['ovalo','Óvalos bordados'],['luna','Lunitas bordadas'],['flor','Florecitas bordadas'],
+    ['cruz','Crucecitas bordadas'],['sorpresa','Bordados de sorpresa'],['llorando','Bordados llorones'],['chinitos','Bordados apretaditos']];
+  ES.forEach(([st,n])=>[['cafes','#2c1c16','cafés'],['rosas','#d0407a','rosas'],['azules','#2a5ab0','azules']].forEach(([k,c,cn])=>{ if((st==='felices'||st==='dormidos')&&k==='cafes') return; if(st==='corazon'&&k==='rosas') return; AE('e_'+st+'_'+k,n+' '+cn,10,{st, col:c}); }));
+  AE('e_corazon_morados','Corazones bordados morados',10,{st:'corazon', col:'#8a3ac0'}); }
 // v157: lo mismo que el Chibi, en versión tejida para el Amigurumi (copiado de su lista, con su propio id)
 { const cp=(cat,pre,np)=>SHOP.filter(it=>it.cat===cat).forEach(it=>{ const o={...it}; delete o.id; delete o.cat; delete o.name; delete o.price; I(np,pre+it.id.slice(it.id.indexOf('_')+1),it.name,it.price,o); });
   cp('cgorros','arg_','agorros'); cp('caccesorios','arc_','aaccesorios');
