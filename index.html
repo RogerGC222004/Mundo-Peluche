@@ -1166,7 +1166,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='196';
+const GAME_VERSION='197';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -1954,6 +1954,7 @@ let GROUND_MAT=null; const TERRAIN_LOD=[];
         const ring=[V(ix,iy)]; if(L) ring.push(V(ix,iy+1)); ring.push(V(ix,iy+2)); if(T) ring.push(V(ix+1,iy+2)); ring.push(V(ix+2,iy+2)); if(R) ring.push(V(ix+2,iy+1)); ring.push(V(ix+2,iy)); if(B) ring.push(V(ix+1,iy));
         const ctr=V(ix+1,iy+1); for(let k=0;k<ring.length;k++) li.push(ctr,ring[k],ring[(k+1)%ring.length]); }
       const gl=new THREE.BufferGeometry(); for(const k of ['position','normal','uv','color']) gl.setAttribute(k, geo.attributes[k]); gl.setIndex(li); gl.boundingSphere=g.boundingSphere;
+      m.userData.noCol=true;   // v197: el terreno es piso, no lleva cajitas de choque (antes cada pedazo medía la isla entera)
       TERRAIN_LOD.push({m, hi:g, lo:gl, c:g.boundingSphere.center, r:g.boundingSphere.radius}); }
   }
 })();
@@ -2046,9 +2047,11 @@ function waterRipple(x,z,amp){
 // Cada 75 s llega una serie de 3 olas que nacen mar adentro y viajan hacia la isla grande (a 10 m/s). Lejos de la orilla son
 // colosales (hasta ~10 m) y cerca de la playa son grandes (~2.4 m); se apagan al llegar a la arena. Dependen de la hora: todos ven las mismas.
 // Junto al muelle y cerca de las otras islas son más chiquitas. La tarjeta de video dibuja las mismas (swellSum en WATER_GLSL).
-const SWELL={P:75, N:3, GAP:8, C:10, S0:1400, list:[], u:Array.from({length:8},()=>new THREE.Vector4()), pier:new THREE.Vector4(0,0,1,0), hasPier:false};
+const SWELL={P:75, N:3, GAP:8, C:10, S0:1400, list:[], u:Array.from({length:8},()=>new THREE.Vector4()), pier:new THREE.Vector4(0,0,1,0), hasPier:false, k:1, ku:{value:1}};
 const swHash=n=>{ const v=Math.sin(n*12.9898+4.1)*43758.5453; return v-Math.floor(v); };
-function swellTick(){ const T=Date.now()/1000, S=SWELL, life=(S.S0+60)/S.C, n1=Math.floor(T/S.P); S.list.length=0;
+// v197: con lluvia el mar se mueve más y los tubos salen el doble de altos; con tormenta eléctrica, cuatro veces
+function seaWeatherK(){ const W=(typeof weatherNow!=='undefined')?weatherNow:null; if(!W) return [1,1]; return [1+.6*W.rain+.9*W.storm, 1+W.rain+2*W.storm]; }
+function swellTick(){ { const k=seaWeatherK(); SWELL.k=k[0]; TUBE.wk=k[1]; SWELL.ku.value=SWELL.k; } const T=Date.now()/1000, S=SWELL, life=(S.S0+60)/S.C, n1=Math.floor(T/S.P); S.list.length=0;
   for(let n=n1; n>=n1-Math.ceil(life/S.P)-1; n--) for(let k=0;k<S.N;k++){ const age=T-(n*S.P+k*S.GAP); if(age<0 || age>life) continue;
     S.list.push({id:n*10+k, sc:S.S0-S.C*age, ph:swHash(n)*6.283+k*1.7, str:.85+.3*swHash(n+.5)}); }
   for(let i=0;i<8;i++){ const w=S.list[i]; if(w) S.u[i].set(w.sc,w.ph,1,w.str); else S.u[i].set(0,0,0,0); } }
@@ -2058,8 +2061,8 @@ const SWO={h:0, face:0, sx:0, sz:0, H:0, s:0, list:null};
 // ¿qué tanto sube el agua aquí por las olas grandes? (y de paso: en qué lado de la ola estás y hacia dónde está la orilla)
 function swellAt(x,z,full){ const o=SWO; o.h=0; o.face=0; o.H=0; o.list=full?[]:null; if(!SWELL.list.length) return o;
   const r=Math.hypot(x,z), a=Math.atan2(z,x), s=r-coastRN(a); o.s=s; if(s<4 || s>SWELL.S0+80) return o;
-  let A=swellAmp(s); if(A<.01) return o;
-  for(const I of [WI,JI,DI]){ A*=smooth(0,150,Math.hypot(x-I.x,z-I.z)-540); if(A<.01) return o; }
+  let A=swellAmp(s)*(SWELL.k||1); if(A<.01) return o;
+  for(const I of (SWELL.isl||(SWELL.isl=[WI,JI,DI]))){ A*=smooth(0,150,Math.hypot(x-I.x,z-I.z)-540); if(A<.01) return o; }
   if(SWELL.hasPier){ const P=SWELL.pier, dx=x-P.x, dz=z-P.y, lx=dx*P.z-dz*P.w, lz=dx*P.w+dz*P.z, ex=Math.max(Math.abs(lx)-8,0), ez=Math.max(-22-lz,lz-90,0); A*=.15+.85*smooth(4,32,Math.hypot(ex,ez)); }
   o.sx=-x/r; o.sz=-z/r;
   for(const w of SWELL.list){ const d=s-w.sc; if(d>70 || d<-45) continue; const H=A*w.str*(.8+.2*Math.sin(2*a+w.ph)), W=7+H*2, wx=d<0?W*.55:W*1.5, e=Math.exp(-(d/wx)*(d/wx));
@@ -2077,11 +2080,26 @@ const TUBE_F=[[.7,.92],[-.15,1.02],[-.48,.98],[-.76,.8],[-.92,.55],[-.97,.3],[-.
 const TUBE_U=[[.7,.92],[.45,.95],[.2,.85],[0,.7],[-.15,.5],[-.25,.3],[-.32,.12],[-.36,-.25]];
 function tubeSpots(){ if(!TUBE.spots){ const a0=PIER.a; TUBE.spots=[a0+.095, a0+2.25, a0-2.05].map((a,i)=>({a, i})); } return TUBE.spots; }
 // cuánto está enroscado (k) y cuánto ya se cayó (c) en el punto u (metros a lo largo de la ola) para la ola con avance q (0→1)
-function tubeKC(q,u,dir){ const L=TUBE.L, up=dir*(L/2-q*L*1.05), x=dir*u;   // up: dónde va rompiendo; avanza de un extremo al otro
-  const k=smooth(up*dir-24,up*dir-3,x)*(1-smooth(up*dir,up*dir+3,x)), c=smooth(up*dir,up*dir+9,x); return [k,c]; }
+function tubeKC(q,u,dir,L=TUBE.L,H=4){ const up=dir*(L/2-q*L*1.05), x=dir*u, fw=Math.max(24,1.6*H), cw=Math.max(3,.4*H), bw=Math.max(9,1.2*H);   // up: dónde va rompiendo; avanza de un extremo al otro
+  const k=smooth(up*dir-fw,up*dir-cw,x)*(1-smooth(up*dir,up*dir+cw,x)), c=smooth(up*dir,up*dir+bw,x); return [k,c]; }
+// v197: qué tan alto es el tubo según qué tan lejos estás de la orilla (o de una isla): cerca 5–10 m, mar adentro hasta ~100 m
+function tubeHAt(x,z){ let d=Math.hypot(x,z)-coastRN(Math.atan2(z,x)); for(const I of (SWELL.isl||(SWELL.isl=[WI,JI,DI]))) d=Math.min(d,Math.hypot(x-I.x,z-I.z)-540);
+  return 5+5*smooth(30,160,d)+90*Math.pow(smooth(160,1300,d),1.3); }
+function tubeMake(sp,w,q,H,L){ const f=smooth(0,.32,q)*smooth(1,.84,q),   /* v197: crece poco a poco (unos 3 s) y se calma al final */ wk=TUBE.wk||1; H*=wk; L*=Math.sqrt(wk); return {sp, w, q, rc:coastRN(sp.a), dir:(w.id%2)?1:-1, Ht:H*f, H, fade:f, L, V0:Math.max(16,3*H), V1:-Math.max(14,3.6*H)}; }
 function tubeList(){ const out=[]; if(!SWELL.list.length || typeof PIER==='undefined') return out;
   for(const w of SWELL.list){ if(w.sc>TUBE.S1 || w.sc<TUBE.S0) continue; const q=(TUBE.S1-w.sc)/(TUBE.S1-TUBE.S0);
-    for(const sp of tubeSpots()){ const rc=coastRN(sp.a); out.push({sp, w, q, rc, dir:(w.id%2)?1:-1, Ht:(3.1+1.1*w.str)*Math.min(1,q/.1)*Math.min(1,(1-q)/.12), fade:Math.min(1,q/.1)*Math.min(1,(1-q)/.12)}); } }
+    for(const sp of tubeSpots()){ const r=coastRN(sp.a)+w.sc; out.push(tubeMake(sp,w,q,(tubeHAt(Math.cos(sp.a)*r,Math.sin(sp.a)*r)*.9+.5)*(.9+.2*w.str),TUBE.L)); } }
+  // v197: la ola que viene hacia quien surfea o nada mar adentro se enrosca justo ahí (más grande entre más lejos de la orilla)
+  const P=TUBE.pers||(TUBE.pers=new Map()), who=[];
+  if(state==='play' && !(typeof SP!=='undefined' && SP.on)) who.push(['yo',player.pos.x,player.pos.z]);
+  try{ for(const r of mp.remotes.values()) if(r.tb && r.tb[1]===4 && r.pos) who.push([r.uid||r.id||'r',r.pos.x,r.pos.z]); }catch(e){}
+  for(const [id,x,z] of who){ const a=Math.atan2(z,x); let sp0=Math.hypot(x,z)-coastRN(a); if(sp0<-150) continue; if(sp0<45){ sp0=45; }   // en la playa o cerca: la ola de enfrente
+    const ax=Math.cos(a)*(coastRN(a)+sp0), az=Math.sin(a)*(coastRN(a)+sp0); if(groundAt(ax,az,5)>waterSurfaceY(ax,az)-1.2) continue; const H=tubeHAt(ax,az), Dt=Math.max(80,4*H);
+    for(const w of SWELL.list){ const key=w.id+'|'+id; if(P.has(key) || w.sc<sp0 || w.sc-sp0>.35*Dt) continue;
+      let busy=false; for(const [k2,o] of P){ if(o.id===w.id && Math.abs(Math.atan2(Math.sin(o.sp.a-a),Math.cos(o.sp.a-a)))*(coastRN(a)+w.sc)<o.L*.6) busy=true; }
+      for(const sp of tubeSpots()) if(w.sc<TUBE.S1+20 && Math.abs(Math.atan2(Math.sin(sp.a-a),Math.cos(sp.a-a)))*(coastRN(a)+w.sc)<TUBE.L) busy=true;
+      if(!busy) P.set(key,{id:w.id, sp:{a, i:'p'}, s0:w.sc, s1:w.sc-Dt, H:H*(.9+.2*w.str), L:Math.max(70,6*H)}); } }
+  for(const [key,o] of P){ const w=SWELL.list.find(x=>x.id===o.id); if(!w || w.sc<o.s1){ P.delete(key); continue; } out.push(tubeMake(o.sp,w,(o.s0-w.sc)/(o.s0-o.s1),o.H,o.L)); }   // las olas se rehacen cada cuadro: se buscan por su número
   return out; }
 // un punto del tubo en el mundo: u a lo largo (m), d adelante/atrás de la cresta (m), y alto sobre el mar
 function tubeW(T,u,d,y,out){ const a=T.sp.a+u/(T.rc+T.w.sc), r=coastRN(a)+T.w.sc+d; out[0]=Math.cos(a)*r; out[1]=SEA_Y+y; out[2]=Math.sin(a)*r; return out; }
@@ -2091,10 +2109,85 @@ function tubeMesh(i){ let m=TUBE.mesh[i]; if(m) return m; const NU=TUBE.NU, NP=T
   const idx=[]; for(let j=0;j<NU-1;j++) for(let p=0;p<NP-1;p++){ const a=j*NP+p, b=a+NP; idx.push(a,b,a+1, a+1,b,b+1); } g.setIndex(idx);
   m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true, roughness:.18, metalness:.1, transparent:true, opacity:.82, side:THREE.DoubleSide, depthWrite:true}));
   m.frustumCulled=false; m.userData.noBatch=true; m.renderOrder=3; m.visible=false; scene.add(m); TUBE.mesh[i]=m; return m; }
+// ---------- v197: el tubo hecho con el mar de verdad ----------
+// Cerca de una ola de tubo, una franja de mar con muchos puntitos (61 × 181) reemplaza al mar normal (que ahí no se dibuja).
+// Usa el mismo dibujo del agua (color, brillo, transparencia, textura y espuma). Cada punto sabe dónde estaría en el mar normal
+// y a dónde va cuando la ola se enrosca: la tarjeta de video lo mueve de uno a otro según qué tanto está enroscada la ola ahí.
+// La forma de lado (en unidades del alto del tubo): la espalda sube, pasa por arriba, el labio cae adelante hasta tocar el agua,
+// y por dentro: el techo, la pared que baja y el piso del tubo, que sigue hacia la orilla.
+const TUBE_PF=[[2.6,.30],[1.9,.42],[1.3,.58],[0.8,.76],[0.38,.92],[0.0,1.03],[-0.38,1.07],[-0.72,.98],[-0.96,.78],[-1.08,.52],[-1.10,.28],[-1.05,.08],[-0.99,.0],
+  [-0.93,.07],[-0.93,.28],[-0.86,.52],[-0.70,.72],[-0.45,.82],[-0.18,.78],[0.02,.62],[0.10,.42],[0.08,.22],[0.0,.08],[-0.15,-.04],[-0.45,-.05],[-0.75,-.05],[-1.05,-.05],[-1.5,-.03],[-2.2,0],[-3.2,0]];
+const TUBE_LIP=[11,12,13];   // los puntos del labio (llevan espuma)
+const TS={NU:57, NV:151, V0:16, V1:-14, mesh:null, mat:null, T:null, cut:new THREE.Vector4(0,0,0,0), cutD:new THREE.Vector2(-14,16), prof:null, on:false};
+function tsInit(){ if(TS.mesh) return TS.mesh; const NU=TS.NU, NV=TS.NV, n=NU*NV, g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(n*3),3)); g.setAttribute('normal',new THREE.Float32BufferAttribute(new Float32Array(n*3),3));
+  g.setAttribute('aT',new THREE.Float32BufferAttribute(new Float32Array(n*4),4)); g.setAttribute('aF',new THREE.Float32BufferAttribute(new Float32Array(n*2),2));
+  const idx=[]; for(let j=0;j<NU-1;j++) for(let i=0;i<NV-1;i++){ const a=j*NV+i, b=a+NV; idx.push(a,a+1,b, a+1,b+1,b); } g.setIndex(idx);
+  const U=seaSurface.material.uniforms;
+  TS.mat=makeWaterMat({A:WATER.seaA, depth:{tex:U.uDepth.value, rect:U.uRect.value}, shallow:'#78d3df', deep:'#2266a8', deepD:7, detail:U.uDetail.value, tile:U.uTile.value, foam:1, opacity:.86, open:1, tube:true});
+  TS.mat.depthWrite=true; waterMats.push(TS.mat);
+  const m=new THREE.Mesh(g,TS.mat); m.frustumCulled=false; m.renderOrder=3; m.userData.noBatch=true; m.userData.noCol=true; m.visible=false; scene.add(m); TS.mesh=m; return m; }
+// la forma de lado en metros para este alto H, repartida en NV puntos parejos a lo largo de la curva
+function tsProfile(H,T){ const P=[[T.V0,null]]; for(const [d,y] of TUBE_PF) P.push([d*H,y<0?y*Math.min(H,6):y*H]); P.push([T.V1,0]);   /* el piso del tubo queda al ras del mar aunque la ola sea gigante */
+  // la espalda se apoya en la ola grande que ya trae el mar
+  const a=T.sp.a, rc0=coastRN(a);
+  for(const p of P){ const r=rc0+T.w.sc+p[0], h=swellH(Math.cos(a)*r,Math.sin(a)*r); if(p[1]===null) p[1]=h; else if(p[0]>0) p[1]=Math.max(p[1],h*.95); }
+  const L=[0]; for(let i=1;i<P.length;i++) L.push(L[i-1]+Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]));
+  const tot=L[L.length-1], NV=TS.NV, out={d:new Float32Array(NV), y:new Float32Array(NV), lip:new Float32Array(NV)}; let s=0;
+  for(let i=0;i<NV;i++){ const at=tot*i/(NV-1); while(s<P.length-2 && L[s+1]<at) s++; const f=(at-L[s])/Math.max(1e-6,L[s+1]-L[s]);
+    out.d[i]=P[s][0]+(P[s+1][0]-P[s][0])*f; out.y[i]=P[s][1]+(P[s+1][1]-P[s][1])*f;
+    const pi=s-1+f; out.lip[i]=Math.max(0,1-Math.min(...TUBE_LIP.map(q=>Math.abs(q-pi)))/1.2); }   // s-1: el primer punto de P es el borde de la franja
+  return out; }
+// cada cuadro: acomodar la franja en la ola de tubo más cercana a la cámara
+function tsTick(){ if(MIN_Q){ TS.on=false; TS.cut.w=0; return false; }
+  const cx=camera.position.x, cz=camera.position.z; let best=null, bd=420;
+  for(const T of TUBE.act){ const a=T.sp.a, r=T.rc+T.w.sc, d=Math.hypot(Math.cos(a)*r-cx,Math.sin(a)*r-cz)-T.L/2-T.H; if(d<bd){ bd=d; best=T; } }
+  if(!best || best.fade<.02){ if(TS.mesh) TS.mesh.visible=false; TS.on=false; TS.cut.w=0; TS.T=null; return false; }
+  if(TS.T===best && TS.on && (TS.fr=(TS.fr|0)+1)%2) return true;   // v197: la forma se recalcula cada dos cuadros (la ola avanza despacito)
+  const T=best, m=tsInit(), g=m.geometry, P=g.attributes.position.array, N=g.attributes.normal.array, A=g.attributes.aT.array, F=g.attributes.aF.array;
+  const NU=TS.NU, NV=TS.NV, L=T.L, H=T.Ht, pr=tsProfile(H,T), sc=T.w.sc, rcc=T.rc+sc, a0=T.sp.a; TS.pr=pr;
+  for(let j=0;j<NU;j++){ const u=-L/2+L*j/(NU-1), a=a0+u/rcc, ca=Math.cos(a), sa=Math.sin(a), r0=coastRN(a)+sc, [k,c]=tubeKC(T.q,u,T.dir,L,T.H), endF=smooth(L/2,L/2-Math.max(10,1.5*T.H),Math.abs(u)), kc=Math.max(k,c), wc=kc>0?c/kc:0;
+    for(let i=0;i<NV;i++){ const q=j*NV+i, t=i/(NV-1), v=T.V0+(T.V1-T.V0)*t, kv=smooth(0,.07,t)*smooth(1,.93,t), K=kc*endF*kv*T.fade;
+      P[q*3]=ca*(r0+v); P[q*3+1]=SEA_Y; P[q*3+2]=sa*(r0+v);
+      // a dónde va: la curva del tubo, o (donde ya rompió) una loma de espuma que se aplana
+      const wy=.28*H*Math.exp(-Math.pow((v+.6*H)/(1.4*H),2)), td=pr.d[i]+(v-pr.d[i])*wc, ty=pr.y[i]+(wy-pr.y[i])*wc;
+      A[q*4]=ca*(r0+td); A[q*4+1]=SEA_Y+ty; A[q*4+2]=sa*(r0+td); A[q*4+3]=K;
+      F[q*2]=Math.min(1,(pr.lip[i]*.85*k+c*.9*Math.exp(-Math.pow((v+.6*H)/Math.max(6,.45*H),2)))*endF*T.fade);   /* espuma: en la punta del labio y donde ya rompió */
+      F[q*2+1]=Math.min(smooth(0,TS.EB,L/2-Math.abs(u)), smooth(0,TS.EB,Math.min(T.V0-v, v-T.V1))); } }   // qué tanto se ve (se desvanece en la orilla de la franja)
+  // normales de la forma enroscada (de los puntos de destino)
+  for(let j=0;j<NU;j++) for(let i=0;i<NV;i++){ const q=j*NV+i, i0=Math.max(0,i-1), i1=Math.min(NV-1,i+1), j0=Math.max(0,j-1), j1=Math.min(NU-1,j+1);
+    const a1=(j*NV+i1)*4, a0q=(j*NV+i0)*4, b1=(j1*NV+i)*4, b0=(j0*NV+i)*4;
+    const ex=A[a1]-A[a0q], ey=A[a1+1]-A[a0q+1], ez=A[a1+2]-A[a0q+2], fx=A[b1]-A[b0], fy=A[b1+1]-A[b0+1], fz=A[b1+2]-A[b0+2];
+    let nx=ey*fz-ez*fy, ny=ez*fx-ex*fz, nz=ex*fy-ey*fx; const l=Math.hypot(nx,ny,nz)||1; N[q*3]=nx/l*TS.sg; N[q*3+1]=ny/l*TS.sg; N[q*3+2]=nz/l*TS.sg; }
+  g.attributes.position.needsUpdate=true; g.attributes.normal.needsUpdate=true; g.attributes.aT.needsUpdate=true; g.attributes.aF.needsUpdate=true;
+  m.visible=true; TS.on=true; TS.T=T; TS.cut.set(a0, sc, (L/2-TS.EB)/rcc, 1); TS.cutD.set(T.V1+TS.EB, T.V0-TS.EB); return true; }
+TS.sg=1; TS.EB=1.8;
+// dentro del tubo, la cámara se pone del lado de la orilla (afuera del labio) para que veas al peluche dentro de la ola
+const _tcW=new THREE.Vector3(), _tcT=new THREE.Vector3();
+function tubeCamera(dt){ const R=TBL.ride; if(!R || !player.pg || player.pg.k!=='surf' || !TS.on){ TS.camK=0; return false; }
+  const tb=tubeAt(R.x,R.z), want=tb && tb.T===TS.T && Math.max(tb.k,tb.c)>.05 ? 1 : 0, hollow=want && tb.k>.6 && tb.d<.3*tb.H && tb.d>-1.1*tb.H;
+  TS.camK=(TS.camK||0)+(want-(TS.camK||0))*(1-Math.exp(-dt*(want?3:1.5))); if(TS.camK<.03) return false;
+  const a=Math.atan2(R.z,R.x), sx=-Math.cos(a), sz=-Math.sin(a), hx=Math.sin(R.h), hz=Math.cos(R.h);
+  _tcT.set(R.x, R.y+1.3, R.z); if(hollow) _tcW.set(R.x+sx*9-hx*3, R.y+2.0, R.z+sz*9-hz*3); else _tcW.set(R.x-hx*7+sx*2, R.y+3.2, R.z-hz*7+sz*2);   // dentro del hueco: desde la orilla; si no: atrás y arriba _tcW.y=Math.max(_tcW.y, tubeWaterY(_tcW.x,_tcW.z)+1.3);   // nunca debajo del agua
+  const nw=camera.position.clone().lerp(_tcW,1-Math.exp(-dt*4)); camera.position.lerpVectors(camera.position,nw,TS.camK); camera.position.y=Math.max(camera.position.y, tubeWaterY(camera.position.x,camera.position.z)+1); camera.lookAt(_tcT); plush.visible=true;
+  yaw=Math.atan2(camera.position.x-R.x, camera.position.z-R.z); return TS.camK>.5; }
+// el agua bajo la tabla dentro del tubo: el piso del tubo (al ras del mar), no la loma de la ola grande
+function tubeWaterY(x,z){ const ws=waterSurfaceY(x,z); if(!TS.on || !TS.pr || !TS.T) return ws; const T=TS.T, pr=TS.pr;
+  // v197: la altura de verdad de la franja en ese punto (la misma cuenta que hace la tarjeta de video), tomando la superficie de más abajo (el piso)
+  const a=Math.atan2(z,x), rcc=T.rc+T.w.sc, u=Math.atan2(Math.sin(a-T.sp.a),Math.cos(a-T.sp.a))*rcc, L=T.L; if(Math.abs(u)>L/2) return ws;
+  const [k,c]=tubeKC(T.q,u,T.dir,L,T.H), endF=smooth(L/2,L/2-Math.max(10,1.5*T.H),Math.abs(u)), kc=Math.max(k,c); if(kc*endF*T.fade<.01) return ws;
+  const H=T.Ht, wc=kc>0?c/kc:0, r0=coastRN(a)+T.w.sc, dP=Math.hypot(x,z)-r0, ca=Math.cos(a), sa=Math.sin(a), NV=TS.NV; let best=null, pr0=0, py0=0;
+  for(let i=0;i<NV;i++){ const t=i/(NV-1), v=T.V0+(T.V1-T.V0)*t, K=kc*endF*smooth(0,.07,t)*smooth(1,.93,t)*T.fade, wy=.28*H*Math.exp(-Math.pow((v+.6*H)/(1.4*H),2));
+    const td=pr.d[i]+(v-pr.d[i])*wc, ty=pr.y[i]+(wy-pr.y[i])*wc, hf=SEA_Y+swellH(ca*(r0+v),sa*(r0+v)), fr=v+(td-v)*K, fy=hf+(SEA_Y+ty-hf)*K;
+    if(i>0 && (pr0-dP)*(fr-dP)<=0){ const f=(dP-pr0)/((fr-pr0)||1e-6), y=py0+(fy-py0)*f; if(best===null || y<best) best=y; } pr0=fr; py0=fy; }
+  return best===null ? ws : best+(ws-SEA_Y-swellH(x,z))*.5; }
 const TUBE_C0=new THREE.Color('#1d6b9e'), TUBE_C1=new THREE.Color('#4fb6d3'), TUBE_C2=new THREE.Color('#ffffff'), _tbc=new THREE.Color();
 function tubeTick(){ const L=TUBE.L, NU=TUBE.NU, NP=TUBE.NP; TUBE.act=tubeList(); const used=new Set();
+  if(tsTick()){ TUBE.mesh.forEach(m=>{ if(m) m.visible=false; }); const T=TS.T;   // v197: el tubo es el mar mismo
+    if(Math.random()<.6){ const u=-T.L/2+T.L*Math.random(), [k,c]=tubeKC(T.q,u,T.dir,T.L,T.H); if(k>.5 || c>.25){ tubeW(T,u,(c>k?-.4:-1.0)*T.Ht,.1,_tbw); if(Math.hypot(_tbw[0]-camera.position.x,_tbw[2]-camera.position.z)<120) try{ splashBurst(_tbw[0],SEA_Y+.15,_tbw[2],.35); }catch(e){} } }
+    return; }
   const cx=camera.position.x, cz=camera.position.z;
-  for(const T of TUBE.act){ const i=T.sp.i; if(used.has(i)) continue; tubeW(T,0,0,0,_tbw); if(Math.hypot(_tbw[0]-cx,_tbw[2]-cz)>650) continue; used.add(i);
+  for(const T of TUBE.act){ const i=T.sp.i; if(i==='p' || used.has(i)) continue; tubeW(T,0,0,0,_tbw); if(Math.hypot(_tbw[0]-cx,_tbw[2]-cz)>650) continue; used.add(i);
     const m=tubeMesh(i), P=m.geometry.attributes.position, C=m.geometry.attributes.color, Ht=T.Ht;
     for(let j=0;j<NU;j++){ const u=-L/2+L*j/(NU-1), [k,c]=tubeKC(T.q,u,T.dir), endF=smooth(L/2,L/2-9,Math.abs(u)), H=Ht*(1-.78*c)*(.35+.65*endF);
       tubeW(T,u,2.4,0,_tbw); const back=swellH(_tbw[0],_tbw[2])*.92;
@@ -2107,7 +2200,7 @@ function tubeTick(){ const L=TUBE.L, NU=TUBE.NU, NP=TUBE.NP; TUBE.act=tubeList()
   TUBE.mesh.forEach((m,i)=>{ if(m && !used.has(i)) m.visible=false; }); }
 // ¿dónde estoy respecto a un tubo? → {T, u, d, k, c, H} o null
 function tubeAt(x,z){ for(const T of TUBE.act){ const a=Math.atan2(z,x), da=Math.atan2(Math.sin(a-T.sp.a),Math.cos(a-T.sp.a)), u=da*(T.rc+T.w.sc);
-    if(Math.abs(u)>TUBE.L/2) continue; const d=Math.hypot(x,z)-coastRN(a)-T.w.sc, H=T.Ht; if(d>1.5 || d<-1.15*H) continue; const [k,c]=tubeKC(T.q,u,T.dir); return {T,u,d,k,c,H}; }
+    if(Math.abs(u)>T.L/2) continue; const d=Math.hypot(x,z)-coastRN(a)-T.w.sc, H=T.Ht; if(d>Math.max(1.5,.15*H) || d<-1.15*H) continue; const [k,c]=tubeKC(T.q,u,T.dir,T.L,T.H); return {T,u,d,k,c,H}; }
   return null; }
 const WATER_GLSL=`
 uniform float uT; uniform float uA; uniform float uOpen; uniform vec4 uRip[${RIP_N}];
@@ -2120,12 +2213,14 @@ float waveSum(vec2 p, out vec2 g){
   ${WAVES.map(([dx,dz,k,w,a,ph])=>`{ vec2 d=vec2(${dx.toFixed(3)},${dz.toFixed(3)}); float s=${k.toFixed(3)}*dot(d,p)+${w.toFixed(3)}*uT+${ph.toFixed(3)}; h+=${a.toFixed(3)}*sin(s); g+=${(a*k).toFixed(4)}*cos(s)*d; }`).join('\n  ')}
   float ok=1.0+seaOpenK(p); g*=uA*ok; return h*uA*ok;
 }
-uniform vec4 uSw[8]; uniform vec4 uPier;
+uniform vec4 uSw[8]; uniform vec4 uPier; uniform vec4 uTC; uniform vec2 uTD; uniform float uSwK;
+float coastS(vec2 p){ float a=atan(p.y,p.x), da=a-${AIRPORT.a.toFixed(3)}; da=atan(sin(da),cos(da));
+  return length(p)-(${ISLAND_R2.toFixed(1)}+95.0*sin(3.0*a+.4)+60.0*sin(5.0*a+2.2)+35.0*sin(8.0*a+1.0)+18.0*sin(13.0*a+.5)-190.0*exp(-(da/.22)*(da/.22))); }
 float swellSum(vec2 p, inout vec2 g, out float crest){ crest=0.0; if(uOpen<.5) return 0.0;
   float r=max(length(p),1.0), a=atan(p.y,p.x), da=a-${AIRPORT.a.toFixed(3)}; da=atan(sin(da),cos(da));
   float s=r-(${ISLAND_R2.toFixed(1)}+95.0*sin(3.0*a+.4)+60.0*sin(5.0*a+2.2)+35.0*sin(8.0*a+1.0)+18.0*sin(13.0*a+.5)-190.0*exp(-(da/.22)*(da/.22)));
   if(s<4.0 || s>${(SWELL.S0+80).toFixed(1)}) return 0.0;
-  float A=(2.4*smoothstep(6.0,45.0,s)+8.0*smoothstep(160.0,800.0,s))*(1.0-smoothstep(${(SWELL.S0-200).toFixed(1)},${SWELL.S0.toFixed(1)},s));
+  float A=(2.4*smoothstep(6.0,45.0,s)+8.0*smoothstep(160.0,800.0,s))*(1.0-smoothstep(${(SWELL.S0-200).toFixed(1)},${SWELL.S0.toFixed(1)},s))*uSwK;
   ${[WI,JI,DI].map(I=>`A*=smoothstep(0.0,150.0,length(p-vec2(${I.x.toFixed(1)},${I.z.toFixed(1)}))-540.0);`).join(' ')}
   if(uPier.z!=0.0 || uPier.w!=0.0){ vec2 q=p-uPier.xy; float lx=q.x*uPier.z-q.y*uPier.w, lz=q.x*uPier.w+q.y*uPier.z; vec2 e=vec2(max(abs(lx)-8.0,0.0), max(max(-22.0-lz,lz-90.0),0.0)); A*=.15+.85*smoothstep(4.0,32.0,length(e)); }
   if(A<.01) return 0.0;
@@ -2147,7 +2242,7 @@ float ripSum(vec2 p, inout vec2 g, out float foam){
 function makeWaterMat(o){
   const U={uT:{value:0}, uA:{value:o.A}, uOpen:{value:o.open?1:0}, uRip:{value:ripples}, uDepth:{value:o.depth.tex}, uRect:{value:o.depth.rect},
     uShallow:{value:hexLin(o.shallow)}, uDeep:{value:hexLin(o.deep)}, uDeepD:{value:o.deepD}, uSky:{value:new THREE.Color()}, uAmb:{value:new THREE.Color(.6,.6,.6)},
-    uSunD:{value:new THREE.Vector3(0,1,0)}, uSunC:{value:new THREE.Color(1,1,1)}, uSw:{value:SWELL.u}, uPier:{value:SWELL.pier}, uDetail:{value:o.detail}, uTile:{value:o.tile}, uFoamK:{value:o.foam}, uOpacity:{value:o.opacity}};
+    uSunD:{value:new THREE.Vector3(0,1,0)}, uSunC:{value:new THREE.Color(1,1,1)}, uSw:{value:SWELL.u}, uPier:{value:SWELL.pier}, uTC:{value:TS.cut}, uTD:{value:TS.cutD}, uSwK:SWELL.ku, uDetail:{value:o.detail}, uTile:{value:o.tile}, uFoamK:{value:o.foam}, uOpacity:{value:o.opacity}};
   return new THREE.ShaderMaterial({
     uniforms:Object.assign(THREE.UniformsUtils.clone(THREE.UniformsLib.fog), U),
     vertexShader:`${WATER_GLSL}
@@ -2155,6 +2250,9 @@ function makeWaterMat(o){
       varying vec3 vWp; varying float vH; varying float vS;
       #if FLOW
       attribute vec3 aFlow; varying vec3 vFlow;
+      #endif
+      #if TUBE
+      attribute vec4 aT; attribute vec2 aF; varying float vK; varying vec2 vF; varying vec3 vNc;
       #endif
       #include <fog_pars_vertex>
       void main(){
@@ -2170,6 +2268,10 @@ function makeWaterMat(o){
         { float cr; vS=swellSum(wp.xz,g,cr); h+=vS; }   // v196: olas grandes
         float f; h+=ripSum(wp.xz,g,f);
         wp.y+=h; vH=h; vWp=wp.xyz;
+        #if TUBE
+        vK=aT.w; vF=aF; vNc=normal;   // v197: el mar se enrosca: de su lugar normal hacia la forma del tubo
+        if(aT.w>0.0){ vec3 tp=vec3(aT.x, aT.y+(h-vS)*.5, aT.z); wp.xyz=mix(wp.xyz,tp,aT.w); vH=wp.y-(${SEA_Y.toFixed(2)}); vS=mix(vS,(vH-.6)/.85,aT.w); vWp=wp.xyz; }
+        #endif
         vec4 mvPosition=viewMatrix*wp; gl_Position=projectionMatrix*mvPosition;
         #include <fog_vertex>
       }`,
@@ -2180,10 +2282,19 @@ function makeWaterMat(o){
       #if FLOW
       varying vec3 vFlow;
       #endif
+      #if TUBE
+      varying float vK; varying vec2 vF; varying vec3 vNc;
+      #endif
       #include <fog_pars_fragment>
       void main(){
         vec2 p=vWp.xz;
+        #if !TUBE
+        if(uTC.w>.5 && uOpen>.5){ float da=atan(p.y,p.x)-uTC.x; da=atan(sin(da),cos(da)); if(abs(da)<uTC.z){ float d=coastS(p)-uTC.y; if(d>uTD.x && d<uTD.y) discard; } }   // v197: aquí dibuja la franja del tubo
+        #endif
         float depth=texture2D(uDepth,(p-uRect.xy)/uRect.zw).r*12.0-2.0+vH;
+        #if TUBE
+        depth=max(depth,4.0*clamp(vK*2.0,0.0,1.0));   // el agua enroscada nunca está "bajo tierra" (y mar muy adentro la textura de hondura ya no llega)
+        #endif
         if(depth<-1.2) discard;   // bajo tierra (por ejemplo el mar debajo del lago)
         vec2 g; waveSum(p,g); { float sd=texture2D(uDepth,(p-uRect.xy)/uRect.zw).r*12.0-2.0; g*=mix(.25,1.0,smoothstep(.1,2.8,sd)); } float rf; ripSum(p,g,rf); float swc; swellSum(p,g,swc);
         // olitas finas que se mueven (detalle) y olas que llegan a la orilla
@@ -2191,19 +2302,30 @@ function makeWaterMat(o){
         #if WATER_DETAIL
         g+=vec2(.05*sin(p.x*1.9+uT*1.3)+.04*sin(p.y*2.3-uT*1.1), .05*cos(p.y*1.7+uT*1.2)+.04*cos(p.x*2.1+uT*.9));
         #endif
-        vec3 n=normalize(vec3(-g.x,1.0,-g.y)); if(!gl_FrontFacing) n=-n;
+        vec3 n=normalize(vec3(-g.x,1.0,-g.y));
+        #if TUBE
+        n=normalize(mix(n, normalize(normalize(vNc)+vec3(-g.x,0.0,-g.y)*.25), clamp(vK*1.5,0.0,1.0)));
+        #endif
+        if(!gl_FrontFacing) n=-n;
         vec3 v=normalize(cameraPosition-vWp);
         #if FLOW
         // río: la tela corre río abajo (dos capas que se turnan para que no se estire)
         float fph=fract(uT*.22), fph2=fract(uT*.22+.5), fw=abs(1.0-2.0*fph);
         vec3 det=pow(mix(texture2D(uDetail,(p-vFlow.xy*fph*4.5)/uTile).rgb, texture2D(uDetail,(p-vFlow.xy*fph2*4.5)/uTile+.37).rgb, fw),vec3(2.2));
         #else
-        vec3 det=pow(texture2D(uDetail,p/uTile+vec2(uT*.006,uT*.003)).rgb,vec3(2.2));
+        vec2 pd=p;
+        #if TUBE
+        pd+=vec2(.8,.6)*(vWp.y-(${SEA_Y.toFixed(2)}))*vK;   // en las paredes del tubo la tela no se estira en rayas
+        #endif
+        vec3 det=pow(texture2D(uDetail,pd/uTile+vec2(uT*.006,uT*.003)).rgb,vec3(2.2));
         #endif
         vec3 base=mix(uShallow,uDeep,smoothstep(0.0,uDeepD,depth))*mix(vec3(1.0),det*1.3,.55)*(1.0+clamp(vH-vS*.85,-1.5,1.5)*.35);
         float dif=max(dot(n,uSunD),0.0);
         vec3 col=base*(uAmb+uSunC*dif*.55);
         float fr=pow(1.0-max(dot(n,v),0.0),3.0);
+        #if TUBE
+        fr*=mix(1.0,.35,vK);   // la pared del tubo refleja menos el cielo: se ve agua, no hielo
+        #endif
         col=mix(col,uSky,clamp(fr*.55,0.0,.5));
         float sp=pow(max(dot(n,normalize(uSunD+v)),0.0),160.0);
         col+=uSunC*sp*1.6;
@@ -2214,7 +2336,14 @@ function makeWaterMat(o){
         float foam=(1.0-smoothstep(0.0,.1+.07*sin(uT*1.6+p.x*.07+p.y*.05),depth))*step(-.4,depth)*(.45+.55*smoothstep(.25,.7,det.g));   // línea de espuma fina y rota donde llega el agua
         foam+=smoothstep(.82,1.0,sw)*shore*.75;
         foam+=clamp(rf*6.0,0.0,1.0)*.7;
-        { float ok=seaOpenK(p); foam+=ok*.45*smoothstep(.45,.95,(vH-vS)/(uA*(1.0+ok)*1.3))*(.4+.6*smoothstep(.3,.7,det.g)); }   // v191: espuma en las crestas, mar adentro
+        { float ok=seaOpenK(p);
+          #if TUBE
+          ok*=1.0-clamp(vK*2.0,0.0,1.0);
+          #endif
+          foam+=ok*.45*smoothstep(.45,.95,(vH-vS)/(uA*(1.0+ok)*1.3))*(.4+.6*smoothstep(.3,.7,det.g)); }   // v191: espuma en las crestas, mar adentro
+        #if TUBE
+        swc*=1.0-clamp(vK*2.0,0.0,1.0); foam+=vF.x*(.55+.45*smoothstep(.25,.6,det.g));
+        #endif
         foam+=swc*.9*(.45+.55*smoothstep(.3,.7,det.g));   // v196: espuma en la cresta de las olas grandes
         #if FLOW
         foam+=vFlow.z*smoothstep(.2,.7,det.r)*1.3;   // espuma en los rápidos
@@ -2223,10 +2352,16 @@ function makeWaterMat(o){
         col=mix(col,vec3(.96,.98,1.0)*(uAmb+uSunC*.5),foam);
         float a=mix(uOpacity*.42,uOpacity,smoothstep(0.0,2.5,depth));   // en la orilla casi transparente: se ve la arena mojada
         gl_FragColor=vec4(col,max(a,foam*.95));
+        #if TUBE
+        gl_FragColor.a=mix(gl_FragColor.a,.96,clamp(vK*1.3,0.0,1.0))*vF.y; vec3 preFog=gl_FragColor.rgb;   // la ola enroscada es agua gruesa: casi no se ve a través
+        #endif
         #include <fog_fragment>
+        #if TUBE
+        gl_FragColor.rgb=mix(gl_FragColor.rgb,preFog,.55+.35*clamp(vK*1.5,0.0,1.0));   // la ola gigante conserva su color de agua aunque esté lejos
+        #endif
         #include <encodings_fragment>
       }`,
-    defines:{RIP_LOOP:MIN_Q?0:RIP_N, WATER_DETAIL:MIN_Q?0:1, WATER_VTF:renderer.capabilities.maxVertexTextures>0?1:0, FLOW:o.flow?1:0}, transparent:true, depthWrite:false, side:THREE.DoubleSide, fog:true});
+    defines:{RIP_LOOP:MIN_Q?0:RIP_N, WATER_DETAIL:MIN_Q?0:1, WATER_VTF:renderer.capabilities.maxVertexTextures>0?1:0, FLOW:o.flow?1:0, TUBE:o.tube?1:0}, transparent:true, depthWrite:false, side:THREE.DoubleSide, fog:true});
 }
 // malla en anillos: muchos puntos cerca del jugador (para ver las olas y las ondas) y pocos lejos
 function ringGeometry(R,rings,segs,pow){
@@ -2263,7 +2398,7 @@ function waterTouch(st,x,y,z,speed,dt){
 const myWaterSt={};
 function updateWater(dt){
   WATER.t=waterClock(); swellTick(); try{ tubeTick(); }catch(e){}
-  const W=weatherNow; WATER.seaA=.22+.3*W.wind+.15*W.storm; WATER.lakeA=.025+.05*W.wind;
+  const W=weatherNow; WATER.seaA=(.22+.3*W.wind+.15*W.storm)*(1+.6*W.rain+.6*W.storm); WATER.lakeA=.025+.05*W.wind;   /* v197: con lluvia y tormenta el mar se mueve bruscamente */
   const day=sky.dayK, amb=_c1.copy(hemi.color).multiplyScalar(hemi.intensity*.9).add(_c2.copy(hemi.groundColor).multiplyScalar(hemi.intensity*.25));
   for(const m of waterMats){ const u=m.uniforms; u.uT.value=WATER.t; u.uA.value=m.userData.lake?WATER.lakeA:WATER.seaA;
     u.uSky.value.copy(skyNow).convertSRGBToLinear(); u.uAmb.value.copy(amb);
@@ -2369,8 +2504,11 @@ const obstacles = [];
 const DYN_OBS=[];   // los que se mueven (caballitos del carrusel): siempre se revisan
 const obsGrid={cell:6, map:null, n:-1};
 function obsNear(x,z){
-  if(obsGrid.n!==obstacles.length){ const m=new Map(), C=obsGrid.cell; obsGrid.map=m; obsGrid.n=obstacles.length;
-    for(const o of obstacles){ const rr=o.r+2.5; for(let i=Math.floor((o.x-rr)/C);i<=Math.floor((o.x+rr)/C);i++) for(let j=Math.floor((o.z-rr)/C);j<=Math.floor((o.z+rr)/C);j++){ const k=i*100003+j; let l=m.get(k); if(!l){ l=[]; m.set(k,l); } l.push(o); } } }
+  if(obsGrid.n!==obstacles.length){ const C=obsGrid.cell, n0=obsGrid.n;
+    // v197: si solo se agregaron al final (lo más común), se agregan esos a la rejilla; si se quitó algo, se rehace toda
+    const now=performance.now(), add=n0>0 && obstacles.length>n0 && obstacles[n0-1]===obsGrid.last && obsGrid.map && now-(obsGrid.full||0)<5000, m=add?obsGrid.map:new Map(); obsGrid.map=m; if(!add) obsGrid.full=now;
+    for(let q=add?n0:0;q<obstacles.length;q++){ const o=obstacles[q], rr=o.r+2.5; for(let i=Math.floor((o.x-rr)/C);i<=Math.floor((o.x+rr)/C);i++) for(let j=Math.floor((o.z-rr)/C);j<=Math.floor((o.z+rr)/C);j++){ const k=i*100003+j; let l=m.get(k); if(!l){ l=[]; m.set(k,l); } l.push(o); } }
+    obsGrid.n=obstacles.length; obsGrid.last=obstacles[obstacles.length-1]; }
   const l=obsGrid.map.get(Math.floor(x/obsGrid.cell)*100003+Math.floor(z/obsGrid.cell));
   return DYN_OBS.length ? (l?l.concat(DYN_OBS):DYN_OBS) : (l||EMPTY_OBS);
 }
@@ -11141,7 +11279,8 @@ function blUpdate(dt,t){
       if(Math.hypot(tx-b.x,tz-b.z)>40){ b.x=tx; b.z=tz; b.y=ty; } const k=1-Math.exp(-dt*6); b.x+=(tx-b.x)*k; b.z+=(tz-b.z)*k; b.y+=(ty-b.y)*k; b.h=lerpAng(b.h,d.h,k); b.burn=d.vy>.5?1:b.burn; }
     else { // solo: baja despacito hasta posarse; después de 3 min sin nadie, regresa a la estación
       if(b.net){ const k=1-Math.exp(-dt*2); if(Math.hypot(b.net.x-b.x,b.net.z-b.z)>40){ b.x=b.net.x; b.z=b.net.z; b.y=b.net.y; } b.x+=(b.net.x-b.x)*k; b.z+=(b.net.z-b.z)*k; b.h=lerpAng(b.h,b.net.h,k); if(Math.hypot(b.net.x-b.x,b.net.z-b.z)<.05) b.net=null; }
-      b.vx*=Math.exp(-dt*1.5); b.vz*=Math.exp(-dt*1.5); b.vy+=(-1.6-b.vy)*(1-Math.exp(-dt*1.2)); blMove(b,dt);
+      b.vx*=Math.exp(-dt*1.5); b.vz*=Math.exp(-dt*1.5); b.vy+=(-1.6-b.vy)*(1-Math.exp(-dt*1.2));
+      if(b.rest && !b.net && Math.abs(b.vx)<.02 && Math.abs(b.vz)<.02 && (b.rT=(b.rT||0)+dt)<.5){} else { b.rT=0; const y0=b.y; blMove(b,dt); b.rest=Math.abs(b.y-y0)<.003; }   // v197: posado y quieto: el piso se revisa cada medio segundo
       const away=Math.hypot(b.x-b.home[0],b.z-b.home[1])>3;
       if(away && b.t && now-b.t>180){ b.x=b.home[0]; b.z=b.home[1]; b.y=groundAt(b.x,b.z,50); b.h=0; b.vx=b.vz=b.vy=0; b.t=now1(); b.net=null; } }
     blPlace(b,dt,t);
@@ -12706,7 +12845,7 @@ const platIdx=(f,i,j)=>f*PLAT.N*PLAT.N+j*PLAT.N+i;
 const PLAT_COL=['#ff7aa2','#ffc23d','#6fd15a','#4fb0ff','#a77bff'];
 (function buildPlat(){ const A=AR_SPOTS[0], N=PLAT.N, T=PLAT.T, o=new THREE.Object3D(), c=new THREE.Color(), geo=new THREE.BoxGeometry(T*.94,.4,T*.94), yaw=Math.atan2(A.v[0],A.v[1]);
   for(let f=0;f<PLAT.F;f++){ const gf=geo.clone(); gf.boundingSphere=new THREE.Sphere(arW(A,0,0,platTop(f)),N*T*.75);   // así solo se dibuja cuando está a la vista
-    const m=new THREE.InstancedMesh(gf,new THREE.MeshStandardMaterial({roughness:.75}),N*N); m.receiveShadow=true; m.castShadow=f===PLAT.F-1;
+    const m=new THREE.InstancedMesh(gf,new THREE.MeshStandardMaterial({roughness:.75}),N*N); m.userData.noCol=true;   /* v197 */ m.receiveShadow=true; m.castShadow=f===PLAT.F-1;
     for(let j=0;j<N;j++) for(let i=0;i<N;i++){ arW(A,(j-(N-1)/2)*T,(i-(N-1)/2)*T,platTop(f)-.2,o.position); o.rotation.set(0,yaw,0); o.scale.set(1,1,1); o.updateMatrix(); m.setMatrixAt(j*N+i,o.matrix);
       c.set(PLAT_COL[f]); if((i+j)%2) c.multiplyScalar(.9); m.setColorAt(j*N+i,c); }
     m.frustumCulled=true; m.instanceMatrix.needsUpdate=true; m.instanceColor.needsUpdate=true; scene.add(m); PLAT.meshes.push(m); PLAT.orig.push(m.instanceMatrix.array.slice()); }
@@ -14357,13 +14496,13 @@ function tblRemotePose(r,t,dt){ let S=TBL.rem.get(r); const a=r.tb;
   if(a[1]===1 || a[1]===2){ S.h=tblAttach(r.obj,a[0],a[1],S.h); S.h.visible=true; if(a[1]===1) tblUpPose(r.obj); } else if(S.h) S.h.visible=false;
   if(a[1]===3){ if(!S.l || S.lid!==a[0]){ if(S.l) scene.remove(S.l); S.l=tblLoose(a[0]); S.lid=a[0]; scene.add(S.l); } S.l.visible=true; const y=a[6]?waterSurfaceY(a[2],a[4])+.02:a[3]+.06; S.l.position.set(a[2],y,a[4]); S.l.rotation.set(0,a[5],0); }
   else if(S.l) S.l.visible=false; }
-function tblRemoteGc(){ if(!TBL.rem.size) return; const alive=new Set(mp.remotes.values()); TBL.rem.forEach((S,r)=>{ if(!alive.has(r)){ if(S.h&&S.h.parent) S.h.parent.remove(S.h); if(S.l) scene.remove(S.l); TBL.rem.delete(r); } }); }
+function tblRemoteGc(){ if(!TBL.rem.size || (TBL.gcN=(TBL.gcN|0)+1)%60) return; const alive=new Set(mp.remotes.values()); TBL.rem.forEach((S,r)=>{ if(!alive.has(r)){ if(S.h&&S.h.parent) S.h.parent.remove(S.h); if(S.l) scene.remove(S.l); TBL.rem.delete(r); } }); }
 
 // ---------- v196: subirse a la tabla y andar en el mar (parte 2) ----------
 // Es un «juego» más ('surf'): así los demás te ven parado en tu tabla. TBL.m=4 mientras vas arriba; TBL.ride guarda dónde va.
 const tblWaterAt=(x,z)=>{ const ws=waterSurfaceY(x,z), g=groundAt(x,z,ws+.6); return g<ws-.4 ? ws : null; };   // ¿flota aquí? (lo bastante hondo)
 // la inclinación del agua bajo la tabla (adelante/atrás y de lado)
-function tblSlope(x,z,h){ const fx=Math.sin(h), fz=Math.cos(h), e=.55, ws=waterSurfaceY;
+function tblSlope(x,z,h){ const fx=Math.sin(h), fz=Math.cos(h), e=.55, ws=tubeWaterY;
   return [Math.atan2(ws(x+fx*e,z+fz*e)-ws(x-fx*e,z-fz*e),2*e), Math.atan2(ws(x+fz*e,z-fx*e)-ws(x-fz*e,z+fx*e),2*e)]; }
 function tblCanMount(){ if(TBL.eq<0 || player.pg || player.car || player.ac || player.mg || player.balloon || player.dive) return false;
   if(TBL.m===3 && TBL.drop && TBL.drop.w && !TBL.thr){ const d=TBL.drop; return Math.hypot(player.pos.x-d.x,player.pos.z-d.z)<(player.swim?2.6:4) && Math.abs(player.pos.y-d.y)<2.4; }   /* desde la plataforma o la orilla brincas a la tabla */
@@ -14400,7 +14539,7 @@ function tblRide(P,dt){ const R=TBL.ride; if(!R){ setTimeout(()=>{ if(player.pg=
   for(const o of obsNear(R.x,R.z)){ if(o.walk) continue; if(o.top!==undefined && o.top<R.y+.2) continue; if(o.bot!==undefined && o.bot>R.y+1.6) continue;
     const dx=R.x-o.x, dz=R.z-o.z, d=Math.hypot(dx,dz), m=o.r+.5; if(d<m && d>1e-4){ R.x=o.x+dx/d*m; R.z=o.z+dz/d*m; R.v*=.6; } }
   { const lim=MAP_W-80, r=Math.hypot(R.x,R.z); if(r>lim){ R.x*=lim/r; R.z*=lim/r; R.v*=.5; } }
-  R.y=waterSurfaceY(R.x,R.z); const [pt,rl]=tblSlope(R.x,R.z,R.h); R.pitch+=(pt-R.pitch)*(1-Math.exp(-dt*6)); R.roll+=(rl+s*.12*Math.min(1,Math.abs(R.v)/3)-R.roll)*(1-Math.exp(-dt*5));
+  R.y=tubeWaterY(R.x,R.z); const [pt,rl]=tblSlope(R.x,R.z,R.h); R.pitch+=(pt-R.pitch)*(1-Math.exp(-dt*6)); R.roll+=(rl+s*.12*Math.min(1,Math.abs(R.v)/3)-R.roll)*(1-Math.exp(-dt*5));
   if(Math.abs(R.v)>1.5 && performance.now()-lastLookT>1500) yaw=lerpAng(yaw, R.h+Math.PI, 1-Math.exp(-dt*2));
   if(Math.abs(R.v)>2.5 && Math.random()<dt*6) try{ splashBurst(R.x-Math.sin(R.h)*.9,R.y,R.z-Math.cos(R.h)*.9,.15); }catch(e){}
   P.v=Math.round(R.v*10)/10; const pose=tblRidePose(R.x,R.y,R.z,R.h,R.pitch,R.roll,R.t,s); pose.armsUp=.3+.25*Math.min(1,R.surf||0); return pose; }
@@ -14410,7 +14549,7 @@ function tblRidePose(x,y,z,h,pt,rl,t,s){ return {pos:[x,y+TBL_T/2+.03,z], yaw:h,
 function tblPlaceRiding(L,x,y,z,h,pt,rl){ L.position.set(x,y+.01,z); L.rotation.order='YXZ'; L.rotation.set(pt,h+Math.PI,-rl); L.visible=true; }
 function tblRemoteRide(r,dt,t){ const S=TBL.rem.get(r)||(TBL.rem.set(r,{h:null,l:null,lid:-1}),TBL.rem.get(r)), a=r.tb, id=a?a[0]:0;
   r.pos.lerp(r.target,1-Math.exp(-dt*8)); const yawT=r.facing||0; r.surfH=r.surfH===undefined?yawT:lerpAng(r.surfH,yawT,1-Math.exp(-dt*8));
-  const y=waterSurfaceY(r.pos.x,r.pos.z), [pt,rl]=tblSlope(r.pos.x,r.pos.z,r.surfH); r.surfT=(r.surfT||0)+dt;
+  const y=tubeWaterY(r.pos.x,r.pos.z), [pt,rl]=tblSlope(r.pos.x,r.pos.z,r.surfH); r.surfT=(r.surfT||0)+dt;
   if(!S.l || S.lid!==id){ if(S.l) scene.remove(S.l); S.l=tblLoose(id); S.lid=id; scene.add(S.l); } tblPlaceRiding(S.l,r.pos.x,y,r.pos.z,r.surfH,pt,rl); if(S.h) S.h.visible=false;
   const pose=tblRidePose(r.pos.x,y,r.pos.z,r.surfH,pt,rl,r.surfT,0); placePlay(r.obj,pose); pgPoseLimbs(r.obj,pose,t,dt,r.walk); r.label.position.set(0,2.42,0); r.blob.visible=false; return true; }
 // ---------- v196: surfear las olas grandes (parte 3) ----------
@@ -14427,7 +14566,7 @@ function tblWaveRide(R,dt,f){ const W=swellAt(R.x,R.z,true), C=SWELL.C, al=Math.
   // v196: olas de tubo — por dentro del hueco la ola te lleva de lado; si te cae la parte rota, te tumba
   R.tube=0; { const tb=tubeAt(R.x,R.z);
     if(tb){ if(tb.c>.55 && tb.d<.6){ R.wipeMsg='¡La ola de tubo te cayó encima! 🌊'; return true; }
-      if(tb.k>.3 && tb.d<.9){ R.tube=tb.k; wipe=false; const a=Math.atan2(R.z,R.x), du=-tb.T.dir; const kk=Math.min(1,tb.k*1.4); R.x+=(-Math.cos(a)*C*.6*kk-Math.sin(a)*du*4*kk)*dt; R.z+=(-Math.sin(a)*C*.6*kk+Math.cos(a)*du*4*kk)*dt; if(R.v<7) R.v+=(7-R.v)*(1-Math.exp(-dt*2));
+      if(tb.k>.3 && tb.d<.9){ R.tube=tb.k; wipe=false; const a=Math.atan2(R.z,R.x), du=-tb.T.dir; const kk=Math.min(1,tb.k*1.4), lat=4+.12*tb.T.H; R.x+=(-Math.cos(a)*C*.6*kk-Math.sin(a)*du*lat*kk)*dt; R.z+=(-Math.sin(a)*C*.6*kk+Math.cos(a)*du*lat*kk)*dt; if(R.v<7) R.v+=(7-R.v)*(1-Math.exp(-dt*2));
         if(tb.k>.6 && TUBE.noteId!==tb.T.w.id){ TUBE.noteId=tb.T.w.id; flashNote('¡Estás dentro del tubo! 🌀 ¡Sigue de lado para salir antes de que se cierre!'); try{ audio.wave(); }catch(e){} } } } }
   R.wd=keep; return wipe; }
 function tblWipe(){ const R=TBL.ride; if(!R || !player.pg || player.pg.k!=='surf') return; const W=swellAt(R.x,R.z), sx=W.sx||0, sz=W.sz||0; stopPlay(); TBL.ride=null;
@@ -15722,12 +15861,17 @@ function hpSlabs(P){ const N=HZ.N, LV=HZ.LV, R=HZ.RISE, m=new Map(); let any=fal
     else if(p.t===HT.CUMBRE) add(p.i,p.j,yb+p.k*R-.05,yb+p.k*R+.35);
     else if(hIsCap(p.t)) add(p.i,p.j,yb+p.k*R-.05,yb+p.k*R+1.4); }
   return any?m:null; }
+const _hpNM=new THREE.Matrix3();
 function hpBuild(L,P,opt={}){ P.forEach((p,i)=>{ p.__i=i; }); { const FS=new Set(P.filter(q=>q.t===HT.PISO).map(q=>q.lv+','+q.i+','+q.j)); P.forEach(p=>{ p.__f=FS.has(p.lv+','+p.i+','+p.j); }); }
   { const SF=new Map(); P.forEach(q=>{ if(hIsSmall(q)) return; const sf=hSurfOf(q); if(sf) SF.set(q.lv+','+q.i+','+q.j,{q,sf}); });
     P.forEach(p=>{ if(!hIsSmall(p)){ p.__top=null; return; } const e=SF.get(p.lv+','+p.i+','+p.j); if(e){ const d=HD[e.q.r], rx=d[1], rz=-d[0]; p.__top={y:e.sf.h, dx:e.sf.ax*rx+e.sf.az*d[0], dz:e.sf.ax*rz+e.sf.az*d[1]}; } else p.__top=p.__topPre||null; }); }
   { const PT=new Map(P.filter(q=>q.t===127).map(q=>[q.lv+','+q.i+','+q.j+','+q.r,q.m])); if(PT.size) P.forEach(p=>{ if(p.t!==127 && hIsWallP(p)){ const d=HD[p.r]; p.__pin=PT.get(p.lv+','+p.i+','+p.j+','+p.r); p.__pout=PT.get(p.lv+','+(p.i+d[0])+','+(p.j+d[1])+','+((p.r+2)%4)); } }); } const sep=[], leaves2=[], lts=[]; let curPi=-1; const buckets=new Map(), cols=[], floors=new Map(), stairs=[], leaves=[], M=new THREE.Matrix4(), Q=new THREE.Quaternion(), E=new THREE.Euler(), S=new THREE.Vector3(), Tv=new THREE.Vector3();
-  const push=(m,geo,mat)=>{ if(!opt.mat && (m==='nlamp'||m==='lamp'||m==='fire'||m==='blink')) lts.push({m, x:mat.elements[12], y:mat.elements[13], z:mat.elements[14], pi:curPi}); if(!opt.mat && (m==='screen'||m==='lamp'||m==='burner'||m==='fire'||m==='blink')){ const g2=geo.clone(); g2.applyMatrix4(mat); sep.push({m,geo:g2,pi:curPi}); return; } let b=buckets.get(m); if(!b){ b={p:[],n:[],u:[]}; buckets.set(m,b); } const g=geo.clone(); g.applyMatrix4(mat);
-    b.p.push(...g.attributes.position.array); b.n.push(...g.attributes.normal.array); b.u.push(...g.attributes.uv.array); g.dispose(); };
+  const push=(m,geo,mat)=>{ if(!opt.mat && (m==='nlamp'||m==='lamp'||m==='fire'||m==='blink')) lts.push({m, x:mat.elements[12], y:mat.elements[13], z:mat.elements[14], pi:curPi}); if(!opt.mat && (m==='screen'||m==='lamp'||m==='burner'||m==='fire'||m==='blink')){ const g2=geo.clone(); g2.applyMatrix4(mat); sep.push({m,geo:g2,pi:curPi}); return; } let b=buckets.get(m); if(!b){ b={p:[],n:[],u:[]}; buckets.set(m,b); }
+    // v197: se pasa cada punto ya acomodado directo a la cubeta (antes se copiaba la figura entera, se movía y se vaciaba: era lo más lento al editar la casa)
+    const pa=geo.attributes.position.array, na=geo.attributes.normal.array, ua=geo.attributes.uv.array, e=mat.elements, q=_hpNM.getNormalMatrix(mat).elements, bp=b.p, bn=b.n, bu=b.u, cnt=pa.length/3;
+    for(let i=0;i<cnt;i++){ const i3=i*3, x=pa[i3], y=pa[i3+1], z=pa[i3+2], a=na[i3], c=na[i3+1], d=na[i3+2];
+      bp.push(e[0]*x+e[4]*y+e[8]*z+e[12], e[1]*x+e[5]*y+e[9]*z+e[13], e[2]*x+e[6]*y+e[10]*z+e[14]);
+      const nx=q[0]*a+q[3]*c+q[6]*d, ny=q[1]*a+q[4]*c+q[7]*d, nz=q[2]*a+q[5]*c+q[8]*d, l=Math.sqrt(nx*nx+ny*ny+nz*nz)||1; bn.push(nx/l,ny/l,nz/l); bu.push(ua[i*2],ua[i*2+1]); } };
   for(const p of P) for(const o of hpParts(p)){ curPi=o.pi;
     if(o.k==='b'){ M.compose(Tv.set(o.x,o.y,o.z),Q.set(0,0,0,1),S.set(o.sx,o.sy,o.sz)); if(!o.nov) push(o.m,_hBox,M);
       if(o.wall && (p.__pin!=null || p.__pout!=null)){ const d=HD[p.r]; for(const [pm,sg] of [[p.__pin,-1],[p.__pout,1]]){ if(pm==null) continue; const off=sg*(HZ.T/2+.012);
@@ -16264,7 +16408,7 @@ function hThumbRender(k){ if(k.startsWith('pf:')) return hThumbRenderP(HPF[+k.sl
     for(let y=0;y<128;y++) im.data.set(px.subarray((127-y)*512,(128-y)*512),y*512); g.putImageData(im,0,0); return cv.toDataURL('image/png');
   }catch(e){ return 'x'; } }
 // se dibujan unos cuantos por cuadro (así no se traba la pantalla)
-function hThumbPump(){ let n=0; while(HTH.q.length && n<3){ const k=HTH.q.shift(); if(HTH.c[k]) continue; const url=hThumbRender(k); HTH.c[k]=url; n++;
+function hThumbPump(){ HTH.f=(HTH.f|0)+1; if(HTH.f%2) return; let n=0; while(HTH.q.length && n<1){   /* v197: una miniatura cada dos cuadros */ const k=HTH.q.shift(); if(HTH.c[k]) continue; const url=hThumbRender(k); HTH.c[k]=url; n++;
   if(url!=='x') document.querySelectorAll('img[data-tk="'+k+'"]').forEach(im=>{ im.src=url; im.hidden=false; const ph=im.previousElementSibling; if(ph && ph.classList.contains('ph')) ph.remove(); }); } }
 function hThumbEl(kid,m){ const k=kid+':'+m, url=hThumb(kid,m), im=document.createElement('img'); im.dataset.tk=k; im.alt=''; im.draggable=false;
   if(url && url!=='x'){ im.src=url; return [im]; } const ph=document.createElement('div'); ph.className='ph'; im.hidden=true; return [ph,im]; }
@@ -21355,8 +21499,8 @@ function acMakeOne(g,M,out){ if(!g.boundingBox) g.computeBoundingBox(); _acB.cop
 // no encerrar a nadie: si alguien está parado justo ahí, esa cajita no se pone
 function acTrap(x,z,r){ const t=(p)=>Math.hypot(p.x-x,p.z-z)<r+.45; if(t(player.pos)) return true; for(const q of mp.remotes.values()) if(q.pos && t(q.pos)) return true; return false; }
 const acVis=o=>{ for(let p=o;p;p=p.parent){ if(!p.visible) return false; if(p===scene) return true; } return false; };
-function acSig(o){ const e=o.matrixWorld.elements; return e[0].toFixed(3)+e[2].toFixed(3)+e[5].toFixed(3)+e[10].toFixed(3)+e[12].toFixed(2)+e[13].toFixed(2)+e[14].toFixed(2)+(o.isInstancedMesh?'i'+o.instanceMatrix.version+'_'+o.count:''); }   // dónde está (sin contar si se ve)
-function acEligible(o){ if(!o.isMesh || o.isSprite || o.userData.noCol || o.userData.batchShared) return false; const m=Array.isArray(o.material)?o.material[0]:o.material; if(!m || m.transparent || m.type==='MeshBasicMaterial' || m.type==='ShaderMaterial' || m.type==='RawShaderMaterial') return false;
+function acSig(o){ const e=o.matrixWorld.elements, r=(v,k)=>Math.round(v*k); return r(e[0],1000)*1.000003+r(e[2],1000)*7.0000031+r(e[5],1000)*53.00007+r(e[10],1000)*401.0001+r(e[12],100)*3001.3+r(e[13],100)*29989.7+r(e[14],100)*299993.1+(o.isInstancedMesh?o.instanceMatrix.version*7e9+o.count*3e11:0); }   // v197: un número (antes un texto: lento)   // dónde está (sin contar si se ve)
+function acEligible(o){ if(!o.isMesh || o.isSprite || o.userData.noCol || o.userData.batchShared || (o.isInstancedMesh && o.count>600)) return false; const m=Array.isArray(o.material)?o.material[0]:o.material; if(!m || m.transparent || m.type==='MeshBasicMaterial' || m.type==='ShaderMaterial' || m.type==='RawShaderMaterial') return false;
   for(let p=o;p;p=p.parent) if(AC.dyn.has(p) || (p.userData && p.userData.noCol)) return false; return !!o.geometry; }
 function acRemove(rec){ if(!rec.obs || !rec.obs.length) { rec.obs=null; return; } const S=new Set(rec.obs); if(AC.pend.length) AC.pend=AC.pend.filter(c=>!S.has(c)); let w=0; for(let i=0;i<obstacles.length;i++){ const o=obstacles[i]; if(!S.has(o)) obstacles[w++]=o; } obstacles.length=w; rec.obs=null; AC.dirty=true; }
 function acBuild(o,rec){ const out=[]; if(o.isInstancedMesh){ for(let i=0;i<o.count;i++){ o.getMatrixAt(i,_acM); _acM.premultiply(o.matrixWorld); acMakeOne(o.geometry,_acM,out); } } else acMakeOne(o.geometry,o.matrixWorld,out);
@@ -21370,11 +21514,15 @@ function acVisit(o){ if(!o.parent) return; let rec=AC.seen.get(o); const sig=acS
 // cada cuadro, unos milisegundos: revisar lo del mundo; y lo cercano que ya choca, más seguido (por si se movió)
 function acTick(){ if(!AC.on || (typeof SP!=='undefined' && SP.on)) return; const now=performance.now()/1000;
   if(now-AC.chk>.25){ AC.chk=now; const px=player.pos.x, pz=player.pos.z; for(const rec of AC.made){ if(!rec.obs) continue; if(Math.abs(rec.x-px)>40 || Math.abs(rec.z-pz)>40) continue; const o=rec.o; if(!o.parent || acSig(o)!==rec.sig || !acVis(o)){ const moved=!o.parent || acSig(o)!==rec.sig; acRemove(rec); rec.n=0; rec.sig=o.parent?acSig(o):''; rec.vis=o.parent?acVis(o):false; if(moved && ++rec.mv>2) rec.dyn=true; } } AC.made=AC.made.filter(r=>r.obs); }
-  if(!AC.list){ if(now-AC.t<4) return; AC.t=now; AC.dyn=acDynRoots(); const L=[], px=player.pos.x, pz=player.pos.z; scene.traverse(o=>{ if(o.isMesh) L.push(o); });
-    const d=o=>{ if(o.isInstancedMesh) return 0; const e=o.matrixWorld.elements; return (e[12]-px)**2+(e[14]-pz)**2; }; L.sort((a,b)=>d(a)-d(b)); AC.list=L; AC.li=0; }   // lo más cercano primero
-  const t0=performance.now(), bud=state==='play'?2.5:9; while(AC.li<AC.list.length && performance.now()-t0<bud) acVisit(AC.list[AC.li++]);
+  if(!AC.list){ // v197: se junta la lista de todo poco a poco (antes: recorrer y ordenar toda la isla en un solo cuadro, un tirón cada 4 s)
+    if(!AC.col){ if(now-AC.t<4) return; AC.t=now; AC.dyn=acDynRoots(); AC.col={st:[scene], near:[], far:[], px:player.pos.x, pz:player.pos.z}; }
+    const K=AC.col, tc=performance.now(); let k=0;
+    while(K.st.length){ const o=K.st.pop(); if(o.isMesh){ let d=0; if(!o.isInstancedMesh){ const e=o.matrixWorld.elements; d=(e[12]-K.px)**2+(e[14]-K.pz)**2; } (d<3600?K.near:K.far).push(o); }   // lo cercano (60 m) primero
+      const ch=o.children; for(let i=ch.length-1;i>=0;i--) K.st.push(ch[i]); if((++k&127)===0 && performance.now()-tc>1) return; }
+    AC.list=K.near.concat(K.far); AC.li=0; AC.col=null; return; }
+  const t0=performance.now(), bud=state==='play'?1.5:9; while(AC.li<AC.list.length && performance.now()-t0<bud) acVisit(AC.list[AC.li++]);
   if(AC.li>=AC.list.length) AC.list=null;
-  if(AC.pend.length && (!AC.list || now-AC.fl>.8)){ AC.fl=now; for(const c of AC.pend) obstacles.push(c); AC.pend.length=0; AC.dirty=true; }
+  if(AC.pend.length && (!AC.list || now-AC.fl>.8)){ AC.fl=now; for(const c of AC.pend) obstacles.push(c); AC.pend.length=0; }   /* v197: agregar al final no obliga a rehacer la rejilla */
   if(AC.dirty){ AC.dirty=false; obsGrid.n=-1; } }
 // ---------- Detalle según la distancia: lo lejano se dibuja con menos caras (de lejos no se nota) ----------
 let lodT=0; const _lodV=new THREE.Vector3();
@@ -21452,16 +21600,20 @@ function mergeInto(list,local,colored,uvBake){ const g0=list[0].geometry, names=
     vo+=n; }
   const g=new THREE.BufferGeometry(); for(const k of names) g.setAttribute(k,new THREE.BufferAttribute(out[k],g0.attributes[k].itemSize)); if(col) g.setAttribute('color',new THREE.BufferAttribute(col,3)); if(fsp) g.setAttribute('feltSpk',new THREE.BufferAttribute(fsp,3)); g.setIndex(new THREE.BufferAttribute(idx,1)); g.computeBoundingSphere(); return g; }
 function batchTick(){ if(!BATCH.on) return;
-  if(SP.on){ if(BATCH.local>0){ for(const b of [...BATCH.batches]) if(b.local) dissolve(b); BATCH.local=0; BATCH.cyc=null; } return; } const now=BATCH.t=performance.now()/1000;
+  if(SP.on){ if(BATCH.local>0){ for(const b of [...BATCH.batches]) if(b.local) dissolve(b); BATCH.local=0; BATCH.cyc=null; } BATCH.grp=null; BATCH.bq=null; return; } const now=BATCH.t=performance.now()/1000;
+  if(BATCH.bq){ batchBuildStep(); return; }
+  if(BATCH.grp){ batchGroupStep(); return; }
   // 1) revisar todo lo de la isla, repartido en varios cuadros (así no da un tirón cada medio segundo)
-  if(!BATCH.cyc){ if(now-BATCH.last<.5) return; BATCH.last=now; BMAT.tick++; const L=[], V=[], D=[];
-    const col=(o,pv,dy)=>{ if(batchSkip(o)) return; const vis=pv && o.visible, dyn=dy || o===plush || !!o.userData.isPlushRoot;
-      if(o.isMesh){ if(Array.isArray(o.material) && !o.userData.split && o.geometry && o.geometry.groups && o.geometry.groups.length) splitMulti(o); L.push(o); V.push(vis); D.push(dyn); }
-      const ch=o.children; for(let i=0;i<ch.length;i++) col(ch[i],vis,dyn); };
-    col(scene,true,false); BATCH.cyc={L, V, D, i:0, T:now}; BATCH.pn=now; return; }
-  const C=BATCH.cyc, T=C.T, rdt=Math.max(0,now-(BATCH.pn||now)); BATCH.pn=now;   // si el equipo va lento (cuadros largos), se revisa más por cuadro para no tardar segundos
-  const end=Math.min(C.L.length, C.i+Math.max(250,Math.ceil(C.L.length*Math.max(1/6,rdt/.2))));
-  for(; C.i<end; C.i++){ const o=C.L[C.i], vis=C.V[C.i];
+  if(!BATCH.cyc){ // v197: se recorre la isla poco a poco (máximo ~1 ms por cuadro); antes era todo de golpe cada medio segundo
+    if(!BATCH.col){ if(now-BATCH.last<.5) return; BATCH.last=now; BMAT.tick++; BATCH.col={L:[], V:[], D:[], st:[scene], sv:[true], sd:[false]}; }
+    const K=BATCH.col, tc=performance.now(); let k=0;
+    while(K.st.length){ const o=K.st.pop(), pv=K.sv.pop(), dy=K.sd.pop(); if(batchSkip(o)) continue; const vis=pv && o.visible, dyn=dy || o===plush || !!o.userData.isPlushRoot;
+      if(o.isMesh){ if(Array.isArray(o.material) && !o.userData.split && o.geometry && o.geometry.groups && o.geometry.groups.length) splitMulti(o); K.L.push(o); K.V.push(vis); K.D.push(dyn); }
+      const ch=o.children; for(let i=ch.length-1;i>=0;i--){ K.st.push(ch[i]); K.sv.push(vis); K.sd.push(dyn); } if((++k&127)===0 && performance.now()-tc>1) return; }
+    BATCH.cyc={L:K.L, V:K.V, D:K.D, i:0, T:now}; BATCH.col=null; BATCH.pn=now; return; }
+  const C=BATCH.cyc, T=C.T; BATCH.pn=now;
+  const tb=performance.now(), end=C.L.length;   // v197: revisar con tiempo máximo por cuadro (~1.2 ms), no una sexta parte de todo de golpe
+  for(let k=0; C.i<end; C.i++, k++){ if((k&63)===63 && performance.now()-tb>1.2) break; const o=C.L[C.i], vis=C.V[C.i];
       let r=BATCH.recs.get(o);
       if(!r){ r=batchCandidate(o)?{m:new Float32Array(16), lm:new Float32Array(16), ws:T, ls:T, batch:null, moves:0, lmoves:0}:{bad:true}; if(!r.bad) recSet(r,o); BATCH.recs.set(o,r); }
       r.st=T; r.dyn=C.D[C.i];
@@ -21475,9 +21627,10 @@ function batchTick(){ if(!BATCH.on) return;
   BATCH.cyc=null;
   for(const [o,r] of BATCH.recs) if(r.st!==T){ if(r.batch) dissolve(r.batch); BATCH.recs.delete(o); }   // ya no está en la escena
   // 2) juntar los que llevan quietos un rato (máximo una vez por segundo)
-  if(T-BATCH.lastBuild<1) return; BATCH.lastBuild=T;
-  const groups=new Map();
-  for(const [o,r] of BATCH.recs){ if(r.bad || r.batch) continue; let key, local=false;
+  if(T-BATCH.lastBuild<1) return; BATCH.lastBuild=T; BATCH.grp={it:BATCH.recs.entries(), groups:new Map(), T}; }
+// v197: agrupar también poco a poco (~1 ms por cuadro); antes revisaba las 11 mil piezas de golpe una vez por segundo
+function batchGroupStep(){ const GR=BATCH.grp, T=GR.T, groups=GR.groups, tg=performance.now();
+  for(let k=0;;k++){ if((k&63)===63 && performance.now()-tg>1.2) return; const nx=GR.it.next(); if(nx.done) break; const [o,r]=nx.value; if(r.bad || r.batch || !o.parent) continue; let key, local=false;
     const MI=matInfo(o.material), colored=MI.key[0]==='C' && !o.geometry.attributes.color && !o.geometry.attributes.feltSpk, tex=MI.key[0]==='X' && !!o.geometry.attributes.uv;
     const base=(colored||tex?MI.key:'M|'+o.material.uuid)+'|'+o.castShadow+'|'+o.receiveShadow+'|'+o.renderOrder+'|'+batchSig(o);
     if(r.dyn){ if(T-r.ls>=3 && o.visible && o.parent && o.parent!==scene){ key='L|'+o.parent.uuid+'|'+base; local=true; } else continue; }   // partes de un peluche: solo dentro de su grupo
@@ -21487,16 +21640,23 @@ function batchTick(){ if(!BATCH.on) return;
     else if(r.moves>3 && T-r.ls>=3 && o.visible && o.parent && o.parent!==scene){ key='L|'+o.parent.uuid+'|'+base; local=true; }   // se mueve con su grupo: se junta dentro de él
     else continue;
     let l=groups.get(key); if(!l) groups.set(key,l={list:[],local,par:o.parent,colored,tex,props:MI.props}); l.list.push(o); }
-  for(const [key,G] of groups){
+  BATCH.grp=null; BATCH.bq={it:groups.entries()}; }
+// v197: armar los grupos también poco a poco (máximo ~2.5 ms por cuadro), en los cuadros siguientes
+function batchBuildStep(){ const tb2=performance.now(), Q=BATCH.bq;
+  for(;;){ if(performance.now()-tb2>2.5) return; const nx=Q.it.next(); if(nx.done){ BATCH.bq=null; return; } const [key,G]=nx.value;
+    G.list=G.list.filter(o=>{ const rr=o.parent && BATCH.recs.get(o); return rr && !rr.batch && !rr.bad; });
     let old=null; for(const b of BATCH.batches) if(b.key===key){ old=b; break; }
-    const all=old?[...old.src,...G.list]:G.list; if(all.length<3) continue;
-    let verts=0; for(const o of all) verts+=o.geometry.attributes.position.count; if(verts>200000) continue;
+    let all=old?[...old.src,...G.list]:G.list, bkey=key; if(all.length<3) continue;
+    let verts=0; for(const o of all) verts+=o.geometry.attributes.position.count;
+    if(verts>30000){ // v197: lo grande se junta en pedazos (cada pedazo en su propio cuadro); el resto en la próxima vuelta
+      const part=[]; let v=0; for(const o of G.list){ const c=o.geometry.attributes.position.count; if(part.length && v+c>30000) break; part.push(o); v+=c; }
+      if(part.length<3) continue; all=part; old=null; bkey=key+'#'+(BATCH.sn=(BATCH.sn|0)+1); }
     if(old) dissolve(old);
     const mesh=new THREE.Mesh(mergeInto(all,G.local,G.colored,G.tex),G.colored?sharedMat(all[0].material,G.props):G.tex?sharedTexMat(all[0].material,G.props):all[0].material); mesh.castShadow=all[0].castShadow; mesh.receiveShadow=all[0].receiveShadow; mesh.renderOrder=all[0].renderOrder;
     mesh.matrixAutoUpdate=false; mesh.userData.noBatch=true; (G.local?G.par:scene).add(mesh); mesh.updateMatrixWorld(true);
-    const b={key, mesh, src:all, local:G.local}; BATCH.batches.add(b); if(G.local) BATCH.local=(BATCH.local||0)+1;
+    const b={key:bkey, mesh, src:all, local:G.local}; BATCH.batches.add(b); if(G.local) BATCH.local=(BATCH.local||0)+1;
     if(key.endsWith('|t')){ let rm=0; for(const o of all){ const g=o.geometry; rm=Math.max(rm,g.boundingSphere.radius*o.matrixWorld.getMaxScaleOnAxis()); } b.hideD=Math.max(30,rm*BATCH.TINYK); }
-    for(const o of all){ o.layers.disable(0); BATCH.recs.get(o).batch=b; } } }
+    for(const o of all){ o.layers.disable(0); const rr=BATCH.recs.get(o); if(rr) rr.batch=b; } } }
 
 // ======================================================================================
 // ---------- Ambiente vivo: viento, sombras de nubes, pétalos y luciérnagas, polvito, pájaros, peces y mariposas ----------
@@ -22039,6 +22199,7 @@ function update(dt,t){ myLabelUpdate();
   } else if(state==='play' && SP.on && spaceCamera(dt)){
   } else if(state==='play' && rocketCamera(dt)){
   } else if(state==='play' && ED && ED.on && hedCamera(dt)){
+  } else if(state==='play' && camMode==='third' && tubeCamera(dt)){
   } else if(state==='play' && arenaCamera(dt)){
   } else if(player.mg && mgCamera(dt)){
   } else if(player.ac && acPose){
@@ -22165,12 +22326,14 @@ function areaBounds(g){ const B=AREA.b.makeEmpty(), v=AREA.v; let n=0;
     else { v.setFromMatrixPosition(o.matrixWorld); B.expandByPoint(v.set(v.x-3,v.y-3,v.z-3)); B.expandByPoint(v.set(v.x+6,v.y+6,v.z+6)); } });
   if(!n || B.isEmpty()) return null; const sp=new THREE.Sphere(); B.getBoundingSphere(sp); return sp; }
 function areaCullBegin(){ const now=performance.now();
-  if(now-AREA.t>600){ AREA.t=now; AREA.list.length=0; scene.updateMatrixWorld();
-    for(const c of scene.children){ if(c===plush || c.userData.isPlushRoot || c.isMesh || c.isLight || c.isCamera || !c.visible || !c.children.length) continue; const sp=areaBounds(c); if(!sp || sp.radius>=400) continue;
-      const pc=c.userData._areaC; if(pc && pc.distanceTo(sp.center)>1.5) c.userData._areaDyn=true; c.userData._areaC=sp.center.clone(); AREA.list.push([c,sp]); } }
+  if(now-AREA.t>600){ AREA.t=now; const have=new Map(AREA.list.map(it=>[it[0],it])), L=[];   // v197: solo se revisa quién está; las medidas se van haciendo poco a poco abajo
+    for(const c of scene.children){ if(c===plush || c.userData.isPlushRoot || c.isMesh || c.isLight || c.isCamera || !c.children.length) continue; L.push(have.get(c)||[c,null]); }
+    AREA.list=L; }
+  { const N=AREA.list.length, tm=performance.now(); for(let n=0; n<N && (n<2 || performance.now()-tm<.7); n++){ AREA.ri=((AREA.ri|0)+1)%N; const it=AREA.list[AREA.ri], c=it[0]; if(!c.visible || c.userData._areaDyn) continue;
+      const sp=areaBounds(c); if(!sp || sp.radius>=400){ it[1]=null; continue; } const pc=c.userData._areaC; if(pc && pc.distanceTo(sp.center)>1.5) c.userData._areaDyn=true; c.userData._areaC=sp.center.clone(); it[1]=sp; } }
   const cam=camera, cp=cam.position, shadows=renderer.shadowMap.enabled && settings.shadows, far=cam.far;
   AREA.fr.setFromProjectionMatrix(AREA.m.multiplyMatrices(cam.projectionMatrix,cam.matrixWorldInverse));
-  for(const it of AREA.list){ const c=it[0]; if(!c.visible || c.parent!==scene) continue; if(c.userData._areaDyn){ const n=areaBounds(c); if(n) it[1]=n; }   // lo que se mueve (coches, aviones, otros jugadores): cada cuadro
+  for(const it of AREA.list){ const c=it[0]; if(!c.visible || c.parent!==scene) continue; if(c.userData._areaDyn){ const n=areaBounds(c); if(n && n.radius<400) it[1]=n; } if(!it[1]) continue;   // lo que se mueve (coches, aviones, otros jugadores): cada cuadro
     const sp=it[1], S=AREA.s; S.center.copy(sp.center); S.radius=sp.radius+20;   // margen: algunas cosas se mueven (coches, aviones)
     const d=cp.distanceTo(S.center)-S.radius; let out=d>far; if(!out && !shadows && d>8) out=!AREA.fr.intersectsSphere(S);
     if(out){ c.visible=false; AREA.off.push(c); } } }
