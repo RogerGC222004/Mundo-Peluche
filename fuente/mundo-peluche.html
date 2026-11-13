@@ -1240,8 +1240,9 @@ const TM={x:240, z:520, W:14, L:30, h:3.2, Y:3.2+24};   // v162: la banda en el 
 const FRU={x:-690, z:620, S:14, h:.3, DUR:80000};   // v195: la Canasta de frutas (un huerto en el prado del noreste; cancha de 28×28 m)
 const PNTG={x:520, z:480, N:20, T:1.3, h:1.5, DUR:60000};   // v195: Pinta el piso (bosque del noroeste; pista de 26×26 m)
 const PRLG={a:2.75, d:130, R:13, DUR:90000};   // v195: Cazadores de perlas (en el mar del oeste: a 130 m de la orilla, ~7 m de hondo)
+const CJG={x:650, z:-520, RR:9, h:2.2, SCR:6000, PAUSE:2500};   // v195: Cojines musicales (prado del suroeste; alfombra de 9 m de radio)
 const BARRIOS=[{x:20, z:540, h:2.4}, {x:560, z:-160, h:6.8}, {x:-520, z:180, h:5.6}];   // v165: vecindarios de casitas (4 terrenos de 44×44 m cada uno)
-const MG_PADS=[{x:MZ.x, z:MZ.z, R:MZ.N*MZ.S/2+5, B:12, h:MZ.h}, {x:CHOC.x, z:CHOC.z, R:CHOC.R+5, B:14, h:CHOC.h}, {x:TM.x, z:TM.z, R:TM.L/2+6, B:12, h:TM.h}, {x:FRU.x, z:FRU.z, R:FRU.S+11, B:14, h:FRU.h}, {x:PNTG.x, z:PNTG.z, R:PNTG.N*PNTG.T/2+12, B:14, h:PNTG.h}, ...BARRIOS.map(b=>({x:b.x, z:b.z, R:54, B:14, h:b.h}))];
+const MG_PADS=[{x:MZ.x, z:MZ.z, R:MZ.N*MZ.S/2+5, B:12, h:MZ.h}, {x:CHOC.x, z:CHOC.z, R:CHOC.R+5, B:14, h:CHOC.h}, {x:TM.x, z:TM.z, R:TM.L/2+6, B:12, h:TM.h}, {x:FRU.x, z:FRU.z, R:FRU.S+11, B:14, h:FRU.h}, {x:PNTG.x, z:PNTG.z, R:PNTG.N*PNTG.T/2+12, B:14, h:PNTG.h}, {x:CJG.x, z:CJG.z, R:CJG.RR+9, B:14, h:CJG.h}, ...BARRIOS.map(b=>({x:b.x, z:b.z, R:54, B:14, h:b.h}))];
 function mgPad(x,z,v){ for(const P of MG_PADS){ const d=Math.max(Math.abs(x-P.x),Math.abs(z-P.z)); if(d<P.R+P.B) v+=(P.h-v)*(1-smooth(P.R,P.R+P.B,d)); } return v; }
 const lerp=(a,b,t)=>a+(b-a)*t;
 // Perfil de la costa según qué tan lejos estás del borde (c = distancia / radio de costa)
@@ -5742,6 +5743,7 @@ AR_SPOTS.push({id:'frutas', name:'Canasta de frutas', a:0, c:0, u:[-1,0], v:[0,1
 AR_SPOTS.push({id:'pinta', name:'Pinta el piso', a:0, c:0, u:[-1,0], v:[0,1], center:[PNTG.x,PNTG.z], plate:[PNTG.x+PNTG.N*PNTG.T/2+7,PNTG.z-4], watch:[PNTG.x+PNTG.N*PNTG.T/2+11,PNTG.z-4]});   // v195
 { const a=PRLG.a, c=coastAtA(a), u=[Math.cos(a),Math.sin(a)], v=[-u[1],u[0]], at=d=>[u[0]*(c+d), u[1]*(c+d)];
   AR_SPOTS.push({id:'perlas', name:'Cazadores de perlas', a, c, u, v, center:at(PRLG.d), plate:at(-16), watch:at(-22)}); }   // v195
+AR_SPOTS.push({id:'cojines', name:'Cojines musicales', a:0, c:0, u:[-1,0], v:[0,1], center:[CJG.x,CJG.z], plate:[CJG.x+CJG.RR+7,CJG.z-4], watch:[CJG.x+CJG.RR+11,CJG.z-4]});   // v195
 const TELEPORTS=[{id:'inicio', name:'Inicio', x:START.x, z:START.z}, {id:'pista', name:'Pista', x:MAP.park.x-6, z:MAP.park.z+30}, {id:'aero', name:'Aeropuerto', ...(([x,z])=>({x,z}))(airportXZ(85,-80))}, {id:'parque', name:'Parque', x:PG.x+1, z:PG.z+2}, {id:'feria', name:'Feria', x:FAIR.x+Math.sin(FAIR.yaw)*-(FAIR.R-5), z:FAIR.z+Math.cos(FAIR.yaw)*-(FAIR.R-5)}, ...AR_SPOTS.map(A=>({id:'ar_'+A.id, name:A.id==='carrera'?'Obstáculos':A.name, x:A.watch[0], z:A.watch[1], noPortal:true}))];
 
 // ---------- Portales del segundo piso del castillo: arcos de mini bombones que llevan a los lugares del mapa ----------
@@ -13301,11 +13303,129 @@ function prBot(r,dt,G){ const P=PR_BOT[CPU.diff]||PR_BOT[1], A=AR_SPOTS[9]; let 
   const hv=Math.hypot(b.vx,b.vz); r.moving=Math.min(1,hv/3.3); if(hv>.3) r.facing=Math.atan2(b.vx,b.vz); r.diveTarget=hv>.6?1.2:Math.abs(b.vy)>1?.35:.12;
   r.pos.set(b.x,b.y,b.z); r.target.copy(r.pos); }
 
+// ---------------- 11) Cojines musicales (v195): una fiesta en el prado del suroeste ----------------
+// Mientras suena la música todos caminan alrededor de la alfombra (no hay cojines). Cuando la música para, salen cojines
+// en lugares al azar (uno menos que los jugadores): ¡corre y siéntate en uno! Quien se queda sin cojín, sale. Gana el último.
+// El líder lleva las rondas: G.h = 'm3' (música, ronda 3), 's3' (¡a sentarse!), 'p3' (pausa); G.hms = lo que falta de esa etapa;
+// G.fin = quién se sentó en qué cojín ('uid:número'). Los cojines de cada ronda salen de la semilla.
+const CJ={stage:'', r:-1, n:0, pos:[], seat:-1, claimR:-1, beatT:0, beatI:0, meshes:[], pops:[], lastStage:'', btn:false};
+const CJ_MEL=[523,659,784,659,587,698,880,698,523,659,784,1046,988,784,659,587];
+const cjMusicMs=(sd,r)=>{ const R=mzRand(((sd|0)^(0x9e3779b1+r*7919))>>>0); return 6000+R()*7000; };
+function cjSpots(sd,r,n){ const R=mzRand(((sd|0)^(0x85ebca6b+r*104729))>>>0), out=[]; let tries=0;
+  while(out.length<n && tries++<3000){ const a=R()*Math.PI*2, d=Math.sqrt(R())*(CJG.RR-1.2); const du=Math.cos(a)*d, dv=Math.sin(a)*d; if(out.every(p=>Math.hypot(p[0]-du,p[1]-dv)>2.3)) out.push([du,dv]); }
+  while(out.length<n){ const a=out.length/n*Math.PI*2; out.push([Math.cos(a)*4,Math.sin(a)*4]); }
+  return out.map(([du,dv])=>arW(AR_SPOTS[10],du,dv,CJG.h)); }
+// el estado de la ronda (tal como lo dice el líder)
+function cjStage(G){ const h=G.h||''; const k=h[0], r=parseInt(h.slice(1),10); return (k==='m'||k==='s'||k==='p') && r>=0 ? {k, r} : null; }
+const cjAlive=G=>G.pl.filter(u=>!G.el.includes(u));
+// quién está sentado en cada cojín (según el líder)
+function cjSeats(G){ const m=new Map(); for(const s of (G.fin||[])){ const i=s.lastIndexOf(':'); if(i>0) m.set(s.slice(0,i), +s.slice(i+1)); } return m; }
+// lo que pide cada quien: [ronda, cojín]
+function cjReq(u){ if(u===myUid) return AR.me.a===10 ? AR.me.req : null; const r=arRemote(u); const z=r && r.az; return z && z[0]===10 && z.length>=4 && Number.isInteger(z[2]) && Number.isInteger(z[3]) ? [z[2],z[3]] : null; }
+// el líder: rondas, quién se sienta y quién sale
+function cjLead(G,ms,alive){ let S=cjStage(G);
+  if(!S){ G.h='m0'; G.hms=cjMusicMs(G.sd,0); G.fin=[]; return; }
+  G.hms-=ms;
+  if(S.k==='m'){ if(G.hms<=0){ G.h='s'+S.r; G.hms=CJG.SCR; G.fin=[]; } return; }
+  if(S.k==='s'){ const n=Math.max(1,alive.length-1), seats=cjSeats(G), used=new Set(seats.values());
+    for(const u of alive){ if(seats.has(u)) continue; const q=cjReq(u); if(!q || q[0]!==S.r || !(q[1]>=0 && q[1]<n) || used.has(q[1])) continue; seats.set(u,q[1]); used.add(q[1]); G.fin=[...(G.fin||[]), u+':'+q[1]]; }
+    if(seats.size>=n || G.hms<=0){ for(const u of alive) if(!seats.has(u)) G.el.push(u); G.h='p'+S.r; G.hms=CJG.PAUSE; }
+    return; }
+  if(S.k==='p' && G.hms<=0){ G.h='m'+(S.r+1); G.hms=cjMusicMs(G.sd,S.r+1); G.fin=[]; } }
+
+// --- la fiesta: alfombra redonda de colores, cojines, banderines, una caja de música gigante y globos ---
+(function cjBuild(){ const A=AR_SPOTS[10], h=CJG.h, RR=CJG.RR;
+  { const c=document.createElement('canvas'); c.width=c.height=512; const q=c.getContext('2d'), cols=['#ff8fab','#ffd34d','#7ed957','#6fc3ff','#c79bff','#ffb27a'];
+    for(let i=0;i<12;i++){ q.fillStyle=cols[i%6]; q.beginPath(); q.arc(256,256,250-i*20,0,7); q.fill(); }
+    q.strokeStyle='rgba(255,255,255,.7)'; q.lineWidth=4; q.setLineDash([10,10]); for(let i=0;i<12;i++){ q.beginPath(); q.arc(256,256,240-i*20,0,7); q.stroke(); }
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding;
+    const m=new THREE.Mesh(new THREE.CircleGeometry(RR+.6,48), new THREE.MeshStandardMaterial({map:t, roughness:.95, polygonOffset:true, polygonOffsetFactor:0, polygonOffsetUnits:-4})); m.rotation.x=-Math.PI/2; m.position.set(A.center[0],h+.03,A.center[1]); m.receiveShadow=true; m.userData.noCol=true; scene.add(m); }
+  // los cojines (se reusan en cada ronda): cuadrados esponjados con borlas en las esquinas
+  const cushG=(()=>{ const g=new THREE.BoxGeometry(1.1,.36,1.1,6,2,6), p=g.attributes.position; for(let i=0;i<p.count;i++){ const x=p.getX(i), y=p.getY(i), z=p.getZ(i), k=1-.35*(Math.pow(Math.abs(x)/.55,4)+Math.pow(Math.abs(z)/.55,4))/2; p.setY(i,y*k); }
+    g.computeVertexNormals(); return g; })();
+  const cols=['#ff6f91','#ffc93f','#6fd3a0','#5fb7ff','#b48cff','#ff9f5a','#ff7ad9','#7fe0e0','#f0e06a','#9fdc6a','#ff8a8a'];
+  for(let i=0;i<11;i++){ const g=new THREE.Group(); const m=FM(cols[i],'felt'); const c=new THREE.Mesh(cushG,m); c.position.y=.19; g.add(c);
+    const tm=FM('#fff6e3'); for(const [x,z] of [[-.55,-.55],[.55,-.55],[-.55,.55],[.55,.55]]){ const b=new THREE.Mesh(sphereLo,tm); b.scale.setScalar(.07); b.position.set(x,.2,z); g.add(b); }
+    const bt=new THREE.Mesh(sphereLo,tm); bt.scale.set(.08,.04,.08); bt.position.y=.37; g.add(bt);
+    g.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; o.userData.noCol=true; } }); g.visible=false; scene.add(g); CJ.meshes.push(g); }
+  // banderines alrededor
+  const posts=[]; for(let i=0;i<8;i++){ const a=i/8*Math.PI*2+.2, w=arW(A,Math.cos(a)*(RR+2.2),Math.sin(a)*(RR+2.2),0); w.y=terrainH(w.x,w.z); posts.push(w);
+    const p=new THREE.Mesh(cylLo,FM('#fbf3e4')); p.scale.set(.07,3.2,.07); p.position.set(w.x,w.y+1.6,w.z); p.castShadow=true; scene.add(p); obstacles.push({x:w.x,z:w.z,r:.15,top:w.y+3.2,walk:false}); }
+  const flagG=new THREE.BufferGeometry(); flagG.setAttribute('position',new THREE.Float32BufferAttribute([-.18,0,0, .18,0,0, 0,-.38,0],3)); flagG.computeVertexNormals();
+  const fc=['#ff6f91','#ffc93f','#6fd3a0','#5fb7ff','#b48cff']; let fk=0;
+  posts.forEach((a,i)=>{ const b=posts[(i+1)%posts.length]; for(let k=1;k<9;k++){ const t=k/9, x=a.x+(b.x-a.x)*t, z=a.z+(b.z-a.z)*t, y=Math.min(a.y,b.y)+3.1-Math.sin(t*Math.PI)*.6;
+      const f=new THREE.Mesh(flagG,new THREE.MeshStandardMaterial({color:fc[fk++%5], side:THREE.DoubleSide, roughness:.8})); f.position.set(x,y,z); f.rotation.y=Math.atan2(b.x-a.x,b.z-a.z)+Math.PI/2; f.userData.noCol=true; scene.add(f); } });
+  // la caja de música (gramófono gigante) junto a la entrada
+  { const w=arW(A,-RR-3.2,5.5,0); w.y=terrainH(w.x,w.z); const g=new THREE.Group(); g.position.copy(w); g.rotation.y=Math.atan2(A.u[0],A.u[1])+.6;
+    const box=new THREE.Mesh(new THREE.BoxGeometry(1.6,1.1,1.6),FM('#b7834f')); box.position.y=.55; g.add(box);
+    const disc=new THREE.Mesh(new THREE.CylinderGeometry(.7,.7,.05,24),FM('#2b2b2b','shiny')); disc.position.y=1.13; g.add(disc); g.userData.disc=disc;
+    const arm=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,1.6,8),FM('#d8b04a','shiny')); arm.position.set(.55,1.6,0); arm.rotation.z=.5; g.add(arm);
+    const horn=new THREE.Mesh(new THREE.CylinderGeometry(1.0,.08,1.8,24,1,true),new THREE.MeshStandardMaterial({color:'#d8b04a', roughness:.3, metalness:.5, side:THREE.DoubleSide})); horn.position.set(.9,2.4,0); horn.rotation.z=-.9; g.add(horn);
+    g.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); scene.add(g); CJ.box=g; obstacles.push({x:w.x,z:w.z,r:1.1,top:w.y+1.15,walk:true}); }
+  // globos
+  for(let i=0;i<6;i++){ const a=i*1.1+.5, w=arW(A,Math.cos(a)*(RR+3.6),Math.sin(a)*(RR+3.6),0); w.y=terrainH(w.x,w.z);
+    const b=new THREE.Mesh(sphereG,FM(cols[i],'shiny')); b.scale.set(.45,.55,.45); b.position.set(w.x,w.y+3.2+(i%2)*.6,w.z); b.castShadow=true; scene.add(b);
+    const s=new THREE.Mesh(cylLo,FM('#ffffff')); s.scale.set(.01,3,.01); s.position.set(w.x,w.y+1.5,w.z); scene.add(s); }
+  // arco de la entrada
+  { const wood=felt('#fff6e3','rgba(0,0,0,.08)'); for(const sd of [-1,1]){ const w=arW(A,-RR-1.4,sd*2.6,h+1.6); const p=new THREE.Mesh(new THREE.CylinderGeometry(.14,.16,3.2,10),FM(sd>0?'#ff6f91':'#5fb7ff','shiny')); p.position.copy(w); p.castShadow=true; scene.add(p); obstacles.push({x:w.x,z:w.z,r:.2,top:h+3.2,walk:false}); }
+    const sg=new THREE.Mesh(new THREE.BoxGeometry(5.8,.9,.12), [wood,wood,wood,wood,new THREE.MeshStandardMaterial({map:textTex(['🎵 Cojines musicales 🪑'],512,90,'#fff3d6','#7a2b2b','#ff6f91'), roughness:.8}),new THREE.MeshStandardMaterial({map:textTex(['¡Cuando pare la música, siéntate!'],512,90,'#fff3d6','#7a2b2b','#5fb7ff'), roughness:.8})]);
+    const w=arW(A,-RR-1.4,0,h+3.25); sg.position.copy(w); sg.rotation.y=Math.atan2(-A.u[0],-A.u[1]); sg.castShadow=true; scene.add(sg); }
+})();
+
+// cada cuadro: música, cojines, sentarse
+function cjUpdate(dt){ const G=AR.G[10], me=AR.me, mine=me.a===10 && me.st===2, S=G && G.ph===3 ? cjStage(G) : null;
+  if(CJ.box) CJ.box.userData.disc.rotation.y+=dt*(S && S.k==='m'?3:0);
+  if(!S){ CJ.meshes.forEach(m=>m.visible=false); CJ.seat=-1; CJ.lastStage=''; if(me.a===10) me.req=null; return; }
+  const alive=cjAlive(G), key=S.k+S.r;
+  // cojines de esta ronda
+  if(S.k!=='m'){ const n=S.k==='s'?Math.max(1,alive.length-1):CJ.n; if(CJ.r!==S.r || CJ.n!==n && S.k==='s'){ CJ.r=S.r; CJ.n=n; CJ.pos=cjSpots(G.sd,S.r,n); } }
+  if(key!==CJ.lastStage){ const was=CJ.lastStage; CJ.lastStage=key;
+    if(S.k==='s'){ CJ.popT=0; CJ.seat=-1; if(mine){ bigText('¡Siéntate!',900); try{ const R=audio.raw(), t=R.ctx.currentTime; R.tone('sawtooth',420,90,t,.25,.07); R.noise(t,.12,1800,.06); }catch(e){} } }
+    if(S.k==='m'){ CJ.seat=-1; if(mine && me.req) me.req=null; if(mine) bigText(S.r?'¡Otra ronda!':'¡Camina!',900); } }
+  // la música (solo la escucho si juego o estoy cerca)
+  if(S.k==='m'){ const A=AR_SPOTS[10], d=Math.hypot(player.pos.x-A.center[0],player.pos.z-A.center[1]); CJ.beatT-=dt; if(CJ.beatT<=0 && d<40){ CJ.beatT=.24; CJ.beatI=(CJ.beatI+1)%CJ_MEL.length; const f=CJ_MEL[CJ.beatI], v=.07*Math.max(.15,1-d/40);
+      try{ const R=audio.raw(), t=R.ctx.currentTime; R.tone('triangle',f,f,t,.2,v); if(CJ.beatI%4===0) R.tone('sine',f/2,f/2,t,.22,v*.9); }catch(e){} } }
+  // dibujar cojines
+  const seats=cjSeats(G); CJ.popT=(CJ.popT||0)+dt;
+  CJ.meshes.forEach((m,i)=>{ const on=S.k!=='m' && i<CJ.n; m.visible=on; if(!on) return; const w=CJ.pos[i]; const k=Math.min(1,CJ.popT/.35), s=S.k==='s'?(k<1?1.25*Math.sin(k*Math.PI*.5)+(k>.8?(1-k)*.5:0):1):1;
+    m.position.set(w.x,w.y,w.z); m.scale.setScalar(Math.max(.01,s)); m.rotation.y=i*1.7; });
+  // yo: ¿toco un cojín libre? me siento (el líder confirma)
+  if(mine && S.k==='s'){ const mySeat=seats.get(myUid);
+    if(mySeat!==undefined) CJ.seat=mySeat;
+    else { if(CJ.seat>=0 && [...seats.values()].includes(CJ.seat)) { CJ.seat=-1; me.req=null; flashNote('¡Otro peluche llegó primero! Busca otro cojín'); }
+      if(CJ.seat<0){ const used=new Set(seats.values()); for(let i=0;i<CJ.n;i++){ if(used.has(i)) continue; const w=CJ.pos[i]; if(Math.hypot(player.pos.x-w.x,player.pos.z-w.z)<.95 && player.pos.y<w.y+1.6){ CJ.seat=i; me.req=[S.r,i]; sendPresence(true); try{ audio.sit&&audio.sit(); }catch(e){} break; } } } } }
+  if(mine && S.k==='p' && seats.has(myUid)) CJ.seat=seats.get(myUid);
+  // los de la CPU: si el líder (yo) les dio cojín, se quedan ahí
+}
+// mientras juego: sentado no me muevo; y no salirme de la alfombra
+function cjSeatOf(u,G){ const S=cjStage(G); if(!S || S.k==='m') return -1; const seats=cjSeats(G); if(seats.has(u)) return seats.get(u); if(u===myUid) return CJ.seat; const q=cjReq(u); return q && q[0]===S.r ? q[1] : -1; }
+function cjPlay(dt,G){ const A=AR_SPOTS[10], P=player.pos; const i=cjSeatOf(myUid,G);
+  if(i>=0 && CJ.pos[i]){ const w=CJ.pos[i]; P.x=w.x; P.z=w.z; player.vel.set(0,0,0); return; }
+  const [du,dv]=arL(A,P.x,P.z), d=Math.hypot(du,dv), L=CJG.RR+.3; if(d>L){ const w=arW(A,du/d*L,dv/d*L,P.y); P.x=w.x; P.z=w.z; } }
+const cjSitting=()=>AR.me.a===10 && AR.me.st===2 && AR.G[10].ph===3 && cjSeatOf(myUid,AR.G[10])>=0;
+function cjSitPose(o,t,dt,walk){ pgPoseLimbs(o,{sit:1},t,dt,walk||0); o.position.y+=(o.userData.av==='a'?-.42:o.userData.av==='c'?-.02:-.07); }
+
+// ---------- la CPU para Cojines musicales ----------
+// Con música caminan en círculo alrededor de la alfombra; cuando para, corren al cojín libre más cercano (los fáciles se tardan en reaccionar).
+const CJ_BOT=[{v:4.4, re:.95, smart:0, oops:.3}, {v:5.7, re:.5, smart:.6, oops:.1}, {v:6.9, re:.22, smart:1, oops:0}];
+function cjBot(r,dt,G){ const P=CJ_BOT[CPU.diff]||CJ_BOT[1], A=AR_SPOTS[10]; let b=r.cb; if(!b || b.gid!==G.gid) b=r.cb={gid:G.gid, x:r.pos.x, z:r.pos.z, vx:0, vz:0, wait:0, ci:-1, key:'', dir:Math.random()<.5?1:-1};
+  const S=cjStage(G); if(!S || G.ph!==3){ r.moving=0; return; }
+  const key=S.k+S.r; if(key!==b.key){ b.key=key; b.ci=-1; b.wait=P.re*(.7+Math.random()*.6); if(S.k==='m') r.az.length=3; }
+  const seats=cjSeats(G), mine=seats.get(r.uid);
+  if(S.k!=='m' && (mine!==undefined || (b.ci>=0 && r.az[2]===S.r && r.az[3]===b.ci && ![...seats.entries()].some(([u,c])=>c===b.ci && u!==r.uid)))){ const i=mine!==undefined?mine:b.ci, w=CJ.pos[i]; if(w){ b.x=w.x; b.z=w.z; b.vx=b.vz=0; r.moving=0; r.pos.set(w.x,terrainH(w.x,w.z),w.z); r.target.copy(r.pos); return; } }
+  let tx, tz, sp=P.v;
+  if(S.k==='m' || (S.k==='s' && (b.wait-=dt)>0)){ const [du,dv]=arL(A,b.x,b.z), a=Math.atan2(dv,du)+b.dir*.5, rr=CJG.RR*.55; const w=arW(A,Math.cos(a)*rr,Math.sin(a)*rr,0); tx=w.x; tz=w.z; sp=S.k==='m'?2.6:1; }
+  else if(S.k==='s'){ const used=new Set(seats.values()); if(b.ci>=0 && used.has(b.ci)) b.ci=-1;
+    if(b.ci<0){ let best=-1, bd=1e9; for(let i=0;i<CJ.n;i++){ if(used.has(i)) continue; const w=CJ.pos[i]; let d=Math.hypot(w.x-b.x,w.z-b.z); if(P.smart>0) for(const u of G.pl){ if(u===r.uid || G.el.includes(u)) continue; const p=arPos(u); if(p && Math.hypot(p.x-w.x,p.z-w.z)<d-1) { d+=4*P.smart; break; } } if(Math.random()<P.oops) d+=Math.random()*8; if(d<bd){ bd=d; best=i; } } b.ci=best; }
+    if(b.ci>=0){ const w=CJ.pos[b.ci]; tx=w.x; tz=w.z; if(Math.hypot(w.x-b.x,w.z-b.z)<.9){ r.az[2]=S.r; r.az[3]=b.ci; } } else { tx=b.x; tz=b.z; } }
+  else { tx=b.x; tz=b.z; }
+  botSteer(r,b,tx,tz,sp,dt,A,CJG.RR*.7,G); }
+
 // ---------- v195: jugar contra la CPU (solo cuando juegas tú solo, sin sala) ----------
 // Los peluches de la CPU son "jugadores" de mentira que viven en tu juego: se ponen en la fila del minijuego y yo (el único
 // jugador real) soy el líder que lleva la partida. Cada minijuego que tiene CPU dice cómo juegan sus peluches (CPU_AI).
 const CPU={on:false, a:-1, diff:1, n:1, pick:{a:-1, n:1, d:1}};
-const CPU_AI={7:frBot, 8:pntBot, 9:prBot};
+const CPU_AI={7:frBot, 8:pntBot, 9:prBot, 10:cjBot};
 const CPU_NAMES=['Nube','Bombón','Canelita','Pompón','Gomita','Algodón','Malvavisco','Chispita','Mazapán','Galletita','Cocada','Panquecito'];
 const cpuBots=()=>{ const out=[]; for(const r of mp.remotes.values()) if(r.cpu) out.push(r); return out; };
 function cpuStart(a,n,diff){ if(mp.room) return; cpuEnd(); n=Math.max(1,Math.min(3,n|0)); CPU.on=true; CPU.a=a; CPU.n=n; CPU.diff=Math.max(0,Math.min(2,diff|0));
@@ -13325,6 +13445,7 @@ function cpuTick(dt){ if(!CPU.on) return; const a=CPU.a, G=AR.G[a], me=AR.me;
   for(const r of cpuBots()){ const az=r.az;
     if(az[1]===1 && G.ph>=1 && G.ph<=3 && G.pl.includes(r.uid) && r.cpuGid!==G.gid){ r.cpuGid=G.gid; az[1]=2; az[2]=0; r.cb=null; r.swim=a===9;
       const [w]=arStartSpot(a,G.pl.indexOf(r.uid),G.pl.length), c=arW(AR_SPOTS[a],0,0,w.y); r.pos.copy(w); r.target.copy(w); r.facing=Math.atan2(c.x-w.x,c.z-w.z); r.obj.rotation.y=r.facing; r.moving=0; }
+    if(az[1]===2 && G.ph===3 && G.el.includes(r.uid)){ az[1]=3; const [wx,wz]=AR_SPOTS[a].watch, s=(r.cpuN||1)*1.3-2.6; r.pos.set(wx+s,terrainH(wx+s,wz),wz); r.target.copy(r.pos); r.swim=false; r.moving=0; r.cb=null; continue; }   // quedó fuera: con el público
     if(az[1]===2 && G.ph>=1 && G.ph<=3){ const ai=CPU_AI[a]; if(G.ph===3 && ai) ai(r,dt,G); else r.moving=0; }
     else if(az[1]===2) r.moving=0; } }
 // las monedas contra la CPU: menos que con amigos (jugar con amigos vale más), más en difícil
@@ -13346,7 +13467,7 @@ ui('cpuGo').onclick=()=>{ const p=CPU.pick; try{ localStorage.setItem('mpCpu',JS
 // ---------------- placas para unirse (en la playa) y letreros ----------------
 (function buildPlates(){ AR_SPOTS.forEach((A,i)=>{ const [x,z]=A.plate, h=terrainH(x,z);
   const m=padMesh(scene,x,z,.9); m.position.y=h+.04;
-  const sg=new THREE.Mesh(new THREE.PlaneGeometry(3.4,1.15), new THREE.MeshStandardMaterial({map:textTex([A.name, i===1?'Pásala antes de que explote':i===3?'¡El más rápido gana!':i===4?'¡Encuentra la salida!':i===5?'¡Revienta sus globos!':i===6?'¡No te caigas!':i===7?'¡Atrapa más fruta!':i===8?'¡Píntalo de tu color!':i===9?'¡Junta perlas!':'¡El último gana!'],512,174,'#fff3d6','#7a2b2b','#ffd34d'), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(3.4,1.15), new THREE.MeshStandardMaterial({map:textTex([A.name, i===1?'Pásala antes de que explote':i===3?'¡El más rápido gana!':i===4?'¡Encuentra la salida!':i===5?'¡Revienta sus globos!':i===6?'¡No te caigas!':i===7?'¡Atrapa más fruta!':i===8?'¡Píntalo de tu color!':i===9?'¡Junta perlas!':i===10?'¡No te quedes sin cojín!':'¡El último gana!'],512,174,'#fff3d6','#7a2b2b','#ffd34d'), roughness:.8, emissive:0xffffff, emissiveIntensity:0}));
   const yaw=Math.atan2(A.u[0],A.u[1]); const sp=[x+A.u[0]*1.6, z+A.u[1]*1.6]; sg.position.set(sp[0],h+2.6,sp[1]); sg.rotation.y=yaw+Math.PI; scene.add(sg); fairGlow.push(sg.material); const sb=sg.clone(); sb.rotation.y=yaw; sb.position.addScaledVector(new THREE.Vector3(A.u[0],0,A.u[1]),.02); scene.add(sb);
   [-1,1].forEach(s=>{ const p=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,2.6,8),new THREE.MeshStandardMaterial({color:'#fbf3e4'})); p.position.set(sp[0]+A.v[0]*s*1.6,h+1.3,sp[1]+A.v[1]*s*1.6); scene.add(p); obstacles.push({x:p.position.x,z:p.position.z,r:.12,top:h+2.6,walk:false}); }); }); })();
 
@@ -13440,6 +13561,10 @@ const HOWTO=(()=>{ const F='Sniglet, Nunito, sans-serif', W=512, H=512;
     clam(130,395,true,'#ff9ec4','#ffffff'); clam(256,385,false,'#b79cff',null); clam(390,395,true,'#7fd6d0','#ffd34d');
     plush(q,300,190,1,'#ffd34d',{arms:'down'}); arrow(q,320,225,375,330,'#1565c0',6);
     label(q,'¡ábrete!',130,330,22,'#c2185b'); label(q,'dorada = 3',395,345,20,'#a4740a'); label(q,'cerrada',256,350,18,'#3a3f52'); };
+  DRAW.cojines=q=>{ const cols=['#ff8fab','#ffd34d','#7ed957','#6fc3ff']; for(let i=0;i<4;i++){ q.fillStyle=cols[i]; q.beginPath(); q.ellipse(256,330,210-i*45,95-i*20,0,0,7); q.fill(); }
+    const cush=(x,y,c)=>{ rr(q,x-30,y-14,60,28,12,c,'rgba(0,0,0,.25)'); };
+    cush(170,320,'#ff6f91'); cush(330,300,'#5fb7ff'); plush(q,330,262,.9,'#7ed957'); plush(q,175,280,.9,'#ff9ad5'); plush(q,420,300,.9,'#ffd34d',{arms:'up'});
+    label(q,'♪ ♫ ♪',256,120,40,'#7a2b8a'); label(q,'cuando pare la música…',256,165,22,'#5a2b2b'); label(q,'¡sin cojín!',430,230,20,'#c62828'); };
   // un cartel: banda de color arriba, y abajo el dibujo o la lista de indicaciones
   function board(kind,col,draw){ const c=document.createElement('canvas'); c.width=W; c.height=H; const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4;
     const paint=()=>{ const q=c.getContext('2d'); q.setTransform(1,0,0,1,0,0); q.fillStyle='#fff6e3'; q.fillRect(0,0,W,H); try{ TK.finish(c,{seed:W+kind.length, amp:.03, grain:.02, fuzzDiv:30, len:2}); }catch(e){}
@@ -13468,6 +13593,7 @@ const HOWTO=(()=>{ const F='Sniglet, Nunito, sans-serif', W=512, H=512;
     frutas:['frutas','#e08a2f','Ponte debajo de la sombra',['Del cielo caen frutas: primero sale su sombra chiquita y va creciendo.','Ponte debajo con tu canasta para atraparla.','Manzana dorada = 3 · sandía = 2 · las demás = 1.','Gana quien junte más fruta en 80 segundos.','Con amigos en una sala, o tú solo contra la CPU.']],
     pinta:['pinta','#d81b60','Pinta de tu color',['Cada jugador tiene un color y un rodillo (la esponja es de tu color).','Por donde pasa tu rodillo, el piso se pinta de tu color (también encima del de otro).','Toca una cubeta ★ para pintar de golpe un círculo grande.','Gana quien tenga más piso pintado al acabar el minuto.','Con amigos en una sala, o tú solo contra la CPU.']],
     perlas:['perlas','#0277bd','Toca la perla de una almeja abierta',['En el fondo hay almejas gigantes que se abren y se cierran solas.','Cuando una se abre tiene una perla: nada hasta ella y tócala.','Bajar: botón Bajar (o Q) · Subir: botón Subir (o Espacio).','Perla blanca = 1 · rosa = 2 · dorada = 3.','Gana quien junte más en 90 segundos. Con amigos o contra la CPU.']],
+    cojines:['cojines','#8e24aa','¡Siéntate cuando pare la música!',['Mientras suena la música, camina por la alfombra (no hay cojines).','Cuando la música para, salen cojines en lugares al azar: uno menos que los jugadores.','Corre y tócalo para sentarte. Si otro llegó primero, busca otro.','Quien se queda sin cojín, sale. En cada ronda hay un cojín menos.','Gana el último que quede. Con amigos o contra la CPU.']],
     hockey:['hockey','#1565c0','Mete el disco en su portería',['Para 2 jugadores: cada uno pisa una placa (un lado de la mesa).','Mueve tu paleta con WASD o la palanca.','Mete el disco en la portería del otro.','Gana quien meta 5 goles (o más goles a los 2 minutos).']],
   };
   const tex={}; const get=id=>tex[id]||(tex[id]=[pic(G[id][0],G[id][1],G[id][2]), text(G[id][1],G[id][3])]);
@@ -13482,7 +13608,7 @@ const HOWTO=(()=>{ const F='Sniglet, Nunito, sans-serif', W=512, H=512;
     const c=Math.cos(s.rotation.y), si=Math.sin(s.rotation.y); for(const k of [-1,1]){ const px=x+k*(size/2-.12)*c, pz=z-k*(size/2-.12)*si; obstacles.push({x:px,z:pz,r:.14,top:y+2.5,walk:false}); } return s; }
   return {G, place, get, DRAW}; })();
 // minijuegos grandes: a los lados del letrero de cada placa (dibujo a la izquierda, instrucciones a la derecha, viendo hacia el letrero)
-['plat','papa','bola','carrera','lab','carros','banda','frutas','pinta','perlas'].forEach((id,i)=>{ const A=AR_SPOTS[i]; if(!A) return; const [x,z]=A.plate;
+['plat','papa','bola','carrera','lab','carros','banda','frutas','pinta','perlas','cojines'].forEach((id,i)=>{ const A=AR_SPOTS[i]; if(!A) return; const [x,z]=A.plate;
   const V=[-A.u[1],A.u[0]];   // (a la izquierda de quien mira hacia el letrero va el dibujo)
   for(const [which,side] of [[0,-1],[1,1]]){ const px=x+A.u[0]*1.2+V[0]*side*3.5, pz=z+A.u[1]*1.2+V[1]*side*3.5;
     const fx=-A.u[0]-V[0]*side*.25, fz=-A.u[1]-V[1]*side*.25; HOWTO.place(id,which,px,terrainH(px,pz)-.05,pz,fx,fz,2.2); } });
@@ -15564,7 +15690,7 @@ function hPlayInstrument(kind){ const mel=kind===3?[110,0,220,0,110,110,220,0]:k
 function arenaPresence(){ const me=AR.me, la=AR.lead.indexOf(true);
   const agOf=a=>{ const G=AR.G[a]; return {a, ph:G.ph, ms:Math.round(G.ms/100)*100, gid:G.gid, pl:G.pl, el:G.el, h:G.h, hms:Math.round(G.hms/100)*100, pause:G.pause>0?1:0, rk:G.rk, tie:G.tie, sd:G.sd, prev:G.prev, fin:G.fin||[], bl:G.bl||[]}; };
   if(me.a<0) return {az:null, ag: la>=0 && AR.G[la].ph>0 ? agOf(la) : null, rt:null};   // aunque ya salí, sigo avisando cómo acabó la partida que llevaba
-  const az=[me.a, me.st]; if(me.a===5 && me.st===2){ az.push(r2(CHOC.v.x), r2(CHOC.v.y), r2(CHOC.head)); if(CHOC.req) az.push(CHOC.req[0], CHOC.req[1]); } if(me.a===2 && me.st===2) az.push(r2(BOLA.v.x), r2(BOLA.v.y), BOLA.dashT>0?1:0); if(me.a===1 && me.req) az.push(me.req[0], me.req[1]); if((me.a===3||me.a===4) && me.st===4) az.push(me.finMs||0); if(me.a===7 && me.st===2) az.push(FR.sc); if(me.a===8 && me.st===2) az.push(PNT.mine); if(me.a===9 && me.st===2) az.push(PR.sc);
+  const az=[me.a, me.st]; if(me.a===5 && me.st===2){ az.push(r2(CHOC.v.x), r2(CHOC.v.y), r2(CHOC.head)); if(CHOC.req) az.push(CHOC.req[0], CHOC.req[1]); } if(me.a===2 && me.st===2) az.push(r2(BOLA.v.x), r2(BOLA.v.y), BOLA.dashT>0?1:0); if(me.a===1 && me.req) az.push(me.req[0], me.req[1]); if((me.a===3||me.a===4) && me.st===4) az.push(me.finMs||0); if(me.a===7 && me.st===2) az.push(FR.sc); if(me.a===8 && me.st===2) az.push(PNT.mine); if(me.a===9 && me.st===2) az.push(PR.sc); if(me.a===10 && me.st===2 && me.req) az.push(me.req[0], me.req[1]);
   const ag=AR.lead[me.a] ? agOf(me.a) : la>=0 && AR.G[la].ph>0 ? agOf(la) : null;
   return {az, ag, rt: me.a===0 && PLAT.mine.length ? [PLAT.gid, ...PLAT.mine.slice(-200)] : null}; }
 const clean12=s=>typeof s==='string'?s.slice(0,24):'';
@@ -15591,7 +15717,7 @@ function arLead(a,dt){ const G=AR.G[a], ms=dt*1000;
     else G.ms=-1; return; }
   G.ms-=ms;
   if(G.ph===1 && G.ms<=0){ G.ph=2; G.ms=AR_COUNT; }
-  else if(G.ph===2 && G.ms<=0){ G.ph=3; G.ms=[600000,240000,150000,300000,300000,180000,TM_DUR,FRU.DUR,PNTG.DUR,PRLG.DUR][a]; G.pt=0; }
+  else if(G.ph===2 && G.ms<=0){ G.ph=3; G.ms=[600000,240000,150000,300000,300000,180000,TM_DUR,FRU.DUR,PNTG.DUR,PRLG.DUR,600000][a]; G.pt=0; G.h=null; G.fin=[]; }
   else if(G.ph===3){
     G.pt=(G.pt||0)+ms; G.fin=G.fin||[]; G.ft=G.ft||{};
     for(const u of G.pl){ if(G.fin.includes(u)) continue; const st=arStatus(a,u);
@@ -15605,6 +15731,7 @@ function arLead(a,dt){ const G=AR.G[a], ms=dt*1000;
         const req = G.h===myUid ? AR.me.req : (r=>r&&r.az&&r.az[0]===1&&r.az.length>=4?[r.az[2],r.az[3]]:null)(arRemote(G.h));
         G.seen=G.seen||{}; if(req && req[1]>(G.seen[G.h]||0) && alive.includes(req[0]) && req[0]!==G.h){ G.seen[G.h]=req[1]; G.prev=G.h; G.h=req[0]; G.hms=Math.min(20000,G.hms+1000); }   // al pasarla se recarga un poquito (así no se puede quedar pasándola para siempre)
         if(G.hms<=0){ G.el.push(G.h); G.h=null; G.pause=3000; } } }
+    if(a===10 && alive.length>1) cjLead(G,ms,alive);   // v195: cojines musicales
     if(a===5){ G.bl=G.bl||G.pl.map(()=>CC_BAL); G.seenPop=G.seenPop||{}; G.inv=G.inv||{}; const now=G.pt;
       for(const u of G.pl){ if(G.el.includes(u)) continue; const z=u===myUid?null:(arRemote(u)||{}).az, req=u===myUid?(AR.me.a===5?CHOC.req:null):(z && z[0]===5 && z.length>=7 ? [z[5],z[6]] : null);
         if(!req || !(req[1]>(G.seenPop[u]||0))) continue; G.seenPop[u]=req[1]; const tu=G.pl[req[0]]; if(!tu || tu===u || G.el.includes(tu)) continue;
@@ -15641,6 +15768,7 @@ function arStartSpot(a,n,N){ const A=AR_SPOTS[a], ang=n/N*Math.PI*2+.3;
   if(a===5){ const w=new THREE.Vector3(CHOC.x+Math.cos(ang)*12, CHOC.floor, CHOC.z+Math.sin(ang)*12); return [w,ang]; }
   if(a===6){ const w=new THREE.Vector3(TM.x-5.5+(n%6)*2.2, TM.Y, TM.z+5-Math.floor(n/6)*2.4); return [w,0]; }
   if(a===4){ const r=1+(n%3)*.9, w=new THREE.Vector3(MZ.x+Math.cos(ang)*r, MZ.h+.05, MZ.z+Math.sin(ang)*r); return [w,ang]; }
+  if(a===10){ const r=CJG.RR*.6, w=arW(A,Math.cos(ang)*r,Math.sin(ang)*r,CJG.h+.05); return [w,ang]; }
   if(a===9){ const r=N>6?5:3.5, w=arW(A,Math.cos(ang)*r,Math.sin(ang)*r,SEA_Y-1.07); return [w,ang]; }
   if(a===7||a===8){ const r=N>6?6:4.5, w=arW(A,Math.cos(ang)*r,Math.sin(ang)*r,0); w.y=terrainH(w.x,w.z)+.05; return [w,ang]; }
   const r=7, w=arW(A,Math.cos(ang)*r,Math.sin(ang)*r,BOLA.top); return [w,ang]; }
@@ -15652,6 +15780,7 @@ function arEnter(a,G){ const me=AR.me, n=G.pl.indexOf(myUid), [w,ang]=arStartSpo
   if(a===4){ mzBuild(G.sd); MZ.t0=0; me.finMs=0; }
   if(a===7){ FR.sc=0; }
   if(a===9){ PR.sc=0; }
+  if(a===10){ CJ.seat=-1; me.req=null; }
   arWarp(w.x,w.y,w.z,a===6?0:face);
   if(a===5){ CHOC.v.set(0,0); CHOC.head=face; CHOC.cool=0; CHOC.req=null; CHOC.hitT.clear(); }
   if(a===2){ BOLA.v.set(0,0); BOLA.vy=0; BOLA.fall=false; BOLA.mine.visible=true; }
@@ -15661,7 +15790,7 @@ function arOut(a,why){ const me=AR.me; if(me.st!==2) return; me.st=3; me.outAt=p
   bigText(why||'¡Quedaste fuera!',1600); setTimeout(()=>{ if(AR.me.a===a && AR.me.st===3) arToBeach(a); },900); sendPresence(true); }
 function ballOff(){ BOLA.mine.visible=false; BOLA.fall=false; }
 const arBall=()=>AR.me.a===2 && AR.me.st===2 && AR.G[2].ph>=1 && AR.G[2].ph<=3;
-const arFrozen=()=>AR.me.st===2 && AR.me.a>=0 && (AR.G[AR.me.a].ph===1 || AR.G[AR.me.a].ph===2);
+const arFrozen=()=>AR.me.st===2 && AR.me.a>=0 && (AR.G[AR.me.a].ph===1 || AR.G[AR.me.a].ph===2 || cjSitting());
 // texto grande en el centro
 let bigT=0;
 function bigText(s,ms=900,sub){ const el=ui('arBig'); if(sub){ const sp=document.createElement('span'); sp.className='sub'; sp.textContent=sub; el.replaceChildren(sp,document.createTextNode(s)); } else el.textContent=s; el.classList.toggle('long',!!sub || s.length>12); el.hidden=false; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); clearTimeout(bigT); bigT=setTimeout(()=>el.hidden=true,ms); }
@@ -15671,7 +15800,7 @@ function arResult(a,G){ const me=AR.me; if(me.awarded===G.gid) return; me.awarde
   if(CPU.on && CPU.a===a) coins=Math.max(3,Math.round(coins*cpuCoinK()));   // v195: contra la CPU
   const names=['¡1er lugar!','2º lugar','3er lugar']; const title=place===0?(G.tie>1?'¡Ganaron juntos!':'¡Ganaste!'):(names[place]||(place+1)+'º lugar');
   ui('arResTitle').textContent=title; ui('arResText').textContent=AR_SPOTS[a].name+' · '+N+' jugadores'+(CPU.on&&CPU.a===a?' · '+['fácil','normal','difícil'][CPU.diff]:''); ui('arResCoins').textContent='+'+coins; ui('arRes').hidden=false;
-  { const rk=ui('arResRank'); if(a===7||a===8||a===9){ const md=['🥇','🥈','🥉']; rk.textContent=G.rk.slice(0,6).map((u,k)=>(md[k]||(k+1)+'º')+' '+(u===myUid?'Tú':((arRemote(u)||{}).name||'Alguien').replace(' (CPU)',''))+(a===7?' 🍎'+frScore(u):a===9?' 🦪'+prScore(u):' '+(PNT_EMO[pntIdx(u,G)%12]||'🎨')+pntPct(pntScore(u))+'%')).join(' · '); rk.hidden=false; } else rk.hidden=true; }
+  { const rk=ui('arResRank'); if(a===7||a===8||a===9||a===10){ const md=['🥇','🥈','🥉']; rk.textContent=G.rk.slice(0,6).map((u,k)=>(md[k]||(k+1)+'º')+' '+(u===myUid?'Tú':((arRemote(u)||{}).name||'Alguien').replace(' (CPU)',''))+(a===10?'':a===7?' 🍎'+frScore(u):a===9?' 🦪'+prScore(u):' '+(PNT_EMO[pntIdx(u,G)%12]||'🎨')+pntPct(pntScore(u))+'%')).join(' · '); rk.hidden=false; } else rk.hidden=true; }
   setTimeout(()=>{ ui('arRes').hidden=true; },5500); setTimeout(()=>addCoins(coins),400);
   try{ const R=audio.raw(); const t=R.ctx.currentTime; (place===0?[523,659,784,1046]:[523,440]).forEach((f,k)=>R.tone('triangle',f,f,t+k*.12,.16,.08)); }catch(e){} }
 
@@ -15691,7 +15820,8 @@ function arZones(){ if(AR_Z) return AR_Z; const S=AR_SPOTS, g=a=>terrainH(S[a].c
     {u0:-TM.L/2-2,u1:TM.L/2+2,v0:-TM.W/2-2,v1:TM.W/2+2, y0:TM.Y-6, y1:TM.Y+12},
     {u0:-FRU.S-.5,u1:FRU.S+.5,v0:-FRU.S-.5,v1:FRU.S+.5, y0:CAVE_TOP, y1:FRU.h+12},   // v195: canasta de frutas
     {u0:-PNTG.N*PNTG.T/2-.5,u1:PNTG.N*PNTG.T/2+.5,v0:-PNTG.N*PNTG.T/2-.5,v1:PNTG.N*PNTG.T/2+.5, y0:CAVE_TOP, y1:PNTG.h+12},   // v195: pinta el piso
-    {u0:-PRLG.R-2,u1:PRLG.R+2,v0:-PRLG.R-2,v1:PRLG.R+2, y0:-60, y1:SEA_Y+12}];   // v195: cazadores de perlas   // banda en el aire (abajo, en el claro, se camina normal)
+    {u0:-PRLG.R-2,u1:PRLG.R+2,v0:-PRLG.R-2,v1:PRLG.R+2, y0:-60, y1:SEA_Y+12},   // v195: cazadores de perlas
+    {u0:-CJG.RR-1,u1:CJG.RR+1,v0:-CJG.RR-1,v1:CJG.RR+1, y0:CAVE_TOP, y1:CJG.h+12}];   // v195: cojines musicales   // banda en el aire (abajo, en el claro, se camina normal)
   return AR_Z; }
 function arInZone(a,x,y,z,m){ const Z=arZones()[a], [du,dv]=arL(AR_SPOTS[a],x,z); m=m||0; if(a===1) return papaInside(x,z,-1.5-m) && y>Z.y0 && y<Z.y1+m; return du>Z.u0-m && du<Z.u1+m && dv>Z.v0-m && dv<Z.v1+m && y>Z.y0 && y<Z.y1+m; }
 const arLive=a=>{ const G=AR.G[a]; return G && G.ph>=1 && G.ph<=4 && G.pl && G.pl.length>0; };
@@ -15732,7 +15862,7 @@ function arenaUpdate(dt){
     if(!mp.room && !(CPU.on && CPU.a===a)){ arLeave(); return; }
     if(me.st===1 && G.ph>=1 && G.ph<=3 && G.pl.includes(myUid) && !G.el.includes(myUid) && me.gid!==G.gid) arEnter(a,G);
     if(me.st>=2 && (G.gid!==me.gid || G.ph===0)){ const was=me.st; me.st=0; me.a=-1; ballOff(); if(was===2 || was===4) arToBeach(a); renderArHud(); sendPresence(true); return; }
-    if(me.st===2 && G.ph===3 && G.el.includes(myUid)) arOut(a, a===1?'¡BUM! Se te quemó la papa':a===5?'¡Te reventaron todos los globos!':'¡Quedaste fuera!');
+    if(me.st===2 && G.ph===3 && G.el.includes(myUid)) arOut(a, a===1?'¡BUM! Se te quemó la papa':a===5?'¡Te reventaron todos los globos!':a===10?'¡Te quedaste sin cojín!':'¡Quedaste fuera!');
     if(me.st>=2 && G.ph===4) arResult(a,G);
     // cuenta regresiva y salida
     if(me.st===2 && arPrevPh[a]!==G.ph){ if(G.ph===1) bigText('¡A sus lugares!',2600); if(G.ph===3) bigText('¡YA!',900); }
@@ -15747,6 +15877,7 @@ function arenaUpdate(dt){
       if(a===7) frPlay(dt,G);
       if(a===8) pntPlay(dt,G);
       if(a===9) prPlay(dt,G);
+      if(a===10) cjPlay(dt,G);
     }
     if(arBall()) ballPlay(dt,G);
     if(arCar()) carPlay(dt,G);
@@ -15759,6 +15890,7 @@ function arenaUpdate(dt){
   papaShow(dt);
   ccUpdate(dt);   // v161: los carritos y sus globos
   tmUpdate(dt);   // v162: la banda, sus colores, huecos y muros
+  cjUpdate(dt);   // v195: cojines musicales (antes que la CPU: ella usa dónde están los cojines)
   cpuTick(dt);   // v195: los peluches de la CPU
   frUpdate(dt);   // v195: la canasta de frutas
   pntUpdate(dt);   // v195: pinta el piso
@@ -15828,7 +15960,8 @@ function arenaPose(t,dt){ const me=AR.me; if(me.a<0 || me.st!==2) return;
   if(arCar()) carRiderPose(plush,t,dt);
   if(me.a===1 && AR.G[1].h===myUid && AR.G[1].ph===3) pgPoseLimbs(plush,{armsUp:1},t,dt,player.walk);
   if(me.a===7 && frIn(myUid,AR.G[7])) frHoldPose(plush);
-  if(me.a===8 && pntIn(myUid,AR.G[8])) pntHoldPose(plush); }
+  if(me.a===8 && pntIn(myUid,AR.G[8])) pntHoldPose(plush);
+  if(cjSitting()) cjSitPose(plush,t,dt,player.walk); }
 const remoteBalls=new Map();
 function remoteArenaPose(r,t,dt){ const az=r.az; let b=remoteBalls.get(r);
   if(az && az[0]===2 && az[1]===2 && AR.G[2].ph>=1){ if(!b){ b=makeBall(1); remoteBalls.set(r,b); } b.visible=true; b.position.set(r.pos.x,r.pos.y+BOLA.br,r.pos.z); const v=Math.hypot(az[2]||0,az[3]||0); b.rotation.x+=v*dt/BOLA.br; ballRiderPose(r.obj,t,dt,v); }
@@ -15836,7 +15969,8 @@ function remoteArenaPose(r,t,dt){ const az=r.az; let b=remoteBalls.get(r);
   if(az && az[0]===1 && AR.G[1].h===uidOf(r) && AR.G[1].ph===3) pgPoseLimbs(r.obj,{armsUp:1},t,dt,r.walk||0);
   if(az && az[0]===5 && az[1]===2 && AR.G[5].ph>=1 && AR.G[5].ph<=3) carRiderPose(r.obj,t,dt);
   if(az && az[0]===7 && az[1]===2 && AR.G[7].ph>=1 && AR.G[7].ph<=4) frHoldPose(r.obj);
-  if(az && az[0]===8 && az[1]===2 && AR.G[8].ph>=1 && AR.G[8].ph<=4) pntHoldPose(r.obj); }
+  if(az && az[0]===8 && az[1]===2 && AR.G[8].ph>=1 && AR.G[8].ph<=4) pntHoldPose(r.obj);
+  if(az && az[0]===10 && az[1]===2 && AR.G[10].ph===3 && cjSeatOf(uidOf(r),AR.G[10])>=0) cjSitPose(r.obj,t,dt,r.walk); }
 function arenaGround(x,z,y){ if(!arenaReady) return null; { const tg=tmGround(x,z,y); if(tg!==null) return tg; } { const cg=ccArenaGround(x,z,y); if(cg!==null) return cg; } const A=AR_SPOTS[0]; if(Math.abs(x-A.center[0])<40 && Math.abs(z-A.center[1])<40) return platGround(x,z,y); return raceGround(x,z,y); }
 // cámara: al acomodarse, una vuelta por arriba de la arena
 function arenaCamera(dt){ const me=AR.me; if(me.a<0 || me.st!==2 || AR.G[me.a].ph!==1 || me.a===4) return false;   // v160: al laberinto no se le da la vuelta por arriba (se vería el camino)
@@ -15868,6 +16002,7 @@ function renderArHud(){ const me=AR.me, el=arHudEl(); if(!el) return;
     if(me.a===5) txt='Globos: '+ccBal(myUid)+' · quedan '+alive+' · '+fmtMs(G.ms);
     if(me.a===6) txt='Velocidad '+tmSpeed(TM.te).toFixed(1)+' · quedan '+alive+' · '+fmtMs(G.ms);
     if(me.a===7){ const mine=FR.sc, pos=1+G.pl.filter(u=>u!==myUid && !G.el.includes(u) && frScore(u)>mine).length; txt='🍎 '+mine+' · '+pos+'º lugar · '+fmtMs(G.ms); }
+    if(me.a===10){ const S=cjStage(G), n=cjAlive(G).length; txt=me.st===3?'Quedan '+n:!S?'¡Camina!':S.k==='m'?'🎵 ¡Camina por la alfombra! · quedan '+n:S.k==='s'?(cjSeatOf(myUid,G)>=0?'🪑 ¡Sentado! · quedan '+n:'🪑 ¡Siéntate en un cojín! · '+Math.max(0,Math.ceil(G.hms/1000))+' s'):'Quedan '+n+' · ¡otra ronda!'; }
     if(me.a===9){ const mine=PR.sc, pos=1+G.pl.filter(u=>u!==myUid && !G.el.includes(u) && prScore(u)>mine).length; txt='🦪 '+mine+' · '+pos+'º lugar · '+fmtMs(G.ms); }
     if(me.a===8){ const mine=PNT.mine, pos=1+G.pl.filter(u=>u!==myUid && !G.el.includes(u) && pntScore(u)>mine).length; txt=(PNT_EMO[pntIdx(myUid,G)%12]||'🎨')+' '+pntPct(mine)+'% · '+pos+'º lugar · '+fmtMs(G.ms); }
     if(me.st===3) txt='Fuera · '+txt; }
