@@ -5043,7 +5043,7 @@ hold(ui('tJump'),()=>{ touchHold.up=true; jump(); },()=>{ touchHold.up=false; })
 hold(ui('tDive'),()=>{ touchHold.down=true; startDive(); },()=>{ touchHold.down=false; });
 
 function jump(){ if(player.pg && player.pg.k==='vine'){ jiVineRelease(); return; }   // v142: soltar la liana
-  if(player.pg && (player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='veh' || player.pg.k==='vehp')) return;   // v144: en el tobogán y en la rueda no se salta
+  if(player.pg && (player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='veh' || player.pg.k==='vehp' || player.pg.k==='surf')) return;   // v144: en el tobogán y en la rueda no se salta
   if(player.busy) return; if(player.mg || (typeof SP!=='undefined' && SP.on)) return; if(hook.mode>=2){ bowRelease(); return; } if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see')){ stopPlay(); return; } const now=performance.now()/1000, coyote=!player.grounded && player.vy<=1.5 && now-(player.lastGroundT||0)<.16;   // v195: saltar aunque te acabes de salir de la orilla
   if((player.grounded||coyote) && !player.dive && !player.swim && !player.car && !player.ac && !player.pg){ player.vy=trOnMat(player.pos.x,player.pos.z,player.pos.y)?9.5:7.2; player.grounded=false; player.jumpBuf=0; player.lastGroundT=0; audio.jump(); }
   else if(!player.dive && !player.swim && !player.car && !player.ac && !player.pg) player.jumpBuf=now; }   // v195: si tocaste Saltar un poquito antes de caer, salta al llegar
@@ -6570,7 +6570,7 @@ function updateCarHud(){
 // Botones táctiles: a pie (saltar, tirarse…) o en coche (acelerar, frenar)
 function updateTouchMode(){
   const inCar=!!player.car, pilot=typeof iPilot==='function' && iPilot(), aboard=!!player.ac, seatedAir=aboard && player.ac.mode==='seated';
-  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && (player.pg.k==='cuco' || player.pg.k==='helm' || player.pg.k==='sled' || player.pg.k==='zip' || player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='vehp' || (player.pg.k==='veh' && !(VE.w && (VE.w.S.canAir||VE.w.S.sub)))));
+  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && (player.pg.k==='cuco' || player.pg.k==='helm' || player.pg.k==='sled' || player.pg.k==='zip' || player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='vehp' || player.pg.k==='surf' || (player.pg.k==='veh' && !(VE.w && (VE.w.S.canAir||VE.w.S.sub)))));
   ui('tcar').hidden=!((inCar && player.car.kind==='seated') || pilot);
   { const vd=!!(player.pg && player.pg.k==='veh' && VE.w), L=vd&&VE.w.L; ui('tveh').hidden=!vd; if(vd){ ui('tveh').classList.toggle('up',!!VE.w.S.canAir); ui('tSiren').hidden=!(L && (L.sr.length||L.sb.length)); ui('tVLights').hidden=!(L && (L.head.length||L.tail.length)); ui('tFx').hidden=!vehFxOf(VE.w).length; } }   // v182
   const drv=(inCar && player.car.seat===0) || pilot;
@@ -7316,8 +7316,8 @@ function trRemotePose(r,t,dt){ if(r.tz && r.tz[2]) pgPoseLimbs(r.obj,{climb:(per
 let myPush={i:-1,t:0}; player.pushUntil=0;
 function pgOccupied(k,i){ if(player.pg && player.pg.k===k && player.pg.i===i) return 'me';
   for(const r of mp.remotes.values()) if(r.pl && r.pl[0]===PG_KINDS.indexOf(k) && r.pl[1]===i) return r; return null; }
-const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled','zip','vine','icsl','dwheel','dcar','veh','vehp'];   // v182: + carrusel de dulces
-function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars' && k!=='cart' && k!=='veh' && k!=='vehp') return;   // v182: cada quien tiene su vehículo
+const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled','zip','vine','icsl','dwheel','dcar','veh','vehp','surf'];   // v182: + carrusel de dulces
+function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars' && k!=='cart' && k!=='veh' && k!=='vehp' && k!=='surf') return;   // v182: cada quien tiene su vehículo
   holding=false; applyHeld(); renderHotbar();
   player.pg={k,i,t0:performance.now()/1000, from:[player.pos.x,player.pos.y,player.pos.z]};
   player.vel.set(0,0,0); player.vy=0; player.dive=null; player.diveAngle=0;
@@ -7373,7 +7373,7 @@ function updateMyPlay(dt){
   if(P.k==='cart') return mcRide(P,dt);   // v137
   if(P.k==='helm'){ P.v=0; return helmPose(); }
   if(P.k==='sled') return wiSledRide(P,dt);   // v140
-  if(P.k==='icsl') return diSlideRide(P,dt); if(P.k==='dwheel') return diWheelRide(P,dt); if(P.k==='dcar') return diCarRide(P,dt); if(P.k==='veh') return vehRide(P,dt); if(P.k==='vehp') return vehpRide(P,dt);   // v144 · v182
+  if(P.k==='icsl') return diSlideRide(P,dt); if(P.k==='dwheel') return diWheelRide(P,dt); if(P.k==='dcar') return diCarRide(P,dt); if(P.k==='veh') return vehRide(P,dt); if(P.k==='surf') return tblRide(P,dt); if(P.k==='vehp') return vehpRide(P,dt);   // v144 · v182
   if(P.k==='zip') return jiZipRide(P,dt); if(P.k==='vine') return jiVineRide(P,dt);   // v142   // v138: el barco se mueve en shipUpdate
   if(P.k==='swing'){ const S=pgState.swing[P.i];
     S.w += (-(9.8/PG_EQ.swings.L)*Math.sin(S.a) - .12*S.w)*dt;
@@ -7448,6 +7448,7 @@ function updateRemoteInPlay(r,dt,t){
   const d=r.pl, k=PG_KINDS[d[0]]; if(!k) return false;
   let v=0;
   if(k==='sled') return wiRemoteSled(r,dt,t);   // v140: en su trineo
+  if(k==='surf') return tblRemoteRide(r,dt,t);   /* v196 */
   if(k==='veh'||k==='vehp'){ const pose=vehRemotePose(r,k,d[1]); if(!pose) return false; placePlay(r.obj,pose); r.pos.set(...pose.pos); r.target.set(...pose.pos); pgPoseLimbs(r.obj,pose,t,dt,r.walk); r.label.position.set(0,2.42,0); r.blob.visible=false; return true; }   // v182
   if(k==='slide'||k==='bars'){ const key=d[0]+':'+d[1]; if(r.pgK!==key || Math.abs(r.pgEl-d[2])>.35) r.pgEl=d[2]; else r.pgEl+=dt; r.pgK=key; v=r.pgEl; }
   else if(k==='cart'){ r.pgK=null; if(r.mcS===undefined || Math.abs(r.mcS-d[2])>4) r.mcS=d[2]; else r.mcS+=dt*4.2+(d[2]-r.mcS)*Math.min(1,dt*3); v=r.mcS; }
@@ -7958,7 +7959,16 @@ function shipRemote(r){ const d=r.dk; if(!r.dkS || Math.hypot(r.dkS[0]-d[0],r.dk
 function helmPose(){ const [x,z]=shipW(0,HELM_Z-.75); return {pos:[x,SH.DECK,z], yaw:SH.h, sit:0, grip:1}; }
 function pierDeckY(lz){ const P=PIER; if(lz<P.ZR) return P.y0+.06+(P.Y-P.y0-.06)*Math.max(0,(lz-P.Z0)/(P.ZR-P.Z0)); return P.Y; }
 function pierOn(lx,lz){ const P=PIER; return (Math.abs(lx)<=P.W+.05 && lz>=P.Z0 && lz<=P.PZ0+.2) || (Math.abs(lx)<=P.PW && lz>=P.PZ0 && lz<=P.PZ1); }
-PIER_GROUND=function(x,z,y){ const [lx,lz]=pL(x,z); if(!pierOn(lx,lz)) return null; const h=pierDeckY(lz); return y>=h-.75 ? h : null; };
+// ---------- v196: la bajada al mar del muelle (escalerita junto al muelle, para lanzar la tabla y subirte) ----------
+// Del lado izquierdo del muelle (lx<0), un poco después de salir de la casita de Tortu hacia la orilla. Hay un hueco en el barandal,
+// una escalerita que baja pegada al muelle en dirección a la orilla y una plataforma casi al nivel del mar.
+const TBL_ST={G0:65.9, G1:67.3, X0:-3.2, X1:-1.7, N:6, TR:.32, LY:-.72, LZ0:62.2, LX0:-4.9};
+TBL_ST.d=(PIER.Y-TBL_ST.LY)/(TBL_ST.N+1); TBL_ST.SZ=TBL_ST.G0-TBL_ST.N*TBL_ST.TR;   // alto de cada escalón y dónde termina la escalera
+function tblStairH(lx,lz){ const S=TBL_ST;
+  if(lx>=S.X0-.05 && lx<=S.X1+.1 && lz>=S.SZ && lz<=S.G1+.05){ if(lz>=S.G0) return PIER.Y; return PIER.Y-Math.min(S.N,Math.ceil((S.G0-lz)/S.TR))*S.d; }
+  if(lx>=S.LX0-.05 && lx<=S.X1+.1 && lz>=S.LZ0-.05 && lz<S.SZ) return S.LY;
+  return null; }
+PIER_GROUND=function(x,z,y){ const [lx,lz]=pL(x,z); if(!pierOn(lx,lz)){ const sh=tblStairH(lx,lz); return sh!==null && y>=sh-.75 ? sh : null; } const h=pierDeckY(lz); return y>=h-.75 ? h : null; };   /* v196: + la bajada al mar */
 const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH-.15 && lz>P.HZ-P.HH+.15 && lz<P.HZ+P.HH-.15 && y>P.Y-.6 && y<P.Y+P.HW+2.5; };
 // ---------- construcción ----------
 (function buildPier(){
@@ -7985,7 +7995,7 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
     for(let i=0;i<=n;i++){ const t=i/n, x=x0+(x1-x0)*t, z=z0+(z1-z0)*t, y=y0+(y1-y0)*t; B(woodD, x, y+.5, z, .14, 1.0, .14); }
     for(const hh of [.55,.98]){ const ym=(y0+y1)/2+hh, slope=Math.atan2(y1-y0,L); B(hh>.9?wood:woodL, (x0+x1)/2, ym, (z0+z1)/2, .1, .1, L, null, -slope*Math.cos(ang)*0, ang, 0).rotation.set(0,ang,0); }
     lineObs(x0,z0,x1,z1,.22,Math.max(y0,y1)+1.0,Math.min(y0,y1)-.35); };
-  [-1,1].forEach(sd=>{ railSeg(sd*(P.W-.06),P.Z0+.3,sd*(P.W-.06),P.ZR,pierDeckY(P.Z0+.3),P.Y); railSeg(sd*(P.W-.06),P.ZR,sd*(P.W-.06),P.PZ0,P.Y,P.Y); });
+  [-1,1].forEach(sd=>{ railSeg(sd*(P.W-.06),P.Z0+.3,sd*(P.W-.06),P.ZR,pierDeckY(P.Z0+.3),P.Y); if(sd<0){ railSeg(sd*(P.W-.06),P.ZR,sd*(P.W-.06),TBL_ST.G0,P.Y,P.Y); railSeg(sd*(P.W-.06),TBL_ST.G1,sd*(P.W-.06),P.PZ0,P.Y,P.Y); } else railSeg(sd*(P.W-.06),P.ZR,sd*(P.W-.06),P.PZ0,P.Y,P.Y); });   /* v196: hueco para la bajada al mar */
   [-1,1].forEach(sd=>{ railSeg(sd*(P.PW-.06),P.PZ0+.06,sd*(P.PW-.06),P.PZ1-.06,P.Y,P.Y); railSeg(sd*(P.W+.1),P.PZ0+.06,sd*(P.PW-.06),P.PZ0+.06,P.Y,P.Y); });
   railSeg(-P.PW+.06,P.PZ1-.06,P.PW-.06,P.PZ1-.06,P.Y,P.Y);
   // ---------- cañas fijas (5 por lado, donde el agua ya es honda) y un balde junto a cada una ----------
@@ -8143,6 +8153,36 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
     bucketVisual(b); });
   if(saved && Number.isInteger(saved.h) && FISH[saved.h]) player.hand=saved.h;
 })();
+// ---------- v196: construir la bajada al mar ----------
+(function tblStairsBuild(){ const P=PIER, S=TBL_ST, G=new THREE.Group(); G.position.set(P.bx,0,P.bz); G.rotation.y=P.th;
+  const box=new THREE.BoxGeometry(1,1,1), cyl=new THREE.CylinderGeometry(1,1,1,10);
+  const wood=felt('#b98250','rgba(70,35,10,.16)'), woodL=felt('#d2a06c','rgba(90,50,15,.14)'), woodD=felt('#86562f','rgba(50,25,5,.2)');
+  const B=(m,x,y,z,sx,sy,sz,rx)=>{ const o=new THREE.Mesh(box,m); o.position.set(x,y,z); o.scale.set(sx,sy,sz); if(rx) o.rotation.x=rx; G.add(o); return o; };
+  const post=(lx,lz,top)=>{ const [x,z]=pW(lx,lz), bot=terrainH(x,z)-.6; const o=new THREE.Mesh(cyl,woodD); o.position.set(lx,(top+bot)/2,lz); o.scale.set(.13,top-bot,.13); G.add(o); };
+  const ob=(lx,lz,top,bot)=>{ const [x,z]=pW(lx,lz); obstacles.push({x,z,r:.2,top,bot,walk:false}); };
+  const W=S.X1-S.X0, xm=(S.X0+S.X1)/2;
+  // la plataforma de arriba (al nivel del muelle, afuera del barandal)
+  for(let z=S.G0+.2;z<S.G1;z+=.47) B(wood,xm,P.Y-.06,z,W,.12,.42);
+  // escalones
+  for(let k=1;k<=S.N;k++){ const y=P.Y-k*S.d, z=S.G0-(k-.5)*S.TR; B(k%2?woodL:wood,xm,y-.06,z,W,.12,S.TR-.03); }
+  // los largueros de los lados de la escalera
+  { const L=Math.hypot(S.G0-S.SZ,P.Y-S.LY), a=Math.atan2(P.Y-S.LY,S.G0-S.SZ); [S.X0+.04,S.X1-.04].forEach(x=>B(woodD,x,(P.Y+S.LY)/2-.16,(S.G0+S.SZ)/2,.08,.24,L,a)); }
+  // la plataforma de abajo, casi al ras del mar
+  for(let z=S.LZ0+.2;z<S.SZ;z+=.47) B(z>S.SZ-.5?woodL:wood,(S.LX0+S.X1)/2,S.LY-.06,z,S.X1-S.LX0,.12,.42);
+  [[S.LX0+.15,S.LZ0+.15],[S.LX0+.15,S.SZ-.15],[S.X1-.1,S.LZ0+.15],[(S.LX0+S.X1)/2,S.LZ0+.15],[(S.LX0+S.X1)/2,S.SZ-.15],[S.X0+.1,S.SZ+.4],[S.X0+.1,S.G0],[S.X0+.1,S.G1-.1]].forEach(([x,z])=>post(x,z,z>S.SZ?(z>=S.G0?P.Y-.12:tblStairH(x,z)-.12):S.LY-.12));
+  // barandales: del lado de afuera de la escalera, al fondo de arriba y en dos lados de la plataforma de abajo (el lado del mar queda abierto)
+  const rail=(x0,z0,y0,x1,z1,y1)=>{ const L=Math.hypot(x1-x0,z1-z0), n=Math.max(1,Math.round(L/1.1)), a=Math.atan2(x1-x0,z1-z0), sl=Math.atan2(y1-y0,L);
+    for(let i=0;i<=n;i++){ const t=i/n, x=x0+(x1-x0)*t, z=z0+(z1-z0)*t, y=y0+(y1-y0)*t; B(woodD,x,y+.5,z,.12,1.0,.12); }
+    for(const hh of [.55,.98]){ const o=new THREE.Mesh(box,hh>.9?wood:woodL); o.position.set((x0+x1)/2,(y0+y1)/2+hh,(z0+z1)/2); o.rotation.order='YXZ'; o.rotation.set(-sl,a,0); o.scale.set(.09,.09,Math.hypot(L,y1-y0)); G.add(o); }
+    const m=Math.max(1,Math.ceil(L/.4)); for(let i=0;i<=m;i++){ const t=i/m, y=y0+(y1-y0)*t; ob(x0+(x1-x0)*t, z0+(z1-z0)*t, y+1.0, y-.35); } };
+  rail(S.X0+.06,S.SZ,S.LY,S.X0+.06,S.G0,P.Y); rail(S.X0+.06,S.G0,P.Y,S.X0+.06,S.G1-.06,P.Y); rail(S.X0+.06,S.G1-.06,P.Y,S.X1,S.G1-.06,P.Y);
+  rail(S.LX0+.06,S.LZ0+.06,S.LY,S.X1,S.LZ0+.06,S.LY); rail(S.LX0+.06,S.SZ-.06,S.LY,S.X0,S.SZ-.06,S.LY);
+  // letrerito en el barandal de arriba
+  { const c=document.createElement('canvas'); c.width=256; c.height=96; const q=c.getContext('2d'); q.fillStyle='#f6e7c6'; q.fillRect(0,0,256,96); q.strokeStyle='#86562f'; q.lineWidth=8; q.strokeRect(4,4,248,88);
+    q.fillStyle='#2f86c9'; q.font='bold 34px sans-serif'; q.textAlign='center'; q.fillText('Bajada al mar',128,44); q.fillStyle='#86562f'; q.font='bold 24px sans-serif'; q.fillText('para surfear',128,78);
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; const m=new THREE.Mesh(new THREE.PlaneGeometry(.9,.34),new THREE.MeshStandardMaterial({map:t,roughness:.8,side:THREE.DoubleSide}));
+    m.position.set(S.X0+.0,P.Y+1.25,(S.G0+S.G1)/2); m.rotation.y=Math.PI/2; G.add(m); B(woodD,S.X0+.06,P.Y+1.12,(S.G0+S.G1)/2,.08,.25,.08); }
+  G.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); mergeStatic(G); scene.add(G); TBL_ST.g=G; })();
 // ---------- datos del jugador: baldes, pez en la mano y catálogo ----------
 player.bucket=-1; if(player.hand===undefined) player.hand=-1; player.fish=null; player.feed=null; player.busy=false;
 let fishBait=0;   // 0 lombriz · 1 pez pequeño · 2 pez mediano
@@ -13923,9 +13963,9 @@ const TBL_BOARDS=[
 const TBL={own:new Set(), eq:-1, m:0, drop:null, mine:null, loose:null, looseId:-1, tex:new Map(), thr:null, rem:new Map()};
 // m: 0 = no la llevas · 1 = en las manos (sobre la cabeza) · 2 = en la espalda · 3 = la dejaste (en el piso o flotando)
 (function tblLoad(){ try{ const o=JSON.parse(localStorage.getItem('mundoPelucheSurf')||'null'); if(!o) return;
-  (o.o||[]).forEach(i=>{ if(TBL_BOARDS[i]) TBL.own.add(i); }); TBL.eq=TBL.own.has(o.e)?o.e:-1; TBL.m=TBL.eq<0?0:Math.max(0,Math.min(3,o.m|0));
+  (o.o||[]).forEach(i=>{ if(TBL_BOARDS[i]) TBL.own.add(i); }); TBL.eq=TBL.own.has(o.e)?o.e:-1; TBL.m=TBL.eq<0?0:Math.max(0,Math.min(4,o.m|0)); if(TBL.m===4) TBL.m=2;
   if(TBL.m===3){ const d=o.d; if(d && Number.isFinite(d.x) && Number.isFinite(d.z) && Date.now()-(d.t||0)<TBL_GONE) TBL.drop=d; else TBL.m=0; } }catch(e){} })();
-function tblSave(){ try{ localStorage.setItem('mundoPelucheSurf', JSON.stringify({o:[...TBL.own], e:TBL.eq, m:TBL.m, d:TBL.m===3?TBL.drop:null})); }catch(e){} }
+function tblSave(){ try{ localStorage.setItem('mundoPelucheSurf', JSON.stringify({o:[...TBL.own], e:TBL.eq, m:TBL.m===4?2:TBL.m, d:TBL.m===3?TBL.drop:null})); }catch(e){} }
 
 // ---- el dibujo de cada tabla (la cubierta) ----
 function tblDraw(q,W,H,b){ const c1=b.c1, c2=b.c2; q.fillStyle=c1; q.fillRect(0,0,W,H); const R=mzRand(b.id*97+5);
@@ -14019,13 +14059,15 @@ function tblLoose(id){ const g=new THREE.Group(); const b=makeSurfBoard(id); b.r
 const tblFree=()=>state==='play' && !player.car && !player.ac && !player.pg && !player.mg && !(AR.me.a>=0 && AR.me.st>=1) && !SP.on && !player.balloon;
 function tblSetMode(m){ TBL.m=m; if(m!==3) TBL.drop=null; if(m===1 && holding){ holding=false; applyHeld(); renderHotbar(); } tblSave(); try{ sendPresence(true); }catch(e){} actKey=''; }
 function tblThrow(){ if(TBL.m!==1) return; const f=player.facing, sx=player.pos.x, sz=player.pos.z, d=3.4; let tx=sx+Math.sin(f)*d, tz=sz+Math.cos(f)*d;
-  TBL.thr={t:0, from:new THREE.Vector3(sx,player.pos.y+2.4,sz), to:new THREE.Vector3(tx,0,tz), yaw:f}; TBL.m=3; TBL.drop={x:tx, y:player.pos.y, z:tz, yaw:f, t:Date.now(), w:0};
+  TBL.thr={t:0, from:new THREE.Vector3(sx,player.pos.y+2.4,sz), to:new THREE.Vector3(tx,0,tz), yaw:f+Math.PI}; TBL.m=3; TBL.drop={x:tx, y:player.pos.y, z:tz, yaw:f+Math.PI, t:Date.now(), w:0};   /* la punta queda hacia donde la lanzaste */
   try{ audio.whoosh?audio.whoosh():audio.jump(); }catch(e){} tblSave(); try{ sendPresence(true); }catch(e){} actKey=''; }
 function tblDropHere(){ if(TBL.m!==2) return; const f=player.facing, x=player.pos.x-Math.sin(f)*.9, z=player.pos.z-Math.cos(f)*.9; TBL.m=3; TBL.drop={x, y:player.pos.y, z, yaw:f+Math.PI/2, t:Date.now(), w:0}; tblLand(); tblSave(); try{ sendPresence(true); }catch(e){} actKey=''; }
 // ¿cayó en el agua o en el piso?
 function tblLand(){ const d=TBL.drop; if(!d) return; const g=groundAt(d.x,d.z,d.y+3), ws=waterSurfaceY(d.x,d.z); d.w=ws>g+.25?1:0; d.y=d.w?ws:g; }
 function tblNear(){ const d=TBL.drop; if(TBL.m!==3 || !d || TBL.thr) return false; return Math.hypot(player.pos.x-d.x,player.pos.z-d.z)<2.2 && Math.abs(player.pos.y-d.y)<2.5; }
-function tblActions(){ if(!tblFree() || TBL.eq<0) return null; try{ if(pierOnNow() && (nearTortu() || nearDoor())) return null; }catch(e){}
+function tblActions(){ if(player.pg && player.pg.k==='surf') return [{label:'Bajarse', run:tblGetOff}, null];
+  if(tblCanMount()) return [{label:'🏄 Subirse a la tabla', run:tblMount}, TBL.m===3?{label:'Tomar tabla', run:()=>tblSetMode(1)} : TBL.m===1?{label:'🏄 Lanzar tabla', run:tblThrow}:null];
+  if(!tblFree() || TBL.eq<0) return null; try{ if(pierOnNow() && (nearTortu() || nearDoor())) return null; }catch(e){}
   if(TBL.m===1 && !player.swim) return [{label:'🏄 Lanzar tabla', run:tblThrow}, {label:'🎒 Colgarte la tabla', run:()=>tblSetMode(2)}];
   if(TBL.m===3 && tblNear() && !player.swim) return [{label:'🏄 Tomar tabla', run:()=>tblSetMode(1)}, null];
   return null; }
@@ -14035,6 +14077,9 @@ function tblBackActions(){ if(!tblFree() || TBL.eq<0 || TBL.m!==2 || player.swim
 function tblTick(dt){ tblRemoteGc(); if(TBL.eq<0 && !TBL.mine && !TBL.loose) return;
   // con las manos ocupadas no se puede usar otra cosa: si tomas algo de la barra o te subes a algo, la tabla se va a la espalda
   if(TBL.m===1 && (holding || player.hand>=0 || player.fish || player.dive || player.swim || player.car || player.ac || player.pg || player.balloon || (AR.me.a>=0 && AR.me.st>=2))) tblSetMode(2);
+  if(TBL.m===4){ if(!(player.pg && player.pg.k==='surf') || !TBL.ride){ TBL.m=2; TBL.ride=null; tblSave(); try{ sendPresence(true); }catch(e){} }
+    else { if(!TBL.loose || TBL.looseId!==TBL.eq){ if(TBL.loose) scene.remove(TBL.loose); TBL.loose=tblLoose(TBL.eq); TBL.looseId=TBL.eq; scene.add(TBL.loose); }
+      const R=TBL.ride; tblPlaceRiding(TBL.loose,R.x,R.y,R.z,R.h,R.pitch,R.roll); if(TBL.mine) TBL.mine.visible=false; return; } }
   // la mía (en las manos o en la espalda)
   const show=TBL.eq>=0 && (TBL.m===1 || TBL.m===2) && !(AR.me.a>=0 && AR.me.st>=2) && !player.car && !player.ac;
   if(show){ TBL.mine=tblAttach(plush,TBL.eq,TBL.m,TBL.mine); TBL.mine.visible=plush.visible; } else if(TBL.mine){ TBL.mine.visible=false; }
@@ -14055,7 +14100,7 @@ function tblPose(t,dt){ if(TBL.m===1 && TBL.eq>=0 && TBL.mine && TBL.mine.visibl
 
 // ---- con amigos: ven tu tabla (en las manos, la espalda o tirada) ----
 function tblPresence(){ try{ if(TBL.eq<0 || TBL.m===0) return null; const d=TBL.drop; return TBL.m===3 && d ? [TBL.eq,3,r2(d.x),r2(d.y),r2(d.z),r2(d.yaw),d.w?1:0] : [TBL.eq,TBL.m]; }catch(e){ return null; } }
-function tblParse(r,pr){ const a=pr.tb; r.tb = Array.isArray(a) && TBL_BOARDS[a[0]] && [1,2,3].includes(a[1]) && (a[1]!==3 || (a.length>=7 && a.slice(2,6).every(Number.isFinite))) ? a.slice(0,7) : null; }
+function tblParse(r,pr){ const a=pr.tb; r.tb = Array.isArray(a) && TBL_BOARDS[a[0]] && [1,2,3,4].includes(a[1]) && (a[1]!==3 || (a.length>=7 && a.slice(2,6).every(Number.isFinite))) ? a.slice(0,7) : null; }
 function tblRemotePose(r,t,dt){ let S=TBL.rem.get(r); const a=r.tb;
   if(!a || !r.obj || !r.obj.visible){ if(S){ if(S.h) S.h.visible=false; if(S.l) S.l.visible=false; } return; }
   if(!S){ S={h:null, l:null, lid:-1}; TBL.rem.set(r,S); }
@@ -14064,6 +14109,59 @@ function tblRemotePose(r,t,dt){ let S=TBL.rem.get(r); const a=r.tb;
   else if(S.l) S.l.visible=false; }
 function tblRemoteGc(){ if(!TBL.rem.size) return; const alive=new Set(mp.remotes.values()); TBL.rem.forEach((S,r)=>{ if(!alive.has(r)){ if(S.h&&S.h.parent) S.h.parent.remove(S.h); if(S.l) scene.remove(S.l); TBL.rem.delete(r); } }); }
 
+// ---------- v196: subirse a la tabla y andar en el mar (parte 2) ----------
+// Es un «juego» más ('surf'): así los demás te ven parado en tu tabla. TBL.m=4 mientras vas arriba; TBL.ride guarda dónde va.
+const tblWaterAt=(x,z)=>{ const ws=waterSurfaceY(x,z), g=groundAt(x,z,ws+.6); return g<ws-.4 ? ws : null; };   // ¿flota aquí? (lo bastante hondo)
+// la inclinación del agua bajo la tabla (adelante/atrás y de lado)
+function tblSlope(x,z,h){ const fx=Math.sin(h), fz=Math.cos(h), e=.55, ws=waterSurfaceY;
+  return [Math.atan2(ws(x+fx*e,z+fz*e)-ws(x-fx*e,z-fz*e),2*e), Math.atan2(ws(x+fz*e,z-fx*e)-ws(x-fz*e,z+fx*e),2*e)]; }
+function tblCanMount(){ if(TBL.eq<0 || player.pg || player.car || player.ac || player.mg || player.balloon || player.dive) return false;
+  if(TBL.m===3 && TBL.drop && TBL.drop.w && !TBL.thr){ const d=TBL.drop; return Math.hypot(player.pos.x-d.x,player.pos.z-d.z)<(player.swim?2.6:4) && Math.abs(player.pos.y-d.y)<2.4; }   /* desde la plataforma o la orilla brincas a la tabla */
+  if((TBL.m===2 || TBL.m===1) && (player.swim || player.inWater)) return tblWaterAt(player.pos.x,player.pos.z)!==null && (!player.swim || uwDepth()<1.5);   /* en el agua: la pones en el agua y te subes */
+  return false; }
+function tblMount(){ if(!tblCanMount()) return; let x,z,h;
+  if(TBL.m===3){ const d=TBL.drop; x=d.x; z=d.z; h=d.yaw+Math.PI; } else { x=player.pos.x; z=player.pos.z; h=player.facing; }
+  holding=false; applyHeld(); renderHotbar(); player.swim=false; player.dive=null; player.diveAngle=0; player.rise=false;
+  TBL.ride={x, z, h, v:0, y:waterSurfaceY(x,z), pitch:0, roll:0, t:0}; TBL.m=4; TBL.drop=null; TBL.thr=null; startPlay('surf',0);
+  if(!player.pg || player.pg.k!=='surf'){ TBL.m=2; TBL.ride=null; return; }
+  try{ audio.jump(); splashBurst(x,TBL.ride.y,z,.5); }catch(e){}
+  if(!tblMount.told){ tblMount.told=true; flashNote(isTouch?'¡Arriba! Muévete con el joystick. Para bajarte toca «Bajarse».':'¡Arriba! Muévete con W A S D. Para bajarte presiona E.'); }
+  tblSave(); try{ sendPresence(true); }catch(e){} actKey=''; }
+// bajarse: si hay piso cerca (la plataforma, la playa) te paras ahí con la tabla en las manos; si no, te quedas nadando junto a ella
+function tblGetOff(){ const R=TBL.ride; if(!R || !player.pg || player.pg.k!=='surf'){ return; } stopPlay(); TBL.ride=null;
+  let best=null, bd=1e9; const ws=waterSurfaceY(R.x,R.z);
+  for(let k=0;k<16;k++){ const a=k/16*Math.PI*2; for(const r of [1.1,1.8,2.5]){ const x=R.x+Math.sin(a)*r, z=R.z+Math.cos(a)*r, g=groundAt(x,z,R.y+1.6), w=waterSurfaceY(x,z);
+    if(g>w-.75 && g-R.y<1.3 && g-R.y>-1 && r<bd){ bd=r; best={x,z,g}; } } }
+  if(best){ player.pos.set(best.x,best.g+.02,best.z); player.grounded=true; player.swim=false; TBL.m=1; }
+  else { const sx=R.x+Math.cos(R.h)*1.1, sz=R.z-Math.sin(R.h)*1.1; player.pos.set(sx,ws-.6,sz); player.swim=true; player.grounded=false;
+    TBL.m=3; TBL.drop={x:R.x, y:ws, z:R.z, yaw:R.h+Math.PI, t:Date.now(), w:1}; }
+  player.vel.set(0,0,0); player.vy=0; player.facing=R.h; updateTouchMode(); try{ audio.jump(); }catch(e){} tblSave(); try{ sendPresence(true); }catch(e){} actKey=''; }
+// cada cuadro arriba de la tabla (por ahora en el mar tranquilo; las olas grandes vienen en la parte 3)
+function tblRide(P,dt){ const R=TBL.ride; if(!R){ setTimeout(()=>{ if(player.pg===P) stopPlay(); },0); return null; }
+  let f=0, s=0; if(keys.KeyW||keys.ArrowUp) f+=1; if(keys.KeyS||keys.ArrowDown) f-=1; if(keys.KeyD||keys.ArrowRight) s+=1; if(keys.KeyA||keys.ArrowLeft) s-=1; f-=stick.y; s+=stick.x; f=Math.max(-1,Math.min(1,f)); s=Math.max(-1,Math.min(1,s));
+  const shift=keys.ShiftLeft||keys.ShiftRight, run=(settings.alwaysRun?!shift:shift)||Math.hypot(stick.x,stick.y)>.95, vmax=run?8:5;
+  R.t+=dt; R.v+=(f*(f>=0?vmax:vmax*.35)-R.v)*(1-Math.exp(-dt*1.3)); R.h-=s*dt*(1.2+.3*Math.min(1,Math.abs(R.v)/4));
+  const px=R.x, pz=R.z; R.x+=Math.sin(R.h)*R.v*dt; R.z+=Math.cos(R.h)*R.v*dt;
+  // ¿se acabó el agua? En la playa te bajas solito con la tabla en las manos; contra algo sólido (la plataforma, el muelle) solo te detienes
+  if(tblWaterAt(R.x,R.z)===null){ const ws=waterSurfaceY(R.x,R.z), gt=terrainH(R.x,R.z);
+    if(gt>ws-.4 && Math.abs(groundAt(R.x,R.z,ws+.6)-gt)<.05){ R.x=px; R.z=pz; R.y=waterSurfaceY(px,pz); tblGetOff(); flashNote('¡Llegaste a la orilla! Aquí ya no flota la tabla.'); return null; }
+    else { R.x=px; R.z=pz; R.v*=-.2; } }
+  for(const o of obsNear(R.x,R.z)){ if(o.walk) continue; if(o.top!==undefined && o.top<R.y+.2) continue; if(o.bot!==undefined && o.bot>R.y+1.6) continue;
+    const dx=R.x-o.x, dz=R.z-o.z, d=Math.hypot(dx,dz), m=o.r+.5; if(d<m && d>1e-4){ R.x=o.x+dx/d*m; R.z=o.z+dz/d*m; R.v*=.6; } }
+  { const lim=MAP_W-80, r=Math.hypot(R.x,R.z); if(r>lim){ R.x*=lim/r; R.z*=lim/r; R.v*=.5; } }
+  R.y=waterSurfaceY(R.x,R.z); const [pt,rl]=tblSlope(R.x,R.z,R.h); R.pitch+=(pt-R.pitch)*(1-Math.exp(-dt*6)); R.roll+=(rl+s*.12*Math.min(1,Math.abs(R.v)/3)-R.roll)*(1-Math.exp(-dt*5));
+  if(Math.abs(R.v)>1.5 && performance.now()-lastLookT>1500) yaw=lerpAng(yaw, R.h+Math.PI, 1-Math.exp(-dt*2));
+  if(Math.abs(R.v)>2.5 && Math.random()<dt*6) try{ splashBurst(R.x-Math.sin(R.h)*.9,R.y,R.z-Math.cos(R.h)*.9,.15); }catch(e){}
+  P.v=Math.round(R.v*10)/10; return tblRidePose(R.x,R.y,R.z,R.h,R.pitch,R.roll,R.t,s); }
+// el peluche parado en la tabla, con los bracitos abiertos para no caerse
+function tblRidePose(x,y,z,h,pt,rl,t,s){ return {pos:[x,y+TBL_T/2+.03,z], yaw:h, tilt:-pt, swing:rl, armsUp:.3, alt:Math.sin(t*1.7)*.5+(s||0)*.6}; }
+// la tabla debajo de los pies (la mía o la de un amigo)
+function tblPlaceRiding(L,x,y,z,h,pt,rl){ L.position.set(x,y+.01,z); L.rotation.order='YXZ'; L.rotation.set(pt,h+Math.PI,-rl); L.visible=true; }
+function tblRemoteRide(r,dt,t){ const S=TBL.rem.get(r)||(TBL.rem.set(r,{h:null,l:null,lid:-1}),TBL.rem.get(r)), a=r.tb, id=a?a[0]:0;
+  r.pos.lerp(r.target,1-Math.exp(-dt*8)); const yawT=r.facing||0; r.surfH=r.surfH===undefined?yawT:lerpAng(r.surfH,yawT,1-Math.exp(-dt*8));
+  const y=waterSurfaceY(r.pos.x,r.pos.z), [pt,rl]=tblSlope(r.pos.x,r.pos.z,r.surfH); r.surfT=(r.surfT||0)+dt;
+  if(!S.l || S.lid!==id){ if(S.l) scene.remove(S.l); S.l=tblLoose(id); S.lid=id; scene.add(S.l); } tblPlaceRiding(S.l,r.pos.x,y,r.pos.z,r.surfH,pt,rl); if(S.h) S.h.visible=false;
+  const pose=tblRidePose(r.pos.x,y,r.pos.z,r.surfH,pt,rl,r.surfT,0); placePlay(r.obj,pose); pgPoseLimbs(r.obj,pose,t,dt,r.walk); r.label.position.set(0,2.42,0); r.blob.visible=false; return true; }
 // ---- en el menú de Tortu: la pestaña de tablas ----
 function tblIcon(id,W,H){ const c=document.createElement('canvas'); c.width=W; c.height=H; const q=c.getContext('2d'), t=document.createElement('canvas'); t.width=128; t.height=384; tblDraw(t.getContext('2d'),128,384,TBL_BOARDS[id]);
   q.save(); q.translate(W/2,H/2); q.rotate(-Math.PI/2); const L=W*.92, w=L*TBL_W/TBL_L*1.15; q.beginPath(); const n=24, hw=k=>w/2*(k>0?Math.pow(Math.max(0,1-k),.6)*(1+.15*k):Math.pow(1-k*k*.62,.85));
