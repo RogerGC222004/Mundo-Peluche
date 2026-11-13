@@ -1860,7 +1860,7 @@ function seaOpenK(x,z){ let s=Math.hypot(x,z)-coastRN(Math.atan2(z,x));
   for(const I of [WI,JI,DI]){ const d=Math.hypot(x-I.x,z-I.z)-540; if(d<s) s=d; }
   return SEA_OPEN_MAX*smooth(80,900,s); }
 function waveH(x,z,A,t){ let h=0; for(const [dx,dz,k,w,a,ph] of WAVES) h+=a*Math.sin(k*(dx*x+dz*z)+w*t+ph); return h*A; }
-function waterSurfaceY(x,z){ if(inLakeWater(x,z)) return WATER_Y+waveH(x,z,WATER.lakeA,WATER.t); const r=riverLevelAt(x,z); return r!==null ? r+waveH(x,z,WATER.lakeA,WATER.t) : SEA_Y+waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t); }
+function waterSurfaceY(x,z){ if(inLakeWater(x,z)) return WATER_Y+waveH(x,z,WATER.lakeA,WATER.t); const r=riverLevelAt(x,z); return r!==null ? r+waveH(x,z,WATER.lakeA,WATER.t) : SEA_Y+waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t)+swellH(x,z); }
 // Profundidad guardada en una textura (se calcula una vez): valor = (nivel - fondo + 2) / 12
 function depthTexture(N,cx,cz,E,level,fast){
   const data=new Uint8Array(N*N);
@@ -1881,6 +1881,73 @@ function waterRipple(x,z,amp){
   const r=ripples[ripNext]; r.set(x,z,WATER.t,Math.min(.35,amp)); ripNext=(ripNext+1)%RIP_N;
   if(amp>.14) splashBurst(x,waterSurfaceY(x,z),z,amp);
 }
+// ---------- v196: olas grandes (para surfear) ----------
+// Cada 75 s llega una serie de 3 olas que nacen mar adentro y viajan hacia la isla grande (a 10 m/s). Lejos de la orilla son
+// colosales (hasta ~10 m) y cerca de la playa son grandes (~2.4 m); se apagan al llegar a la arena. Dependen de la hora: todos ven las mismas.
+// Junto al muelle y cerca de las otras islas son más chiquitas. La tarjeta de video dibuja las mismas (swellSum en WATER_GLSL).
+const SWELL={P:75, N:3, GAP:8, C:10, S0:1400, list:[], u:Array.from({length:8},()=>new THREE.Vector4()), pier:new THREE.Vector4(0,0,1,0), hasPier:false};
+const swHash=n=>{ const v=Math.sin(n*12.9898+4.1)*43758.5453; return v-Math.floor(v); };
+function swellTick(){ const T=Date.now()/1000, S=SWELL, life=(S.S0+60)/S.C, n1=Math.floor(T/S.P); S.list.length=0;
+  for(let n=n1; n>=n1-Math.ceil(life/S.P)-1; n--) for(let k=0;k<S.N;k++){ const age=T-(n*S.P+k*S.GAP); if(age<0 || age>life) continue;
+    S.list.push({id:n*10+k, sc:S.S0-S.C*age, ph:swHash(n)*6.283+k*1.7, str:.85+.3*swHash(n+.5)}); }
+  for(let i=0;i<8;i++){ const w=S.list[i]; if(w) S.u[i].set(w.sc,w.ph,1,w.str); else S.u[i].set(0,0,0,0); } }
+// alto base de las olas según qué tan lejos de la orilla (s en metros)
+const swellAmp=s=>(2.4*smooth(6,45,s)+8*smooth(160,800,s))*(1-smooth(SWELL.S0-200,SWELL.S0,s));
+const SWO={h:0, face:0, sx:0, sz:0, H:0, s:0, list:null};
+// ¿qué tanto sube el agua aquí por las olas grandes? (y de paso: en qué lado de la ola estás y hacia dónde está la orilla)
+function swellAt(x,z,full){ const o=SWO; o.h=0; o.face=0; o.H=0; o.list=full?[]:null; if(!SWELL.list.length) return o;
+  const r=Math.hypot(x,z), a=Math.atan2(z,x), s=r-coastRN(a); o.s=s; if(s<4 || s>SWELL.S0+80) return o;
+  let A=swellAmp(s); if(A<.01) return o;
+  for(const I of [WI,JI,DI]){ A*=smooth(0,150,Math.hypot(x-I.x,z-I.z)-540); if(A<.01) return o; }
+  if(SWELL.hasPier){ const P=SWELL.pier, dx=x-P.x, dz=z-P.y, lx=dx*P.z-dz*P.w, lz=dx*P.w+dz*P.z, ex=Math.max(Math.abs(lx)-8,0), ez=Math.max(-22-lz,lz-90,0); A*=.15+.85*smooth(4,32,Math.hypot(ex,ez)); }
+  o.sx=-x/r; o.sz=-z/r;
+  for(const w of SWELL.list){ const d=s-w.sc; if(d>70 || d<-45) continue; const H=A*w.str*(.8+.2*Math.sin(2*a+w.ph)), W=7+H*2, wx=d<0?W*.55:W*1.5, e=Math.exp(-(d/wx)*(d/wx));
+    o.h+=H*e; if(H*e>o.H) o.H=H*e; if(d<0) o.face=Math.max(o.face, e*Math.min(1,H/1.2));
+    if(full) o.list.push({id:w.id, d, H, W}); }
+  return o; }
+const swellH=(x,z)=>swellAt(x,z,false).h;
+// ---------- v196: olas de tubo (la cresta se enrosca hacia adelante y deja un hueco para pasar) ----------
+// El mar es una sábana que sube y baja (no se puede doblar), así que el tubo es una pieza aparte encima de la ola grande.
+// Pasa en 3 lugares de la isla (uno junto al muelle): cuando una ola grande llega cerca de la orilla, se va enroscando de un
+// lado al otro. Por dentro del hueco puedes pasar con tu tabla; la parte que ya se cayó es pura espuma y te tumba.
+const TUBE={L:70, S1:95, S0:14, NU:36, NP:9, spots:null, mesh:[], act:[], noteId:-1};
+// la forma del tubo de lado: [adelante(+)/atrás(−) respecto a la cresta, alto] en unidades del alto del tubo. F = enroscado, U = sin enroscar
+const TUBE_F=[[.7,.92],[-.15,1.02],[-.48,.98],[-.76,.8],[-.92,.55],[-.97,.3],[-.93,.08],[-.85,-.25]];
+const TUBE_U=[[.7,.92],[.45,.95],[.2,.85],[0,.7],[-.15,.5],[-.25,.3],[-.32,.12],[-.36,-.25]];
+function tubeSpots(){ if(!TUBE.spots){ const a0=PIER.a; TUBE.spots=[a0+.095, a0+2.25, a0-2.05].map((a,i)=>({a, i})); } return TUBE.spots; }
+// cuánto está enroscado (k) y cuánto ya se cayó (c) en el punto u (metros a lo largo de la ola) para la ola con avance q (0→1)
+function tubeKC(q,u,dir){ const L=TUBE.L, up=dir*(L/2-q*L*1.05), x=dir*u;   // up: dónde va rompiendo; avanza de un extremo al otro
+  const k=smooth(up*dir-24,up*dir-3,x)*(1-smooth(up*dir,up*dir+3,x)), c=smooth(up*dir,up*dir+9,x); return [k,c]; }
+function tubeList(){ const out=[]; if(!SWELL.list.length || typeof PIER==='undefined') return out;
+  for(const w of SWELL.list){ if(w.sc>TUBE.S1 || w.sc<TUBE.S0) continue; const q=(TUBE.S1-w.sc)/(TUBE.S1-TUBE.S0);
+    for(const sp of tubeSpots()){ const rc=coastRN(sp.a); out.push({sp, w, q, rc, dir:(w.id%2)?1:-1, Ht:(3.1+1.1*w.str)*Math.min(1,q/.1)*Math.min(1,(1-q)/.12), fade:Math.min(1,q/.1)*Math.min(1,(1-q)/.12)}); } }
+  return out; }
+// un punto del tubo en el mundo: u a lo largo (m), d adelante/atrás de la cresta (m), y alto sobre el mar
+function tubeW(T,u,d,y,out){ const a=T.sp.a+u/(T.rc+T.w.sc), r=coastRN(a)+T.w.sc+d; out[0]=Math.cos(a)*r; out[1]=SEA_Y+y; out[2]=Math.sin(a)*r; return out; }
+const _tbw=[0,0,0];
+function tubeMesh(i){ let m=TUBE.mesh[i]; if(m) return m; const NU=TUBE.NU, NP=TUBE.NP, n=NU*NP, g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(n*3),3)); g.setAttribute('color',new THREE.Float32BufferAttribute(new Float32Array(n*3),3));
+  const idx=[]; for(let j=0;j<NU-1;j++) for(let p=0;p<NP-1;p++){ const a=j*NP+p, b=a+NP; idx.push(a,b,a+1, a+1,b,b+1); } g.setIndex(idx);
+  m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true, roughness:.18, metalness:.1, transparent:true, opacity:.82, side:THREE.DoubleSide, depthWrite:true}));
+  m.frustumCulled=false; m.userData.noBatch=true; m.renderOrder=3; m.visible=false; scene.add(m); TUBE.mesh[i]=m; return m; }
+const TUBE_C0=new THREE.Color('#1d6b9e'), TUBE_C1=new THREE.Color('#4fb6d3'), TUBE_C2=new THREE.Color('#ffffff'), _tbc=new THREE.Color();
+function tubeTick(){ const L=TUBE.L, NU=TUBE.NU, NP=TUBE.NP; TUBE.act=tubeList(); const used=new Set();
+  const cx=camera.position.x, cz=camera.position.z;
+  for(const T of TUBE.act){ const i=T.sp.i; if(used.has(i)) continue; tubeW(T,0,0,0,_tbw); if(Math.hypot(_tbw[0]-cx,_tbw[2]-cz)>650) continue; used.add(i);
+    const m=tubeMesh(i), P=m.geometry.attributes.position, C=m.geometry.attributes.color, Ht=T.Ht;
+    for(let j=0;j<NU;j++){ const u=-L/2+L*j/(NU-1), [k,c]=tubeKC(T.q,u,T.dir), endF=smooth(L/2,L/2-9,Math.abs(u)), H=Ht*(1-.78*c)*(.35+.65*endF);
+      tubeW(T,u,2.4,0,_tbw); const back=swellH(_tbw[0],_tbw[2])*.92;
+      for(let p=0;p<NP;p++){ let d, y; if(p===0){ d=2.4; y=back; } else { const F=TUBE_F[p-1], U=TUBE_U[p-1], kk=k*endF; d=(U[0]+(F[0]-U[0])*kk)*H; y=(U[1]+(F[1]-U[1])*kk)*H; if(c>0) y*=1-.35*c; }
+        tubeW(T,u,d,y,_tbw); P.setXYZ(j*NP+p,_tbw[0],_tbw[1],_tbw[2]);
+        const t=p/(NP-1); _tbc.copy(TUBE_C0).lerp(TUBE_C1,Math.min(1,Math.abs(t-.35)*2)); if(p>=6) _tbc.lerp(TUBE_C2,Math.min(1,(p-5)/2)*.85*k); _tbc.lerp(TUBE_C2,Math.min(1,c*1.1)*.9); C.setXYZ(j*NP+p,_tbc.r,_tbc.g,_tbc.b); } }
+    P.needsUpdate=true; C.needsUpdate=true; m.geometry.computeVertexNormals(); m.material.opacity=.82*T.fade; m.visible=true;
+    // espuma en la punta que cae
+    if(Math.random()<.5){ const j=(Math.random()*NU)|0, u=-L/2+L*j/(NU-1), [k,c]=tubeKC(T.q,u,T.dir); if(k>.4 || c>.2){ tubeW(T,u,-.9*Ht,.1,_tbw); if(Math.hypot(_tbw[0]-cx,_tbw[2]-cz)<120) try{ splashBurst(_tbw[0],SEA_Y+.2,_tbw[2],.35); }catch(e){} } } }
+  TUBE.mesh.forEach((m,i)=>{ if(m && !used.has(i)) m.visible=false; }); }
+// ¿dónde estoy respecto a un tubo? → {T, u, d, k, c, H} o null
+function tubeAt(x,z){ for(const T of TUBE.act){ const a=Math.atan2(z,x), da=Math.atan2(Math.sin(a-T.sp.a),Math.cos(a-T.sp.a)), u=da*(T.rc+T.w.sc);
+    if(Math.abs(u)>TUBE.L/2) continue; const d=Math.hypot(x,z)-coastRN(a)-T.w.sc, H=T.Ht; if(d>1.5 || d<-1.15*H) continue; const [k,c]=tubeKC(T.q,u,T.dir); return {T,u,d,k,c,H}; }
+  return null; }
 const WATER_GLSL=`
 uniform float uT; uniform float uA; uniform float uOpen; uniform vec4 uRip[${RIP_N}];
 float seaOpenK(vec2 p){ if(uOpen<.5) return 0.0; float a=atan(p.y,p.x), da=a-${AIRPORT.a.toFixed(3)}; da=atan(sin(da),cos(da));
@@ -1892,6 +1959,20 @@ float waveSum(vec2 p, out vec2 g){
   ${WAVES.map(([dx,dz,k,w,a,ph])=>`{ vec2 d=vec2(${dx.toFixed(3)},${dz.toFixed(3)}); float s=${k.toFixed(3)}*dot(d,p)+${w.toFixed(3)}*uT+${ph.toFixed(3)}; h+=${a.toFixed(3)}*sin(s); g+=${(a*k).toFixed(4)}*cos(s)*d; }`).join('\n  ')}
   float ok=1.0+seaOpenK(p); g*=uA*ok; return h*uA*ok;
 }
+uniform vec4 uSw[8]; uniform vec4 uPier;
+float swellSum(vec2 p, inout vec2 g, out float crest){ crest=0.0; if(uOpen<.5) return 0.0;
+  float r=max(length(p),1.0), a=atan(p.y,p.x), da=a-${AIRPORT.a.toFixed(3)}; da=atan(sin(da),cos(da));
+  float s=r-(${ISLAND_R2.toFixed(1)}+95.0*sin(3.0*a+.4)+60.0*sin(5.0*a+2.2)+35.0*sin(8.0*a+1.0)+18.0*sin(13.0*a+.5)-190.0*exp(-(da/.22)*(da/.22)));
+  if(s<4.0 || s>${(SWELL.S0+80).toFixed(1)}) return 0.0;
+  float A=(2.4*smoothstep(6.0,45.0,s)+8.0*smoothstep(160.0,800.0,s))*(1.0-smoothstep(${(SWELL.S0-200).toFixed(1)},${SWELL.S0.toFixed(1)},s));
+  ${[WI,JI,DI].map(I=>`A*=smoothstep(0.0,150.0,length(p-vec2(${I.x.toFixed(1)},${I.z.toFixed(1)}))-540.0);`).join(' ')}
+  if(uPier.z!=0.0 || uPier.w!=0.0){ vec2 q=p-uPier.xy; float lx=q.x*uPier.z-q.y*uPier.w, lz=q.x*uPier.w+q.y*uPier.z; vec2 e=vec2(max(abs(lx)-8.0,0.0), max(max(-22.0-lz,lz-90.0),0.0)); A*=.15+.85*smoothstep(4.0,32.0,length(e)); }
+  if(A<.01) return 0.0;
+  vec2 rad=p/r; float h=0.0;
+  for(int i=0;i<8;i++){ vec4 w=uSw[i]; if(w.z<.5) continue; float d=s-w.x; if(d>70.0 || d<-45.0) continue;
+    float H=A*w.w*(.8+.2*sin(2.0*a+w.y)), W=7.0+H*2.0, wx=d<0.0?W*.55:W*1.5, e=exp(-(d/wx)*(d/wx));
+    h+=H*e; g+=rad*(H*e*(-2.0*d/(wx*wx))); crest=max(crest, e*smoothstep(1.2,3.0,H)*step(-W*.35,d)*step(d,W*.12)); }
+  return h; }
 float ripSum(vec2 p, inout vec2 g, out float foam){
   float h=0.0; foam=0.0;
   for(int i=0;i<RIP_LOOP;i++){
@@ -1905,12 +1986,12 @@ float ripSum(vec2 p, inout vec2 g, out float foam){
 function makeWaterMat(o){
   const U={uT:{value:0}, uA:{value:o.A}, uOpen:{value:o.open?1:0}, uRip:{value:ripples}, uDepth:{value:o.depth.tex}, uRect:{value:o.depth.rect},
     uShallow:{value:hexLin(o.shallow)}, uDeep:{value:hexLin(o.deep)}, uDeepD:{value:o.deepD}, uSky:{value:new THREE.Color()}, uAmb:{value:new THREE.Color(.6,.6,.6)},
-    uSunD:{value:new THREE.Vector3(0,1,0)}, uSunC:{value:new THREE.Color(1,1,1)}, uDetail:{value:o.detail}, uTile:{value:o.tile}, uFoamK:{value:o.foam}, uOpacity:{value:o.opacity}};
+    uSunD:{value:new THREE.Vector3(0,1,0)}, uSunC:{value:new THREE.Color(1,1,1)}, uSw:{value:SWELL.u}, uPier:{value:SWELL.pier}, uDetail:{value:o.detail}, uTile:{value:o.tile}, uFoamK:{value:o.foam}, uOpacity:{value:o.opacity}};
   return new THREE.ShaderMaterial({
     uniforms:Object.assign(THREE.UniformsUtils.clone(THREE.UniformsLib.fog), U),
     vertexShader:`${WATER_GLSL}
       uniform sampler2D uDepth; uniform vec4 uRect;
-      varying vec3 vWp; varying float vH;
+      varying vec3 vWp; varying float vH; varying float vS;
       #if FLOW
       attribute vec3 aFlow; varying vec3 vFlow;
       #endif
@@ -1925,6 +2006,7 @@ function makeWaterMat(o){
         { float sd=texture2D(uDepth,(wp.xz-uRect.xy)/uRect.zw).r*12.0-2.0; float calm=smoothstep(.1,2.8,sd);
           h*=calm; h+=(1.0-calm)*uA*.32*sin(uT*.8+wp.x*.017+wp.z*.021); }
         #endif
+        { float cr; vS=swellSum(wp.xz,g,cr); h+=vS; }   // v196: olas grandes
         float f; h+=ripSum(wp.xz,g,f);
         wp.y+=h; vH=h; vWp=wp.xyz;
         vec4 mvPosition=viewMatrix*wp; gl_Position=projectionMatrix*mvPosition;
@@ -1933,7 +2015,7 @@ function makeWaterMat(o){
     fragmentShader:`${WATER_GLSL}
       uniform sampler2D uDepth; uniform vec4 uRect; uniform vec3 uShallow; uniform vec3 uDeep; uniform float uDeepD; uniform vec3 uSky; uniform vec3 uAmb;
       uniform vec3 uSunD; uniform vec3 uSunC; uniform sampler2D uDetail; uniform float uTile; uniform float uFoamK; uniform float uOpacity;
-      varying vec3 vWp; varying float vH;
+      varying vec3 vWp; varying float vH; varying float vS;
       #if FLOW
       varying vec3 vFlow;
       #endif
@@ -1942,7 +2024,7 @@ function makeWaterMat(o){
         vec2 p=vWp.xz;
         float depth=texture2D(uDepth,(p-uRect.xy)/uRect.zw).r*12.0-2.0+vH;
         if(depth<-1.2) discard;   // bajo tierra (por ejemplo el mar debajo del lago)
-        vec2 g; waveSum(p,g); { float sd=texture2D(uDepth,(p-uRect.xy)/uRect.zw).r*12.0-2.0; g*=mix(.25,1.0,smoothstep(.1,2.8,sd)); } float rf; ripSum(p,g,rf);
+        vec2 g; waveSum(p,g); { float sd=texture2D(uDepth,(p-uRect.xy)/uRect.zw).r*12.0-2.0; g*=mix(.25,1.0,smoothstep(.1,2.8,sd)); } float rf; ripSum(p,g,rf); float swc; swellSum(p,g,swc);
         // olitas finas que se mueven (detalle) y olas que llegan a la orilla
         float sw=sin(depth*2.6-uT*1.7); float shore=(1.0-smoothstep(.2,3.5,depth));
         #if WATER_DETAIL
@@ -1957,7 +2039,7 @@ function makeWaterMat(o){
         #else
         vec3 det=pow(texture2D(uDetail,p/uTile+vec2(uT*.006,uT*.003)).rgb,vec3(2.2));
         #endif
-        vec3 base=mix(uShallow,uDeep,smoothstep(0.0,uDeepD,depth))*mix(vec3(1.0),det*1.3,.55)*(1.0+vH*.35);
+        vec3 base=mix(uShallow,uDeep,smoothstep(0.0,uDeepD,depth))*mix(vec3(1.0),det*1.3,.55)*(1.0+clamp(vH-vS*.85,-1.5,1.5)*.35);
         float dif=max(dot(n,uSunD),0.0);
         vec3 col=base*(uAmb+uSunC*dif*.55);
         float fr=pow(1.0-max(dot(n,v),0.0),3.0);
@@ -1971,7 +2053,8 @@ function makeWaterMat(o){
         float foam=(1.0-smoothstep(0.0,.1+.07*sin(uT*1.6+p.x*.07+p.y*.05),depth))*step(-.4,depth)*(.45+.55*smoothstep(.25,.7,det.g));   // línea de espuma fina y rota donde llega el agua
         foam+=smoothstep(.82,1.0,sw)*shore*.75;
         foam+=clamp(rf*6.0,0.0,1.0)*.7;
-        { float ok=seaOpenK(p); foam+=ok*.45*smoothstep(.45,.95,vH/(uA*(1.0+ok)*1.3))*(.4+.6*smoothstep(.3,.7,det.g)); }   // v191: espuma en las crestas, mar adentro
+        { float ok=seaOpenK(p); foam+=ok*.45*smoothstep(.45,.95,(vH-vS)/(uA*(1.0+ok)*1.3))*(.4+.6*smoothstep(.3,.7,det.g)); }   // v191: espuma en las crestas, mar adentro
+        foam+=swc*.9*(.45+.55*smoothstep(.3,.7,det.g));   // v196: espuma en la cresta de las olas grandes
         #if FLOW
         foam+=vFlow.z*smoothstep(.2,.7,det.r)*1.3;   // espuma en los rápidos
         #endif
@@ -2009,7 +2092,7 @@ function splashBurst(x,y,z,amp){ splash.burst(x,y,z,amp); }
 // Quién toca el agua: al entrar salpica fuerte; al moverse deja ondas detrás
 function waterTouch(st,x,y,z,speed,dt){
   const rl=riverLevelAt(x,z), lake=inLakeWater(x,z)||rl!==null, lvl=inLakeWater(x,z)?WATER_Y:rl!==null?rl:SEA_Y, ground=terrainH(x,z);
-  const surf=lvl+(lake?waveH(x,z,WATER.lakeA,WATER.t):waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t));
+  const surf=lvl+(lake?waveH(x,z,WATER.lakeA,WATER.t):waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t)+swellH(x,z));
   const inW = ground<lvl-.05 && y<surf+.05 && y>surf-2.4;
   const vy=st.py===undefined?0:(y-st.py)/Math.max(dt,1e-3); st.py=y;
   if(inW && !st.inW) waterRipple(x,z,.08+Math.min(.27,Math.max(0,-vy)*.03+speed*.012));
@@ -2018,7 +2101,7 @@ function waterTouch(st,x,y,z,speed,dt){
 }
 const myWaterSt={};
 function updateWater(dt){
-  WATER.t=waterClock();
+  WATER.t=waterClock(); swellTick(); try{ tubeTick(); }catch(e){}
   const W=weatherNow; WATER.seaA=.22+.3*W.wind+.15*W.storm; WATER.lakeA=.025+.05*W.wind;
   const day=sky.dayK, amb=_c1.copy(hemi.color).multiplyScalar(hemi.intensity*.9).add(_c2.copy(hemi.groundColor).multiplyScalar(hemi.intensity*.25));
   for(const m of waterMats){ const u=m.uniforms; u.uT.value=WATER.t; u.uA.value=m.userData.lake?WATER.lakeA:WATER.seaA;
@@ -7873,9 +7956,9 @@ const SHIP_OBS=[{t:'c', x:0, z:1.2, r:.42}, {t:'c', x:0, z:HELM_Z, r:.32}, {t:'b
   SHIP_OBS.push({t:'b', x0:1.75, x1:2.45, z0:5.15, z1:5.85}, {t:'c', x:-2.2, z:-3.5, r:.36});
   const W=SH.parts.wheel; B.remove(W); mergeStatic(B); B.children.forEach(o=>{ o.castShadow=true; o.receiveShadow=true; }); B.add(W);
 })();
-function shipPlace(t){ const G=SH.g; G.position.set(SH.x,0,SH.z); G.rotation.set(0,SH.h,0);
+function shipPlace(t){ const G=SH.g; G.position.set(SH.x,SH.lift||0,SH.z); G.rotation.set(0,SH.h,0);
   if(Math.hypot(SH.x-camera.position.x,SH.z-camera.position.z)>240) return;
-  { const k=1+seaOpenK(SH.x,SH.z)*1.6; SH.parts.body.rotation.set(Math.sin(t*.9)*.012*k, 0, Math.sin(t*.7+1)*.02*k); SH.parts.body.position.y=Math.sin(t*1.1)*.06*k; }   // v191: mar adentro se mece más
+  { const k=1+seaOpenK(SH.x,SH.z)*1.6; SH.parts.body.rotation.set(Math.sin(t*.9)*.012*k-(SH.swP||0), 0, Math.sin(t*.7+1)*.02*k); SH.parts.body.position.y=Math.sin(t*1.1)*.06*k; }   // v191: mar adentro se mece más
   const q=SH.parts.sail.geometry.attributes.position, b=SH.parts.sail.geometry.userData.base, k=.35+Math.min(1,Math.abs(SH.v)/10)*.9;
   for(let i=0;i<q.count;i++) q.setZ(i,b[i*3+2]*k+Math.sin(t*2+b[i*3]*.8)*.05); q.needsUpdate=true; SH.parts.sail.geometry.computeVertexNormals();
   SH.parts.flag.rotation.x=Math.sin(t*4)*.12; }
@@ -7932,6 +8015,8 @@ function shipUpdate(dt,t){
     if(shipOnDeck){ const [x,z]=shipW(lx,lz); p.x=x; p.z=z; const dh=S.h-S.prev.h; if(dh){ yaw+=dh; player.facing=(player.facing||0)+dh; } } }
   else shipOnDeck=false;
   if(iSteer()) yaw+=S.h-S.prev.h;   // la cámara gira con el barco
+  { if(S.DECK0===undefined) S.DECK0=S.DECK; const k=1-Math.exp(-dt*2.5), fx=Math.sin(S.h)*9, fz=Math.cos(S.h)*9, hf=swellH(S.x+fx,S.z+fz), hb=swellH(S.x-fx,S.z-fz), hc=swellH(S.x,S.z);   /* v196: las olas grandes mueven el barco */
+    S.lift=(S.lift||0)+(Math.min(5,hc*.75)-(S.lift||0))*k; S.swP=(S.swP||0)+(Math.atan2(hf-hb,18)*.8-(S.swP||0))*k; S.DECK=S.DECK0+S.lift; }
   shipPlace(t); }
 // ---- acciones ----
 function shipActions(){ if(player.car||player.ac||player.mg||player.balloon||player.dive||player.rk||SP.on||player.pg) return null; const p=player.pos;
@@ -7963,6 +8048,7 @@ function pierOn(lx,lz){ const P=PIER; return (Math.abs(lx)<=P.W+.05 && lz>=P.Z0 
 // Del lado izquierdo del muelle (lx<0), un poco después de salir de la casita de Tortu hacia la orilla. Hay un hueco en el barandal,
 // una escalerita que baja pegada al muelle en dirección a la orilla y una plataforma casi al nivel del mar.
 const TBL_ST={G0:65.9, G1:67.3, X0:-3.2, X1:-1.7, N:6, TR:.32, LY:-.72, LZ0:62.2, LX0:-4.9};
+SWELL.pier.set(PIER.bx,PIER.bz,PIER.c,PIER.s); SWELL.hasPier=true;   /* junto al muelle las olas grandes son más chiquitas */
 TBL_ST.d=(PIER.Y-TBL_ST.LY)/(TBL_ST.N+1); TBL_ST.SZ=TBL_ST.G0-TBL_ST.N*TBL_ST.TR;   // alto de cada escalón y dónde termina la escalera
 function tblStairH(lx,lz){ const S=TBL_ST;
   if(lx>=S.X0-.05 && lx<=S.X1+.1 && lz>=S.SZ && lz<=S.G1+.05){ if(lz>=S.G0) return PIER.Y; return PIER.Y-Math.min(S.N,Math.ceil((S.G0-lz)/S.TR))*S.d; }
@@ -14074,7 +14160,7 @@ function tblActions(){ if(player.pg && player.pg.k==='surf') return [{label:'Baj
 function tblBackActions(){ if(!tblFree() || TBL.eq<0 || TBL.m!==2 || player.swim) return null; return [{label:'🏄 Tomar tabla', run:()=>tblSetMode(1)}, {label:'Dejar tabla', run:tblDropHere}]; }
 
 // ---- cada cuadro ----
-function tblTick(dt){ tblRemoteGc(); if(TBL.eq<0 && !TBL.mine && !TBL.loose) return;
+function tblTick(dt){ tblRemoteGc(); try{ tblLeashTick(dt); tblDriftTick(dt); }catch(e){} if(TBL.eq<0 && !TBL.mine && !TBL.loose) return;
   // con las manos ocupadas no se puede usar otra cosa: si tomas algo de la barra o te subes a algo, la tabla se va a la espalda
   if(TBL.m===1 && (holding || player.hand>=0 || player.fish || player.dive || player.swim || player.car || player.ac || player.pg || player.balloon || (AR.me.a>=0 && AR.me.st>=2))) tblSetMode(2);
   if(TBL.m===4){ if(!(player.pg && player.pg.k==='surf') || !TBL.ride){ TBL.m=2; TBL.ride=null; tblSave(); try{ sendPresence(true); }catch(e){} }
@@ -14134,14 +14220,15 @@ function tblGetOff(){ const R=TBL.ride; if(!R || !player.pg || player.pg.k!=='su
     if(g>w-.75 && g-R.y<1.3 && g-R.y>-1 && r<bd){ bd=r; best={x,z,g}; } } }
   if(best){ player.pos.set(best.x,best.g+.02,best.z); player.grounded=true; player.swim=false; TBL.m=1; }
   else { const sx=R.x+Math.cos(R.h)*1.1, sz=R.z-Math.sin(R.h)*1.1; player.pos.set(sx,ws-.6,sz); player.swim=true; player.grounded=false;
-    TBL.m=3; TBL.drop={x:R.x, y:ws, z:R.z, yaw:R.h+Math.PI, t:Date.now(), w:1}; }
+    TBL.m=3; TBL.drop={x:R.x, y:ws, z:R.z, yaw:R.h+Math.PI, t:Date.now(), w:1}; TBL.leash=true; }
   player.vel.set(0,0,0); player.vy=0; player.facing=R.h; updateTouchMode(); try{ audio.jump(); }catch(e){} tblSave(); try{ sendPresence(true); }catch(e){} actKey=''; }
 // cada cuadro arriba de la tabla (por ahora en el mar tranquilo; las olas grandes vienen en la parte 3)
 function tblRide(P,dt){ const R=TBL.ride; if(!R){ setTimeout(()=>{ if(player.pg===P) stopPlay(); },0); return null; }
   let f=0, s=0; if(keys.KeyW||keys.ArrowUp) f+=1; if(keys.KeyS||keys.ArrowDown) f-=1; if(keys.KeyD||keys.ArrowRight) s+=1; if(keys.KeyA||keys.ArrowLeft) s-=1; f-=stick.y; s+=stick.x; f=Math.max(-1,Math.min(1,f)); s=Math.max(-1,Math.min(1,s));
   const shift=keys.ShiftLeft||keys.ShiftRight, run=(settings.alwaysRun?!shift:shift)||Math.hypot(stick.x,stick.y)>.95, vmax=run?8:5;
-  R.t+=dt; R.v+=(f*(f>=0?vmax:vmax*.35)-R.v)*(1-Math.exp(-dt*1.3)); R.h-=s*dt*(1.2+.3*Math.min(1,Math.abs(R.v)/4));
-  const px=R.x, pz=R.z; R.x+=Math.sin(R.h)*R.v*dt; R.z+=Math.cos(R.h)*R.v*dt;
+  R.t+=dt; R.v+=(f*(f>=0?vmax:vmax*.35)-R.v)*(1-Math.exp(-dt*(R.v>vmax?.35:1.3))); R.h-=s*dt*(1.2+.3*Math.min(1,Math.abs(R.v)/4));
+  if(tblWaveRide(R,dt,f)){ tblWipe(); return null; }   /* v196: las olas grandes */
+  const px=R.x, pz=R.z; R.x+=Math.sin(R.h)*R.v*dt+(R.dx||0)*dt; R.z+=Math.cos(R.h)*R.v*dt+(R.dz||0)*dt;
   // ¿se acabó el agua? En la playa te bajas solito con la tabla en las manos; contra algo sólido (la plataforma, el muelle) solo te detienes
   if(tblWaterAt(R.x,R.z)===null){ const ws=waterSurfaceY(R.x,R.z), gt=terrainH(R.x,R.z);
     if(gt>ws-.4 && Math.abs(groundAt(R.x,R.z,ws+.6)-gt)<.05){ R.x=px; R.z=pz; R.y=waterSurfaceY(px,pz); tblGetOff(); flashNote('¡Llegaste a la orilla! Aquí ya no flota la tabla.'); return null; }
@@ -14152,7 +14239,7 @@ function tblRide(P,dt){ const R=TBL.ride; if(!R){ setTimeout(()=>{ if(player.pg=
   R.y=waterSurfaceY(R.x,R.z); const [pt,rl]=tblSlope(R.x,R.z,R.h); R.pitch+=(pt-R.pitch)*(1-Math.exp(-dt*6)); R.roll+=(rl+s*.12*Math.min(1,Math.abs(R.v)/3)-R.roll)*(1-Math.exp(-dt*5));
   if(Math.abs(R.v)>1.5 && performance.now()-lastLookT>1500) yaw=lerpAng(yaw, R.h+Math.PI, 1-Math.exp(-dt*2));
   if(Math.abs(R.v)>2.5 && Math.random()<dt*6) try{ splashBurst(R.x-Math.sin(R.h)*.9,R.y,R.z-Math.cos(R.h)*.9,.15); }catch(e){}
-  P.v=Math.round(R.v*10)/10; return tblRidePose(R.x,R.y,R.z,R.h,R.pitch,R.roll,R.t,s); }
+  P.v=Math.round(R.v*10)/10; const pose=tblRidePose(R.x,R.y,R.z,R.h,R.pitch,R.roll,R.t,s); pose.armsUp=.3+.25*Math.min(1,R.surf||0); return pose; }
 // el peluche parado en la tabla, con los bracitos abiertos para no caerse
 function tblRidePose(x,y,z,h,pt,rl,t,s){ return {pos:[x,y+TBL_T/2+.03,z], yaw:h, tilt:-pt, swing:rl, armsUp:.3, alt:Math.sin(t*1.7)*.5+(s||0)*.6}; }
 // la tabla debajo de los pies (la mía o la de un amigo)
@@ -14162,6 +14249,44 @@ function tblRemoteRide(r,dt,t){ const S=TBL.rem.get(r)||(TBL.rem.set(r,{h:null,l
   const y=waterSurfaceY(r.pos.x,r.pos.z), [pt,rl]=tblSlope(r.pos.x,r.pos.z,r.surfH); r.surfT=(r.surfT||0)+dt;
   if(!S.l || S.lid!==id){ if(S.l) scene.remove(S.l); S.l=tblLoose(id); S.lid=id; scene.add(S.l); } tblPlaceRiding(S.l,r.pos.x,y,r.pos.z,r.surfH,pt,rl); if(S.h) S.h.visible=false;
   const pose=tblRidePose(r.pos.x,y,r.pos.z,r.surfH,pt,rl,r.surfT,0); placePlay(r.obj,pose); pgPoseLimbs(r.obj,pose,t,dt,r.walk); r.label.position.set(0,2.42,0); r.blob.visible=false; return true; }
+// ---------- v196: surfear las olas grandes (parte 3) ----------
+// En la cara de la ola (el lado que mira a la orilla) la ola te empuja; mientras más de frente a la orilla vayas, más rápido.
+// Si una ola grande te pasa por encima sin que la vayas surfeando, te tumba: quedas nadando y la tabla sigue atada a ti con la cuerdita.
+function tblWaveRide(R,dt,f){ const W=swellAt(R.x,R.z,true), C=SWELL.C, al=Math.sin(R.h)*W.sx+Math.cos(R.h)*W.sz;
+  R.v-=9.8*Math.sin(R.pitch)*.45*dt;   // bajando por la ola agarras vuelo; subiendo, frenas
+  R.surf=0; if(W.face>.04){ const push=W.face*Math.max(0,al+.35)/1.35, tgt=C*(1.05+.035*W.H)*(.55+.45*Math.max(0,al)); R.surf=push; if(R.v<tgt) R.v+=(tgt-R.v)*(1-Math.exp(-dt*2.8*push)); }
+  { const kc=1-Math.exp(-dt*3), cr=W.face*C*.95*(1-Math.max(0,al)); R.dx=(R.dx||0)+(W.sx*cr-(R.dx||0))*kc; R.dz=(R.dz||0)+(W.sz*cr-(R.dz||0))*kc; }   /* yendo de lado por la cara de la ola, la ola te lleva con ella */
+  R.v=Math.min(R.v,17);
+  // ¿la cresta te pasó por encima?
+  const seen=R.wd||(R.wd={}); let wipe=false; const keep={};
+  for(const w of W.list||[]){ const pv=seen[w.id]; keep[w.id]=w.d; if(pv!==undefined && pv<0 && w.d>=0 && w.H>1.3){ const thru=al<-.3 && Math.abs(R.v)>1.5 && w.H<5; if(!thru) wipe=true; } }
+  // v196: olas de tubo — por dentro del hueco la ola te lleva de lado; si te cae la parte rota, te tumba
+  R.tube=0; { const tb=tubeAt(R.x,R.z);
+    if(tb){ if(tb.c>.55 && tb.d<.6){ R.wipeMsg='¡La ola de tubo te cayó encima! 🌊'; return true; }
+      if(tb.k>.3 && tb.d<.9){ R.tube=tb.k; wipe=false; const a=Math.atan2(R.z,R.x), du=-tb.T.dir; const kk=Math.min(1,tb.k*1.4); R.x+=(-Math.cos(a)*C*.6*kk-Math.sin(a)*du*4*kk)*dt; R.z+=(-Math.sin(a)*C*.6*kk+Math.cos(a)*du*4*kk)*dt; if(R.v<7) R.v+=(7-R.v)*(1-Math.exp(-dt*2));
+        if(tb.k>.6 && TUBE.noteId!==tb.T.w.id){ TUBE.noteId=tb.T.w.id; flashNote('¡Estás dentro del tubo! 🌀 ¡Sigue de lado para salir antes de que se cierre!'); try{ audio.wave(); }catch(e){} } } } }
+  R.wd=keep; return wipe; }
+function tblWipe(){ const R=TBL.ride; if(!R || !player.pg || player.pg.k!=='surf') return; const W=swellAt(R.x,R.z), sx=W.sx||0, sz=W.sz||0; stopPlay(); TBL.ride=null;
+  const ws=waterSurfaceY(R.x,R.z); player.pos.set(R.x+Math.cos(R.h)*1.2, ws-.8, R.z-Math.sin(R.h)*1.2); player.swim=true; player.grounded=false; player.vel.set(sx*4.5,0,sz*4.5); player.vy=-1.5;
+  TBL.m=3; TBL.drop={x:R.x-sx*1.6, y:ws, z:R.z-sz*1.6, yaw:R.h+Math.PI+.9, t:Date.now(), w:1}; TBL.leash=true;
+  try{ splashBurst(R.x,ws,R.z,1); audio.splash?audio.splash():audio.bump(); }catch(e){}
+  if(R.wipeMsg || !tblWipe.n || performance.now()-tblWipe.n>20000) flashNote((R.wipeMsg||'¡Uy! La ola te tumbó 🌊')+' Tu tabla sigue atada a ti con la cuerdita: nada hacia ella y súbete otra vez.'); tblWipe.n=performance.now();
+  updateTouchMode(); tblSave(); try{ sendPresence(true); }catch(e){} actKey=''; }
+// la cuerdita mientras nadas junto a tu tabla: la jala si te alejas y se ve flotando entre los dos
+const TBL_LEASH=(()=>{ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(14*3),3)); const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:0x2a2a33})); l.frustumCulled=false; l.visible=false; scene.add(l); return l; })();
+const _tbN=new THREE.Vector3();
+function tblLeashTick(dt){ const d=TBL.drop, L=TBL_LEASH;
+  if(TBL.m!==3 || !TBL.leash || !d || TBL.thr){ TBL.leash=TBL.m===3 && TBL.leash; L.visible=false; return; }
+  const inW=player.swim || player.inWater, dx=d.x-player.pos.x, dz=d.z-player.pos.z, D=Math.hypot(dx,dz);
+  if(!inW || D>25 || state!=='play' || player.pg || player.car || player.ac){ TBL.leash=false; L.visible=false; return; }
+  if(D>3.2){ d.x=player.pos.x+dx/D*3.2; d.z=player.pos.z+dz/D*3.2; const ws=waterSurfaceY(d.x,d.z), g=groundAt(d.x,d.z,ws+.5); d.w=ws>g+.25?1:0; d.y=d.w?ws:g; }
+  if(!TBL.loose || !TBL.loose.visible){ L.visible=false; return; }
+  TBL.loose.updateMatrixWorld(true); _tbN.set(0,.04,-TBL_L/2+.12).applyMatrix4(TBL.loose.children[0].matrix).applyMatrix4(TBL.loose.matrixWorld);
+  const a=_tbN, bx=player.pos.x, by=player.pos.y+(player.swim?.15:.9), bz=player.pos.z, p=L.geometry.attributes.position, mx=(a.x+bx)/2, mz=(a.z+bz)/2, my=Math.min((a.y+by)/2, waterSurfaceY(mx,mz)+.03);
+  for(let i=0;i<14;i++){ const t=i/13, u=1-t; p.setXYZ(i, u*u*a.x+2*u*t*mx+t*t*bx, u*u*a.y+2*u*t*my+t*t*by, u*u*a.z+2*u*t*mz+t*t*bz); } p.needsUpdate=true; L.visible=true; }
+// la tabla que flota sola también se la lleva la ola un poquito hacia la orilla
+function tblDriftTick(dt){ const d=TBL.drop; if(TBL.m!==3 || !d || !d.w || TBL.thr) return; const W=swellAt(d.x,d.z); if(W.face<.05) return;
+  const nx=d.x+W.sx*W.face*SWELL.C*.25*dt, nz=d.z+W.sz*W.face*SWELL.C*.25*dt; if(tblWaterAt(nx,nz)!==null){ d.x=nx; d.z=nz; } }
 // ---- en el menú de Tortu: la pestaña de tablas ----
 function tblIcon(id,W,H){ const c=document.createElement('canvas'); c.width=W; c.height=H; const q=c.getContext('2d'), t=document.createElement('canvas'); t.width=128; t.height=384; tblDraw(t.getContext('2d'),128,384,TBL_BOARDS[id]);
   q.save(); q.translate(W/2,H/2); q.rotate(-Math.PI/2); const L=W*.92, w=L*TBL_W/TBL_L*1.15; q.beginPath(); const n=24, hw=k=>w/2*(k>0?Math.pow(Math.max(0,1-k),.6)*(1+.15*k):Math.pow(1-k*k*.62,.85));
@@ -18261,7 +18386,7 @@ function vehRide(P,dt){ const W=VE.w; if(!W){ setTimeout(()=>{ if(player.pg===P)
     const ok=S.canWater, vw=S.vWater*vehSpeedMul(W,'water'); W.v+=(f*(f>=0?vw:vw*.4)*(ok?1:0)-W.v)*(1-Math.exp(-dt*(ok?(S.anchor&&!f?3:.9):2)));
     if(S.sub) W.depth=Math.max(0,Math.min(3,(W.depth||0)+((dn&&!up)?1.5:(up&&!dn&&W.depth>0)?-1.5:0)*dt)); else W.depth=0;   // v184: submarino
     W.h-=s*dt*.8*Math.min(1,Math.abs(W.v)/3+.3)*Math.sign(W.v||1);   // v192: girar en el agua (había quedado dentro del comentario desde v184)
-    W.x+=Math.sin(W.h)*W.v*dt; W.z+=Math.cos(W.h)*W.v*dt; const wl2=swimLevel(W.x,W.z); W.y=(wl2!==null?wl2:W.y)-(ok?.3:.9)-(W.depth||0)+Math.sin(performance.now()/600)*.05*(W.depth>0?0:1); W.tilt*=.9; W.pitch*=.9;
+    W.x+=Math.sin(W.h)*W.v*dt; W.z+=Math.cos(W.h)*W.v*dt; const wl2=swimLevel(W.x,W.z); W.y=(wl2!==null?wl2+swellH(W.x,W.z):W.y)-(ok?.3:.9)-(W.depth||0)+Math.sin(performance.now()/600)*.05*(W.depth>0?0:1); W.tilt*=.9; W.pitch*=.9;
     const g2=groundAt(W.x,W.z,W.y+1.5); if(wl2===null || g2>wl2-.4){ if(S.canLand){ W.mode='land'; W.y=g2; } else { W.x=px; W.z=pz; W.v=0; if(performance.now()-(W.noteT||0)>3000){ W.noteT=performance.now(); flashNote('Tu vehículo no anda en tierra: ponle llantas'); } } }
     if(S.canAir && up && (W.v>10 || S.heli>0) && !(W.depth>0)){ W.mode='air'; W.vy=3; }
   } else {
@@ -21450,7 +21575,7 @@ const SWIM_EXIT=SEA_Y-.9;     // vuelve a caminar cuando el fondo sube de aquí 
 const FLOAT_Y=SEA_Y-1.07;
 // dónde se nada: el mar, el río, el estanque y la poza de la cascada (en el lago no: es bajito). Devuelve el nivel del agua (v123)
 const swimLevel=(x,z)=>{ if(inLakeWater(x,z)) return null; const r=riverLevelAt(x,z); return r!==null?r:SEA_Y; };
-const swimWave=(x,z)=>riverLevelAt(x,z)!==null?waveH(x,z,WATER.lakeA,WATER.t):waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t);
+const swimWave=(x,z)=>riverLevelAt(x,z)!==null?waveH(x,z,WATER.lakeA,WATER.t):waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t)+swellH(x,z);
 // Al nadar, el peluche se inclina desde el centro del cuerpo (no desde los pies),
 // para que al nadar acostado la espalda quede en la superficie y no se hunda.
 const SWIM_PIVOT=1.12;
@@ -21538,6 +21663,7 @@ function update(dt,t){ myLabelUpdate();
       const sp=(run?5.2:3.3)*mag*(1+(dpk-1)*.45);
       const target=tmp.set(0,0,0); if(dl>.01) target.set(dx/dl*sp,0,dz/dl*sp);
       player.vel.lerp(target, 1-Math.exp(-dt*3));
+      if(!(AR.me.a>=0)){ const W=swellAt(player.pos.x,player.pos.z); if(W.face>.05 && uwDepth()<2.5){ player.vel.x+=W.sx*W.face*SWELL.C*.9*dt; player.vel.z+=W.sz*W.face*SWELL.C*.9*dt; } }   /* v196: las olas grandes te empujan */
       let vyT;
       if(up && !down) vyT=(run?4:2.8)*dpk;
       else if(down && !up) vyT=(run?-4.2:-3)*dpk;
