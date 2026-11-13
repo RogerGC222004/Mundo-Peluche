@@ -1,5 +1,5 @@
-// Mundo Peluche 194: guarda el juego en el dispositivo para que abra rápido y sin internet.
-const CACHE='mundo-peluche-194';
+// Mundo Peluche 195: guarda el juego en el dispositivo para que abra rápido y sin internet.
+const CACHE='mundo-peluche-195';
 const CORE=['./','./manifest.webmanifest','./icono-48.png','./icono-180.png','./icono-192.png','./icono-512.png'];
 const LIBS=['https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js','https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'];
 self.addEventListener('install',e=>{ e.waitUntil((async()=>{ const c=await caches.open(CACHE);
