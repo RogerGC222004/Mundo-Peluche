@@ -1005,7 +1005,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='196';
+const GAME_VERSION='197';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -1793,6 +1793,7 @@ let GROUND_MAT=null; const TERRAIN_LOD=[];
         const ring=[V(ix,iy)]; if(L) ring.push(V(ix,iy+1)); ring.push(V(ix,iy+2)); if(T) ring.push(V(ix+1,iy+2)); ring.push(V(ix+2,iy+2)); if(R) ring.push(V(ix+2,iy+1)); ring.push(V(ix+2,iy)); if(B) ring.push(V(ix+1,iy));
         const ctr=V(ix+1,iy+1); for(let k=0;k<ring.length;k++) li.push(ctr,ring[k],ring[(k+1)%ring.length]); }
       const gl=new THREE.BufferGeometry(); for(const k of ['position','normal','uv','color']) gl.setAttribute(k, geo.attributes[k]); gl.setIndex(li); gl.boundingSphere=g.boundingSphere;
+      m.userData.noCol=true;   // v197: el terreno es piso, no lleva cajitas de choque (antes cada pedazo medía la isla entera)
       TERRAIN_LOD.push({m, hi:g, lo:gl, c:g.boundingSphere.center, r:g.boundingSphere.radius}); }
   }
 })();
@@ -1898,7 +1899,7 @@ const SWO={h:0, face:0, sx:0, sz:0, H:0, s:0, list:null};
 function swellAt(x,z,full){ const o=SWO; o.h=0; o.face=0; o.H=0; o.list=full?[]:null; if(!SWELL.list.length) return o;
   const r=Math.hypot(x,z), a=Math.atan2(z,x), s=r-coastRN(a); o.s=s; if(s<4 || s>SWELL.S0+80) return o;
   let A=swellAmp(s); if(A<.01) return o;
-  for(const I of [WI,JI,DI]){ A*=smooth(0,150,Math.hypot(x-I.x,z-I.z)-540); if(A<.01) return o; }
+  for(const I of (SWELL.isl||(SWELL.isl=[WI,JI,DI]))){ A*=smooth(0,150,Math.hypot(x-I.x,z-I.z)-540); if(A<.01) return o; }
   if(SWELL.hasPier){ const P=SWELL.pier, dx=x-P.x, dz=z-P.y, lx=dx*P.z-dz*P.w, lz=dx*P.w+dz*P.z, ex=Math.max(Math.abs(lx)-8,0), ez=Math.max(-22-lz,lz-90,0); A*=.15+.85*smooth(4,32,Math.hypot(ex,ez)); }
   o.sx=-x/r; o.sz=-z/r;
   for(const w of SWELL.list){ const d=s-w.sc; if(d>70 || d<-45) continue; const H=A*w.str*(.8+.2*Math.sin(2*a+w.ph)), W=7+H*2, wx=d<0?W*.55:W*1.5, e=Math.exp(-(d/wx)*(d/wx));
@@ -2208,8 +2209,11 @@ const obstacles = [];
 const DYN_OBS=[];   // los que se mueven (caballitos del carrusel): siempre se revisan
 const obsGrid={cell:6, map:null, n:-1};
 function obsNear(x,z){
-  if(obsGrid.n!==obstacles.length){ const m=new Map(), C=obsGrid.cell; obsGrid.map=m; obsGrid.n=obstacles.length;
-    for(const o of obstacles){ const rr=o.r+2.5; for(let i=Math.floor((o.x-rr)/C);i<=Math.floor((o.x+rr)/C);i++) for(let j=Math.floor((o.z-rr)/C);j<=Math.floor((o.z+rr)/C);j++){ const k=i*100003+j; let l=m.get(k); if(!l){ l=[]; m.set(k,l); } l.push(o); } } }
+  if(obsGrid.n!==obstacles.length){ const C=obsGrid.cell, n0=obsGrid.n;
+    // v197: si solo se agregaron al final (lo más común), se agregan esos a la rejilla; si se quitó algo, se rehace toda
+    const now=performance.now(), add=n0>0 && obstacles.length>n0 && obstacles[n0-1]===obsGrid.last && obsGrid.map && now-(obsGrid.full||0)<5000, m=add?obsGrid.map:new Map(); obsGrid.map=m; if(!add) obsGrid.full=now;
+    for(let q=add?n0:0;q<obstacles.length;q++){ const o=obstacles[q], rr=o.r+2.5; for(let i=Math.floor((o.x-rr)/C);i<=Math.floor((o.x+rr)/C);i++) for(let j=Math.floor((o.z-rr)/C);j<=Math.floor((o.z+rr)/C);j++){ const k=i*100003+j; let l=m.get(k); if(!l){ l=[]; m.set(k,l); } l.push(o); } }
+    obsGrid.n=obstacles.length; obsGrid.last=obstacles[obstacles.length-1]; }
   const l=obsGrid.map.get(Math.floor(x/obsGrid.cell)*100003+Math.floor(z/obsGrid.cell));
   return DYN_OBS.length ? (l?l.concat(DYN_OBS):DYN_OBS) : (l||EMPTY_OBS);
 }
@@ -10977,7 +10981,8 @@ function blUpdate(dt,t){
       if(Math.hypot(tx-b.x,tz-b.z)>40){ b.x=tx; b.z=tz; b.y=ty; } const k=1-Math.exp(-dt*6); b.x+=(tx-b.x)*k; b.z+=(tz-b.z)*k; b.y+=(ty-b.y)*k; b.h=lerpAng(b.h,d.h,k); b.burn=d.vy>.5?1:b.burn; }
     else { // solo: baja despacito hasta posarse; después de 3 min sin nadie, regresa a la estación
       if(b.net){ const k=1-Math.exp(-dt*2); if(Math.hypot(b.net.x-b.x,b.net.z-b.z)>40){ b.x=b.net.x; b.z=b.net.z; b.y=b.net.y; } b.x+=(b.net.x-b.x)*k; b.z+=(b.net.z-b.z)*k; b.h=lerpAng(b.h,b.net.h,k); if(Math.hypot(b.net.x-b.x,b.net.z-b.z)<.05) b.net=null; }
-      b.vx*=Math.exp(-dt*1.5); b.vz*=Math.exp(-dt*1.5); b.vy+=(-1.6-b.vy)*(1-Math.exp(-dt*1.2)); blMove(b,dt);
+      b.vx*=Math.exp(-dt*1.5); b.vz*=Math.exp(-dt*1.5); b.vy+=(-1.6-b.vy)*(1-Math.exp(-dt*1.2));
+      if(b.rest && !b.net && Math.abs(b.vx)<.02 && Math.abs(b.vz)<.02 && (b.rT=(b.rT||0)+dt)<.5){} else { b.rT=0; const y0=b.y; blMove(b,dt); b.rest=Math.abs(b.y-y0)<.003; }   // v197: posado y quieto: el piso se revisa cada medio segundo
       const away=Math.hypot(b.x-b.home[0],b.z-b.home[1])>3;
       if(away && b.t && now-b.t>180){ b.x=b.home[0]; b.z=b.home[1]; b.y=groundAt(b.x,b.z,50); b.h=0; b.vx=b.vz=b.vy=0; b.t=now1(); b.net=null; } }
     blPlace(b,dt,t);
@@ -12542,7 +12547,7 @@ const platIdx=(f,i,j)=>f*PLAT.N*PLAT.N+j*PLAT.N+i;
 const PLAT_COL=['#ff7aa2','#ffc23d','#6fd15a','#4fb0ff','#a77bff'];
 (function buildPlat(){ const A=AR_SPOTS[0], N=PLAT.N, T=PLAT.T, o=new THREE.Object3D(), c=new THREE.Color(), geo=new THREE.BoxGeometry(T*.94,.4,T*.94), yaw=Math.atan2(A.v[0],A.v[1]);
   for(let f=0;f<PLAT.F;f++){ const gf=geo.clone(); gf.boundingSphere=new THREE.Sphere(arW(A,0,0,platTop(f)),N*T*.75);   // así solo se dibuja cuando está a la vista
-    const m=new THREE.InstancedMesh(gf,new THREE.MeshStandardMaterial({roughness:.75}),N*N); m.receiveShadow=true; m.castShadow=f===PLAT.F-1;
+    const m=new THREE.InstancedMesh(gf,new THREE.MeshStandardMaterial({roughness:.75}),N*N); m.userData.noCol=true;   /* v197 */ m.receiveShadow=true; m.castShadow=f===PLAT.F-1;
     for(let j=0;j<N;j++) for(let i=0;i<N;i++){ arW(A,(j-(N-1)/2)*T,(i-(N-1)/2)*T,platTop(f)-.2,o.position); o.rotation.set(0,yaw,0); o.scale.set(1,1,1); o.updateMatrix(); m.setMatrixAt(j*N+i,o.matrix);
       c.set(PLAT_COL[f]); if((i+j)%2) c.multiplyScalar(.9); m.setColorAt(j*N+i,c); }
     m.frustumCulled=true; m.instanceMatrix.needsUpdate=true; m.instanceColor.needsUpdate=true; scene.add(m); PLAT.meshes.push(m); PLAT.orig.push(m.instanceMatrix.array.slice()); }
@@ -14193,7 +14198,7 @@ function tblRemotePose(r,t,dt){ let S=TBL.rem.get(r); const a=r.tb;
   if(a[1]===1 || a[1]===2){ S.h=tblAttach(r.obj,a[0],a[1],S.h); S.h.visible=true; if(a[1]===1) tblUpPose(r.obj); } else if(S.h) S.h.visible=false;
   if(a[1]===3){ if(!S.l || S.lid!==a[0]){ if(S.l) scene.remove(S.l); S.l=tblLoose(a[0]); S.lid=a[0]; scene.add(S.l); } S.l.visible=true; const y=a[6]?waterSurfaceY(a[2],a[4])+.02:a[3]+.06; S.l.position.set(a[2],y,a[4]); S.l.rotation.set(0,a[5],0); }
   else if(S.l) S.l.visible=false; }
-function tblRemoteGc(){ if(!TBL.rem.size) return; const alive=new Set(mp.remotes.values()); TBL.rem.forEach((S,r)=>{ if(!alive.has(r)){ if(S.h&&S.h.parent) S.h.parent.remove(S.h); if(S.l) scene.remove(S.l); TBL.rem.delete(r); } }); }
+function tblRemoteGc(){ if(!TBL.rem.size || (TBL.gcN=(TBL.gcN|0)+1)%60) return; const alive=new Set(mp.remotes.values()); TBL.rem.forEach((S,r)=>{ if(!alive.has(r)){ if(S.h&&S.h.parent) S.h.parent.remove(S.h); if(S.l) scene.remove(S.l); TBL.rem.delete(r); } }); }
 
 // ---------- v196: subirse a la tabla y andar en el mar (parte 2) ----------
 // Es un «juego» más ('surf'): así los demás te ven parado en tu tabla. TBL.m=4 mientras vas arriba; TBL.ride guarda dónde va.
@@ -15558,12 +15563,17 @@ function hpSlabs(P){ const N=HZ.N, LV=HZ.LV, R=HZ.RISE, m=new Map(); let any=fal
     else if(p.t===HT.CUMBRE) add(p.i,p.j,yb+p.k*R-.05,yb+p.k*R+.35);
     else if(hIsCap(p.t)) add(p.i,p.j,yb+p.k*R-.05,yb+p.k*R+1.4); }
   return any?m:null; }
+const _hpNM=new THREE.Matrix3();
 function hpBuild(L,P,opt={}){ P.forEach((p,i)=>{ p.__i=i; }); { const FS=new Set(P.filter(q=>q.t===HT.PISO).map(q=>q.lv+','+q.i+','+q.j)); P.forEach(p=>{ p.__f=FS.has(p.lv+','+p.i+','+p.j); }); }
   { const SF=new Map(); P.forEach(q=>{ if(hIsSmall(q)) return; const sf=hSurfOf(q); if(sf) SF.set(q.lv+','+q.i+','+q.j,{q,sf}); });
     P.forEach(p=>{ if(!hIsSmall(p)){ p.__top=null; return; } const e=SF.get(p.lv+','+p.i+','+p.j); if(e){ const d=HD[e.q.r], rx=d[1], rz=-d[0]; p.__top={y:e.sf.h, dx:e.sf.ax*rx+e.sf.az*d[0], dz:e.sf.ax*rz+e.sf.az*d[1]}; } else p.__top=p.__topPre||null; }); }
   { const PT=new Map(P.filter(q=>q.t===127).map(q=>[q.lv+','+q.i+','+q.j+','+q.r,q.m])); if(PT.size) P.forEach(p=>{ if(p.t!==127 && hIsWallP(p)){ const d=HD[p.r]; p.__pin=PT.get(p.lv+','+p.i+','+p.j+','+p.r); p.__pout=PT.get(p.lv+','+(p.i+d[0])+','+(p.j+d[1])+','+((p.r+2)%4)); } }); } const sep=[], leaves2=[], lts=[]; let curPi=-1; const buckets=new Map(), cols=[], floors=new Map(), stairs=[], leaves=[], M=new THREE.Matrix4(), Q=new THREE.Quaternion(), E=new THREE.Euler(), S=new THREE.Vector3(), Tv=new THREE.Vector3();
-  const push=(m,geo,mat)=>{ if(!opt.mat && (m==='nlamp'||m==='lamp'||m==='fire'||m==='blink')) lts.push({m, x:mat.elements[12], y:mat.elements[13], z:mat.elements[14], pi:curPi}); if(!opt.mat && (m==='screen'||m==='lamp'||m==='burner'||m==='fire'||m==='blink')){ const g2=geo.clone(); g2.applyMatrix4(mat); sep.push({m,geo:g2,pi:curPi}); return; } let b=buckets.get(m); if(!b){ b={p:[],n:[],u:[]}; buckets.set(m,b); } const g=geo.clone(); g.applyMatrix4(mat);
-    b.p.push(...g.attributes.position.array); b.n.push(...g.attributes.normal.array); b.u.push(...g.attributes.uv.array); g.dispose(); };
+  const push=(m,geo,mat)=>{ if(!opt.mat && (m==='nlamp'||m==='lamp'||m==='fire'||m==='blink')) lts.push({m, x:mat.elements[12], y:mat.elements[13], z:mat.elements[14], pi:curPi}); if(!opt.mat && (m==='screen'||m==='lamp'||m==='burner'||m==='fire'||m==='blink')){ const g2=geo.clone(); g2.applyMatrix4(mat); sep.push({m,geo:g2,pi:curPi}); return; } let b=buckets.get(m); if(!b){ b={p:[],n:[],u:[]}; buckets.set(m,b); }
+    // v197: se pasa cada punto ya acomodado directo a la cubeta (antes se copiaba la figura entera, se movía y se vaciaba: era lo más lento al editar la casa)
+    const pa=geo.attributes.position.array, na=geo.attributes.normal.array, ua=geo.attributes.uv.array, e=mat.elements, q=_hpNM.getNormalMatrix(mat).elements, bp=b.p, bn=b.n, bu=b.u, cnt=pa.length/3;
+    for(let i=0;i<cnt;i++){ const i3=i*3, x=pa[i3], y=pa[i3+1], z=pa[i3+2], a=na[i3], c=na[i3+1], d=na[i3+2];
+      bp.push(e[0]*x+e[4]*y+e[8]*z+e[12], e[1]*x+e[5]*y+e[9]*z+e[13], e[2]*x+e[6]*y+e[10]*z+e[14]);
+      const nx=q[0]*a+q[3]*c+q[6]*d, ny=q[1]*a+q[4]*c+q[7]*d, nz=q[2]*a+q[5]*c+q[8]*d, l=Math.sqrt(nx*nx+ny*ny+nz*nz)||1; bn.push(nx/l,ny/l,nz/l); bu.push(ua[i*2],ua[i*2+1]); } };
   for(const p of P) for(const o of hpParts(p)){ curPi=o.pi;
     if(o.k==='b'){ M.compose(Tv.set(o.x,o.y,o.z),Q.set(0,0,0,1),S.set(o.sx,o.sy,o.sz)); if(!o.nov) push(o.m,_hBox,M);
       if(o.wall && (p.__pin!=null || p.__pout!=null)){ const d=HD[p.r]; for(const [pm,sg] of [[p.__pin,-1],[p.__pout,1]]){ if(pm==null) continue; const off=sg*(HZ.T/2+.012);
@@ -16100,7 +16110,7 @@ function hThumbRender(k){ if(k.startsWith('pf:')) return hThumbRenderP(HPF[+k.sl
     for(let y=0;y<128;y++) im.data.set(px.subarray((127-y)*512,(128-y)*512),y*512); g.putImageData(im,0,0); return cv.toDataURL('image/png');
   }catch(e){ return 'x'; } }
 // se dibujan unos cuantos por cuadro (así no se traba la pantalla)
-function hThumbPump(){ let n=0; while(HTH.q.length && n<3){ const k=HTH.q.shift(); if(HTH.c[k]) continue; const url=hThumbRender(k); HTH.c[k]=url; n++;
+function hThumbPump(){ HTH.f=(HTH.f|0)+1; if(HTH.f%2) return; let n=0; while(HTH.q.length && n<1){   /* v197: una miniatura cada dos cuadros */ const k=HTH.q.shift(); if(HTH.c[k]) continue; const url=hThumbRender(k); HTH.c[k]=url; n++;
   if(url!=='x') document.querySelectorAll('img[data-tk="'+k+'"]').forEach(im=>{ im.src=url; im.hidden=false; const ph=im.previousElementSibling; if(ph && ph.classList.contains('ph')) ph.remove(); }); } }
 function hThumbEl(kid,m){ const k=kid+':'+m, url=hThumb(kid,m), im=document.createElement('img'); im.dataset.tk=k; im.alt=''; im.draggable=false;
   if(url && url!=='x'){ im.src=url; return [im]; } const ph=document.createElement('div'); ph.className='ph'; im.hidden=true; return [ph,im]; }
@@ -21191,8 +21201,8 @@ function acMakeOne(g,M,out){ if(!g.boundingBox) g.computeBoundingBox(); _acB.cop
 // no encerrar a nadie: si alguien está parado justo ahí, esa cajita no se pone
 function acTrap(x,z,r){ const t=(p)=>Math.hypot(p.x-x,p.z-z)<r+.45; if(t(player.pos)) return true; for(const q of mp.remotes.values()) if(q.pos && t(q.pos)) return true; return false; }
 const acVis=o=>{ for(let p=o;p;p=p.parent){ if(!p.visible) return false; if(p===scene) return true; } return false; };
-function acSig(o){ const e=o.matrixWorld.elements; return e[0].toFixed(3)+e[2].toFixed(3)+e[5].toFixed(3)+e[10].toFixed(3)+e[12].toFixed(2)+e[13].toFixed(2)+e[14].toFixed(2)+(o.isInstancedMesh?'i'+o.instanceMatrix.version+'_'+o.count:''); }   // dónde está (sin contar si se ve)
-function acEligible(o){ if(!o.isMesh || o.isSprite || o.userData.noCol || o.userData.batchShared) return false; const m=Array.isArray(o.material)?o.material[0]:o.material; if(!m || m.transparent || m.type==='MeshBasicMaterial' || m.type==='ShaderMaterial' || m.type==='RawShaderMaterial') return false;
+function acSig(o){ const e=o.matrixWorld.elements, r=(v,k)=>Math.round(v*k); return r(e[0],1000)*1.000003+r(e[2],1000)*7.0000031+r(e[5],1000)*53.00007+r(e[10],1000)*401.0001+r(e[12],100)*3001.3+r(e[13],100)*29989.7+r(e[14],100)*299993.1+(o.isInstancedMesh?o.instanceMatrix.version*7e9+o.count*3e11:0); }   // v197: un número (antes un texto: lento)   // dónde está (sin contar si se ve)
+function acEligible(o){ if(!o.isMesh || o.isSprite || o.userData.noCol || o.userData.batchShared || (o.isInstancedMesh && o.count>600)) return false; const m=Array.isArray(o.material)?o.material[0]:o.material; if(!m || m.transparent || m.type==='MeshBasicMaterial' || m.type==='ShaderMaterial' || m.type==='RawShaderMaterial') return false;
   for(let p=o;p;p=p.parent) if(AC.dyn.has(p) || (p.userData && p.userData.noCol)) return false; return !!o.geometry; }
 function acRemove(rec){ if(!rec.obs || !rec.obs.length) { rec.obs=null; return; } const S=new Set(rec.obs); if(AC.pend.length) AC.pend=AC.pend.filter(c=>!S.has(c)); let w=0; for(let i=0;i<obstacles.length;i++){ const o=obstacles[i]; if(!S.has(o)) obstacles[w++]=o; } obstacles.length=w; rec.obs=null; AC.dirty=true; }
 function acBuild(o,rec){ const out=[]; if(o.isInstancedMesh){ for(let i=0;i<o.count;i++){ o.getMatrixAt(i,_acM); _acM.premultiply(o.matrixWorld); acMakeOne(o.geometry,_acM,out); } } else acMakeOne(o.geometry,o.matrixWorld,out);
@@ -21206,11 +21216,15 @@ function acVisit(o){ if(!o.parent) return; let rec=AC.seen.get(o); const sig=acS
 // cada cuadro, unos milisegundos: revisar lo del mundo; y lo cercano que ya choca, más seguido (por si se movió)
 function acTick(){ if(!AC.on || (typeof SP!=='undefined' && SP.on)) return; const now=performance.now()/1000;
   if(now-AC.chk>.25){ AC.chk=now; const px=player.pos.x, pz=player.pos.z; for(const rec of AC.made){ if(!rec.obs) continue; if(Math.abs(rec.x-px)>40 || Math.abs(rec.z-pz)>40) continue; const o=rec.o; if(!o.parent || acSig(o)!==rec.sig || !acVis(o)){ const moved=!o.parent || acSig(o)!==rec.sig; acRemove(rec); rec.n=0; rec.sig=o.parent?acSig(o):''; rec.vis=o.parent?acVis(o):false; if(moved && ++rec.mv>2) rec.dyn=true; } } AC.made=AC.made.filter(r=>r.obs); }
-  if(!AC.list){ if(now-AC.t<4) return; AC.t=now; AC.dyn=acDynRoots(); const L=[], px=player.pos.x, pz=player.pos.z; scene.traverse(o=>{ if(o.isMesh) L.push(o); });
-    const d=o=>{ if(o.isInstancedMesh) return 0; const e=o.matrixWorld.elements; return (e[12]-px)**2+(e[14]-pz)**2; }; L.sort((a,b)=>d(a)-d(b)); AC.list=L; AC.li=0; }   // lo más cercano primero
-  const t0=performance.now(), bud=state==='play'?2.5:9; while(AC.li<AC.list.length && performance.now()-t0<bud) acVisit(AC.list[AC.li++]);
+  if(!AC.list){ // v197: se junta la lista de todo poco a poco (antes: recorrer y ordenar toda la isla en un solo cuadro, un tirón cada 4 s)
+    if(!AC.col){ if(now-AC.t<4) return; AC.t=now; AC.dyn=acDynRoots(); AC.col={st:[scene], near:[], far:[], px:player.pos.x, pz:player.pos.z}; }
+    const K=AC.col, tc=performance.now(); let k=0;
+    while(K.st.length){ const o=K.st.pop(); if(o.isMesh){ let d=0; if(!o.isInstancedMesh){ const e=o.matrixWorld.elements; d=(e[12]-K.px)**2+(e[14]-K.pz)**2; } (d<3600?K.near:K.far).push(o); }   // lo cercano (60 m) primero
+      const ch=o.children; for(let i=ch.length-1;i>=0;i--) K.st.push(ch[i]); if((++k&127)===0 && performance.now()-tc>1) return; }
+    AC.list=K.near.concat(K.far); AC.li=0; AC.col=null; return; }
+  const t0=performance.now(), bud=state==='play'?1.5:9; while(AC.li<AC.list.length && performance.now()-t0<bud) acVisit(AC.list[AC.li++]);
   if(AC.li>=AC.list.length) AC.list=null;
-  if(AC.pend.length && (!AC.list || now-AC.fl>.8)){ AC.fl=now; for(const c of AC.pend) obstacles.push(c); AC.pend.length=0; AC.dirty=true; }
+  if(AC.pend.length && (!AC.list || now-AC.fl>.8)){ AC.fl=now; for(const c of AC.pend) obstacles.push(c); AC.pend.length=0; }   /* v197: agregar al final no obliga a rehacer la rejilla */
   if(AC.dirty){ AC.dirty=false; obsGrid.n=-1; } }
 // ---------- Detalle según la distancia: lo lejano se dibuja con menos caras (de lejos no se nota) ----------
 let lodT=0; const _lodV=new THREE.Vector3();
@@ -21288,16 +21302,20 @@ function mergeInto(list,local,colored,uvBake){ const g0=list[0].geometry, names=
     vo+=n; }
   const g=new THREE.BufferGeometry(); for(const k of names) g.setAttribute(k,new THREE.BufferAttribute(out[k],g0.attributes[k].itemSize)); if(col) g.setAttribute('color',new THREE.BufferAttribute(col,3)); if(fsp) g.setAttribute('feltSpk',new THREE.BufferAttribute(fsp,3)); g.setIndex(new THREE.BufferAttribute(idx,1)); g.computeBoundingSphere(); return g; }
 function batchTick(){ if(!BATCH.on) return;
-  if(SP.on){ if(BATCH.local>0){ for(const b of [...BATCH.batches]) if(b.local) dissolve(b); BATCH.local=0; BATCH.cyc=null; } return; } const now=BATCH.t=performance.now()/1000;
+  if(SP.on){ if(BATCH.local>0){ for(const b of [...BATCH.batches]) if(b.local) dissolve(b); BATCH.local=0; BATCH.cyc=null; } BATCH.grp=null; BATCH.bq=null; return; } const now=BATCH.t=performance.now()/1000;
+  if(BATCH.bq){ batchBuildStep(); return; }
+  if(BATCH.grp){ batchGroupStep(); return; }
   // 1) revisar todo lo de la isla, repartido en varios cuadros (así no da un tirón cada medio segundo)
-  if(!BATCH.cyc){ if(now-BATCH.last<.5) return; BATCH.last=now; BMAT.tick++; const L=[], V=[], D=[];
-    const col=(o,pv,dy)=>{ if(batchSkip(o)) return; const vis=pv && o.visible, dyn=dy || o===plush || !!o.userData.isPlushRoot;
-      if(o.isMesh){ if(Array.isArray(o.material) && !o.userData.split && o.geometry && o.geometry.groups && o.geometry.groups.length) splitMulti(o); L.push(o); V.push(vis); D.push(dyn); }
-      const ch=o.children; for(let i=0;i<ch.length;i++) col(ch[i],vis,dyn); };
-    col(scene,true,false); BATCH.cyc={L, V, D, i:0, T:now}; BATCH.pn=now; return; }
-  const C=BATCH.cyc, T=C.T, rdt=Math.max(0,now-(BATCH.pn||now)); BATCH.pn=now;   // si el equipo va lento (cuadros largos), se revisa más por cuadro para no tardar segundos
-  const end=Math.min(C.L.length, C.i+Math.max(250,Math.ceil(C.L.length*Math.max(1/6,rdt/.2))));
-  for(; C.i<end; C.i++){ const o=C.L[C.i], vis=C.V[C.i];
+  if(!BATCH.cyc){ // v197: se recorre la isla poco a poco (máximo ~1 ms por cuadro); antes era todo de golpe cada medio segundo
+    if(!BATCH.col){ if(now-BATCH.last<.5) return; BATCH.last=now; BMAT.tick++; BATCH.col={L:[], V:[], D:[], st:[scene], sv:[true], sd:[false]}; }
+    const K=BATCH.col, tc=performance.now(); let k=0;
+    while(K.st.length){ const o=K.st.pop(), pv=K.sv.pop(), dy=K.sd.pop(); if(batchSkip(o)) continue; const vis=pv && o.visible, dyn=dy || o===plush || !!o.userData.isPlushRoot;
+      if(o.isMesh){ if(Array.isArray(o.material) && !o.userData.split && o.geometry && o.geometry.groups && o.geometry.groups.length) splitMulti(o); K.L.push(o); K.V.push(vis); K.D.push(dyn); }
+      const ch=o.children; for(let i=ch.length-1;i>=0;i--){ K.st.push(ch[i]); K.sv.push(vis); K.sd.push(dyn); } if((++k&127)===0 && performance.now()-tc>1) return; }
+    BATCH.cyc={L:K.L, V:K.V, D:K.D, i:0, T:now}; BATCH.col=null; BATCH.pn=now; return; }
+  const C=BATCH.cyc, T=C.T; BATCH.pn=now;
+  const tb=performance.now(), end=C.L.length;   // v197: revisar con tiempo máximo por cuadro (~1.2 ms), no una sexta parte de todo de golpe
+  for(let k=0; C.i<end; C.i++, k++){ if((k&63)===63 && performance.now()-tb>1.2) break; const o=C.L[C.i], vis=C.V[C.i];
       let r=BATCH.recs.get(o);
       if(!r){ r=batchCandidate(o)?{m:new Float32Array(16), lm:new Float32Array(16), ws:T, ls:T, batch:null, moves:0, lmoves:0}:{bad:true}; if(!r.bad) recSet(r,o); BATCH.recs.set(o,r); }
       r.st=T; r.dyn=C.D[C.i];
@@ -21311,9 +21329,10 @@ function batchTick(){ if(!BATCH.on) return;
   BATCH.cyc=null;
   for(const [o,r] of BATCH.recs) if(r.st!==T){ if(r.batch) dissolve(r.batch); BATCH.recs.delete(o); }   // ya no está en la escena
   // 2) juntar los que llevan quietos un rato (máximo una vez por segundo)
-  if(T-BATCH.lastBuild<1) return; BATCH.lastBuild=T;
-  const groups=new Map();
-  for(const [o,r] of BATCH.recs){ if(r.bad || r.batch) continue; let key, local=false;
+  if(T-BATCH.lastBuild<1) return; BATCH.lastBuild=T; BATCH.grp={it:BATCH.recs.entries(), groups:new Map(), T}; }
+// v197: agrupar también poco a poco (~1 ms por cuadro); antes revisaba las 11 mil piezas de golpe una vez por segundo
+function batchGroupStep(){ const GR=BATCH.grp, T=GR.T, groups=GR.groups, tg=performance.now();
+  for(let k=0;;k++){ if((k&63)===63 && performance.now()-tg>1.2) return; const nx=GR.it.next(); if(nx.done) break; const [o,r]=nx.value; if(r.bad || r.batch || !o.parent) continue; let key, local=false;
     const MI=matInfo(o.material), colored=MI.key[0]==='C' && !o.geometry.attributes.color && !o.geometry.attributes.feltSpk, tex=MI.key[0]==='X' && !!o.geometry.attributes.uv;
     const base=(colored||tex?MI.key:'M|'+o.material.uuid)+'|'+o.castShadow+'|'+o.receiveShadow+'|'+o.renderOrder+'|'+batchSig(o);
     if(r.dyn){ if(T-r.ls>=3 && o.visible && o.parent && o.parent!==scene){ key='L|'+o.parent.uuid+'|'+base; local=true; } else continue; }   // partes de un peluche: solo dentro de su grupo
@@ -21323,16 +21342,23 @@ function batchTick(){ if(!BATCH.on) return;
     else if(r.moves>3 && T-r.ls>=3 && o.visible && o.parent && o.parent!==scene){ key='L|'+o.parent.uuid+'|'+base; local=true; }   // se mueve con su grupo: se junta dentro de él
     else continue;
     let l=groups.get(key); if(!l) groups.set(key,l={list:[],local,par:o.parent,colored,tex,props:MI.props}); l.list.push(o); }
-  for(const [key,G] of groups){
+  BATCH.grp=null; BATCH.bq={it:groups.entries()}; }
+// v197: armar los grupos también poco a poco (máximo ~2.5 ms por cuadro), en los cuadros siguientes
+function batchBuildStep(){ const tb2=performance.now(), Q=BATCH.bq;
+  for(;;){ if(performance.now()-tb2>2.5) return; const nx=Q.it.next(); if(nx.done){ BATCH.bq=null; return; } const [key,G]=nx.value;
+    G.list=G.list.filter(o=>{ const rr=o.parent && BATCH.recs.get(o); return rr && !rr.batch && !rr.bad; });
     let old=null; for(const b of BATCH.batches) if(b.key===key){ old=b; break; }
-    const all=old?[...old.src,...G.list]:G.list; if(all.length<3) continue;
-    let verts=0; for(const o of all) verts+=o.geometry.attributes.position.count; if(verts>200000) continue;
+    let all=old?[...old.src,...G.list]:G.list, bkey=key; if(all.length<3) continue;
+    let verts=0; for(const o of all) verts+=o.geometry.attributes.position.count;
+    if(verts>30000){ // v197: lo grande se junta en pedazos (cada pedazo en su propio cuadro); el resto en la próxima vuelta
+      const part=[]; let v=0; for(const o of G.list){ const c=o.geometry.attributes.position.count; if(part.length && v+c>30000) break; part.push(o); v+=c; }
+      if(part.length<3) continue; all=part; old=null; bkey=key+'#'+(BATCH.sn=(BATCH.sn|0)+1); }
     if(old) dissolve(old);
     const mesh=new THREE.Mesh(mergeInto(all,G.local,G.colored,G.tex),G.colored?sharedMat(all[0].material,G.props):G.tex?sharedTexMat(all[0].material,G.props):all[0].material); mesh.castShadow=all[0].castShadow; mesh.receiveShadow=all[0].receiveShadow; mesh.renderOrder=all[0].renderOrder;
     mesh.matrixAutoUpdate=false; mesh.userData.noBatch=true; (G.local?G.par:scene).add(mesh); mesh.updateMatrixWorld(true);
-    const b={key, mesh, src:all, local:G.local}; BATCH.batches.add(b); if(G.local) BATCH.local=(BATCH.local||0)+1;
+    const b={key:bkey, mesh, src:all, local:G.local}; BATCH.batches.add(b); if(G.local) BATCH.local=(BATCH.local||0)+1;
     if(key.endsWith('|t')){ let rm=0; for(const o of all){ const g=o.geometry; rm=Math.max(rm,g.boundingSphere.radius*o.matrixWorld.getMaxScaleOnAxis()); } b.hideD=Math.max(30,rm*BATCH.TINYK); }
-    for(const o of all){ o.layers.disable(0); BATCH.recs.get(o).batch=b; } } }
+    for(const o of all){ o.layers.disable(0); const rr=BATCH.recs.get(o); if(rr) rr.batch=b; } } }
 
 // ======================================================================================
 // ---------- Ambiente vivo: viento, sombras de nubes, pétalos y luciérnagas, polvito, pájaros, peces y mariposas ----------
@@ -22001,12 +22027,14 @@ function areaBounds(g){ const B=AREA.b.makeEmpty(), v=AREA.v; let n=0;
     else { v.setFromMatrixPosition(o.matrixWorld); B.expandByPoint(v.set(v.x-3,v.y-3,v.z-3)); B.expandByPoint(v.set(v.x+6,v.y+6,v.z+6)); } });
   if(!n || B.isEmpty()) return null; const sp=new THREE.Sphere(); B.getBoundingSphere(sp); return sp; }
 function areaCullBegin(){ const now=performance.now();
-  if(now-AREA.t>600){ AREA.t=now; AREA.list.length=0; scene.updateMatrixWorld();
-    for(const c of scene.children){ if(c===plush || c.userData.isPlushRoot || c.isMesh || c.isLight || c.isCamera || !c.visible || !c.children.length) continue; const sp=areaBounds(c); if(!sp || sp.radius>=400) continue;
-      const pc=c.userData._areaC; if(pc && pc.distanceTo(sp.center)>1.5) c.userData._areaDyn=true; c.userData._areaC=sp.center.clone(); AREA.list.push([c,sp]); } }
+  if(now-AREA.t>600){ AREA.t=now; const have=new Map(AREA.list.map(it=>[it[0],it])), L=[];   // v197: solo se revisa quién está; las medidas se van haciendo poco a poco abajo
+    for(const c of scene.children){ if(c===plush || c.userData.isPlushRoot || c.isMesh || c.isLight || c.isCamera || !c.children.length) continue; L.push(have.get(c)||[c,null]); }
+    AREA.list=L; }
+  { const N=AREA.list.length, tm=performance.now(); for(let n=0; n<N && (n<2 || performance.now()-tm<.7); n++){ AREA.ri=((AREA.ri|0)+1)%N; const it=AREA.list[AREA.ri], c=it[0]; if(!c.visible || c.userData._areaDyn) continue;
+      const sp=areaBounds(c); if(!sp || sp.radius>=400){ it[1]=null; continue; } const pc=c.userData._areaC; if(pc && pc.distanceTo(sp.center)>1.5) c.userData._areaDyn=true; c.userData._areaC=sp.center.clone(); it[1]=sp; } }
   const cam=camera, cp=cam.position, shadows=renderer.shadowMap.enabled && settings.shadows, far=cam.far;
   AREA.fr.setFromProjectionMatrix(AREA.m.multiplyMatrices(cam.projectionMatrix,cam.matrixWorldInverse));
-  for(const it of AREA.list){ const c=it[0]; if(!c.visible || c.parent!==scene) continue; if(c.userData._areaDyn){ const n=areaBounds(c); if(n) it[1]=n; }   // lo que se mueve (coches, aviones, otros jugadores): cada cuadro
+  for(const it of AREA.list){ const c=it[0]; if(!c.visible || c.parent!==scene) continue; if(c.userData._areaDyn){ const n=areaBounds(c); if(n && n.radius<400) it[1]=n; } if(!it[1]) continue;   // lo que se mueve (coches, aviones, otros jugadores): cada cuadro
     const sp=it[1], S=AREA.s; S.center.copy(sp.center); S.radius=sp.radius+20;   // margen: algunas cosas se mueven (coches, aviones)
     const d=cp.distanceTo(S.center)-S.radius; let out=d>far; if(!out && !shadows && d>8) out=!AREA.fr.intersectsSphere(S);
     if(out){ c.visible=false; AREA.off.push(c); } } }
