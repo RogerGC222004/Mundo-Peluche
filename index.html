@@ -206,6 +206,7 @@ body.not-play .mg-hud, body.not-play .mg-ctl, body.not-play .mg-result{display:n
 .fish-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px;}
 .fish-it{background:#fff;border-radius:12px;padding:6px 4px 7px;display:flex;flex-direction:column;align-items:center;text-align:center;box-shadow:0 3px 0 #c9dcea;}
 .fish-it canvas{width:100%;max-width:96px;aspect-ratio:3/2;} .fish-it b{font-family:var(--display);font-size:13.5px;line-height:1.1;color:#23415a;} .fish-it small{font-size:11px;font-weight:700;opacity:.75;} .fish-it.unk{background:#e4eef6;}
+.surf-grid{grid-template-columns:repeat(auto-fill,minmax(132px,1fr));} .surf-it canvas{aspect-ratio:2/1;max-width:120px;} .surf-it .sbtn{margin-top:5px;font-size:12.5px;padding:5px 9px;} .surf-it.surf-on{background:#fff4c9;box-shadow:0 3px 0 #e8c95a;}
 .book-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;overflow:auto;padding:4px 2px 6px;min-height:120px;}
 .book-pl{background:#fff8ec;border:none;border-radius:14px;padding:8px 6px 9px;cursor:pointer;box-shadow:0 3px 0 #d9c4a0;font-family:var(--display);color:#4a3a5c;display:flex;flex-direction:column;align-items:center;gap:1px;text-align:center;}
 .book-pl:hover,.book-pl:focus-visible{transform:translateY(-2px);box-shadow:0 5px 0 #d9c4a0;}
@@ -788,7 +789,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
   <div class="card fish-card" role="dialog" aria-labelledby="fishTitle">
     <div class="fish-head"><h2 id="fishTitle">Tortu</h2><button class="btn" id="fishClose">Cerrar</button></div>
     <p class="fish-say" id="fishSay"></p>
-    <div class="fish-tabs" id="fishTabs"><button class="chip" data-tab="sell">Vender peces</button><button class="chip" data-tab="dex">Catálogo de peces</button></div>
+    <div class="fish-tabs" id="fishTabs"><button class="chip" data-tab="sell">Vender peces</button><button class="chip" data-tab="dex">Catálogo de peces</button><button class="chip" data-tab="surf">🏄 Tablas de surf</button></div>
     <div class="fish-body" id="fishBody"></div>
   </div>
 </div>
@@ -1165,7 +1166,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='195';
+const GAME_VERSION='196';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -2020,7 +2021,7 @@ function seaOpenK(x,z){ let s=Math.hypot(x,z)-coastRN(Math.atan2(z,x));
   for(const I of [WI,JI,DI]){ const d=Math.hypot(x-I.x,z-I.z)-540; if(d<s) s=d; }
   return SEA_OPEN_MAX*smooth(80,900,s); }
 function waveH(x,z,A,t){ let h=0; for(const [dx,dz,k,w,a,ph] of WAVES) h+=a*Math.sin(k*(dx*x+dz*z)+w*t+ph); return h*A; }
-function waterSurfaceY(x,z){ if(inLakeWater(x,z)) return WATER_Y+waveH(x,z,WATER.lakeA,WATER.t); const r=riverLevelAt(x,z); return r!==null ? r+waveH(x,z,WATER.lakeA,WATER.t) : SEA_Y+waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t); }
+function waterSurfaceY(x,z){ if(inLakeWater(x,z)) return WATER_Y+waveH(x,z,WATER.lakeA,WATER.t); const r=riverLevelAt(x,z); return r!==null ? r+waveH(x,z,WATER.lakeA,WATER.t) : SEA_Y+waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t)+swellH(x,z); }
 // Profundidad guardada en una textura (se calcula una vez): valor = (nivel - fondo + 2) / 12
 function depthTexture(N,cx,cz,E,level,fast){
   const data=new Uint8Array(N*N);
@@ -2041,6 +2042,73 @@ function waterRipple(x,z,amp){
   const r=ripples[ripNext]; r.set(x,z,WATER.t,Math.min(.35,amp)); ripNext=(ripNext+1)%RIP_N;
   if(amp>.14) splashBurst(x,waterSurfaceY(x,z),z,amp);
 }
+// ---------- v196: olas grandes (para surfear) ----------
+// Cada 75 s llega una serie de 3 olas que nacen mar adentro y viajan hacia la isla grande (a 10 m/s). Lejos de la orilla son
+// colosales (hasta ~10 m) y cerca de la playa son grandes (~2.4 m); se apagan al llegar a la arena. Dependen de la hora: todos ven las mismas.
+// Junto al muelle y cerca de las otras islas son más chiquitas. La tarjeta de video dibuja las mismas (swellSum en WATER_GLSL).
+const SWELL={P:75, N:3, GAP:8, C:10, S0:1400, list:[], u:Array.from({length:8},()=>new THREE.Vector4()), pier:new THREE.Vector4(0,0,1,0), hasPier:false};
+const swHash=n=>{ const v=Math.sin(n*12.9898+4.1)*43758.5453; return v-Math.floor(v); };
+function swellTick(){ const T=Date.now()/1000, S=SWELL, life=(S.S0+60)/S.C, n1=Math.floor(T/S.P); S.list.length=0;
+  for(let n=n1; n>=n1-Math.ceil(life/S.P)-1; n--) for(let k=0;k<S.N;k++){ const age=T-(n*S.P+k*S.GAP); if(age<0 || age>life) continue;
+    S.list.push({id:n*10+k, sc:S.S0-S.C*age, ph:swHash(n)*6.283+k*1.7, str:.85+.3*swHash(n+.5)}); }
+  for(let i=0;i<8;i++){ const w=S.list[i]; if(w) S.u[i].set(w.sc,w.ph,1,w.str); else S.u[i].set(0,0,0,0); } }
+// alto base de las olas según qué tan lejos de la orilla (s en metros)
+const swellAmp=s=>(2.4*smooth(6,45,s)+8*smooth(160,800,s))*(1-smooth(SWELL.S0-200,SWELL.S0,s));
+const SWO={h:0, face:0, sx:0, sz:0, H:0, s:0, list:null};
+// ¿qué tanto sube el agua aquí por las olas grandes? (y de paso: en qué lado de la ola estás y hacia dónde está la orilla)
+function swellAt(x,z,full){ const o=SWO; o.h=0; o.face=0; o.H=0; o.list=full?[]:null; if(!SWELL.list.length) return o;
+  const r=Math.hypot(x,z), a=Math.atan2(z,x), s=r-coastRN(a); o.s=s; if(s<4 || s>SWELL.S0+80) return o;
+  let A=swellAmp(s); if(A<.01) return o;
+  for(const I of [WI,JI,DI]){ A*=smooth(0,150,Math.hypot(x-I.x,z-I.z)-540); if(A<.01) return o; }
+  if(SWELL.hasPier){ const P=SWELL.pier, dx=x-P.x, dz=z-P.y, lx=dx*P.z-dz*P.w, lz=dx*P.w+dz*P.z, ex=Math.max(Math.abs(lx)-8,0), ez=Math.max(-22-lz,lz-90,0); A*=.15+.85*smooth(4,32,Math.hypot(ex,ez)); }
+  o.sx=-x/r; o.sz=-z/r;
+  for(const w of SWELL.list){ const d=s-w.sc; if(d>70 || d<-45) continue; const H=A*w.str*(.8+.2*Math.sin(2*a+w.ph)), W=7+H*2, wx=d<0?W*.55:W*1.5, e=Math.exp(-(d/wx)*(d/wx));
+    o.h+=H*e; if(H*e>o.H) o.H=H*e; if(d<0) o.face=Math.max(o.face, e*Math.min(1,H/1.2));
+    if(full) o.list.push({id:w.id, d, H, W}); }
+  return o; }
+const swellH=(x,z)=>swellAt(x,z,false).h;
+// ---------- v196: olas de tubo (la cresta se enrosca hacia adelante y deja un hueco para pasar) ----------
+// El mar es una sábana que sube y baja (no se puede doblar), así que el tubo es una pieza aparte encima de la ola grande.
+// Pasa en 3 lugares de la isla (uno junto al muelle): cuando una ola grande llega cerca de la orilla, se va enroscando de un
+// lado al otro. Por dentro del hueco puedes pasar con tu tabla; la parte que ya se cayó es pura espuma y te tumba.
+const TUBE={L:70, S1:95, S0:14, NU:36, NP:9, spots:null, mesh:[], act:[], noteId:-1};
+// la forma del tubo de lado: [adelante(+)/atrás(−) respecto a la cresta, alto] en unidades del alto del tubo. F = enroscado, U = sin enroscar
+const TUBE_F=[[.7,.92],[-.15,1.02],[-.48,.98],[-.76,.8],[-.92,.55],[-.97,.3],[-.93,.08],[-.85,-.25]];
+const TUBE_U=[[.7,.92],[.45,.95],[.2,.85],[0,.7],[-.15,.5],[-.25,.3],[-.32,.12],[-.36,-.25]];
+function tubeSpots(){ if(!TUBE.spots){ const a0=PIER.a; TUBE.spots=[a0+.095, a0+2.25, a0-2.05].map((a,i)=>({a, i})); } return TUBE.spots; }
+// cuánto está enroscado (k) y cuánto ya se cayó (c) en el punto u (metros a lo largo de la ola) para la ola con avance q (0→1)
+function tubeKC(q,u,dir){ const L=TUBE.L, up=dir*(L/2-q*L*1.05), x=dir*u;   // up: dónde va rompiendo; avanza de un extremo al otro
+  const k=smooth(up*dir-24,up*dir-3,x)*(1-smooth(up*dir,up*dir+3,x)), c=smooth(up*dir,up*dir+9,x); return [k,c]; }
+function tubeList(){ const out=[]; if(!SWELL.list.length || typeof PIER==='undefined') return out;
+  for(const w of SWELL.list){ if(w.sc>TUBE.S1 || w.sc<TUBE.S0) continue; const q=(TUBE.S1-w.sc)/(TUBE.S1-TUBE.S0);
+    for(const sp of tubeSpots()){ const rc=coastRN(sp.a); out.push({sp, w, q, rc, dir:(w.id%2)?1:-1, Ht:(3.1+1.1*w.str)*Math.min(1,q/.1)*Math.min(1,(1-q)/.12), fade:Math.min(1,q/.1)*Math.min(1,(1-q)/.12)}); } }
+  return out; }
+// un punto del tubo en el mundo: u a lo largo (m), d adelante/atrás de la cresta (m), y alto sobre el mar
+function tubeW(T,u,d,y,out){ const a=T.sp.a+u/(T.rc+T.w.sc), r=coastRN(a)+T.w.sc+d; out[0]=Math.cos(a)*r; out[1]=SEA_Y+y; out[2]=Math.sin(a)*r; return out; }
+const _tbw=[0,0,0];
+function tubeMesh(i){ let m=TUBE.mesh[i]; if(m) return m; const NU=TUBE.NU, NP=TUBE.NP, n=NU*NP, g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(n*3),3)); g.setAttribute('color',new THREE.Float32BufferAttribute(new Float32Array(n*3),3));
+  const idx=[]; for(let j=0;j<NU-1;j++) for(let p=0;p<NP-1;p++){ const a=j*NP+p, b=a+NP; idx.push(a,b,a+1, a+1,b,b+1); } g.setIndex(idx);
+  m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true, roughness:.18, metalness:.1, transparent:true, opacity:.82, side:THREE.DoubleSide, depthWrite:true}));
+  m.frustumCulled=false; m.userData.noBatch=true; m.renderOrder=3; m.visible=false; scene.add(m); TUBE.mesh[i]=m; return m; }
+const TUBE_C0=new THREE.Color('#1d6b9e'), TUBE_C1=new THREE.Color('#4fb6d3'), TUBE_C2=new THREE.Color('#ffffff'), _tbc=new THREE.Color();
+function tubeTick(){ const L=TUBE.L, NU=TUBE.NU, NP=TUBE.NP; TUBE.act=tubeList(); const used=new Set();
+  const cx=camera.position.x, cz=camera.position.z;
+  for(const T of TUBE.act){ const i=T.sp.i; if(used.has(i)) continue; tubeW(T,0,0,0,_tbw); if(Math.hypot(_tbw[0]-cx,_tbw[2]-cz)>650) continue; used.add(i);
+    const m=tubeMesh(i), P=m.geometry.attributes.position, C=m.geometry.attributes.color, Ht=T.Ht;
+    for(let j=0;j<NU;j++){ const u=-L/2+L*j/(NU-1), [k,c]=tubeKC(T.q,u,T.dir), endF=smooth(L/2,L/2-9,Math.abs(u)), H=Ht*(1-.78*c)*(.35+.65*endF);
+      tubeW(T,u,2.4,0,_tbw); const back=swellH(_tbw[0],_tbw[2])*.92;
+      for(let p=0;p<NP;p++){ let d, y; if(p===0){ d=2.4; y=back; } else { const F=TUBE_F[p-1], U=TUBE_U[p-1], kk=k*endF; d=(U[0]+(F[0]-U[0])*kk)*H; y=(U[1]+(F[1]-U[1])*kk)*H; if(c>0) y*=1-.35*c; }
+        tubeW(T,u,d,y,_tbw); P.setXYZ(j*NP+p,_tbw[0],_tbw[1],_tbw[2]);
+        const t=p/(NP-1); _tbc.copy(TUBE_C0).lerp(TUBE_C1,Math.min(1,Math.abs(t-.35)*2)); if(p>=6) _tbc.lerp(TUBE_C2,Math.min(1,(p-5)/2)*.85*k); _tbc.lerp(TUBE_C2,Math.min(1,c*1.1)*.9); C.setXYZ(j*NP+p,_tbc.r,_tbc.g,_tbc.b); } }
+    P.needsUpdate=true; C.needsUpdate=true; m.geometry.computeVertexNormals(); m.material.opacity=.82*T.fade; m.visible=true;
+    // espuma en la punta que cae
+    if(Math.random()<.5){ const j=(Math.random()*NU)|0, u=-L/2+L*j/(NU-1), [k,c]=tubeKC(T.q,u,T.dir); if(k>.4 || c>.2){ tubeW(T,u,-.9*Ht,.1,_tbw); if(Math.hypot(_tbw[0]-cx,_tbw[2]-cz)<120) try{ splashBurst(_tbw[0],SEA_Y+.2,_tbw[2],.35); }catch(e){} } } }
+  TUBE.mesh.forEach((m,i)=>{ if(m && !used.has(i)) m.visible=false; }); }
+// ¿dónde estoy respecto a un tubo? → {T, u, d, k, c, H} o null
+function tubeAt(x,z){ for(const T of TUBE.act){ const a=Math.atan2(z,x), da=Math.atan2(Math.sin(a-T.sp.a),Math.cos(a-T.sp.a)), u=da*(T.rc+T.w.sc);
+    if(Math.abs(u)>TUBE.L/2) continue; const d=Math.hypot(x,z)-coastRN(a)-T.w.sc, H=T.Ht; if(d>1.5 || d<-1.15*H) continue; const [k,c]=tubeKC(T.q,u,T.dir); return {T,u,d,k,c,H}; }
+  return null; }
 const WATER_GLSL=`
 uniform float uT; uniform float uA; uniform float uOpen; uniform vec4 uRip[${RIP_N}];
 float seaOpenK(vec2 p){ if(uOpen<.5) return 0.0; float a=atan(p.y,p.x), da=a-${AIRPORT.a.toFixed(3)}; da=atan(sin(da),cos(da));
@@ -2052,6 +2120,20 @@ float waveSum(vec2 p, out vec2 g){
   ${WAVES.map(([dx,dz,k,w,a,ph])=>`{ vec2 d=vec2(${dx.toFixed(3)},${dz.toFixed(3)}); float s=${k.toFixed(3)}*dot(d,p)+${w.toFixed(3)}*uT+${ph.toFixed(3)}; h+=${a.toFixed(3)}*sin(s); g+=${(a*k).toFixed(4)}*cos(s)*d; }`).join('\n  ')}
   float ok=1.0+seaOpenK(p); g*=uA*ok; return h*uA*ok;
 }
+uniform vec4 uSw[8]; uniform vec4 uPier;
+float swellSum(vec2 p, inout vec2 g, out float crest){ crest=0.0; if(uOpen<.5) return 0.0;
+  float r=max(length(p),1.0), a=atan(p.y,p.x), da=a-${AIRPORT.a.toFixed(3)}; da=atan(sin(da),cos(da));
+  float s=r-(${ISLAND_R2.toFixed(1)}+95.0*sin(3.0*a+.4)+60.0*sin(5.0*a+2.2)+35.0*sin(8.0*a+1.0)+18.0*sin(13.0*a+.5)-190.0*exp(-(da/.22)*(da/.22)));
+  if(s<4.0 || s>${(SWELL.S0+80).toFixed(1)}) return 0.0;
+  float A=(2.4*smoothstep(6.0,45.0,s)+8.0*smoothstep(160.0,800.0,s))*(1.0-smoothstep(${(SWELL.S0-200).toFixed(1)},${SWELL.S0.toFixed(1)},s));
+  ${[WI,JI,DI].map(I=>`A*=smoothstep(0.0,150.0,length(p-vec2(${I.x.toFixed(1)},${I.z.toFixed(1)}))-540.0);`).join(' ')}
+  if(uPier.z!=0.0 || uPier.w!=0.0){ vec2 q=p-uPier.xy; float lx=q.x*uPier.z-q.y*uPier.w, lz=q.x*uPier.w+q.y*uPier.z; vec2 e=vec2(max(abs(lx)-8.0,0.0), max(max(-22.0-lz,lz-90.0),0.0)); A*=.15+.85*smoothstep(4.0,32.0,length(e)); }
+  if(A<.01) return 0.0;
+  vec2 rad=p/r; float h=0.0;
+  for(int i=0;i<8;i++){ vec4 w=uSw[i]; if(w.z<.5) continue; float d=s-w.x; if(d>70.0 || d<-45.0) continue;
+    float H=A*w.w*(.8+.2*sin(2.0*a+w.y)), W=7.0+H*2.0, wx=d<0.0?W*.55:W*1.5, e=exp(-(d/wx)*(d/wx));
+    h+=H*e; g+=rad*(H*e*(-2.0*d/(wx*wx))); crest=max(crest, e*smoothstep(1.2,3.0,H)*step(-W*.35,d)*step(d,W*.12)); }
+  return h; }
 float ripSum(vec2 p, inout vec2 g, out float foam){
   float h=0.0; foam=0.0;
   for(int i=0;i<RIP_LOOP;i++){
@@ -2065,12 +2147,12 @@ float ripSum(vec2 p, inout vec2 g, out float foam){
 function makeWaterMat(o){
   const U={uT:{value:0}, uA:{value:o.A}, uOpen:{value:o.open?1:0}, uRip:{value:ripples}, uDepth:{value:o.depth.tex}, uRect:{value:o.depth.rect},
     uShallow:{value:hexLin(o.shallow)}, uDeep:{value:hexLin(o.deep)}, uDeepD:{value:o.deepD}, uSky:{value:new THREE.Color()}, uAmb:{value:new THREE.Color(.6,.6,.6)},
-    uSunD:{value:new THREE.Vector3(0,1,0)}, uSunC:{value:new THREE.Color(1,1,1)}, uDetail:{value:o.detail}, uTile:{value:o.tile}, uFoamK:{value:o.foam}, uOpacity:{value:o.opacity}};
+    uSunD:{value:new THREE.Vector3(0,1,0)}, uSunC:{value:new THREE.Color(1,1,1)}, uSw:{value:SWELL.u}, uPier:{value:SWELL.pier}, uDetail:{value:o.detail}, uTile:{value:o.tile}, uFoamK:{value:o.foam}, uOpacity:{value:o.opacity}};
   return new THREE.ShaderMaterial({
     uniforms:Object.assign(THREE.UniformsUtils.clone(THREE.UniformsLib.fog), U),
     vertexShader:`${WATER_GLSL}
       uniform sampler2D uDepth; uniform vec4 uRect;
-      varying vec3 vWp; varying float vH;
+      varying vec3 vWp; varying float vH; varying float vS;
       #if FLOW
       attribute vec3 aFlow; varying vec3 vFlow;
       #endif
@@ -2085,6 +2167,7 @@ function makeWaterMat(o){
         { float sd=texture2D(uDepth,(wp.xz-uRect.xy)/uRect.zw).r*12.0-2.0; float calm=smoothstep(.1,2.8,sd);
           h*=calm; h+=(1.0-calm)*uA*.32*sin(uT*.8+wp.x*.017+wp.z*.021); }
         #endif
+        { float cr; vS=swellSum(wp.xz,g,cr); h+=vS; }   // v196: olas grandes
         float f; h+=ripSum(wp.xz,g,f);
         wp.y+=h; vH=h; vWp=wp.xyz;
         vec4 mvPosition=viewMatrix*wp; gl_Position=projectionMatrix*mvPosition;
@@ -2093,7 +2176,7 @@ function makeWaterMat(o){
     fragmentShader:`${WATER_GLSL}
       uniform sampler2D uDepth; uniform vec4 uRect; uniform vec3 uShallow; uniform vec3 uDeep; uniform float uDeepD; uniform vec3 uSky; uniform vec3 uAmb;
       uniform vec3 uSunD; uniform vec3 uSunC; uniform sampler2D uDetail; uniform float uTile; uniform float uFoamK; uniform float uOpacity;
-      varying vec3 vWp; varying float vH;
+      varying vec3 vWp; varying float vH; varying float vS;
       #if FLOW
       varying vec3 vFlow;
       #endif
@@ -2102,7 +2185,7 @@ function makeWaterMat(o){
         vec2 p=vWp.xz;
         float depth=texture2D(uDepth,(p-uRect.xy)/uRect.zw).r*12.0-2.0+vH;
         if(depth<-1.2) discard;   // bajo tierra (por ejemplo el mar debajo del lago)
-        vec2 g; waveSum(p,g); { float sd=texture2D(uDepth,(p-uRect.xy)/uRect.zw).r*12.0-2.0; g*=mix(.25,1.0,smoothstep(.1,2.8,sd)); } float rf; ripSum(p,g,rf);
+        vec2 g; waveSum(p,g); { float sd=texture2D(uDepth,(p-uRect.xy)/uRect.zw).r*12.0-2.0; g*=mix(.25,1.0,smoothstep(.1,2.8,sd)); } float rf; ripSum(p,g,rf); float swc; swellSum(p,g,swc);
         // olitas finas que se mueven (detalle) y olas que llegan a la orilla
         float sw=sin(depth*2.6-uT*1.7); float shore=(1.0-smoothstep(.2,3.5,depth));
         #if WATER_DETAIL
@@ -2117,7 +2200,7 @@ function makeWaterMat(o){
         #else
         vec3 det=pow(texture2D(uDetail,p/uTile+vec2(uT*.006,uT*.003)).rgb,vec3(2.2));
         #endif
-        vec3 base=mix(uShallow,uDeep,smoothstep(0.0,uDeepD,depth))*mix(vec3(1.0),det*1.3,.55)*(1.0+vH*.35);
+        vec3 base=mix(uShallow,uDeep,smoothstep(0.0,uDeepD,depth))*mix(vec3(1.0),det*1.3,.55)*(1.0+clamp(vH-vS*.85,-1.5,1.5)*.35);
         float dif=max(dot(n,uSunD),0.0);
         vec3 col=base*(uAmb+uSunC*dif*.55);
         float fr=pow(1.0-max(dot(n,v),0.0),3.0);
@@ -2131,7 +2214,8 @@ function makeWaterMat(o){
         float foam=(1.0-smoothstep(0.0,.1+.07*sin(uT*1.6+p.x*.07+p.y*.05),depth))*step(-.4,depth)*(.45+.55*smoothstep(.25,.7,det.g));   // línea de espuma fina y rota donde llega el agua
         foam+=smoothstep(.82,1.0,sw)*shore*.75;
         foam+=clamp(rf*6.0,0.0,1.0)*.7;
-        { float ok=seaOpenK(p); foam+=ok*.45*smoothstep(.45,.95,vH/(uA*(1.0+ok)*1.3))*(.4+.6*smoothstep(.3,.7,det.g)); }   // v191: espuma en las crestas, mar adentro
+        { float ok=seaOpenK(p); foam+=ok*.45*smoothstep(.45,.95,(vH-vS)/(uA*(1.0+ok)*1.3))*(.4+.6*smoothstep(.3,.7,det.g)); }   // v191: espuma en las crestas, mar adentro
+        foam+=swc*.9*(.45+.55*smoothstep(.3,.7,det.g));   // v196: espuma en la cresta de las olas grandes
         #if FLOW
         foam+=vFlow.z*smoothstep(.2,.7,det.r)*1.3;   // espuma en los rápidos
         #endif
@@ -2169,7 +2253,7 @@ function splashBurst(x,y,z,amp){ splash.burst(x,y,z,amp); }
 // Quién toca el agua: al entrar salpica fuerte; al moverse deja ondas detrás
 function waterTouch(st,x,y,z,speed,dt){
   const rl=riverLevelAt(x,z), lake=inLakeWater(x,z)||rl!==null, lvl=inLakeWater(x,z)?WATER_Y:rl!==null?rl:SEA_Y, ground=terrainH(x,z);
-  const surf=lvl+(lake?waveH(x,z,WATER.lakeA,WATER.t):waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t));
+  const surf=lvl+(lake?waveH(x,z,WATER.lakeA,WATER.t):waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t)+swellH(x,z));
   const inW = ground<lvl-.05 && y<surf+.05 && y>surf-2.4;
   const vy=st.py===undefined?0:(y-st.py)/Math.max(dt,1e-3); st.py=y;
   if(inW && !st.inW) waterRipple(x,z,.08+Math.min(.27,Math.max(0,-vy)*.03+speed*.012));
@@ -2178,7 +2262,7 @@ function waterTouch(st,x,y,z,speed,dt){
 }
 const myWaterSt={};
 function updateWater(dt){
-  WATER.t=waterClock();
+  WATER.t=waterClock(); swellTick(); try{ tubeTick(); }catch(e){}
   const W=weatherNow; WATER.seaA=.22+.3*W.wind+.15*W.storm; WATER.lakeA=.025+.05*W.wind;
   const day=sky.dayK, amb=_c1.copy(hemi.color).multiplyScalar(hemi.intensity*.9).add(_c2.copy(hemi.groundColor).multiplyScalar(hemi.intensity*.25));
   for(const m of waterMats){ const u=m.uniforms; u.uT.value=WATER.t; u.uA.value=m.userData.lake?WATER.lakeA:WATER.seaA;
@@ -5203,7 +5287,7 @@ hold(ui('tJump'),()=>{ touchHold.up=true; jump(); },()=>{ touchHold.up=false; })
 hold(ui('tDive'),()=>{ touchHold.down=true; startDive(); },()=>{ touchHold.down=false; });
 
 function jump(){ if(player.pg && player.pg.k==='vine'){ jiVineRelease(); return; }   // v142: soltar la liana
-  if(player.pg && (player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='veh' || player.pg.k==='vehp')) return;   // v144: en el tobogán y en la rueda no se salta
+  if(player.pg && (player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='veh' || player.pg.k==='vehp' || player.pg.k==='surf')) return;   // v144: en el tobogán y en la rueda no se salta
   if(player.busy) return; if(player.mg || (typeof SP!=='undefined' && SP.on)) return; if(hook.mode>=2){ bowRelease(); return; } if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see')){ stopPlay(); return; } const now=performance.now()/1000, coyote=!player.grounded && player.vy<=1.5 && now-(player.lastGroundT||0)<.16;   // v195: saltar aunque te acabes de salir de la orilla
   if((player.grounded||coyote) && !player.dive && !player.swim && !player.car && !player.ac && !player.pg){ player.vy=trOnMat(player.pos.x,player.pos.z,player.pos.y)?9.5:7.2; player.grounded=false; player.jumpBuf=0; player.lastGroundT=0; audio.jump(); }
   else if(!player.dive && !player.swim && !player.car && !player.ac && !player.pg) player.jumpBuf=now; }   // v195: si tocaste Saltar un poquito antes de caer, salta al llegar
@@ -5513,7 +5597,7 @@ function sendPresence(force){
     ap: iPilot() ? (a=>[a.i, r2(a.x), r2(a.y), r2(a.z), Math.round(a.h*1000)/1000, Math.round(a.p*1000)/1000, Math.round(a.b*1000)/1000, r2(a.v), r2(a.vy), r2(a.rotor), a.onGround?1:0, r2(a.thr)])(aircraft[player.ac.i]) : null,
     as: aircraft.map(a=>[Math.round(a.x*10)/10, r2(a.y), Math.round(a.z*10)/10, Math.round(a.h*100)/100, a.t]),
     sd: aircraft.map(a=>[a.stairs, a.door, a.sdT]),
-    id: myUid, bw: bowPresence(), ...mgPresence(), ou: outfitList(wardrobe.eq), ...arenaPresence(), ...housePresence(), ...spacePresence(), ...vehPresence(),
+    id: myUid, bw: bowPresence(), ...mgPresence(), ou: outfitList(wardrobe.eq), ...arenaPresence(), ...housePresence(), ...spacePresence(), ...vehPresence(), tb: tblPresence(),
     pl: player.pg ? [PG_KINDS.indexOf(player.pg.k), player.pg.i, r2(player.pg.v||0)] : null,
     pu: myPush.i>=0 ? [myPush.i, myPush.t] : null, cu: cucoPresence(), sh: shipPresence(), dk: deckPresence(), ...wiPresence(), pz: pierPresence(), tz: trPresence(), pt: petPresence(), bl: blPresence(), bs: blStates(), ...minePresence(),
     ai: player.ac && player.acPose ? (A=>[A.i, A.mode==='seated'||A.mode==='sitting'?A.seat:-1, r2(player.acPose.l[0]), r2(player.acPose.l[1]), r2(player.acPose.l[2]), r2(player.acPose.f||0), r2(player.acPose.sit||0), r2(player.acPose.walk?(player.acPose.mv||1):0), r2(player.acPose.armsUp||0), player.acPose.air?1:0])(player.ac) : null
@@ -5596,7 +5680,7 @@ function onPeers({peers}){
     r.facing=clampN(pr.f,-4,4,0); r.moving=clampN(pr.m,0,1,0); r.air=pr.a===true; r.swim=pr.s===true;
     const nd=clampN(pr.d,0,DIVE_FLAT,0);
     if(nd>.5 && r.diveTarget<=.5 && !r.swim) audio.flop(.5);
-    r.diveTarget=nd; r.held = pr.h==='map' ? 'map' : pr.h==='bow' ? 'bow' : pr.h==='lamp' ? 'lamp' : null; parseMine(r,pr); parseBow(r,pr); parseMg(r,pr); parseArena(r,pr); houseParse(r,pr); parseSpace(r,pr); vehParse(r,pr);
+    r.diveTarget=nd; r.held = pr.h==='map' ? 'map' : pr.h==='bow' ? 'bow' : pr.h==='lamp' ? 'lamp' : null; parseMine(r,pr); parseBow(r,pr); parseMg(r,pr); parseArena(r,pr); houseParse(r,pr); tblParse(r,pr); parseSpace(r,pr); vehParse(r,pr);
     const w=clampN(pr.w,0,Infinity,0);
     if(r.w!==undefined && w!==r.w){ r.waveUntil=clock.elapsedTime+1.6; audio.wave(); }
     r.sf=pr.sf===1;
@@ -5697,7 +5781,7 @@ function updateRemotes(dt,t){
       r.label.position.set(0, H*Math.cos(a)+F*Math.sin(a), -H*Math.sin(a)+F*Math.cos(a)); }
     if(r.bw && r.held==='bow') remoteBowPose(r);
     if(r.mg) remoteMgPose(r,t,dt);
-    remoteArenaPose(r,t,dt); houseRemotePose(r,t,dt);
+    remoteArenaPose(r,t,dt); houseRemotePose(r,t,dt); tblRemotePose(r,t,dt);
     remotePierPose(r,t,dt);
     trRemotePose(r,t,dt);
     caveRemotePose(r,t,dt);
@@ -6549,6 +6633,7 @@ function scanActions(){
   { const aa=arenaActions(); if(aa){ setActions(aa[0],aa[1]); return; } }
   if(heldItem()==='flag' && !player.car && !player.ac && !player.pg && !player.mg){ setActions({label:'Plantar bandera', run:plantFlag}, null); return; }
   { const ma=mgActions(); if(ma){ setActions(ma[0],ma[1]); return; } }
+  { const su=tblActions(); if(su){ setActions(su[0],su[1]); return; } }   /* v196: la tabla de surf en las manos */
   { const sa=shipActions(); if(sa && shipOnDeck){ setActions(sa[0],sa[1]); return; }   // v138: el barco (junto al muelle comparte los botones)
     const pa=pierActions(); if(pa){ if(sa){ const b=sa[0]||sa[1]; if(!pa[1]) pa[1]=b; else if(!pa[0]) pa[0]=b; } setActions(pa[0],pa[1]); return; }
     if(sa){ setActions(sa[0],sa[1]); return; } }
@@ -6570,7 +6655,7 @@ function scanActions(){
     if(Math.abs(c.v)>1.5 || Math.hypot(c.x-player.pos.x,c.z-player.pos.z)>9) continue;
     for(let d=0;d<4;d++){ const w=carLocalToWorld(c,...doorOutside(c,d)), dd=Math.hypot(w.x-player.pos.x,w.z-player.pos.z); if(dd<bd && Math.abs(w.y-player.pos.y)<2){ bd=dd; best={c,d}; } }
   }
-  if(!best){ const fb=pierFallback(); setActions(fb?fb[0]:null, fb?fb[1]:null); return; }
+  if(!best){ const fb=pierFallback()||tblBackActions(); setActions(fb?fb[0]:null, fb?fb[1]:null); return; }
   const {c,d}=best, open=(c.doorMask>>d)&1, nm=c.T.name;
   if(!open){ setActions({label:'Abrir puerta', run:()=>setDoor(c,d,true)}, null); return; }
   const s=freeSeatForDoor(c.i,d);
@@ -6732,7 +6817,7 @@ function updateCarHud(){
 // Botones táctiles: a pie (saltar, tirarse…) o en coche (acelerar, frenar)
 function updateTouchMode(){
   const inCar=!!player.car, pilot=typeof iPilot==='function' && iPilot(), aboard=!!player.ac, seatedAir=aboard && player.ac.mode==='seated';
-  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && (player.pg.k==='cuco' || player.pg.k==='helm' || player.pg.k==='sled' || player.pg.k==='zip' || player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='vehp' || (player.pg.k==='veh' && !(VE.w && (VE.w.S.canAir||VE.w.S.sub)))));
+  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && (player.pg.k==='cuco' || player.pg.k==='helm' || player.pg.k==='sled' || player.pg.k==='zip' || player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='vehp' || player.pg.k==='surf' || (player.pg.k==='veh' && !(VE.w && (VE.w.S.canAir||VE.w.S.sub)))));
   ui('tcar').hidden=!((inCar && player.car.kind==='seated') || pilot);
   { const vd=!!(player.pg && player.pg.k==='veh' && VE.w), L=vd&&VE.w.L; ui('tveh').hidden=!vd; if(vd){ ui('tveh').classList.toggle('up',!!VE.w.S.canAir); ui('tSiren').hidden=!(L && (L.sr.length||L.sb.length)); ui('tVLights').hidden=!(L && (L.head.length||L.tail.length)); ui('tFx').hidden=!vehFxOf(VE.w).length; } }   // v182
   const drv=(inCar && player.car.seat===0) || pilot;
@@ -7478,8 +7563,8 @@ function trRemotePose(r,t,dt){ if(r.tz && r.tz[2]) pgPoseLimbs(r.obj,{climb:(per
 let myPush={i:-1,t:0}; player.pushUntil=0;
 function pgOccupied(k,i){ if(player.pg && player.pg.k===k && player.pg.i===i) return 'me';
   for(const r of mp.remotes.values()) if(r.pl && r.pl[0]===PG_KINDS.indexOf(k) && r.pl[1]===i) return r; return null; }
-const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled','zip','vine','icsl','dwheel','dcar','veh','vehp'];   // v182: + carrusel de dulces
-function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars' && k!=='cart' && k!=='veh' && k!=='vehp') return;   // v182: cada quien tiene su vehículo
+const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled','zip','vine','icsl','dwheel','dcar','veh','vehp','surf'];   // v182: + carrusel de dulces
+function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars' && k!=='cart' && k!=='veh' && k!=='vehp' && k!=='surf') return;   // v182: cada quien tiene su vehículo
   holding=false; applyHeld(); renderHotbar();
   player.pg={k,i,t0:performance.now()/1000, from:[player.pos.x,player.pos.y,player.pos.z]};
   player.vel.set(0,0,0); player.vy=0; player.dive=null; player.diveAngle=0;
@@ -7535,7 +7620,7 @@ function updateMyPlay(dt){
   if(P.k==='cart') return mcRide(P,dt);   // v137
   if(P.k==='helm'){ P.v=0; return helmPose(); }
   if(P.k==='sled') return wiSledRide(P,dt);   // v140
-  if(P.k==='icsl') return diSlideRide(P,dt); if(P.k==='dwheel') return diWheelRide(P,dt); if(P.k==='dcar') return diCarRide(P,dt); if(P.k==='veh') return vehRide(P,dt); if(P.k==='vehp') return vehpRide(P,dt);   // v144 · v182
+  if(P.k==='icsl') return diSlideRide(P,dt); if(P.k==='dwheel') return diWheelRide(P,dt); if(P.k==='dcar') return diCarRide(P,dt); if(P.k==='veh') return vehRide(P,dt); if(P.k==='surf') return tblRide(P,dt); if(P.k==='vehp') return vehpRide(P,dt);   // v144 · v182
   if(P.k==='zip') return jiZipRide(P,dt); if(P.k==='vine') return jiVineRide(P,dt);   // v142   // v138: el barco se mueve en shipUpdate
   if(P.k==='swing'){ const S=pgState.swing[P.i];
     S.w += (-(9.8/PG_EQ.swings.L)*Math.sin(S.a) - .12*S.w)*dt;
@@ -7610,6 +7695,7 @@ function updateRemoteInPlay(r,dt,t){
   const d=r.pl, k=PG_KINDS[d[0]]; if(!k) return false;
   let v=0;
   if(k==='sled') return wiRemoteSled(r,dt,t);   // v140: en su trineo
+  if(k==='surf') return tblRemoteRide(r,dt,t);   /* v196 */
   if(k==='veh'||k==='vehp'){ const pose=vehRemotePose(r,k,d[1]); if(!pose) return false; placePlay(r.obj,pose); r.pos.set(...pose.pos); r.target.set(...pose.pos); pgPoseLimbs(r.obj,pose,t,dt,r.walk); r.label.position.set(0,2.42,0); r.blob.visible=false; return true; }   // v182
   if(k==='slide'||k==='bars'){ const key=d[0]+':'+d[1]; if(r.pgK!==key || Math.abs(r.pgEl-d[2])>.35) r.pgEl=d[2]; else r.pgEl+=dt; r.pgK=key; v=r.pgEl; }
   else if(k==='cart'){ r.pgK=null; if(r.mcS===undefined || Math.abs(r.mcS-d[2])>4) r.mcS=d[2]; else r.mcS+=dt*4.2+(d[2]-r.mcS)*Math.min(1,dt*3); v=r.mcS; }
@@ -8034,9 +8120,9 @@ const SHIP_OBS=[{t:'c', x:0, z:1.2, r:.42}, {t:'c', x:0, z:HELM_Z, r:.32}, {t:'b
   SHIP_OBS.push({t:'b', x0:1.75, x1:2.45, z0:5.15, z1:5.85}, {t:'c', x:-2.2, z:-3.5, r:.36});
   const W=SH.parts.wheel; B.remove(W); mergeStatic(B); B.children.forEach(o=>{ o.castShadow=true; o.receiveShadow=true; }); B.add(W);
 })();
-function shipPlace(t){ const G=SH.g; G.position.set(SH.x,0,SH.z); G.rotation.set(0,SH.h,0);
+function shipPlace(t){ const G=SH.g; G.position.set(SH.x,SH.lift||0,SH.z); G.rotation.set(0,SH.h,0);
   if(Math.hypot(SH.x-camera.position.x,SH.z-camera.position.z)>240) return;
-  { const k=1+seaOpenK(SH.x,SH.z)*1.6; SH.parts.body.rotation.set(Math.sin(t*.9)*.012*k, 0, Math.sin(t*.7+1)*.02*k); SH.parts.body.position.y=Math.sin(t*1.1)*.06*k; }   // v191: mar adentro se mece más
+  { const k=1+seaOpenK(SH.x,SH.z)*1.6; SH.parts.body.rotation.set(Math.sin(t*.9)*.012*k-(SH.swP||0), 0, Math.sin(t*.7+1)*.02*k); SH.parts.body.position.y=Math.sin(t*1.1)*.06*k; }   // v191: mar adentro se mece más
   const q=SH.parts.sail.geometry.attributes.position, b=SH.parts.sail.geometry.userData.base, k=.35+Math.min(1,Math.abs(SH.v)/10)*.9;
   for(let i=0;i<q.count;i++) q.setZ(i,b[i*3+2]*k+Math.sin(t*2+b[i*3]*.8)*.05); q.needsUpdate=true; SH.parts.sail.geometry.computeVertexNormals();
   SH.parts.flag.rotation.x=Math.sin(t*4)*.12; }
@@ -8093,6 +8179,8 @@ function shipUpdate(dt,t){
     if(shipOnDeck){ const [x,z]=shipW(lx,lz); p.x=x; p.z=z; const dh=S.h-S.prev.h; if(dh){ yaw+=dh; player.facing=(player.facing||0)+dh; } } }
   else shipOnDeck=false;
   if(iSteer()) yaw+=S.h-S.prev.h;   // la cámara gira con el barco
+  { if(S.DECK0===undefined) S.DECK0=S.DECK; const k=1-Math.exp(-dt*2.5), fx=Math.sin(S.h)*9, fz=Math.cos(S.h)*9, hf=swellH(S.x+fx,S.z+fz), hb=swellH(S.x-fx,S.z-fz), hc=swellH(S.x,S.z);   /* v196: las olas grandes mueven el barco */
+    S.lift=(S.lift||0)+(Math.min(5,hc*.75)-(S.lift||0))*k; S.swP=(S.swP||0)+(Math.atan2(hf-hb,18)*.8-(S.swP||0))*k; S.DECK=S.DECK0+S.lift; }
   shipPlace(t); }
 // ---- acciones ----
 function shipActions(){ if(player.car||player.ac||player.mg||player.balloon||player.dive||player.rk||SP.on||player.pg) return null; const p=player.pos;
@@ -8120,7 +8208,17 @@ function shipRemote(r){ const d=r.dk; if(!r.dkS || Math.hypot(r.dkS[0]-d[0],r.dk
 function helmPose(){ const [x,z]=shipW(0,HELM_Z-.75); return {pos:[x,SH.DECK,z], yaw:SH.h, sit:0, grip:1}; }
 function pierDeckY(lz){ const P=PIER; if(lz<P.ZR) return P.y0+.06+(P.Y-P.y0-.06)*Math.max(0,(lz-P.Z0)/(P.ZR-P.Z0)); return P.Y; }
 function pierOn(lx,lz){ const P=PIER; return (Math.abs(lx)<=P.W+.05 && lz>=P.Z0 && lz<=P.PZ0+.2) || (Math.abs(lx)<=P.PW && lz>=P.PZ0 && lz<=P.PZ1); }
-PIER_GROUND=function(x,z,y){ const [lx,lz]=pL(x,z); if(!pierOn(lx,lz)) return null; const h=pierDeckY(lz); return y>=h-.75 ? h : null; };
+// ---------- v196: la bajada al mar del muelle (escalerita junto al muelle, para lanzar la tabla y subirte) ----------
+// Del lado izquierdo del muelle (lx<0), un poco después de salir de la casita de Tortu hacia la orilla. Hay un hueco en el barandal,
+// una escalerita que baja pegada al muelle en dirección a la orilla y una plataforma casi al nivel del mar.
+const TBL_ST={G0:65.9, G1:67.3, X0:-3.2, X1:-1.7, N:6, TR:.32, LY:-.72, LZ0:62.2, LX0:-4.9};
+SWELL.pier.set(PIER.bx,PIER.bz,PIER.c,PIER.s); SWELL.hasPier=true;   /* junto al muelle las olas grandes son más chiquitas */
+TBL_ST.d=(PIER.Y-TBL_ST.LY)/(TBL_ST.N+1); TBL_ST.SZ=TBL_ST.G0-TBL_ST.N*TBL_ST.TR;   // alto de cada escalón y dónde termina la escalera
+function tblStairH(lx,lz){ const S=TBL_ST;
+  if(lx>=S.X0-.05 && lx<=S.X1+.1 && lz>=S.SZ && lz<=S.G1+.05){ if(lz>=S.G0) return PIER.Y; return PIER.Y-Math.min(S.N,Math.ceil((S.G0-lz)/S.TR))*S.d; }
+  if(lx>=S.LX0-.05 && lx<=S.X1+.1 && lz>=S.LZ0-.05 && lz<S.SZ) return S.LY;
+  return null; }
+PIER_GROUND=function(x,z,y){ const [lx,lz]=pL(x,z); if(!pierOn(lx,lz)){ const sh=tblStairH(lx,lz); return sh!==null && y>=sh-.75 ? sh : null; } const h=pierDeckY(lz); return y>=h-.75 ? h : null; };   /* v196: + la bajada al mar */
 const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH-.15 && lz>P.HZ-P.HH+.15 && lz<P.HZ+P.HH-.15 && y>P.Y-.6 && y<P.Y+P.HW+2.5; };
 // ---------- construcción ----------
 (function buildPier(){
@@ -8147,7 +8245,7 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
     for(let i=0;i<=n;i++){ const t=i/n, x=x0+(x1-x0)*t, z=z0+(z1-z0)*t, y=y0+(y1-y0)*t; B(woodD, x, y+.5, z, .14, 1.0, .14); }
     for(const hh of [.55,.98]){ const ym=(y0+y1)/2+hh, slope=Math.atan2(y1-y0,L); B(hh>.9?wood:woodL, (x0+x1)/2, ym, (z0+z1)/2, .1, .1, L, null, -slope*Math.cos(ang)*0, ang, 0).rotation.set(0,ang,0); }
     lineObs(x0,z0,x1,z1,.22,Math.max(y0,y1)+1.0,Math.min(y0,y1)-.35); };
-  [-1,1].forEach(sd=>{ railSeg(sd*(P.W-.06),P.Z0+.3,sd*(P.W-.06),P.ZR,pierDeckY(P.Z0+.3),P.Y); railSeg(sd*(P.W-.06),P.ZR,sd*(P.W-.06),P.PZ0,P.Y,P.Y); });
+  [-1,1].forEach(sd=>{ railSeg(sd*(P.W-.06),P.Z0+.3,sd*(P.W-.06),P.ZR,pierDeckY(P.Z0+.3),P.Y); if(sd<0){ railSeg(sd*(P.W-.06),P.ZR,sd*(P.W-.06),TBL_ST.G0,P.Y,P.Y); railSeg(sd*(P.W-.06),TBL_ST.G1,sd*(P.W-.06),P.PZ0,P.Y,P.Y); } else railSeg(sd*(P.W-.06),P.ZR,sd*(P.W-.06),P.PZ0,P.Y,P.Y); });   /* v196: hueco para la bajada al mar */
   [-1,1].forEach(sd=>{ railSeg(sd*(P.PW-.06),P.PZ0+.06,sd*(P.PW-.06),P.PZ1-.06,P.Y,P.Y); railSeg(sd*(P.W+.1),P.PZ0+.06,sd*(P.PW-.06),P.PZ0+.06,P.Y,P.Y); });
   railSeg(-P.PW+.06,P.PZ1-.06,P.PW-.06,P.PZ1-.06,P.Y,P.Y);
   // ---------- cañas fijas (5 por lado, donde el agua ya es honda) y un balde junto a cada una ----------
@@ -8305,6 +8403,36 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
     bucketVisual(b); });
   if(saved && Number.isInteger(saved.h) && FISH[saved.h]) player.hand=saved.h;
 })();
+// ---------- v196: construir la bajada al mar ----------
+(function tblStairsBuild(){ const P=PIER, S=TBL_ST, G=new THREE.Group(); G.position.set(P.bx,0,P.bz); G.rotation.y=P.th;
+  const box=new THREE.BoxGeometry(1,1,1), cyl=new THREE.CylinderGeometry(1,1,1,10);
+  const wood=felt('#b98250','rgba(70,35,10,.16)'), woodL=felt('#d2a06c','rgba(90,50,15,.14)'), woodD=felt('#86562f','rgba(50,25,5,.2)');
+  const B=(m,x,y,z,sx,sy,sz,rx)=>{ const o=new THREE.Mesh(box,m); o.position.set(x,y,z); o.scale.set(sx,sy,sz); if(rx) o.rotation.x=rx; G.add(o); return o; };
+  const post=(lx,lz,top)=>{ const [x,z]=pW(lx,lz), bot=terrainH(x,z)-.6; const o=new THREE.Mesh(cyl,woodD); o.position.set(lx,(top+bot)/2,lz); o.scale.set(.13,top-bot,.13); G.add(o); };
+  const ob=(lx,lz,top,bot)=>{ const [x,z]=pW(lx,lz); obstacles.push({x,z,r:.2,top,bot,walk:false}); };
+  const W=S.X1-S.X0, xm=(S.X0+S.X1)/2;
+  // la plataforma de arriba (al nivel del muelle, afuera del barandal)
+  for(let z=S.G0+.2;z<S.G1;z+=.47) B(wood,xm,P.Y-.06,z,W,.12,.42);
+  // escalones
+  for(let k=1;k<=S.N;k++){ const y=P.Y-k*S.d, z=S.G0-(k-.5)*S.TR; B(k%2?woodL:wood,xm,y-.06,z,W,.12,S.TR-.03); }
+  // los largueros de los lados de la escalera
+  { const L=Math.hypot(S.G0-S.SZ,P.Y-S.LY), a=Math.atan2(P.Y-S.LY,S.G0-S.SZ); [S.X0+.04,S.X1-.04].forEach(x=>B(woodD,x,(P.Y+S.LY)/2-.16,(S.G0+S.SZ)/2,.08,.24,L,a)); }
+  // la plataforma de abajo, casi al ras del mar
+  for(let z=S.LZ0+.2;z<S.SZ;z+=.47) B(z>S.SZ-.5?woodL:wood,(S.LX0+S.X1)/2,S.LY-.06,z,S.X1-S.LX0,.12,.42);
+  [[S.LX0+.15,S.LZ0+.15],[S.LX0+.15,S.SZ-.15],[S.X1-.1,S.LZ0+.15],[(S.LX0+S.X1)/2,S.LZ0+.15],[(S.LX0+S.X1)/2,S.SZ-.15],[S.X0+.1,S.SZ+.4],[S.X0+.1,S.G0],[S.X0+.1,S.G1-.1]].forEach(([x,z])=>post(x,z,z>S.SZ?(z>=S.G0?P.Y-.12:tblStairH(x,z)-.12):S.LY-.12));
+  // barandales: del lado de afuera de la escalera, al fondo de arriba y en dos lados de la plataforma de abajo (el lado del mar queda abierto)
+  const rail=(x0,z0,y0,x1,z1,y1)=>{ const L=Math.hypot(x1-x0,z1-z0), n=Math.max(1,Math.round(L/1.1)), a=Math.atan2(x1-x0,z1-z0), sl=Math.atan2(y1-y0,L);
+    for(let i=0;i<=n;i++){ const t=i/n, x=x0+(x1-x0)*t, z=z0+(z1-z0)*t, y=y0+(y1-y0)*t; B(woodD,x,y+.5,z,.12,1.0,.12); }
+    for(const hh of [.55,.98]){ const o=new THREE.Mesh(box,hh>.9?wood:woodL); o.position.set((x0+x1)/2,(y0+y1)/2+hh,(z0+z1)/2); o.rotation.order='YXZ'; o.rotation.set(-sl,a,0); o.scale.set(.09,.09,Math.hypot(L,y1-y0)); G.add(o); }
+    const m=Math.max(1,Math.ceil(L/.4)); for(let i=0;i<=m;i++){ const t=i/m, y=y0+(y1-y0)*t; ob(x0+(x1-x0)*t, z0+(z1-z0)*t, y+1.0, y-.35); } };
+  rail(S.X0+.06,S.SZ,S.LY,S.X0+.06,S.G0,P.Y); rail(S.X0+.06,S.G0,P.Y,S.X0+.06,S.G1-.06,P.Y); rail(S.X0+.06,S.G1-.06,P.Y,S.X1,S.G1-.06,P.Y);
+  rail(S.LX0+.06,S.LZ0+.06,S.LY,S.X1,S.LZ0+.06,S.LY); rail(S.LX0+.06,S.SZ-.06,S.LY,S.X0,S.SZ-.06,S.LY);
+  // letrerito en el barandal de arriba
+  { const c=document.createElement('canvas'); c.width=256; c.height=96; const q=c.getContext('2d'); q.fillStyle='#f6e7c6'; q.fillRect(0,0,256,96); q.strokeStyle='#86562f'; q.lineWidth=8; q.strokeRect(4,4,248,88);
+    q.fillStyle='#2f86c9'; q.font='bold 34px sans-serif'; q.textAlign='center'; q.fillText('Bajada al mar',128,44); q.fillStyle='#86562f'; q.font='bold 24px sans-serif'; q.fillText('para surfear',128,78);
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; const m=new THREE.Mesh(new THREE.PlaneGeometry(.9,.34),new THREE.MeshStandardMaterial({map:t,roughness:.8,side:THREE.DoubleSide}));
+    m.position.set(S.X0+.0,P.Y+1.25,(S.G0+S.G1)/2); m.rotation.y=Math.PI/2; G.add(m); B(woodD,S.X0+.06,P.Y+1.12,(S.G0+S.G1)/2,.08,.25,.08); }
+  G.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); mergeStatic(G); scene.add(G); TBL_ST.g=G; })();
 // ---------- datos del jugador: baldes, pez en la mano y catálogo ----------
 player.bucket=-1; if(player.hand===undefined) player.hand=-1; player.fish=null; player.feed=null; player.busy=false;
 let fishBait=0;   // 0 lombriz · 1 pez pequeño · 2 pez mediano
@@ -8539,6 +8667,7 @@ function renderFishOv(){ if(fishMode==='farm'){ renderFarmOv(); return; } if(fis
     if(player.hand>=0){ const id=player.hand; body.appendChild(fishRow(id,1,[['Vender el de tu mano',()=>{ player.hand=-1; saveFish(); addCoins(FISH[id].p); try{ sendPresence(true); }catch(e){} renderFishOv(); }]])); }
     [...cnt.entries()].sort((a,c)=>FISH[c[0]].p-FISH[a[0]].p).forEach(([id,n])=>body.appendChild(fishRow(id,n,[['Vender 1',()=>{ const k=b.items.indexOf(id); if(k>=0){ b.items.splice(k,1); bucketVisual(b); saveFish(); addCoins(FISH[id].p); renderFishOv(); } }], n>1?[`Vender ${n}`,()=>{ b.items=b.items.filter(x=>x!==id); bucketVisual(b); saveFish(); addCoins(FISH[id].p*n); renderFishOv(); }]:null].filter(Boolean))));
     return; }
+  if(fishTab==='surf'){ renderTblTab(body,say); return; }   /* v196: tablas de surf */
   // catálogo
   const have=fishDexCount(); say.textContent=`Has atrapado ${have} de ${FISH.length} criaturas. Con lombriz salen pequeños, con un pez pequeño de carnada salen medianos y con uno mediano, ¡grandes!`;
   const chips=document.createElement('div'); chips.className='fish-chips'; [[-1,'Todos'],[0,'Pequeños'],[1,'Medianos'],[2,'Grandes']].forEach(([v,l])=>{ const c=document.createElement('button'); c.className='chip'; c.textContent=l; c.setAttribute('aria-pressed',String(fishFilter===v)); c.onclick=()=>{ fishFilter=v; renderFishOv(); }; chips.appendChild(c); }); body.appendChild(chips);
@@ -14068,6 +14197,276 @@ function tmBot(r,dt,G){ const P=cpuD(TM_BOT); let b=r.cb; if(!b || b.gid!==G.gid
   const [x,z]=tmW(b.u,b.w); r.pos.set(x,b.y,z); r.target.copy(r.pos); }
 Object.assign(CPU_AI,{0:plBot, 1:papaBot, 2:bolaBot, 3:rcBot, 4:mzBot, 5:ccBot, 6:tmBot});
 
+// ---------- v196: tablas de surf (se compran con Tortu) ----------
+// Cada tabla se compra una vez y es tuya para siempre. Con Tortu le das «Llevar» y tu peluchito la carga encima de la cabeza
+// con las dos manitas. Desde ahí la puedes lanzar al frente o colgártela en la espalda: la cuerdita (leash) sale de la punta,
+// baja por la tabla y le da unas vueltas a la pancita (por debajo de los bracitos). En la espalda va contigo a todos lados,
+// aunque te teletransportes. Si la dejas tirada mucho rato (5 min) y lejos, se va: pídesela otra vez a Tortu.
+const TBL_L=1.9, TBL_W=.56, TBL_T=.07, TBL_GONE=300000;
+const TBL_BOARDS=[
+  ['Arena','#f6e7c6','#e8c98f','liso',150], ['Coral','#ff8a80','#ffffff','franja',150], ['Cielo','#8fd6ff','#ffffff','rayas',180], ['Menta','#9ee6c4','#2f9e7a','puntos',180],
+  ['Limón','#fff27a','#7ed957','rayas',200], ['Flores','#ff9ec4','#fff27a','flores',260], ['Ola grande','#2f86c9','#ffffff','olas',300], ['Estrellitas','#2b2f6b','#ffd34d','estrellas',320],
+  ['Fuego','#ff6a3d','#ffd34d','flamas',350], ['Arcoíris','#ffffff','#ffffff','arcoiris',400], ['Cuadritos','#ffffff','#ff5d6c','cuadros',260], ['Corazones','#ffd6e5','#ff4f7b','corazones',300],
+  ['Palmeras','#ffe2a8','#3f9a3a','palmeras',320], ['Rayo','#3a3f52','#ffd34d','rayo',360], ['Sandía','#ff6f7f','#3f9a3a','sandia',300], ['Galaxia','#1c1640','#c79bff','galaxia',500],
+  ['Tigre','#ffa94d','#3a2a1a','tigre',420], ['Nubecitas','#a9dcf5','#ffffff','nubes',280], ['Dulce','#ffd1f0','#8fd6ff','dulce',380], ['Atardecer','#ff9a5c','#7a3fa0','atardecer',600]
+].map(([n,c1,c2,pat,p],id)=>({id,n,c1,c2,pat,p}));
+const TBL={own:new Set(), eq:-1, m:0, drop:null, mine:null, loose:null, looseId:-1, tex:new Map(), thr:null, rem:new Map()};
+// m: 0 = no la llevas · 1 = en las manos (sobre la cabeza) · 2 = en la espalda · 3 = la dejaste (en el piso o flotando)
+(function tblLoad(){ try{ const o=JSON.parse(localStorage.getItem('mundoPelucheSurf')||'null'); if(!o) return;
+  (o.o||[]).forEach(i=>{ if(TBL_BOARDS[i]) TBL.own.add(i); }); TBL.eq=TBL.own.has(o.e)?o.e:-1; TBL.m=TBL.eq<0?0:Math.max(0,Math.min(4,o.m|0)); if(TBL.m===4) TBL.m=2;
+  if(TBL.m===3){ const d=o.d; if(d && Number.isFinite(d.x) && Number.isFinite(d.z) && Date.now()-(d.t||0)<TBL_GONE) TBL.drop=d; else TBL.m=0; } }catch(e){} })();
+function tblSave(){ try{ localStorage.setItem('mundoPelucheSurf', JSON.stringify({o:[...TBL.own], e:TBL.eq, m:TBL.m===4?2:TBL.m, d:TBL.m===3?TBL.drop:null})); }catch(e){} }
+
+// ---- el dibujo de cada tabla (la cubierta) ----
+function tblDraw(q,W,H,b){ const c1=b.c1, c2=b.c2; q.fillStyle=c1; q.fillRect(0,0,W,H); const R=mzRand(b.id*97+5);
+  const star=(x,y,r)=>{ q.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*.45:r; q.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } q.closePath(); q.fill(); };
+  const heart=(x,y,r)=>{ q.beginPath(); q.moveTo(x,y+r*.9); q.bezierCurveTo(x-r*1.4,y-r*.2,x-r*.6,y-r*1.2,x,y-r*.4); q.bezierCurveTo(x+r*.6,y-r*1.2,x+r*1.4,y-r*.2,x,y+r*.9); q.fill(); };
+  q.fillStyle=c2; q.strokeStyle=c2;
+  switch(b.pat){
+    case 'franja': q.fillRect(W*.38,0,W*.24,H); break;
+    case 'rayas': for(let y=-W;y<H;y+=W*.5){ q.save(); q.beginPath(); q.moveTo(0,y); q.lineTo(W,y+W*.4); q.lineTo(W,y+W*.62); q.lineTo(0,y+W*.22); q.fill(); q.restore(); } break;
+    case 'puntos': for(let i=0;i<40;i++){ q.beginPath(); q.arc(R()*W,R()*H,W*(.04+R()*.05),0,7); q.fill(); } break;
+    case 'flores': for(let i=0;i<14;i++){ const x=R()*W, y=R()*H, r=W*(.07+R()*.06); for(let k=0;k<5;k++){ q.beginPath(); q.arc(x+Math.cos(k*1.257)*r,y+Math.sin(k*1.257)*r,r*.7,0,7); q.fill(); } q.fillStyle='#ffffff'; q.beginPath(); q.arc(x,y,r*.5,0,7); q.fill(); q.fillStyle=c2; } break;
+    case 'olas': q.lineWidth=W*.06; for(let y=H*.1;y<H;y+=H*.12){ q.beginPath(); for(let x=0;x<=W;x+=4) q.lineTo(x,y+Math.sin(x/W*Math.PI*3)*H*.025); q.stroke(); } break;
+    case 'estrellas': for(let i=0;i<22;i++) star(R()*W,R()*H,W*(.04+R()*.06)); break;
+    case 'flamas': for(let i=0;i<7;i++){ const x=W*(.05+i*.15); q.beginPath(); q.moveTo(x-W*.12,H); q.quadraticCurveTo(x-W*.1,H*.55,x+W*.02,H*(.25+R()*.15)); q.quadraticCurveTo(x+W*.02,H*.6,x+W*.14,H); q.fill(); } break;
+    case 'arcoiris': ['#ff5d6c','#ff9f43','#ffd34d','#7ed957','#4fc3f7','#7e6bff','#c77dff'].forEach((c,i)=>{ q.fillStyle=c; q.fillRect(i*W/7,0,W/7+1,H); }); break;
+    case 'cuadros': { const s=W/6; for(let y=0;y<H/s;y++) for(let x=0;x<6;x++) if((x+y)%2) q.fillRect(x*s,y*s,s,s); } break;
+    case 'corazones': for(let i=0;i<16;i++) heart(R()*W,R()*H,W*(.06+R()*.05)); break;
+    case 'palmeras': for(let i=0;i<4;i++){ const x=W*(.2+R()*.6), y=H*(.15+i*.22); q.fillStyle='#8a5a2b'; q.fillRect(x-2,y,4,H*.12); q.fillStyle=c2; for(let k=0;k<5;k++){ q.beginPath(); q.ellipse(x+Math.cos(k*1.25)*W*.09,y+Math.sin(k*1.25)*W*.05,W*.12,W*.035,k*1.25,0,7); q.fill(); } } break;
+    case 'rayo': q.beginPath(); q.moveTo(W*.65,H*.08); q.lineTo(W*.3,H*.5); q.lineTo(W*.52,H*.5); q.lineTo(W*.32,H*.92); q.lineTo(W*.75,H*.42); q.lineTo(W*.52,H*.42); q.closePath(); q.fill(); break;
+    case 'sandia': q.fillStyle='#3f9a3a'; q.fillRect(0,0,W*.12,H); q.fillRect(W*.88,0,W*.12,H); q.fillStyle='#ffffff'; q.fillRect(W*.12,0,W*.04,H); q.fillRect(W*.84,0,W*.04,H); q.fillStyle='#2b1a10'; for(let i=0;i<24;i++){ q.beginPath(); q.ellipse(W*(.25+R()*.5),R()*H,W*.025,W*.045,0,0,7); q.fill(); } break;
+    case 'galaxia': { const g=q.createLinearGradient(0,0,W,H); g.addColorStop(0,'#1c1640'); g.addColorStop(.5,'#4a2a7a'); g.addColorStop(1,'#13304f'); q.fillStyle=g; q.fillRect(0,0,W,H); q.fillStyle='#ffffff'; for(let i=0;i<60;i++){ q.globalAlpha=.4+R()*.6; q.fillRect(R()*W,R()*H,2,2); } q.globalAlpha=1; q.fillStyle=c2; for(let i=0;i<5;i++) star(R()*W,R()*H,W*.05); } break;
+    case 'tigre': for(let y=H*.04;y<H;y+=H*.07){ q.beginPath(); q.moveTo(0,y); q.quadraticCurveTo(W*.25,y+H*.02,W*.42,y+H*.01); q.lineTo(W*.3,y+H*.03); q.lineTo(0,y+H*.03); q.fill(); q.beginPath(); q.moveTo(W,y+H*.03); q.quadraticCurveTo(W*.75,y+H*.05,W*.58,y+H*.04); q.lineTo(W*.7,y+H*.06); q.lineTo(W,y+H*.06); q.fill(); } break;
+    case 'nubes': for(let i=0;i<8;i++){ const x=R()*W, y=R()*H, r=W*.09; [[0,0,1],[.8,.1,.8],[-.8,.15,.75],[.3,-.4,.8]].forEach(([a,c,k])=>{ q.beginPath(); q.arc(x+a*r,y+c*r,r*k,0,7); q.fill(); }); } break;
+    case 'dulce': for(let y=-W;y<H;y+=W*.34){ q.beginPath(); q.moveTo(0,y); q.lineTo(W,y+W*.5); q.lineTo(W,y+W*.67); q.lineTo(0,y+W*.17); q.fill(); } q.fillStyle='#fff27a'; for(let i=0;i<20;i++){ q.beginPath(); q.arc(R()*W,R()*H,W*.03,0,7); q.fill(); } break;
+    case 'atardecer': { const g=q.createLinearGradient(0,0,0,H); g.addColorStop(0,'#7a3fa0'); g.addColorStop(.45,'#ff6f91'); g.addColorStop(.75,'#ff9a5c'); g.addColorStop(1,'#ffd34d'); q.fillStyle=g; q.fillRect(0,0,W,H); q.fillStyle='#fff3c4'; q.beginPath(); q.arc(W/2,H*.62,W*.24,0,7); q.fill(); } break;
+  }
+  // la línea de madera del centro (stringer)
+  if(b.pat!=='arcoiris' && b.pat!=='franja'){ q.fillStyle='rgba(120,80,40,.35)'; q.fillRect(W/2-1.5,0,3,H); } }
+function tblTex(id){ if(TBL.tex.has(id)) return TBL.tex.get(id); const c=document.createElement('canvas'); c.width=128; c.height=384; tblDraw(c.getContext('2d'),128,384,TBL_BOARDS[id]);
+  const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping; t.repeat.set(1/TBL_W,1/TBL_L); t.offset.set(.5,.5); TBL.tex.set(id,t); return t; }
+// ---- la tabla 3D: la forma de tabla (punta adelante), aleta abajo y un aro en la punta para la cuerda ----
+const TBL_GEO=(()=>{ const s=new THREE.Shape(), n=28, hw=t=>TBL_W/2*(t>0?Math.pow(Math.max(0,1-t),.6)*(1+.15*t):Math.pow(1-t*t*.62,.85)), pts=[];
+  for(let i=0;i<=n;i++){ const t=-1+2*i/n; pts.push([hw(t),t*TBL_L/2]); }
+  s.moveTo(-pts[0][0],pts[0][1]); for(const [x,y] of pts) s.lineTo(x,y); for(let i=n;i>=0;i--) s.lineTo(-pts[i][0],pts[i][1]); s.closePath();
+  const g=new THREE.ExtrudeGeometry(s,{depth:TBL_T-.03, bevelEnabled:true, bevelThickness:.015, bevelSize:.015, bevelSegments:2, curveSegments:6}); g.translate(0,0,-(TBL_T-.03)/2); g.computeVertexNormals();
+  const fs=new THREE.Shape(); fs.moveTo(0,0); fs.lineTo(.2,0); fs.quadraticCurveTo(.06,.05,-.02,.17); fs.closePath(); const fin=new THREE.ExtrudeGeometry(fs,{depth:.02, bevelEnabled:false}); fin.translate(0,0,-.01);
+  return {board:g, fin}; })();
+function makeSurfBoard(id){ const g=new THREE.Group(), b=TBL_BOARDS[id];
+  const deck=new THREE.Mesh(TBL_GEO.board,[new THREE.MeshStandardMaterial({map:tblTex(id), roughness:.35, metalness:.05}), new THREE.MeshStandardMaterial({color:new THREE.Color(b.c2==='#ffffff'?b.c1:b.c2).multiplyScalar(.85), roughness:.4})]); g.add(deck);
+  const fin=new THREE.Mesh(TBL_GEO.fin,FM('#3a3f52','shiny')); fin.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0,1,0),new THREE.Vector3(0,0,-1),new THREE.Vector3(-1,0,0))); fin.position.set(0,-TBL_L/2+.1,-TBL_T/2+.01); g.add(fin);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(.035,.01,6,12),FM('#9aa0a8','shiny')); ring.position.set(0,TBL_L/2-.12,TBL_T/2+.005); g.add(ring);
+  g.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.userData.noCol=true; } }); g.userData.id=id; return g; }
+const TBL_CORD=new THREE.MeshStandardMaterial({color:'#2a2a33', roughness:.8});
+function tblTube(pts,closed,r){ const c=new THREE.CatmullRomCurve3(pts,!!closed); return new THREE.Mesh(new THREE.TubeGeometry(c,Math.max(16,pts.length*6),r||.016,6,!!closed),TBL_CORD); }
+
+// ---- medir al peluchito: dónde está la espalda, la pancita y la punta de la cabeza (una vez por tipo de avatar) ----
+function tblFit(o){ const u=o.userData, key=(u.av||'p'); if(u.tblK===key && u.tblFit) return u.tblFit;
+  o.updateMatrixWorld(true); const inv=new THREE.Matrix4().copy(o.matrixWorld).invert(), v=new THREE.Vector3(), skip=new Set(); (u.arms||[]).forEach(a=>a.traverse(q=>skip.add(q))); (u.legs||[]).forEach(a=>a.traverse(q=>skip.add(q)));
+  const P=[]; o.traverse(m=>{ if(!m.isMesh || skip.has(m) || m.userData.surf || m.userData.noFit || (m.material && m.material.visible===false)) return; let q=m; while(q && q!==o){ if(!q.visible || (q.userData && q.userData.surf)) return; q=q.parent; } const p=m.geometry.attributes.position; if(!p) return; const st=Math.max(1,Math.floor(p.count/600));
+    for(let i=0;i<p.count;i+=st){ v.fromBufferAttribute(p,i).applyMatrix4(m.matrixWorld).applyMatrix4(inv); P.push(v.x,v.y,v.z); } });
+  let top=0, y0=9; for(let i=0;i<P.length;i+=3){ top=Math.max(top,P[i+1]); y0=Math.min(y0,P[i+1]); } y0=Math.max(y0,.15);
+  const yb=y0+(top-y0)*(u.av==='c'?.2:.3); let rx=0, zf=-9, zb=9, zback=9;
+  for(let i=0;i<P.length;i+=3){ const y=P[i+1]; if(Math.abs(y-yb)<.08){ rx=Math.max(rx,Math.abs(P[i])); zf=Math.max(zf,P[i+2]); zb=Math.min(zb,P[i+2]); } if(y>yb && y<top-.15 && Math.abs(P[i])<.2) zback=Math.min(zback,P[i+2]); }
+  if(rx<=0){ rx=.45; zf=.35; zb=-.35; } if(zback>8) zback=zb;
+  u.tblFit={top, yb, rx:Math.min(rx,.8), zf, zb, zback:Math.min(zb,zback)}; u.tblK=key; return u.tblFit; }
+// brazos arriba (para cargar la tabla sobre la cabeza)
+// la forma de las vueltas de cuerda: la pancita (una elipse) + la tabla (un rectángulo), envueltas juntas
+function tblLoop(F,bw,z0,z1){ const P=[], rx=F.rx+.022, rz=(F.zf-F.zb)/2+.022, zc=(F.zf+F.zb)/2;
+  for(let i=0;i<40;i++){ const a=i/40*Math.PI*2; P.push([Math.cos(a)*rx, zc+Math.sin(a)*rz]); }
+  for(const [x,z] of [[-bw,z0],[bw,z0],[-bw,z1],[bw,z1]]) for(let k=0;k<6;k++){ const a=k/6*Math.PI*2; P.push([x+Math.cos(a)*.02, z+Math.sin(a)*.02]); }
+  P.sort((a,b)=>a[0]-b[0]||a[1]-b[1]); const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]), lo=[], hi=[];
+  for(const p of P){ while(lo.length>=2 && cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); }
+  for(let i=P.length-1;i>=0;i--){ const p=P[i]; while(hi.length>=2 && cr(hi[hi.length-2],hi[hi.length-1],p)<=0) hi.pop(); hi.push(p); }
+  const H=lo.slice(0,-1).concat(hi.slice(0,-1)); let L=0; const seg=H.map((p,i)=>{ const q=H[(i+1)%H.length], d=Math.hypot(q[0]-p[0],q[1]-p[1]); L+=d; return d; });
+  const out=[], N=36; let i=0, acc=0; for(let k=0;k<N;k++){ const s=k/N*L; while(acc+seg[i]<s){ acc+=seg[i]; i++; } const p=H[i], q=H[(i+1)%H.length], f=seg[i]?(s-acc)/seg[i]:0; out.push([p[0]+(q[0]-p[0])*f, p[1]+(q[1]-p[1])*f]); }
+  return out; }
+function tblUpPose(o){ const ar=o.userData.arms; if(!ar) return; ar.forEach(a=>{ const sd=a.userData.side; a.rotation.z=sd*2.8; a.rotation.x=.05; if(a.userData.joint){ a.userData.joint.rotation.x=-.12; a.userData.joint.rotation.z=sd*.55; } }); }
+// arma (o reacomoda) la tabla en el peluche: m=1 sobre la cabeza, m=2 en la espalda con la cuerda en la pancita
+function tblAttach(o,id,m,holder){ let h=holder; const key=id+'|'+m+'|'+(o.userData.av||'p');
+  if(h && h.userData.key===key && h.parent===o) return h;
+  if(h){ h.parent&&h.parent.remove(h); h.traverse(q=>{ if(q.geometry && q.geometry!==TBL_GEO.board && q.geometry!==TBL_GEO.fin && q.userData.tmp) q.geometry.dispose(); }); }
+  h=new THREE.Group(); h.userData.surf=true; h.userData.key=key; const b=makeSurfBoard(id); h.add(b); const F=tblFit(o);
+  if(m===1){ const t0=holdTips(o,tblUpPose,'tblUp')||{y:F.top+.4,z:0}, t={y:Math.max(t0.y,F.top-.01), z:t0.z||0}; b.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(-1,0,0),new THREE.Vector3(0,0,1),new THREE.Vector3(0,1,0))); b.position.set(0,t.y+TBL_T/2+.03,(t.z||0)+.05);
+    // la cuerda cuelga de la punta (adelante) en una curvita
+    const nose=new THREE.Vector3(0,t.y+.02,(t.z||0)+.05+TBL_L/2-.12); const cord=tblTube([nose, nose.clone().add(new THREE.Vector3(.1,-.2,.04)), nose.clone().add(new THREE.Vector3(.3,-.4,-.12)), nose.clone().add(new THREE.Vector3(.36,-.3,-.45))]); cord.userData.tmp=true; h.add(cord); }
+  else { const zb=F.zback-TBL_T/2-.02, yc=F.top+.14-TBL_L/2; b.position.set(0,yc,zb);
+    const ny=yc+TBL_L/2-.12, nz=zb-TBL_T/2-.01, outZ=zb-TBL_T/2-.015, wy=F.yb;
+    // de la punta: hace una curvita por arriba y baja por el centro de la tabla (por fuera) hasta la pancita
+    const down=tblTube([new THREE.Vector3(0,ny,zb+TBL_T/2), new THREE.Vector3(0,ny+.13,zb-.02), new THREE.Vector3(0,ny+.05,outZ-.04), new THREE.Vector3(0,(ny+wy)/2,outZ-.005), new THREE.Vector3(0,wy+.05,outZ-.005)]); down.userData.tmp=true; h.add(down);
+    // tres vueltas alrededor de la pancita y la tabla (por debajo de los bracitos)
+    // la vuelta abraza la pancita por delante y se abre por detrás solo lo justo para rodear la tabla (los bracitos quedan por fuera)
+    const loop=tblLoop(F, TBL_W/2*.97+.02, outZ-.012, zb+TBL_T/2), cz=(F.zf+outZ)/2, rz=Math.max(.1,(F.zf-outZ)/2);
+    for(const [dy,tl] of [[0,0],[.042,.04],[-.038,-.03]]){ const pts=loop.map(([x,z])=>new THREE.Vector3(x, wy+dy+(z-cz)/rz*tl, z)); const ring=tblTube(pts,true,.014); ring.userData.tmp=true; h.add(ring); } }
+  h.traverse(q=>{ if(q.isMesh){ q.castShadow=true; q.userData.noCol=true; q.userData.surf=true; } }); o.add(h); return h; }
+// la tabla suelta (en el piso o flotando), con su cuerdita enrollada a un lado
+function tblLoose(id){ const g=new THREE.Group(); const b=makeSurfBoard(id); b.rotation.set(-Math.PI/2,0,0); g.add(b);
+  const pts=[]; for(let i=0;i<14;i++){ const a=i/13*Math.PI*2.4; pts.push(new THREE.Vector3(.18+Math.cos(a)*(.12+i*.01), .02, -TBL_L/2+.2-Math.sin(a)*(.12+i*.01)+i*.02)); } pts.unshift(new THREE.Vector3(0,.03,-TBL_L/2+.12)); const cord=tblTube(pts,false,.013); g.add(cord); g.userData.cord=cord;
+  g.traverse(q=>{ if(q.isMesh){ q.castShadow=true; q.userData.noCol=true; } }); return g; }
+
+// ---- acciones ----
+const tblFree=()=>state==='play' && !player.car && !player.ac && !player.pg && !player.mg && !(AR.me.a>=0 && AR.me.st>=1) && !SP.on && !player.balloon;
+function tblSetMode(m){ TBL.m=m; if(m!==3) TBL.drop=null; if(m===1 && holding){ holding=false; applyHeld(); renderHotbar(); } tblSave(); try{ sendPresence(true); }catch(e){} actKey=''; }
+function tblThrow(){ if(TBL.m!==1) return; const f=player.facing, sx=player.pos.x, sz=player.pos.z, d=3.4; let tx=sx+Math.sin(f)*d, tz=sz+Math.cos(f)*d;
+  TBL.thr={t:0, from:new THREE.Vector3(sx,player.pos.y+2.4,sz), to:new THREE.Vector3(tx,0,tz), yaw:f+Math.PI}; TBL.m=3; TBL.drop={x:tx, y:player.pos.y, z:tz, yaw:f+Math.PI, t:Date.now(), w:0};   /* la punta queda hacia donde la lanzaste */
+  try{ audio.whoosh?audio.whoosh():audio.jump(); }catch(e){} tblSave(); try{ sendPresence(true); }catch(e){} actKey=''; }
+function tblDropHere(){ if(TBL.m!==2) return; const f=player.facing, x=player.pos.x-Math.sin(f)*.9, z=player.pos.z-Math.cos(f)*.9; TBL.m=3; TBL.drop={x, y:player.pos.y, z, yaw:f+Math.PI/2, t:Date.now(), w:0}; tblLand(); tblSave(); try{ sendPresence(true); }catch(e){} actKey=''; }
+// ¿cayó en el agua o en el piso?
+function tblLand(){ const d=TBL.drop; if(!d) return; const g=groundAt(d.x,d.z,d.y+3), ws=waterSurfaceY(d.x,d.z); d.w=ws>g+.25?1:0; d.y=d.w?ws:g; }
+function tblNear(){ const d=TBL.drop; if(TBL.m!==3 || !d || TBL.thr) return false; return Math.hypot(player.pos.x-d.x,player.pos.z-d.z)<2.2 && Math.abs(player.pos.y-d.y)<2.5; }
+function tblActions(){ if(player.pg && player.pg.k==='surf') return [{label:'Bajarse', run:tblGetOff}, null];
+  if(tblCanMount()) return [{label:'🏄 Subirse a la tabla', run:tblMount}, TBL.m===3?{label:'Tomar tabla', run:()=>tblSetMode(1)} : TBL.m===1?{label:'🏄 Lanzar tabla', run:tblThrow}:null];
+  if(!tblFree() || TBL.eq<0) return null; try{ if(pierOnNow() && (nearTortu() || nearDoor())) return null; }catch(e){}
+  if(TBL.m===1 && !player.swim) return [{label:'🏄 Lanzar tabla', run:tblThrow}, {label:'🎒 Colgarte la tabla', run:()=>tblSetMode(2)}];
+  if(TBL.m===3 && tblNear() && !player.swim) return [{label:'🏄 Tomar tabla', run:()=>tblSetMode(1)}, null];
+  return null; }
+function tblBackActions(){ if(!tblFree() || TBL.eq<0 || TBL.m!==2 || player.swim) return null; return [{label:'🏄 Tomar tabla', run:()=>tblSetMode(1)}, {label:'Dejar tabla', run:tblDropHere}]; }
+
+// ---- cada cuadro ----
+function tblTick(dt){ tblRemoteGc(); try{ tblLeashTick(dt); tblDriftTick(dt); }catch(e){} if(TBL.eq<0 && !TBL.mine && !TBL.loose) return;
+  // con las manos ocupadas no se puede usar otra cosa: si tomas algo de la barra o te subes a algo, la tabla se va a la espalda
+  if(TBL.m===1 && (holding || player.hand>=0 || player.fish || player.dive || player.swim || player.car || player.ac || player.pg || player.balloon || (AR.me.a>=0 && AR.me.st>=2))) tblSetMode(2);
+  if(TBL.m===4){ if(!(player.pg && player.pg.k==='surf') || !TBL.ride){ TBL.m=2; TBL.ride=null; tblSave(); try{ sendPresence(true); }catch(e){} }
+    else { if(!TBL.loose || TBL.looseId!==TBL.eq){ if(TBL.loose) scene.remove(TBL.loose); TBL.loose=tblLoose(TBL.eq); TBL.looseId=TBL.eq; scene.add(TBL.loose); }
+      const R=TBL.ride; tblPlaceRiding(TBL.loose,R.x,R.y,R.z,R.h,R.pitch,R.roll); if(TBL.mine) TBL.mine.visible=false; return; } }
+  // la mía (en las manos o en la espalda)
+  const show=TBL.eq>=0 && (TBL.m===1 || TBL.m===2) && !(AR.me.a>=0 && AR.me.st>=2) && !player.car && !player.ac;
+  if(show){ TBL.mine=tblAttach(plush,TBL.eq,TBL.m,TBL.mine); TBL.mine.visible=plush.visible; } else if(TBL.mine){ TBL.mine.visible=false; }
+  // la tabla suelta
+  if(TBL.m===3 && TBL.drop && TBL.eq>=0){ const d=TBL.drop;
+    if(!TBL.loose || TBL.looseId!==TBL.eq){ if(TBL.loose) scene.remove(TBL.loose); TBL.loose=tblLoose(TBL.eq); TBL.looseId=TBL.eq; scene.add(TBL.loose); }
+    const L=TBL.loose; L.visible=true;
+    if(TBL.thr){ const T=TBL.thr; T.t+=dt; const k=Math.min(1,T.t/.55); if(T.t<dt*1.5) tblLand(); const y1=d.y+(d.w?0:.06);
+      L.position.set(T.from.x+(T.to.x-T.from.x)*k, T.from.y+(y1-T.from.y)*k+Math.sin(k*Math.PI)*1.3, T.from.z+(T.to.z-T.from.z)*k); L.rotation.set(Math.sin(k*Math.PI)*.4,T.yaw,Math.sin(k*6)*.2*(1-k));
+      if(k>=1){ TBL.thr=null; tblSave(); try{ if(d.w) splashBurst(d.x,d.y,d.z,.8); else audio.bump&&audio.bump(); }catch(e){} } }
+    else { if(d.w){ d.y=waterSurfaceY(d.x,d.z); const t=performance.now()/1000; L.position.set(d.x,d.y+.02,d.z); L.rotation.set(Math.sin(t*1.3+d.x)*.06,d.yaw,Math.cos(t*1.1+d.z)*.06); }
+      else { L.position.set(d.x,d.y+.06,d.z); L.rotation.set(0,d.yaw,0); } }
+    // si la dejas mucho rato y lejos, se va
+    if(Date.now()-d.t>TBL_GONE && Math.hypot(player.pos.x-d.x,player.pos.z-d.z)>25){ TBL.m=0; TBL.drop=null; L.visible=false; tblSave(); try{ sendPresence(true); }catch(e){} flashNote('Tu tabla de surf se quedó mucho rato sola y se fue. Pídesela otra vez a Tortu (en el muelle).'); } }
+  else if(TBL.loose) TBL.loose.visible=false; }
+// la pose: con la tabla en las manos, los bracitos arriba
+function tblPose(t,dt){ if(TBL.m===1 && TBL.eq>=0 && TBL.mine && TBL.mine.visible) tblUpPose(plush); }
+
+// ---- con amigos: ven tu tabla (en las manos, la espalda o tirada) ----
+function tblPresence(){ try{ if(TBL.eq<0 || TBL.m===0) return null; const d=TBL.drop; return TBL.m===3 && d ? [TBL.eq,3,r2(d.x),r2(d.y),r2(d.z),r2(d.yaw),d.w?1:0] : [TBL.eq,TBL.m]; }catch(e){ return null; } }
+function tblParse(r,pr){ const a=pr.tb; r.tb = Array.isArray(a) && TBL_BOARDS[a[0]] && [1,2,3,4].includes(a[1]) && (a[1]!==3 || (a.length>=7 && a.slice(2,6).every(Number.isFinite))) ? a.slice(0,7) : null; }
+function tblRemotePose(r,t,dt){ let S=TBL.rem.get(r); const a=r.tb;
+  if(!a || !r.obj || !r.obj.visible){ if(S){ if(S.h) S.h.visible=false; if(S.l) S.l.visible=false; } return; }
+  if(!S){ S={h:null, l:null, lid:-1}; TBL.rem.set(r,S); }
+  if(a[1]===1 || a[1]===2){ S.h=tblAttach(r.obj,a[0],a[1],S.h); S.h.visible=true; if(a[1]===1) tblUpPose(r.obj); } else if(S.h) S.h.visible=false;
+  if(a[1]===3){ if(!S.l || S.lid!==a[0]){ if(S.l) scene.remove(S.l); S.l=tblLoose(a[0]); S.lid=a[0]; scene.add(S.l); } S.l.visible=true; const y=a[6]?waterSurfaceY(a[2],a[4])+.02:a[3]+.06; S.l.position.set(a[2],y,a[4]); S.l.rotation.set(0,a[5],0); }
+  else if(S.l) S.l.visible=false; }
+function tblRemoteGc(){ if(!TBL.rem.size) return; const alive=new Set(mp.remotes.values()); TBL.rem.forEach((S,r)=>{ if(!alive.has(r)){ if(S.h&&S.h.parent) S.h.parent.remove(S.h); if(S.l) scene.remove(S.l); TBL.rem.delete(r); } }); }
+
+// ---------- v196: subirse a la tabla y andar en el mar (parte 2) ----------
+// Es un «juego» más ('surf'): así los demás te ven parado en tu tabla. TBL.m=4 mientras vas arriba; TBL.ride guarda dónde va.
+const tblWaterAt=(x,z)=>{ const ws=waterSurfaceY(x,z), g=groundAt(x,z,ws+.6); return g<ws-.4 ? ws : null; };   // ¿flota aquí? (lo bastante hondo)
+// la inclinación del agua bajo la tabla (adelante/atrás y de lado)
+function tblSlope(x,z,h){ const fx=Math.sin(h), fz=Math.cos(h), e=.55, ws=waterSurfaceY;
+  return [Math.atan2(ws(x+fx*e,z+fz*e)-ws(x-fx*e,z-fz*e),2*e), Math.atan2(ws(x+fz*e,z-fx*e)-ws(x-fz*e,z+fx*e),2*e)]; }
+function tblCanMount(){ if(TBL.eq<0 || player.pg || player.car || player.ac || player.mg || player.balloon || player.dive) return false;
+  if(TBL.m===3 && TBL.drop && TBL.drop.w && !TBL.thr){ const d=TBL.drop; return Math.hypot(player.pos.x-d.x,player.pos.z-d.z)<(player.swim?2.6:4) && Math.abs(player.pos.y-d.y)<2.4; }   /* desde la plataforma o la orilla brincas a la tabla */
+  if((TBL.m===2 || TBL.m===1) && (player.swim || player.inWater)) return tblWaterAt(player.pos.x,player.pos.z)!==null && (!player.swim || uwDepth()<1.5);   /* en el agua: la pones en el agua y te subes */
+  return false; }
+function tblMount(){ if(!tblCanMount()) return; let x,z,h;
+  if(TBL.m===3){ const d=TBL.drop; x=d.x; z=d.z; h=d.yaw+Math.PI; } else { x=player.pos.x; z=player.pos.z; h=player.facing; }
+  holding=false; applyHeld(); renderHotbar(); player.swim=false; player.dive=null; player.diveAngle=0; player.rise=false;
+  TBL.ride={x, z, h, v:0, y:waterSurfaceY(x,z), pitch:0, roll:0, t:0}; TBL.m=4; TBL.drop=null; TBL.thr=null; startPlay('surf',0);
+  if(!player.pg || player.pg.k!=='surf'){ TBL.m=2; TBL.ride=null; return; }
+  try{ audio.jump(); splashBurst(x,TBL.ride.y,z,.5); }catch(e){}
+  if(!tblMount.told){ tblMount.told=true; flashNote(isTouch?'¡Arriba! Muévete con el joystick. Para bajarte toca «Bajarse».':'¡Arriba! Muévete con W A S D. Para bajarte presiona E.'); }
+  tblSave(); try{ sendPresence(true); }catch(e){} actKey=''; }
+// bajarse: si hay piso cerca (la plataforma, la playa) te paras ahí con la tabla en las manos; si no, te quedas nadando junto a ella
+function tblGetOff(){ const R=TBL.ride; if(!R || !player.pg || player.pg.k!=='surf'){ return; } stopPlay(); TBL.ride=null;
+  let best=null, bd=1e9; const ws=waterSurfaceY(R.x,R.z);
+  for(let k=0;k<16;k++){ const a=k/16*Math.PI*2; for(const r of [1.1,1.8,2.5]){ const x=R.x+Math.sin(a)*r, z=R.z+Math.cos(a)*r, g=groundAt(x,z,R.y+1.6), w=waterSurfaceY(x,z);
+    if(g>w-.75 && g-R.y<1.3 && g-R.y>-1 && r<bd){ bd=r; best={x,z,g}; } } }
+  if(best){ player.pos.set(best.x,best.g+.02,best.z); player.grounded=true; player.swim=false; TBL.m=1; }
+  else { const sx=R.x+Math.cos(R.h)*1.1, sz=R.z-Math.sin(R.h)*1.1; player.pos.set(sx,ws-.6,sz); player.swim=true; player.grounded=false;
+    TBL.m=3; TBL.drop={x:R.x, y:ws, z:R.z, yaw:R.h+Math.PI, t:Date.now(), w:1}; TBL.leash=true; }
+  player.vel.set(0,0,0); player.vy=0; player.facing=R.h; updateTouchMode(); try{ audio.jump(); }catch(e){} tblSave(); try{ sendPresence(true); }catch(e){} actKey=''; }
+// cada cuadro arriba de la tabla (por ahora en el mar tranquilo; las olas grandes vienen en la parte 3)
+function tblRide(P,dt){ const R=TBL.ride; if(!R){ setTimeout(()=>{ if(player.pg===P) stopPlay(); },0); return null; }
+  let f=0, s=0; if(keys.KeyW||keys.ArrowUp) f+=1; if(keys.KeyS||keys.ArrowDown) f-=1; if(keys.KeyD||keys.ArrowRight) s+=1; if(keys.KeyA||keys.ArrowLeft) s-=1; f-=stick.y; s+=stick.x; f=Math.max(-1,Math.min(1,f)); s=Math.max(-1,Math.min(1,s));
+  const shift=keys.ShiftLeft||keys.ShiftRight, run=(settings.alwaysRun?!shift:shift)||Math.hypot(stick.x,stick.y)>.95, vmax=run?8:5;
+  R.t+=dt; R.v+=(f*(f>=0?vmax:vmax*.35)-R.v)*(1-Math.exp(-dt*(R.v>vmax?.35:1.3))); R.h-=s*dt*(1.2+.3*Math.min(1,Math.abs(R.v)/4));
+  if(tblWaveRide(R,dt,f)){ tblWipe(); return null; }   /* v196: las olas grandes */
+  const px=R.x, pz=R.z; R.x+=Math.sin(R.h)*R.v*dt+(R.dx||0)*dt; R.z+=Math.cos(R.h)*R.v*dt+(R.dz||0)*dt;
+  // ¿se acabó el agua? En la playa te bajas solito con la tabla en las manos; contra algo sólido (la plataforma, el muelle) solo te detienes
+  if(tblWaterAt(R.x,R.z)===null){ const ws=waterSurfaceY(R.x,R.z), gt=terrainH(R.x,R.z);
+    if(gt>ws-.4 && Math.abs(groundAt(R.x,R.z,ws+.6)-gt)<.05){ R.x=px; R.z=pz; R.y=waterSurfaceY(px,pz); tblGetOff(); flashNote('¡Llegaste a la orilla! Aquí ya no flota la tabla.'); return null; }
+    else { R.x=px; R.z=pz; R.v*=-.2; } }
+  for(const o of obsNear(R.x,R.z)){ if(o.walk) continue; if(o.top!==undefined && o.top<R.y+.2) continue; if(o.bot!==undefined && o.bot>R.y+1.6) continue;
+    const dx=R.x-o.x, dz=R.z-o.z, d=Math.hypot(dx,dz), m=o.r+.5; if(d<m && d>1e-4){ R.x=o.x+dx/d*m; R.z=o.z+dz/d*m; R.v*=.6; } }
+  { const lim=MAP_W-80, r=Math.hypot(R.x,R.z); if(r>lim){ R.x*=lim/r; R.z*=lim/r; R.v*=.5; } }
+  R.y=waterSurfaceY(R.x,R.z); const [pt,rl]=tblSlope(R.x,R.z,R.h); R.pitch+=(pt-R.pitch)*(1-Math.exp(-dt*6)); R.roll+=(rl+s*.12*Math.min(1,Math.abs(R.v)/3)-R.roll)*(1-Math.exp(-dt*5));
+  if(Math.abs(R.v)>1.5 && performance.now()-lastLookT>1500) yaw=lerpAng(yaw, R.h+Math.PI, 1-Math.exp(-dt*2));
+  if(Math.abs(R.v)>2.5 && Math.random()<dt*6) try{ splashBurst(R.x-Math.sin(R.h)*.9,R.y,R.z-Math.cos(R.h)*.9,.15); }catch(e){}
+  P.v=Math.round(R.v*10)/10; const pose=tblRidePose(R.x,R.y,R.z,R.h,R.pitch,R.roll,R.t,s); pose.armsUp=.3+.25*Math.min(1,R.surf||0); return pose; }
+// el peluche parado en la tabla, con los bracitos abiertos para no caerse
+function tblRidePose(x,y,z,h,pt,rl,t,s){ return {pos:[x,y+TBL_T/2+.03,z], yaw:h, tilt:-pt, swing:rl, armsUp:.3, alt:Math.sin(t*1.7)*.5+(s||0)*.6}; }
+// la tabla debajo de los pies (la mía o la de un amigo)
+function tblPlaceRiding(L,x,y,z,h,pt,rl){ L.position.set(x,y+.01,z); L.rotation.order='YXZ'; L.rotation.set(pt,h+Math.PI,-rl); L.visible=true; }
+function tblRemoteRide(r,dt,t){ const S=TBL.rem.get(r)||(TBL.rem.set(r,{h:null,l:null,lid:-1}),TBL.rem.get(r)), a=r.tb, id=a?a[0]:0;
+  r.pos.lerp(r.target,1-Math.exp(-dt*8)); const yawT=r.facing||0; r.surfH=r.surfH===undefined?yawT:lerpAng(r.surfH,yawT,1-Math.exp(-dt*8));
+  const y=waterSurfaceY(r.pos.x,r.pos.z), [pt,rl]=tblSlope(r.pos.x,r.pos.z,r.surfH); r.surfT=(r.surfT||0)+dt;
+  if(!S.l || S.lid!==id){ if(S.l) scene.remove(S.l); S.l=tblLoose(id); S.lid=id; scene.add(S.l); } tblPlaceRiding(S.l,r.pos.x,y,r.pos.z,r.surfH,pt,rl); if(S.h) S.h.visible=false;
+  const pose=tblRidePose(r.pos.x,y,r.pos.z,r.surfH,pt,rl,r.surfT,0); placePlay(r.obj,pose); pgPoseLimbs(r.obj,pose,t,dt,r.walk); r.label.position.set(0,2.42,0); r.blob.visible=false; return true; }
+// ---------- v196: surfear las olas grandes (parte 3) ----------
+// En la cara de la ola (el lado que mira a la orilla) la ola te empuja; mientras más de frente a la orilla vayas, más rápido.
+// Si una ola grande te pasa por encima sin que la vayas surfeando, te tumba: quedas nadando y la tabla sigue atada a ti con la cuerdita.
+function tblWaveRide(R,dt,f){ const W=swellAt(R.x,R.z,true), C=SWELL.C, al=Math.sin(R.h)*W.sx+Math.cos(R.h)*W.sz;
+  R.v-=9.8*Math.sin(R.pitch)*.45*dt;   // bajando por la ola agarras vuelo; subiendo, frenas
+  R.surf=0; if(W.face>.04){ const push=W.face*Math.max(0,al+.35)/1.35, tgt=C*(1.05+.035*W.H)*(.55+.45*Math.max(0,al)); R.surf=push; if(R.v<tgt) R.v+=(tgt-R.v)*(1-Math.exp(-dt*2.8*push)); }
+  { const kc=1-Math.exp(-dt*3), cr=W.face*C*.95*(1-Math.max(0,al)); R.dx=(R.dx||0)+(W.sx*cr-(R.dx||0))*kc; R.dz=(R.dz||0)+(W.sz*cr-(R.dz||0))*kc; }   /* yendo de lado por la cara de la ola, la ola te lleva con ella */
+  R.v=Math.min(R.v,17);
+  // ¿la cresta te pasó por encima?
+  const seen=R.wd||(R.wd={}); let wipe=false; const keep={};
+  for(const w of W.list||[]){ const pv=seen[w.id]; keep[w.id]=w.d; if(pv!==undefined && pv<0 && w.d>=0 && w.H>1.3){ const thru=al<-.3 && Math.abs(R.v)>1.5 && w.H<5; if(!thru) wipe=true; } }
+  // v196: olas de tubo — por dentro del hueco la ola te lleva de lado; si te cae la parte rota, te tumba
+  R.tube=0; { const tb=tubeAt(R.x,R.z);
+    if(tb){ if(tb.c>.55 && tb.d<.6){ R.wipeMsg='¡La ola de tubo te cayó encima! 🌊'; return true; }
+      if(tb.k>.3 && tb.d<.9){ R.tube=tb.k; wipe=false; const a=Math.atan2(R.z,R.x), du=-tb.T.dir; const kk=Math.min(1,tb.k*1.4); R.x+=(-Math.cos(a)*C*.6*kk-Math.sin(a)*du*4*kk)*dt; R.z+=(-Math.sin(a)*C*.6*kk+Math.cos(a)*du*4*kk)*dt; if(R.v<7) R.v+=(7-R.v)*(1-Math.exp(-dt*2));
+        if(tb.k>.6 && TUBE.noteId!==tb.T.w.id){ TUBE.noteId=tb.T.w.id; flashNote('¡Estás dentro del tubo! 🌀 ¡Sigue de lado para salir antes de que se cierre!'); try{ audio.wave(); }catch(e){} } } } }
+  R.wd=keep; return wipe; }
+function tblWipe(){ const R=TBL.ride; if(!R || !player.pg || player.pg.k!=='surf') return; const W=swellAt(R.x,R.z), sx=W.sx||0, sz=W.sz||0; stopPlay(); TBL.ride=null;
+  const ws=waterSurfaceY(R.x,R.z); player.pos.set(R.x+Math.cos(R.h)*1.2, ws-.8, R.z-Math.sin(R.h)*1.2); player.swim=true; player.grounded=false; player.vel.set(sx*4.5,0,sz*4.5); player.vy=-1.5;
+  TBL.m=3; TBL.drop={x:R.x-sx*1.6, y:ws, z:R.z-sz*1.6, yaw:R.h+Math.PI+.9, t:Date.now(), w:1}; TBL.leash=true;
+  try{ splashBurst(R.x,ws,R.z,1); audio.splash?audio.splash():audio.bump(); }catch(e){}
+  if(R.wipeMsg || !tblWipe.n || performance.now()-tblWipe.n>20000) flashNote((R.wipeMsg||'¡Uy! La ola te tumbó 🌊')+' Tu tabla sigue atada a ti con la cuerdita: nada hacia ella y súbete otra vez.'); tblWipe.n=performance.now();
+  updateTouchMode(); tblSave(); try{ sendPresence(true); }catch(e){} actKey=''; }
+// la cuerdita mientras nadas junto a tu tabla: la jala si te alejas y se ve flotando entre los dos
+const TBL_LEASH=(()=>{ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(14*3),3)); const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:0x2a2a33})); l.frustumCulled=false; l.visible=false; scene.add(l); return l; })();
+const _tbN=new THREE.Vector3();
+function tblLeashTick(dt){ const d=TBL.drop, L=TBL_LEASH;
+  if(TBL.m!==3 || !TBL.leash || !d || TBL.thr){ TBL.leash=TBL.m===3 && TBL.leash; L.visible=false; return; }
+  const inW=player.swim || player.inWater, dx=d.x-player.pos.x, dz=d.z-player.pos.z, D=Math.hypot(dx,dz);
+  if(!inW || D>25 || state!=='play' || player.pg || player.car || player.ac){ TBL.leash=false; L.visible=false; return; }
+  if(D>3.2){ d.x=player.pos.x+dx/D*3.2; d.z=player.pos.z+dz/D*3.2; const ws=waterSurfaceY(d.x,d.z), g=groundAt(d.x,d.z,ws+.5); d.w=ws>g+.25?1:0; d.y=d.w?ws:g; }
+  if(!TBL.loose || !TBL.loose.visible){ L.visible=false; return; }
+  TBL.loose.updateMatrixWorld(true); _tbN.set(0,.04,-TBL_L/2+.12).applyMatrix4(TBL.loose.children[0].matrix).applyMatrix4(TBL.loose.matrixWorld);
+  const a=_tbN, bx=player.pos.x, by=player.pos.y+(player.swim?.15:.9), bz=player.pos.z, p=L.geometry.attributes.position, mx=(a.x+bx)/2, mz=(a.z+bz)/2, my=Math.min((a.y+by)/2, waterSurfaceY(mx,mz)+.03);
+  for(let i=0;i<14;i++){ const t=i/13, u=1-t; p.setXYZ(i, u*u*a.x+2*u*t*mx+t*t*bx, u*u*a.y+2*u*t*my+t*t*by, u*u*a.z+2*u*t*mz+t*t*bz); } p.needsUpdate=true; L.visible=true; }
+// la tabla que flota sola también se la lleva la ola un poquito hacia la orilla
+function tblDriftTick(dt){ const d=TBL.drop; if(TBL.m!==3 || !d || !d.w || TBL.thr) return; const W=swellAt(d.x,d.z); if(W.face<.05) return;
+  const nx=d.x+W.sx*W.face*SWELL.C*.25*dt, nz=d.z+W.sz*W.face*SWELL.C*.25*dt; if(tblWaterAt(nx,nz)!==null){ d.x=nx; d.z=nz; } }
+// ---- en el menú de Tortu: la pestaña de tablas ----
+function tblIcon(id,W,H){ const c=document.createElement('canvas'); c.width=W; c.height=H; const q=c.getContext('2d'), t=document.createElement('canvas'); t.width=128; t.height=384; tblDraw(t.getContext('2d'),128,384,TBL_BOARDS[id]);
+  q.save(); q.translate(W/2,H/2); q.rotate(-Math.PI/2); const L=W*.92, w=L*TBL_W/TBL_L*1.15; q.beginPath(); const n=24, hw=k=>w/2*(k>0?Math.pow(Math.max(0,1-k),.6)*(1+.15*k):Math.pow(1-k*k*.62,.85));
+  for(let i=0;i<=n;i++){ const k=-1+2*i/n; q.lineTo(hw(k),-k*L/2); } for(let i=n;i>=0;i--){ const k=-1+2*i/n; q.lineTo(-hw(k),-k*L/2); } q.closePath(); q.save(); q.clip(); q.drawImage(t,-w/2,-L/2,w,L); q.restore();
+  q.lineWidth=2; q.strokeStyle='rgba(0,0,0,.25)'; q.stroke(); q.restore(); return c; }
+function renderTblTab(body,say){ const n=TBL.own.size; say.textContent=n?`¡Tienes ${n} de ${TBL_BOARDS.length} tablas! Toca «Llevar» para cargarla. Luego la puedes lanzar al mar o colgártela en la espalda.`:'¡Tablas de surf! Cómprala una vez y es tuya para siempre. Luego la lanzas al mar y ¡a surfear!';
+  const grid=document.createElement('div'); grid.className='fish-grid surf-grid';
+  TBL_BOARDS.forEach(b=>{ const it=document.createElement('div'); it.className='fish-it surf-it'+(TBL.eq===b.id && TBL.m>0?' surf-on':''); it.appendChild(tblIcon(b.id,192,96));
+    const nm=document.createElement('b'); nm.textContent=b.n; it.appendChild(nm);
+    const bt=document.createElement('button'); bt.className='sbtn';
+    if(!TBL.own.has(b.id)){ bt.textContent='Comprar · '+b.p+' 🪙'; bt.disabled=coins<b.p; bt.onclick=()=>{ if(coins<b.p) return; coins-=b.p; saveCoins(); renderCoins(); TBL.own.add(b.id); tblSave(); try{ coinSound(3); }catch(e){} renderFishOv(); }; }
+    else if(TBL.eq===b.id && TBL.m>0){ bt.textContent='¡Ya la llevas!'; bt.disabled=true; }
+    else { bt.textContent='Llevar'; bt.onclick=()=>{ if(TBL.loose) TBL.loose.visible=false; TBL.eq=b.id; TBL.thr=null; tblSetMode(1); try{ audio.ui(); }catch(e){} renderFishOv(); }; }
+    it.appendChild(bt); grid.appendChild(it); });
+  body.appendChild(grid); }
+
 // ---------------- placas para unirse (en la playa) y letreros ----------------
 (function buildPlates(){ AR_SPOTS.forEach((A,i)=>{ const [x,z]=A.plate, h=terrainH(x,z);
   const m=padMesh(scene,x,z,.9); m.position.y=h+.04;
@@ -18151,7 +18550,7 @@ function vehRide(P,dt){ const W=VE.w; if(!W){ setTimeout(()=>{ if(player.pg===P)
     const ok=S.canWater, vw=S.vWater*vehSpeedMul(W,'water'); W.v+=(f*(f>=0?vw:vw*.4)*(ok?1:0)-W.v)*(1-Math.exp(-dt*(ok?(S.anchor&&!f?3:.9):2)));
     if(S.sub) W.depth=Math.max(0,Math.min(3,(W.depth||0)+((dn&&!up)?1.5:(up&&!dn&&W.depth>0)?-1.5:0)*dt)); else W.depth=0;   // v184: submarino
     W.h-=s*dt*.8*Math.min(1,Math.abs(W.v)/3+.3)*Math.sign(W.v||1);   // v192: girar en el agua (había quedado dentro del comentario desde v184)
-    W.x+=Math.sin(W.h)*W.v*dt; W.z+=Math.cos(W.h)*W.v*dt; const wl2=swimLevel(W.x,W.z); W.y=(wl2!==null?wl2:W.y)-(ok?.3:.9)-(W.depth||0)+Math.sin(performance.now()/600)*.05*(W.depth>0?0:1); W.tilt*=.9; W.pitch*=.9;
+    W.x+=Math.sin(W.h)*W.v*dt; W.z+=Math.cos(W.h)*W.v*dt; const wl2=swimLevel(W.x,W.z); W.y=(wl2!==null?wl2+swellH(W.x,W.z):W.y)-(ok?.3:.9)-(W.depth||0)+Math.sin(performance.now()/600)*.05*(W.depth>0?0:1); W.tilt*=.9; W.pitch*=.9;
     const g2=groundAt(W.x,W.z,W.y+1.5); if(wl2===null || g2>wl2-.4){ if(S.canLand){ W.mode='land'; W.y=g2; } else { W.x=px; W.z=pz; W.v=0; if(performance.now()-(W.noteT||0)>3000){ W.noteT=performance.now(); flashNote('Tu vehículo no anda en tierra: ponle llantas'); } } }
     if(S.canAir && up && (W.v>10 || S.heli>0) && !(W.depth>0)){ W.mode='air'; W.vy=3; }
   } else {
@@ -20802,7 +21201,7 @@ function tutTick(){ const T=TUT; if(!T.on) return; const E=T.el, S=T.steps&&T.st
   const [dir,ax,ay]=pick;
   E.arrow.hidden=false; E.arrow.className=dir; E.arrow.style.left=Math.max(2,Math.min(innerWidth-42,ax))+'px'; E.arrow.style.top=Math.max(2,Math.min(innerHeight-50,ay))+'px'; }
 
-const SAVE_KEYS=['Monedas','Ropa','Banderas','Especies','Planetas','Jugador','MejorVuelta','Opciones','Peces','Mascotas','Mina','Huerto','Casa','Islas','Baldes','Vehiculo','Tutorial'];   // v188: + tutoriales vistos   // v182: + islas y baldes   // v166: + tu casita   // v125: + mascotas, mina y huerto
+const SAVE_KEYS=['Monedas','Ropa','Banderas','Especies','Planetas','Jugador','MejorVuelta','Opciones','Peces','Mascotas','Mina','Huerto','Casa','Islas','Baldes','Vehiculo','Tutorial','Surf'];   // v188: + tutoriales vistos   // v182: + islas y baldes   // v166: + tu casita   // v125: + mascotas, mina y huerto
 function saveSnapshot(){ const o={v:1, e:124}; /* e: versión de la economía (v124: precios ×5) */ for(const k of SAVE_KEYS){ try{ const v=localStorage.getItem('mundoPeluche'+k); if(v!=null) o[k]=v; }catch(e){} } return o; }
 const jparse=(s,d)=>{ try{ const v=JSON.parse(s); return v==null?d:v; }catch(e){ return d; } };
 function saveSummary(o){ const own=(jparse(o.Ropa,{}).own||[]).length, pl=Object.keys(jparse(o.Planetas,{})).length, sp=(jparse(o.Especies,[])||[]).length, pe=(jparse(o.Mascotas,{}).own||[]).length;
@@ -21340,7 +21739,7 @@ const SWIM_EXIT=SEA_Y-.9;     // vuelve a caminar cuando el fondo sube de aquí 
 const FLOAT_Y=SEA_Y-1.07;
 // dónde se nada: el mar, el río, el estanque y la poza de la cascada (en el lago no: es bajito). Devuelve el nivel del agua (v123)
 const swimLevel=(x,z)=>{ if(inLakeWater(x,z)) return null; const r=riverLevelAt(x,z); return r!==null?r:SEA_Y; };
-const swimWave=(x,z)=>riverLevelAt(x,z)!==null?waveH(x,z,WATER.lakeA,WATER.t):waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t);
+const swimWave=(x,z)=>riverLevelAt(x,z)!==null?waveH(x,z,WATER.lakeA,WATER.t):waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t)+swellH(x,z);
 // Al nadar, el peluche se inclina desde el centro del cuerpo (no desde los pies),
 // para que al nadar acostado la espalda quede en la superficie y no se hunda.
 const SWIM_PIVOT=1.12;
@@ -21405,6 +21804,7 @@ function update(dt,t){ myLabelUpdate();
   try{ ambientUpdate(dt,t); }catch(e){ console.warn('ambiente',e); }
   updateMinis(dt);
   arenaUpdate(dt);
+  try{ tblTick(dt); }catch(e){ console.warn('surf',e); }
   if(state==='play'){ rocketUpdate(dt); if(SP.on) spaceUpdate(dt,t); }
   const dv=player.dive;
   if(state==='play' && !player.car && !player.ac && !player.pg && !bowMoving && !player.mg && !arBall() && !arCar() && !arFrozen() && !(ED&&ED.on) && !player.hpose && !SP.on && !player.rk && !player.busy){
@@ -21427,6 +21827,7 @@ function update(dt,t){ myLabelUpdate();
       const sp=(run?5.2:3.3)*mag*(1+(dpk-1)*.45);
       const target=tmp.set(0,0,0); if(dl>.01) target.set(dx/dl*sp,0,dz/dl*sp);
       player.vel.lerp(target, 1-Math.exp(-dt*3));
+      if(!(AR.me.a>=0)){ const W=swellAt(player.pos.x,player.pos.z); if(W.face>.05 && uwDepth()<2.5){ player.vel.x+=W.sx*W.face*SWELL.C*.9*dt; player.vel.z+=W.sz*W.face*SWELL.C*.9*dt; } }   /* v196: las olas grandes te empujan */
       let vyT;
       if(up && !down) vyT=(run?4:2.8)*dpk;
       else if(down && !up) vyT=(run?-4.2:-3)*dpk;
@@ -21608,7 +22009,7 @@ function update(dt,t){ myLabelUpdate();
   if(acPose){ const w=placeInAircraft(plush, aircraft[player.ac.i], acPose); player.pos.copy(w); player.groundY=w.y; }
   if(pgPose){ placePlay(plush,pgPose); player.pos.set(...pgPose.pos); player.groundY=pgPose.pos[1]; player.facing=pgPose.yaw; }
   if(player.mg && state==='play') mgPose(t,dt);
-  if(state==='play'){ arenaPose(t,dt); rocketPose(t,dt); spacePose(t,dt); housePose(t,dt);
+  if(state==='play'){ arenaPose(t,dt); rocketPose(t,dt); spacePose(t,dt); housePose(t,dt); tblPose(t,dt);
     if(performance.now()/1000<player.pushUntil) pgPoseLimbs(plush,{push:1},t,dt,player.walk); }   // v182: también en tu pantalla
   if(state==='play' && !player.car && !player.ac && !player.pg) pulledByOthers(dt);
   myBowPose(dt);
