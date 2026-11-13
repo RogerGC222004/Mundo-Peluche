@@ -1933,11 +1933,11 @@ function tubeList(){ const out=[]; if(!SWELL.list.length || typeof PIER==='undef
   if(state==='play' && !(typeof SP!=='undefined' && SP.on)) who.push(['yo',player.pos.x,player.pos.z]);
   try{ for(const r of mp.remotes.values()) if(r.tb && r.tb[1]===4 && r.pos) who.push([r.uid||r.id||'r',r.pos.x,r.pos.z]); }catch(e){}
   for(const [id,x,z] of who){ const a=Math.atan2(z,x); let sp0=Math.hypot(x,z)-coastRN(a); if(sp0<-150) continue; if(sp0<45){ sp0=45; }   // en la playa o cerca: la ola de enfrente
-    const ax=Math.cos(a)*(coastRN(a)+sp0), az=Math.sin(a)*(coastRN(a)+sp0); if(groundAt(ax,az,5)>waterSurfaceY(ax,az)-1.2) continue; const H=tubeHAt(ax,az), Dt=Math.max(80,4*H);
-    for(const w of SWELL.list){ const key=w.id+'|'+id; if(P.has(key) || w.sc<sp0 || w.sc-sp0>.35*Dt) continue;
+    const ax=Math.cos(a)*(coastRN(a)+sp0), az=Math.sin(a)*(coastRN(a)+sp0); if(terrainH(ax,az)>SEA_Y-.4) continue;   /* solo donde ya hay agua */ const H=tubeHAt(ax,az), Dt=Math.max(80,4*H), surf=id!=='yo' || TBL.m===4, ahead=surf?0:1.5*H*(TUBE.wk||1)+15;   // quien mira (barco, playa, nadando) ve el tubo enroscarse enfrente; quien surfea, donde va
+    for(const w of SWELL.list){ const key=w.id+'|'+id; if(P.has(key) || w.sc<sp0+ahead || w.sc-sp0-ahead>(surf?.35:.45)*Dt) continue;
       let busy=false; for(const [k2,o] of P){ if(o.id===w.id && Math.abs(Math.atan2(Math.sin(o.sp.a-a),Math.cos(o.sp.a-a)))*(coastRN(a)+w.sc)<o.L*.6) busy=true; }
       for(const sp of tubeSpots()) if(w.sc<TUBE.S1+20 && Math.abs(Math.atan2(Math.sin(sp.a-a),Math.cos(sp.a-a)))*(coastRN(a)+w.sc)<TUBE.L) busy=true;
-      if(!busy) P.set(key,{id:w.id, sp:{a, i:'p'}, s0:w.sc, s1:w.sc-Dt, H:H*(.9+.2*w.str), L:Math.max(70,6*H)}); } }
+      if(!busy){ const s0=surf?w.sc:sp0+ahead+.476*Dt; P.set(key,{id:w.id, sp:{a, i:'p'}, s0, s1:s0-Dt, H:H*(.9+.2*w.str), L:Math.max(70,6*H)}); } } }
   for(const [key,o] of P){ const w=SWELL.list.find(x=>x.id===o.id); if(!w || w.sc<o.s1){ P.delete(key); continue; } out.push(tubeMake(o.sp,w,(o.s0-w.sc)/(o.s0-o.s1),o.H,o.L)); }   // las olas se rehacen cada cuadro: se buscan por su número
   return out; }
 // un punto del tubo en el mundo: u a lo largo (m), d adelante/atrás de la cresta (m), y alto sobre el mar
@@ -8036,7 +8036,7 @@ const HELM_Z=-5.0;
 const SHIP_OBS=[{t:'c', x:0, z:1.2, r:.42}, {t:'c', x:0, z:HELM_Z, r:.32}, {t:'b', x0:-2.05, x1:2.05, z0:SH.L0-.3, z1:-7.2}];   // mástil, timón, camarote
 // ---- el barco que se ve ----
 (function shipBuild(){
-  const G=new THREE.Group(); scene.add(G); SH.g=G; const B=new THREE.Group(); G.add(B); SH.parts.body=B;
+  const G=new THREE.Group(); G.userData._areaDyn=true; scene.add(G); SH.g=G;   /* v197: el barco se mueve: se mide en cada cuadro */ const B=new THREE.Group(); G.add(B); SH.parts.body=B;
   const D=SH.DECK, hull=felt('#8a5a34','rgba(40,20,5,.25)'), shell=felt('#8a5a34','rgba(40,20,5,.25)'), hullD=felt('#6b4226','rgba(30,15,5,.25)'), deckM=felt('#c9a26b','rgba(90,60,25,.18)'), trim=felt('#e5534b','rgba(80,10,10,.18)'),
     white=felt('#fbf6ee','rgba(80,60,40,.10)'), dark=felt('#3a2a1c','rgba(0,0,0,.2)'), gold=felt('#f2c94c','rgba(120,80,0,.2)'), box=new THREE.BoxGeometry(1,1,1);
   shell.side=THREE.DoubleSide; deckM.side=THREE.DoubleSide;
