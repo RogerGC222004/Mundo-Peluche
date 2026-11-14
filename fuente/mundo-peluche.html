@@ -2522,7 +2522,14 @@ function slimFor(r){ return r<SLIM.R1 ? SLIM.s1 : r<SLIM.R2 ? SLIM.s2 : null; }
 function slimPick(cur,r){ for(const b of [SLIM.R1,SLIM.R2]) if(Math.abs(r-b)<b*.06) return cur; return slimFor(r)||sphereG; }
 const fBox=new THREE.BoxGeometry(1,1,1), fCyl=new THREE.CylinderGeometry(1,1,1,14);   // caja y cilindro de medida 1 (la ropa los usa desde que carga el juego; antes estaban más abajo y al abrir el juego la sudadera salía sin mangas)
 const cylG = new THREE.CylinderGeometry(1,1,1,14), cylLo=new THREE.CylinderGeometry(1,1,1,7);
+const TEXT_BASE=new Map();   // v200: el fondo de fieltro de los letreros (textTex) es idéntico para el mismo tamaño y colores: se hace una vez y se reusa
+const MS_CACHE=new Map();   // v200: recetas de mergeStatic ya hechas (va aquí arriba: mergeStatic se usa desde antes de donde está escrita)
 const INST_LOD=[];   // grupos de árboles/rocas que cambian a la versión sencilla cuando quedan lejos
+// v200: una "copia" de una forma que comparte sus datos (puntos, normales…) en vez de duplicarlos; solo la esfera que la envuelve es propia.
+// (para formas que nadie modifica después: árboles, rocas, flores…). Así no se repiten los datos ni en memoria ni en la tarjeta de video.
+function shareGeo(geo){ const g=new THREE.BufferGeometry(); for(const k in geo.attributes) g.setAttribute(k,geo.attributes[k]); if(geo.index) g.setIndex(geo.index);
+  for(const k in geo.morphAttributes) g.morphAttributes[k]=geo.morphAttributes[k]; g.morphTargetsRelative=geo.morphTargetsRelative; for(const G of geo.groups) g.addGroup(G.start,G.count,G.materialIndex);
+  g.drawRange.start=geo.drawRange.start; g.drawRange.count=geo.drawRange.count; if(geo.boundingSphere) g.boundingSphere=geo.boundingSphere.clone(); if(geo.boundingBox) g.boundingBox=geo.boundingBox.clone(); return g; }
 const _o=new THREE.Object3D();
 // Muchas copias de lo mismo (árboles, flores, corales…) repartidas en zonas de 90 m.
 // Cada zona sabe dónde está, así solo se dibujan (y hacen sombra) las zonas que se ven.
@@ -2538,13 +2545,13 @@ function instanced(geo, mat, items, set, opts={}){
   if(!geo.boundingSphere) geo.computeBoundingSphere();
   const gr=geo.boundingSphere ? geo.boundingSphere.radius : 1, meshes=new Map();
   buckets.forEach((list,key)=>{
-    const g=geo.clone();
+    const g=shareGeo(geo);   // v200: antes geo.clone() (una copia completa por zona)
     const c=new THREE.Vector3(); list.forEach(e=>c.add(e.p)); c.multiplyScalar(1/list.length);
     let r=0; list.forEach(e=>{ r=Math.max(r, e.p.distanceTo(c)+gr*e.s); });
     g.boundingSphere=new THREE.Sphere(c, r+.5);
     const m=new THREE.InstancedMesh(g,mat,list.length); list.forEach((e,i)=>m.setMatrixAt(i,e.m));
     const loSrc=opts.lo||(geo===sphereG?sphereLo:geo===cylG?cylLo:null);   // v145: o la que mande quien llama   // de lejos: la misma figura con menos caras
-    if(loSrc){ const gl=loSrc.clone(); gl.boundingSphere=g.boundingSphere; INST_LOD.push({m, hi:g, lo:gl}); }
+    if(loSrc){ const gl=shareGeo(loSrc); gl.boundingSphere=g.boundingSphere; INST_LOD.push({m, hi:g, lo:gl}); }
     m.frustumCulled=true;   // la esfera de arriba envuelve todo el grupo: si no se ve, no se dibuja (three.js lo apaga por defecto en grupos)
     m.castShadow=opts.shadow!==false; m.receiveShadow=true; scene.add(m); meshes.set(key,m);
   });
@@ -6479,6 +6486,11 @@ function rbox(w,h,d,r){
   const g=new THREE.ExtrudeGeometry(sh,{depth:d-2*r, bevelEnabled:true, bevelSize:r, bevelThickness:r, bevelSegments:2, curveSegments:4});
   g.translate(0,0,-(d-2*r)/2); return g;
 }
+// v200: recetas de mergeStatic ya hechas → la forma resultante (si la receta es idéntica, se reusa; se guarda débil: si ya nadie la usa, se libera)
+function msKey(sig){ let h=2166136261, h2=5381; for(let i=0;i<sig.length;i++){ const v=typeof sig[i]==='number'?sig[i]:0; if(typeof sig[i]==='string'){ const t=sig[i]; for(let j=0;j<t.length;j++){ const c=t.charCodeAt(j); h=Math.imul(h^c,16777619); h2=(Math.imul(h2,33)+c)|0; } } else { h=Math.imul(h^(v|0),16777619); h2=(Math.imul(h2,33)^(v|0))|0; } }
+  return [h>>>0, sig.length+':'+(h2>>>0)]; }   // dos huellas + el largo (casi imposible que dos recetas distintas coincidan; así no se guarda la receta entera)
+function msCacheGet(sig){ if(typeof WeakRef==='undefined') return null; const [h,s]=msKey(sig), L=MS_CACHE.get(h); if(!L) return null; for(const e of L) if(e.s===s){ const g=e.r.deref(); if(g) return g; } return null; }
+function msCachePut(sig,g){ if(typeof WeakRef==='undefined') return; const [h,s]=msKey(sig); let L=MS_CACHE.get(h); if(!L) MS_CACHE.set(h,L=[]); for(let i=L.length-1;i>=0;i--) if(!L[i].r.deref()) L.splice(i,1); L.push({s, r:new WeakRef(g)}); }
 // Une en una sola malla todas las piezas fijas que comparten material (mucho más ligero de dibujar)
 function mergeStatic(parent){
   const groups=new Map(); let ps=1; for(let q=parent;q;q=q.parent) ps*=Math.max(q.scale.x,q.scale.y,q.scale.z);   // v200: el tamaño de todo el grupo
@@ -6487,11 +6499,13 @@ function mergeStatic(parent){
     o.updateMatrix();
     const src=o.geometry===sphereG?(slimFor(Math.max(o.scale.x,o.scale.y,o.scale.z)*ps)||sphereG):o.geometry;   // v200
     const g=(src.index ? src.toNonIndexed() : src.clone()); g.applyMatrix4(o.matrix);
-    const k=o.material.uuid; if(!groups.has(k)) groups.set(k,{mat:o.material, geos:[]}); groups.get(k).geos.push(g);
+    const k=o.material.uuid; if(!groups.has(k)) groups.set(k,{mat:o.material, geos:[], sig:[]}); groups.get(k).geos.push(g);
+    { const e=o.matrix.elements, S=groups.get(k).sig; S.push(src.uuid); for(let i=0;i<16;i++) S.push(Math.round(e[i]*1e5)); }   // v200: la receta (qué forma y dónde) para saber si ya se hizo una igual
     parent.remove(o);
   });
-  groups.forEach(({mat,geos})=>{
-    const out=new THREE.BufferGeometry();
+  groups.forEach(({mat,geos,sig})=>{
+    const hit=msCacheGet(sig); if(hit){ geos.forEach(g=>g.dispose()); parent.add(new THREE.Mesh(hit,mat)); return; }   // v200: igualita a una ya hecha: se comparte
+    const out=new THREE.BufferGeometry(); msCachePut(sig,out);
     ['position','normal','uv'].forEach(name=>{
       const size=name==='uv'?2:3, total=geos.reduce((n,g)=>n+g.attributes.position.count,0), arr=new Float32Array(total*size); let off=0;
       geos.forEach(g=>{ const a=g.attributes[name], n=g.attributes.position.count; if(a) arr.set(a.array.subarray(0,n*size), off); off+=n*size; });
@@ -12103,10 +12117,10 @@ function stripeTex(a,b,n=8){ const c=document.createElement('canvas'); c.width=2
   TK.finish(c,{seed:n*31, amp:.04, fuzzDiv:16, len:2});
   const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t; }
 function textTex(lines,w=512,h=192,bg='#fff3d6',fg='#7a2b2b',edge='#e5534b'){ const c=document.createElement('canvas'); c.width=w; c.height=h; const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding;
-  let base=null;
+  const bk=w+'|'+h+'|'+bg+'|'+edge; let base=TEXT_BASE.get(bk)||null;
   const draw=()=>{ const g=c.getContext('2d',{willReadFrequently:true});
     if(!base){ g.fillStyle=bg; g.fillRect(0,0,w,h); TK.finish(c,{seed:w+h, amp:.035, grain:.02, fuzzDiv:30, len:2}); TK.puff(g,0,0,w,h,{depth:22, alpha:.1});
-      TK.stitch(g,[[14,14],[w-14,14],[w-14,h-14],[14,h-14],[14,14]],{dash:18,gap:12,lw:8,col:edge,shadow:'rgba(0,0,0,.22)',hole:'rgba(0,0,0,.25)'}); base=g.getImageData(0,0,w,h); }
+      TK.stitch(g,[[14,14],[w-14,14],[w-14,h-14],[14,h-14],[14,14]],{dash:18,gap:12,lw:8,col:edge,shadow:'rgba(0,0,0,.22)',hole:'rgba(0,0,0,.25)'}); base=g.getImageData(0,0,w,h); TEXT_BASE.set(bk,base); }
     else g.putImageData(base,0,0);
     g.fillStyle=fg; g.textAlign='center'; g.textBaseline='middle'; const L=[].concat(lines);
     L.forEach((s,i)=>{ g.font=(i?'700 ':'800 ')+(i?Math.round(h*.17):Math.round(h*(L.length>1?.36:.5)))+'px Sniglet, Nunito, sans-serif'; g.fillText(s,w/2,h*(L.length>1?(i?.74:.4):.52),w-50); }); t.needsUpdate=true; };
@@ -21684,7 +21698,7 @@ function slimInst(o){ let S=SLIM.inst.get(o); if(S && S.no) return;
   for(let i=0;i<o.count;i++){ const j=i*16; mx=Math.max(mx,a[j]*a[j]+a[j+1]*a[j+1]+a[j+2]*a[j+2],a[j+4]*a[j+4]+a[j+5]*a[j+5]+a[j+6]*a[j+6],a[j+8]*a[j+8]+a[j+9]*a[j+9]+a[j+10]*a[j+10]); }
   slimSet(o,S,slimPick(S.cur,Math.sqrt(mx)*o.matrixWorld.getMaxScaleOnAxis())); }
 function slimSet(o,S,base){ if(S.cur===base) return; S.cur=base; let g=S.orig;
-  if(base!==sphereG){ g=S.g.get(base); if(!g){ g=base.clone(); if(S.orig.boundingSphere) g.boundingSphere=S.orig.boundingSphere.clone(); S.g.set(base,g); } }
+  if(base!==sphereG){ g=S.g.get(base); if(!g){ g=shareGeo(base); if(S.orig.boundingSphere) g.boundingSphere=S.orig.boundingSphere.clone(); S.g.set(base,g); } }
   if(!SLIM.lod){ SLIM.lod=new Map(); for(const L of INST_LOD) SLIM.lod.set(L.m,L); } const L=SLIM.lod.get(o); if(L){ L.hi=g; if(o.geometry===L.lo) return; }
   o.geometry=g; }
 // v197: agrupar también poco a poco (~1 ms por cuadro); antes revisaba las 11 mil piezas de golpe una vez por segundo
