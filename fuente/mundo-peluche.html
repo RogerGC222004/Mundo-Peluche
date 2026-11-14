@@ -1005,7 +1005,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='199';
+const GAME_VERSION='200';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -1058,6 +1058,8 @@ THREE.ShaderChunk.fog_fragment=THREE.ShaderChunk.fog_fragment.replace('float fog
 
 // Cada cuadro three.js vuelve a calcular la posición de TODOS los objetos (miles), aunque no se hayan movido.
 // Aquí solo se recalcula si cambió su posición, giro o tamaño; lo quieto se salta (en teléfonos lentos es de lo que más pesa).
+// v200: solo mientras se dibuja el mundo se saltan las cosas escondidas (cuando alguien pide la posición a mano, se calcula todo como siempre)
+const UMW={skip:false};
 { const OP=THREE.Object3D.prototype; OP._umwOrig=OP.updateMatrixWorld;
   OP.updateMatrixWorld=function(force){
     if(this.matrixAutoUpdate){ const p=this.position, q=this.quaternion, s=this.scale; let c=this._mc;
@@ -1065,7 +1067,10 @@ THREE.ShaderChunk.fog_fragment=THREE.ShaderChunk.fog_fragment.replace('float fog
         if(!c) c=this._mc=new Float64Array(10); c[0]=p.x; c[1]=p.y; c[2]=p.z; c[3]=q.x; c[4]=q.y; c[5]=q.z; c[6]=q.w; c[7]=s.x; c[8]=s.y; c[9]=s.z;
         this.matrix.compose(p,q,s); this.matrixWorldNeedsUpdate=true; } }
     if(this.matrixWorldNeedsUpdate || force){ if(this.parent===null) this.matrixWorld.copy(this.matrix); else this.matrixWorld.multiplyMatrices(this.parent.matrixWorld,this.matrix); this.matrixWorldNeedsUpdate=false; force=true; }
-    const ch=this.children; for(let i=0,l=ch.length;i<l;i++) ch[i].updateMatrixWorld(force); };
+    const ch=this.children;
+    for(let i=0,l=ch.length;i<l;i++){ const c=ch[i];
+      if(UMW.skip && !c.visible && !c._acOff){ if(force) c._mwF=true; continue; }   // v200: escondido (no se dibuja): se salta, y si su papá se movió queda anotado
+      if(c._mwF){ c._mwF=false; c.updateMatrixWorld(true); } else c.updateMatrixWorld(force); } };
   // si alguien pide la matriz a mano, se calcula siempre (y se olvida lo guardado)
   const um=OP.updateMatrix; OP.updateMatrix=function(){ um.call(this); this._mc=null; }; }
 const scene = new THREE.Scene();
@@ -2012,16 +2017,19 @@ function tsInit(){ if(TS.mesh) return TS.mesh; const NU=TS.NU, NV=TS.NV, n=NU*NV
   TS.mat.depthWrite=true; waterMats.push(TS.mat); TS.FR=new Float32Array(n); TS.FY=new Float32Array(n); TS.blk=new Float32Array(NU);
   const m=new THREE.Mesh(g,TS.mat); m.frustumCulled=false; m.renderOrder=3; m.userData.noBatch=true; m.userData.noCol=true; m.visible=false; scene.add(m); TS.mesh=m; return m; }
 // la forma de lado en metros para este alto H, repartida en NV puntos parejos a lo largo de la curva (y lo alto de la ola grande en cada punto)
-function tsProfile(H,T){ const P=[[T.V0,null]]; for(const [d,y] of TUBE_PF) P.push([d*H,y<0?y*Math.min(H,6):y*H]); P.push([T.V1,0]);   /* el piso del tubo queda al ras del mar aunque la ola sea gigante */
-  for(const p of P){ const h=swellH(T.Ox-T.nx*p[0],T.Oz-T.nz*p[0]); if(p[1]===null) p[1]=h; else if(p[0]>0) p[1]=Math.max(p[1],h*.95); }   // la espalda se apoya en la ola grande
-  const L=[0]; for(let i=1;i<P.length;i++) L.push(L[i-1]+Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]));
-  const tot=L[L.length-1], NV=TS.NV, out={d:new Float32Array(NV), y:new Float32Array(NV), lip:new Float32Array(NV), hf:new Float32Array(NV)}; let s=0;
-  for(let i=0;i<NV;i++){ const at=tot*i/(NV-1); while(s<P.length-2 && L[s+1]<at) s++; const f=(at-L[s])/Math.max(1e-6,L[s+1]-L[s]);
-    out.d[i]=P[s][0]+(P[s+1][0]-P[s][0])*f; out.y[i]=P[s][1]+(P[s+1][1]-P[s][1])*f;
-    const pi=s-1+f; out.lip[i]=Math.max(0,1-Math.min(...TUBE_LIP.map(q=>Math.abs(q-pi)))/1.2); }   // s-1: el primer punto de P es el borde de la franja
+const TSP={n:TUBE_PF.length+2, pd:null, py:null, L:null, out:null};   // v200: arreglos que se reusan cada cuadro (antes se creaban nuevos: basura que causaba pausitas)
+function tsProfile(H,T){ const n=TSP.n; if(!TSP.pd){ TSP.pd=new Float64Array(n); TSP.py=new Float64Array(n); TSP.L=new Float64Array(n); const NV=TS.NV; TSP.out={d:new Float32Array(NV), y:new Float32Array(NV), lip:new Float32Array(NV), hf:new Float32Array(NV)}; }
+  const Pd=TSP.pd, Py=TSP.py, L=TSP.L, out=TSP.out;
+  Pd[0]=T.V0; Py[0]=NaN; for(let k=0;k<TUBE_PF.length;k++){ const d=TUBE_PF[k][0], y=TUBE_PF[k][1]; Pd[k+1]=d*H; Py[k+1]=y<0?y*Math.min(H,6):y*H; } Pd[n-1]=T.V1; Py[n-1]=0;   /* el piso del tubo queda al ras del mar aunque la ola sea gigante */
+  for(let k=0;k<n;k++){ const h=swellH(T.Ox-T.nx*Pd[k],T.Oz-T.nz*Pd[k]); if(Py[k]!==Py[k]) Py[k]=h; else if(Pd[k]>0) Py[k]=Math.max(Py[k],h*.95); }   // la espalda se apoya en la ola grande
+  L[0]=0; for(let k=1;k<n;k++){ const a=Pd[k]-Pd[k-1], b=Py[k]-Py[k-1]; L[k]=L[k-1]+Math.sqrt(a*a+b*b); }
+  const tot=L[n-1], NV=TS.NV; let s=0;
+  for(let i=0;i<NV;i++){ const at=tot*i/(NV-1); while(s<n-2 && L[s+1]<at) s++; const f=(at-L[s])/Math.max(1e-6,L[s+1]-L[s]);
+    out.d[i]=Pd[s]+(Pd[s+1]-Pd[s])*f; out.y[i]=Py[s]+(Py[s+1]-Py[s])*f;
+    const pi=s-1+f; let mn=1e9; for(let k=0;k<TUBE_LIP.length;k++){ const a=Math.abs(TUBE_LIP[k]-pi); if(a<mn) mn=a; } out.lip[i]=Math.max(0,1-mn/1.2); }   // s-1: el primer punto es el borde de la franja
   return out; }
 // en cada columna: ¿la parte que se enrosca está chocando con algo sólido? (ahí la ola revienta en vez de atravesarlo)
-function tsBlock(T){ const NU=TS.NU, L=T.L, H=Math.max(2,T.Ht), raw=new Float32Array(NU);
+function tsBlock(T){ const NU=TS.NU, L=T.L, H=Math.max(2,T.Ht), raw=TS.raw||(TS.raw=new Float32Array(NU)); raw.fill(0);
   for(let j=0;j<NU;j++){ const u=-L/2+L*j/(NU-1); for(const fd of [-.85,-.45,-.1]){ const d=fd*H; if(swSolid(T.Ox+T.tx*u-T.nx*d,T.Oz+T.tz*u-T.nz*d)){ raw[j]=1; break; } } }
   for(let j=0;j<NU;j++){ let m=0; for(let q=-2;q<=2;q++){ const v=raw[j+q]; if(v) m=Math.max(m,1-Math.abs(q)*.3); } TS.blk[j]=m; } }
 // cada cuadro: acomodar la franja en la ola de tubo más cercana a la cámara
@@ -2037,22 +2045,25 @@ function tsTick(){ if(MIN_Q){ TS.on=false; TS.cut.w=0; TS.cutD.w=0; return false
   if(TS.blkId!==T.id || (TS.blkN=(TS.blkN|0)+1)%6===0){ TS.blkId=T.id; tsBlock(T); }
   const up=L/2-T.q*L*1.05, hc=Math.max(.01,swellH(T.Ox,T.Oz));
   for(let i=0;i<NV;i++){ const v=T.V0+(T.V1-T.V0)*i/(NV-1); pr.hf[i]=swellH(T.Ox-T.nx*v,T.Oz-T.nz*v); }
+  /* v200: lo que solo depende de la fila (adelante/atrás) se calcula una vez por fila, no en cada punto */
+  const RW=TS.rw||(TS.rw={v:new Float64Array(NV), kv:new Float64Array(NV), eb:new Float64Array(NV), g1:new Float64Array(NV), g2:new Float64Array(NV)}), w1=1/(1.4*H), w2=1/Math.max(6,.45*H);
+  for(let i=0;i<NV;i++){ const t=i/(NV-1), v=T.V0+(T.V1-T.V0)*t, a=(v+.6*H)*w1, b=(v+.6*H)*w2; RW.v[i]=v; RW.kv[i]=smooth(0,.07,t)*smooth(1,.93,t); RW.eb[i]=smooth(0,TS.EB,Math.min(T.V0-v, v-T.V1)); RW.g1[i]=Math.exp(-a*a); RW.g2[i]=Math.exp(-b*b); }
   for(let j=0;j<NU;j++){ const u=-L/2+L*j/(NU-1), bx=T.Ox+T.tx*u, bz=T.Oz+T.tz*u, blk=TS.blk[j], kc0=tubeKC(T.q,u,T.dir,L,T.H);
     const k=kc0[0]*(1-blk), c=Math.max(kc0[1],blk*smooth(0,.3,T.fade)), dec=Math.exp(-Math.max(0,T.dir*u-up)/(2*T.H+25)), endF=smooth(L/2,L/2-Math.max(10,1.5*T.H),Math.abs(u)), kc=Math.max(k,c), wc=kc>0?c/kc:0;
-    const sc=Math.max(0,swellH(bx,bz))/hc;   // qué tan alta va la ola grande en esta columna (comparada con el centro)
-    for(let i=0;i<NV;i++){ const q=j*NV+i, t=i/(NV-1), v=T.V0+(T.V1-T.V0)*t, kv=smooth(0,.07,t)*smooth(1,.93,t), K=kc*endF*kv*T.fade;
+    const sc=Math.max(0,swellH(bx,bz))/hc, ebU=smooth(0,TS.EB,L/2-Math.abs(u)), kf=kc*endF*T.fade, fl=.85*k, fc=c*.9*dec, ff=endF*T.fade, wyk=.28*H*dec;   // sc: qué tan alta va la ola grande en esta columna (comparada con el centro)
+    for(let i=0;i<NV;i++){ const q=j*NV+i, v=RW.v[i], K=kf*RW.kv[i];
       P[q*3]=bx-T.nx*v; P[q*3+1]=SEA_Y; P[q*3+2]=bz-T.nz*v;
       // a dónde va: la curva del tubo, o (donde ya rompió) una loma de espuma que se va aplanando detrás
-      const wy=.28*H*dec*Math.exp(-Math.pow((v+.6*H)/(1.4*H),2)), td=pr.d[i]+(v-pr.d[i])*wc, ty=pr.y[i]+(wy-pr.y[i])*wc;
+      const wy=wyk*RW.g1[i], td=pr.d[i]+(v-pr.d[i])*wc, ty=pr.y[i]+(wy-pr.y[i])*wc;
       A[q*4]=bx-T.nx*td; A[q*4+1]=SEA_Y+ty; A[q*4+2]=bz-T.nz*td; A[q*4+3]=K;
-      F[q*2]=Math.min(1,(pr.lip[i]*.85*k+c*.9*dec*Math.exp(-Math.pow((v+.6*H)/Math.max(6,.45*H),2)))*endF*T.fade);   /* espuma: en la punta del labio y donde ya rompió */
-      F[q*2+1]=Math.min(smooth(0,TS.EB,L/2-Math.abs(u)), smooth(0,TS.EB,Math.min(T.V0-v, v-T.V1)));   // qué tanto se ve (se desvanece en la orilla de la franja)
+      F[q*2]=Math.min(1,(pr.lip[i]*fl+fc*RW.g2[i])*ff);   /* espuma: en la punta del labio y donde ya rompió */
+      F[q*2+1]=Math.min(ebU, RW.eb[i]);   // qué tanto se ve (se desvanece en la orilla de la franja)
       const hf=SEA_Y+pr.hf[i]*sc; FR[q]=v+(td-v)*K; FY[q]=hf+(SEA_Y+ty-hf)*K; } }   // para que lo que flota sepa dónde está el agua
   // normales de la forma enroscada (de los puntos de destino)
   for(let j=0;j<NU;j++) for(let i=0;i<NV;i++){ const q=j*NV+i, i0=Math.max(0,i-1), i1=Math.min(NV-1,i+1), j0=Math.max(0,j-1), j1=Math.min(NU-1,j+1);
     const a1=(j*NV+i1)*4, a0q=(j*NV+i0)*4, b1=(j1*NV+i)*4, b0=(j0*NV+i)*4;
     const ex=A[a1]-A[a0q], ey=A[a1+1]-A[a0q+1], ez=A[a1+2]-A[a0q+2], fx=A[b1]-A[b0], fy=A[b1+1]-A[b0+1], fz=A[b1+2]-A[b0+2];
-    let nx=ey*fz-ez*fy, ny=ez*fx-ex*fz, nz=ex*fy-ey*fx; const l=Math.hypot(nx,ny,nz)||1; N[q*3]=nx/l*TS.sg; N[q*3+1]=ny/l*TS.sg; N[q*3+2]=nz/l*TS.sg; }
+    let nx=ey*fz-ez*fy, ny=ez*fx-ex*fz, nz=ex*fy-ey*fx; const l=TS.sg/(Math.sqrt(nx*nx+ny*ny+nz*nz)||1); N[q*3]=nx*l; N[q*3+1]=ny*l; N[q*3+2]=nz*l; }
   g.attributes.position.needsUpdate=true; g.attributes.normal.needsUpdate=true; g.attributes.aT.needsUpdate=true; g.attributes.aF.needsUpdate=true;
   m.visible=true; TS.on=true; TS.T=T; TS.cut.set(T.Ox,T.Oz,T.nx,T.nz); TS.cutD.set(L/2-TS.EB, T.V1+TS.EB, T.V0-TS.EB, 1); return true; }
 // la altura del agua dentro de la franja (la superficie de más abajo: el piso del tubo), o null si estás fuera
@@ -2380,7 +2391,7 @@ function waterTouch(st,x,y,z,speed,dt){
 }
 const myWaterSt={};
 function updateWater(dt){
-  WATER.t=waterClock(); swellTick(); try{ tubeTick(); }catch(e){} try{ waveExtrasTick(dt); }catch(e){ if(!waveExtrasTick.e){ waveExtrasTick.e=1; console.warn(e); } }
+  WATER.t=waterClock(); swellTick(); try{ tubeTick(); }catch(e){} try{ HOWTO.tick(); }catch(e){} try{ waveExtrasTick(dt); }catch(e){ if(!waveExtrasTick.e){ waveExtrasTick.e=1; console.warn(e); } }
   const W=weatherNow; WATER.seaA=(.22+.3*W.wind+.15*W.storm)*(1+.6*W.rain+.6*W.storm); WATER.lakeA=.025+.05*W.wind;   /* v197: con lluvia y tormenta el mar se mueve bruscamente */
   const day=sky.dayK, amb=_c1.copy(hemi.color).multiplyScalar(hemi.intensity*.9).add(_c2.copy(hemi.groundColor).multiplyScalar(hemi.intensity*.25));
   for(const m of waterMats){ const u=m.uniforms; u.uT.value=WATER.t; u.uA.value=m.userData.lake?WATER.lakeA:WATER.seaA;
@@ -2502,6 +2513,13 @@ const leafMats = [felt('#6fae3e'), felt('#7cbf4a'), felt('#f0a9bb','rgba(150,40,
 const rockMat = felt('#c9c4d6','rgba(60,50,80,.15)');
 const sphereLo = new THREE.SphereGeometry(1, 8, 6);   // para bolitas muy chiquitas
 const sphereG = new THREE.SphereGeometry(1, ...({min:[9,6], low:[12,9], mid:[16,12], high:[20,16], max:[26,18]}[Q0]||[12,9]));   // menos caras en calidad baja (hojas, rocas, nubes…)
+// v200: las bolitas chiquitas (ojos, botones, cerezas, copitos…) usan una bolita con menos caras: a ese tamaño se ve igual de redonda.
+// s1 para lo de menos de 12 cm de radio, s2 para lo de menos de 30 cm (solo si tiene menos caras que la normal de esta calidad)
+const SLIM=(()=>{ const P=sphereG.parameters, mk=(w,h)=>w*h<P.widthSegments*P.heightSegments?new THREE.SphereGeometry(1,w,h):null, s2=mk(16,12);
+  return {s1:mk(12,9)||s2, s2, R1:.12, R2:.3, inst:new WeakMap(), clone:new WeakMap(), lod:null}; })();
+function slimFor(r){ return r<SLIM.R1 ? SLIM.s1 : r<SLIM.R2 ? SLIM.s2 : null; }
+// cerca de un límite se queda como está (así no cambia de una a otra a cada rato)
+function slimPick(cur,r){ for(const b of [SLIM.R1,SLIM.R2]) if(Math.abs(r-b)<b*.06) return cur; return slimFor(r)||sphereG; }
 const fBox=new THREE.BoxGeometry(1,1,1), fCyl=new THREE.CylinderGeometry(1,1,1,14);   // caja y cilindro de medida 1 (la ropa los usa desde que carga el juego; antes estaban más abajo y al abrir el juego la sudadera salía sin mangas)
 const cylG = new THREE.CylinderGeometry(1,1,1,14), cylLo=new THREE.CylinderGeometry(1,1,1,7);
 const INST_LOD=[];   // grupos de árboles/rocas que cambian a la versión sencilla cuando quedan lejos
@@ -6463,11 +6481,12 @@ function rbox(w,h,d,r){
 }
 // Une en una sola malla todas las piezas fijas que comparten material (mucho más ligero de dibujar)
 function mergeStatic(parent){
-  const groups=new Map();
+  const groups=new Map(); let ps=1; for(let q=parent;q;q=q.parent) ps*=Math.max(q.scale.x,q.scale.y,q.scale.z);   // v200: el tamaño de todo el grupo
   parent.children.slice().forEach(o=>{
     if(!o.isMesh) return;
     o.updateMatrix();
-    const g=(o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()); g.applyMatrix4(o.matrix);
+    const src=o.geometry===sphereG?(slimFor(Math.max(o.scale.x,o.scale.y,o.scale.z)*ps)||sphereG):o.geometry;   // v200
+    const g=(src.index ? src.toNonIndexed() : src.clone()); g.applyMatrix4(o.matrix);
     const k=o.material.uuid; if(!groups.has(k)) groups.set(k,{mat:o.material, geos:[]}); groups.get(k).geos.push(g);
     parent.remove(o);
   });
@@ -9196,10 +9215,17 @@ const critters=[];
 })();
 // ojos saltones: todos los blancos en un solo dibujo y todas las bolitas negras en otro
 // como los de manualidades: base blanca plana, bolita negra grande suelta y un domo transparente que brilla
-const eyeWhites=new THREE.InstancedMesh(sphereG, new THREE.MeshStandardMaterial({color:0xf4f4f2, roughness:.45, metalness:0}), critters.length*2);
-const eyePupils=new THREE.InstancedMesh(sphereG, new THREE.MeshStandardMaterial({color:0x0c0c0c, roughness:.5}), critters.length*2);
-const eyeDomes=new THREE.InstancedMesh(sphereG, new THREE.MeshStandardMaterial({color:0xffffff, roughness:.04, metalness:.1, transparent:true, opacity:.22, depthWrite:false}), critters.length*2);
+// v200: los ojos miden unos 9 cm: una bolita de pocas caras se ve igual de redonda; y solo se mandan a dibujar los de los animalitos que se ven
+const eyeSphG=SLIM.s1||sphereG;
+const eyeWhites=new THREE.InstancedMesh(eyeSphG, new THREE.MeshStandardMaterial({color:0xf4f4f2, roughness:.45, metalness:0}), critters.length*2);
+const eyePupils=new THREE.InstancedMesh(eyeSphG, new THREE.MeshStandardMaterial({color:0x0c0c0c, roughness:.5}), critters.length*2);
+const eyeDomes=new THREE.InstancedMesh(eyeSphG, new THREE.MeshStandardMaterial({color:0xffffff, roughness:.04, metalness:.1, transparent:true, opacity:.22, depthWrite:false}), critters.length*2);
 eyeWhites.frustumCulled=eyePupils.frustumCulled=eyeDomes.frustumCulled=false; eyeDomes.renderOrder=3; scene.add(eyeWhites, eyePupils, eyeDomes); if(ULTRA) eyeDomes.visible=false;
+[eyeWhites,eyePupils,eyeDomes].forEach(m=>m.userData.noSlim=true);
+let EYE_N=0;   // cuántos ojos se mandan a dibujar este cuadro
+// los 6 lugares de ojos de un animalito (blancos, bolitas, domos) se guardan en c.ec y se copian juntitos al final de la lista
+function eyePush(c){ if(!c.ec) return; const W=eyeWhites.instanceMatrix.array, Pp=eyePupils.instanceMatrix.array, D=eyeDomes.instanceMatrix.array, E=c.ec, o=EYE_N*16;
+  W.set(E.subarray(0,32),o); Pp.set(E.subarray(32,64),o); D.set(E.subarray(64,96),o); EYE_N+=2; }
 { const z=new THREE.Matrix4().makeScale(0,0,0); for(let i=0;i<critters.length*2;i++){ eyeWhites.setMatrixAt(i,z); eyePupils.setMatrixAt(i,z); eyeDomes.setMatrixAt(i,z); } }
 const _cm=new THREE.Matrix4(), _cl=new THREE.Matrix4(), _cq=new THREE.Quaternion(), _cp=new THREE.Vector3(), _cs=new THREE.Vector3(), _cv=new THREE.Vector3(), _ce=new THREE.Euler(), _cz=new THREE.Matrix4().makeScale(0,0,0);
 // camino de paseo: avanza con pausas (u' = vel·(1+sin) llega a 0 de vez en cuando)
@@ -9217,7 +9243,7 @@ function stepPupils(c,dt){
 const CRITTER_FAR=ULTRA?45:95; const _cfr=new THREE.Frustum(), _cfm=new THREE.Matrix4(), _cfs=new THREE.Sphere();
 let CRIT_FR=0;
 function updateCritters(dt){
-  if(!critters.length) return; CRIT_FR++;
+  if(!critters.length) return; CRIT_FR++; EYE_N=0;
   const t=(Date.now()/1000)%100000, cx=camera.position.x, cz=camera.position.z, far=Math.min(CRITTER_FAR, settings.draw+10);
   _cfr.setFromProjectionMatrix(_cfm.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
   // cada animalito tiene SIEMPRE sus dos lugares de ojos (antes se recorrían y, al apagarse uno lejano, los ojos de otros quedaban flotando)
@@ -9225,7 +9251,7 @@ function updateCritters(dt){
     const d=Math.hypot(c.home.x-cx, c.home.y-cz)-c.R;
     const on=d<far && state!=='menu';
     // fuera de la cámara: no se calcula (al volver a verse retoma su paseo); cerca de ti siempre, por si lo empujas
-    if(on && c.vis && d>6){ _cfs.center.set(c.home.x,c.pos.y,c.home.y); _cfs.radius=c.R+2.5; if(!_cfr.intersectsSphere(_cfs)){ c.off=true; continue; } }
+    if(on && c.vis && d>6){ _cfs.center.set(c.home.x,c.pos.y,c.home.y); _cfs.radius=c.R+2.5; if(!_cfr.intersectsSphere(_cfs)){ c.off=true; eyePush(c); continue; } }   // (sus ojos van igual, con lo último que se calculó)
     if(c.off){ c.off=false; c.first=true; }
     if(!on){ if(c.vis){ c.vis=false; if(c.snake) c.im.visible=false; else c.g.visible=false; for(let k=0;k<2;k++){ eyeWhites.setMatrixAt(ei+k,_cz); eyePupils.setMatrixAt(ei+k,_cz); eyeDomes.setMatrixAt(ei+k,_cz); } c.first=true; } continue; }
     if(!c.vis){ c.vis=true; if(c.snake) c.im.visible=true; else c.g.visible=true; }
@@ -9277,11 +9303,13 @@ function updateCritters(dt){
     // ojos: blanco brillante y bolita negra que se mueve dentro
     const [ex,eyY,ez,er]=c.def.eyes;
     for(let s=0;s<2;s++){ const sd=s?-1:1, e=c.eyes[s];
-      _cl.compose(_cp.set(ex*sd,eyY,ez),_cq.identity(),_cs.set(er,er,er*.3)); _cl.premultiply(head); eyeWhites.setMatrixAt(ei+s,_cl);
-      _cl.compose(_cp.set(ex*sd+e.p.x*er*.36,eyY+e.p.y*er*.36,ez+er*.3),_cq.identity(),_cs.set(er*.6,er*.6,er*.08)); _cl.premultiply(head); eyePupils.setMatrixAt(ei+s,_cl);
-      _cl.compose(_cp.set(ex*sd,eyY,ez+er*.05),_cq.identity(),_cs.set(er*.97,er*.97,er*.5)); _cl.premultiply(head); eyeDomes.setMatrixAt(ei+s,_cl); }
+      const E=c.ec||(c.ec=new Float32Array(96));
+      _cl.compose(_cp.set(ex*sd,eyY,ez),_cq.identity(),_cs.set(er,er,er*.3)); _cl.premultiply(head); _cl.toArray(E,s*16);
+      _cl.compose(_cp.set(ex*sd+e.p.x*er*.36,eyY+e.p.y*er*.36,ez+er*.3),_cq.identity(),_cs.set(er*.6,er*.6,er*.08)); _cl.premultiply(head); _cl.toArray(E,32+s*16);
+      _cl.compose(_cp.set(ex*sd,eyY,ez+er*.05),_cq.identity(),_cs.set(er*.97,er*.97,er*.5)); _cl.premultiply(head); _cl.toArray(E,64+s*16); }
+    eyePush(c);
   }
-  eyeWhites.count=eyePupils.count=eyeDomes.count=critters.length*2;
+  eyeWhites.count=eyePupils.count=eyeDomes.count=EYE_N; eyeWhites.visible=eyePupils.visible=EYE_N>0; eyeDomes.visible=EYE_N>0 && !ULTRA;
   eyeWhites.instanceMatrix.needsUpdate=true; eyePupils.instanceMatrix.needsUpdate=true; eyeDomes.instanceMatrix.needsUpdate=true;
 }
 
@@ -12051,7 +12079,7 @@ function caveRemotePose(r,t,dt){ const inC=inCave(r.pos.y), M=gearSet(r.obj, inC
   if(M.lamp.visible) lampAim(M,1-(sky.dayK??1)); else M.pool.visible=false;
   if(prev<.24 && r.miSwing>=.24 && r.pos.distanceTo(player.pos)<18) mineSound(false,false); }
 // en la cueva solo se dibuja la cueva (y los peluches): todo lo de arriba se apaga mientras se dibuja
-function caveCull(){ for(const c of scene.children){ if(!c.visible || c===CAVE || c.userData.caveKeep || c===plush || c.userData.isPlushRoot || c.isLight || c.isCamera) continue; c.visible=false; AREA.off.push(c); } }
+function caveCull(){ for(const c of scene.children){ if(!c.visible || c===CAVE || c.userData.caveKeep || c===plush || c.userData.isPlushRoot || c.isLight || c.isCamera) continue; c.visible=false; c._acOff=true; AREA.off.push(c); } }
 const minePresence=()=>({mi: MS.inC ? [mine.pick, MS.swingSeq] : null});
 
 
@@ -14726,11 +14754,17 @@ const HOWTO=(()=>{ const F='Sniglet, Nunito, sans-serif', W=512, H=512;
     label(q,'¡sigue la línea!',256,110,26,'#c62828'); label(q,'92%',400,170,30,'#e0a800'); };
   // un cartel: banda de color arriba, y abajo el dibujo o la lista de indicaciones
   function board(kind,col,draw){ const c=document.createElement('canvas'); c.width=W; c.height=H; const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4;
+    { const q=c.getContext('2d'); q.fillStyle='#fff6e3'; q.fillRect(0,0,W,H); q.fillStyle=col; q.fillRect(0,0,W,70); }   // v200: de lejos, papel con su banda de color; el dibujo se pinta al acercarte
     const paint=()=>{ const q=c.getContext('2d'); q.setTransform(1,0,0,1,0,0); q.fillStyle='#fff6e3'; q.fillRect(0,0,W,H); try{ TK.finish(c,{seed:W+kind.length, amp:.03, grain:.02, fuzzDiv:30, len:2}); }catch(e){}
       q.fillStyle=col; q.fillRect(0,0,W,70); label(q,kind,W/2,38,34,'#ffffff');
       try{ TK.stitch(q,[[12,12],[W-12,12],[W-12,H-12],[12,H-12],[12,12]],{dash:18,gap:12,lw:7,col,shadow:'rgba(0,0,0,.22)',hole:'rgba(0,0,0,.25)'}); }catch(e){}
       draw(q); t.needsUpdate=true; };
-    paint(); if(document.fonts) document.fonts.ready.then(paint); return t; }
+    t.__paint=()=>{ if(t.__done) return; t.__done=true; paint(); if(document.fonts && document.fonts.status!=='loaded') document.fonts.ready.then(paint); };
+    LAZY.push(t); return t; }
+  const LAZY=[], SPOTS=[]; let lzT=0;
+  // cada medio segundo: pinta el cartel más cercano que falte (si estás a menos de 70 m); uno a la vez para que no dé tirones
+  function tick(){ const now=performance.now(); if(now-lzT<500 || !SPOTS.length) return; lzT=now; const px=player.pos.x, pz=player.pos.z; let best=null, bd=70*70;
+    for(const S of SPOTS){ if(S.t.__done) continue; const d=(S.x-px)**2+(S.z-pz)**2; if(d<bd){ bd=d; best=S; } } if(best) best.t.__paint(); }   /* (las texturas de esta versión no tienen userData) */
   function pic(id,col,cap){ return board('¿Cómo se juega?',col,q=>{ DRAW[id](q); rr(q,40,446,W-80,46,14,'rgba(255,255,255,.85)'); label(q,cap,W/2,470,26,'#5a2b2b'); }); }
   function text(col,lines){ return board('Instrucciones',col,q=>{ let sz=27; const wrap=(s,max)=>{ const out=[]; let cur=''; for(const w of s.split(' ')){ const t=cur?cur+' '+w:w; if(q.measureText(t).width>max && cur){ out.push(cur); cur=w; } else cur=t; } if(cur) out.push(cur); return out; };
       let rows; for(;;){ q.font='700 '+sz+'px '+F; rows=lines.map(s=>wrap(s,W-120)); const hh=rows.reduce((a,r)=>a+r.length*sz*1.18+sz*.45,0); if(hh<400 || sz<17) break; sz--; }
@@ -14765,9 +14799,9 @@ const HOWTO=(()=>{ const F='Sniglet, Nunito, sans-serif', W=512, H=512;
     for(const s of [-1,1]){ const p=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,b.position.y+size/2,8),wood); p.position.set(s*(size/2-.12),(b.position.y+size/2)/2,-.06); g.add(p); }
     g.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.userData.noBatch=true; } }); return g; }
   // ponerlo en el mundo (x,z), mirando hacia (fx,fz); también es sólido
-  function place(id,which,x,y,z,fx,fz,size){ const s=sign(id,which,size); s.position.set(x,y,z); s.rotation.y=Math.atan2(fx,fz); scene.add(s);
+  function place(id,which,x,y,z,fx,fz,size){ const s=sign(id,which,size); s.position.set(x,y,z); SPOTS.push({t:get(id)[which], x, z}); s.rotation.y=Math.atan2(fx,fz); scene.add(s);
     const c=Math.cos(s.rotation.y), si=Math.sin(s.rotation.y); for(const k of [-1,1]){ const px=x+k*(size/2-.12)*c, pz=z-k*(size/2-.12)*si; obstacles.push({x:px,z:pz,r:.14,top:y+2.5,walk:false}); } return s; }
-  return {G, place, get, DRAW}; })();
+  return {G, place, get, DRAW, tick}; })();
 // minijuegos grandes: a los lados del letrero de cada placa (dibujo a la izquierda, instrucciones a la derecha, viendo hacia el letrero)
 ['plat','papa','bola','carrera','lab','carros','banda','frutas','pinta','perlas','cojines','escondidas','dibujar'].forEach((id,i)=>{ const A=AR_SPOTS[i]; if(!A) return; const [x,z]=A.plate;
   const V=[-A.u[1],A.u[0]];   // (a la izquierda de quien mira hacia el letrero va el dibujo)
@@ -21615,7 +21649,7 @@ function batchTick(){ if(!BATCH.on) return;
     if(!BATCH.col){ if(now-BATCH.last<.5) return; BATCH.last=now; BMAT.tick++; BATCH.col={L:[], V:[], D:[], st:[scene], sv:[true], sd:[false]}; }
     const K=BATCH.col, tc=performance.now(); let k=0;
     while(K.st.length){ const o=K.st.pop(), pv=K.sv.pop(), dy=K.sd.pop(); if(batchSkip(o)) continue; const vis=pv && o.visible, dyn=dy || o===plush || !!o.userData.isPlushRoot;
-      if(o.isMesh){ if(Array.isArray(o.material) && !o.userData.split && o.geometry && o.geometry.groups && o.geometry.groups.length) splitMulti(o); K.L.push(o); K.V.push(vis); K.D.push(dyn); }
+      if(o.isMesh){ if(Array.isArray(o.material) && !o.userData.split && o.geometry && o.geometry.groups && o.geometry.groups.length) splitMulti(o); try{ slimMesh(o); }catch(e){} K.L.push(o); K.V.push(vis); K.D.push(dyn); }
       const ch=o.children; for(let i=ch.length-1;i>=0;i--){ K.st.push(ch[i]); K.sv.push(vis); K.sd.push(dyn); } if((++k&127)===0 && performance.now()-tc>1) return; }
     BATCH.cyc={L:K.L, V:K.V, D:K.D, i:0, T:now}; BATCH.col=null; BATCH.pn=now; return; }
   const C=BATCH.cyc, T=C.T; BATCH.pn=now;
@@ -21635,6 +21669,24 @@ function batchTick(){ if(!BATCH.on) return;
   for(const [o,r] of BATCH.recs) if(r.st!==T){ if(r.batch) dissolve(r.batch); BATCH.recs.delete(o); }   // ya no está en la escena
   // 2) juntar los que llevan quietos un rato (máximo una vez por segundo)
   if(T-BATCH.lastBuild<1) return; BATCH.lastBuild=T; BATCH.grp={it:BATCH.recs.entries(), groups:new Map(), T}; }
+// v200: una bolita suelta usa la versión sencilla si es chiquita (se revisa en cada vuelta: si crece, regresa a la normal)
+function slimMesh(o){ if(o.userData.noSlim) return; const g=o.geometry; if(o.isInstancedMesh){ slimInst(o); return; }
+  if(g!==sphereG && g!==SLIM.s1 && g!==SLIM.s2) return; const w=slimPick(g,o.matrixWorld.getMaxScaleOnAxis()); if(w!==g) o.geometry=w; }
+// ¿esta forma es una copia exacta de la bolita normal? (los grupos de copias usan su propia copia)
+function slimIsSph(g){ let v=SLIM.clone.get(g); if(v!==undefined) return v; const a=sphereG.attributes;
+  v=g===sphereG || (!!g.index && g.index.count===sphereG.index.count && Object.keys(g.attributes).sort().join()==='normal,position,uv' && g.attributes.position.count===a.position.count && g.attributes.position.array.every((x,i)=>x===a.position.array[i]));
+  SLIM.clone.set(g,v); return v; }
+// un grupo de copias (InstancedMesh) que no se mueve: si todas son chiquitas, usa la bolita sencilla
+function slimInst(o){ let S=SLIM.inst.get(o); if(S && S.no) return;
+  if(!S){ if(!slimIsSph(o.geometry)){ SLIM.inst.set(o,{no:true}); return; } S={orig:o.geometry, ver:o.instanceMatrix.version, cnt:o.count, cur:sphereG, g:new Map()}; SLIM.inst.set(o,S); return; }   // la primera vez solo se anota
+  const im=o.instanceMatrix; if(im.version!==S.ver || o.count!==S.cnt){ S.no=true; slimSet(o,S,sphereG); return; }   // se mueve: se queda con la normal
+  if(S.done) return; S.done=true; const a=im.array; let mx=0;
+  for(let i=0;i<o.count;i++){ const j=i*16; mx=Math.max(mx,a[j]*a[j]+a[j+1]*a[j+1]+a[j+2]*a[j+2],a[j+4]*a[j+4]+a[j+5]*a[j+5]+a[j+6]*a[j+6],a[j+8]*a[j+8]+a[j+9]*a[j+9]+a[j+10]*a[j+10]); }
+  slimSet(o,S,slimPick(S.cur,Math.sqrt(mx)*o.matrixWorld.getMaxScaleOnAxis())); }
+function slimSet(o,S,base){ if(S.cur===base) return; S.cur=base; let g=S.orig;
+  if(base!==sphereG){ g=S.g.get(base); if(!g){ g=base.clone(); if(S.orig.boundingSphere) g.boundingSphere=S.orig.boundingSphere.clone(); S.g.set(base,g); } }
+  if(!SLIM.lod){ SLIM.lod=new Map(); for(const L of INST_LOD) SLIM.lod.set(L.m,L); } const L=SLIM.lod.get(o); if(L){ L.hi=g; if(o.geometry===L.lo) return; }
+  o.geometry=g; }
 // v197: agrupar también poco a poco (~1 ms por cuadro); antes revisaba las 11 mil piezas de golpe una vez por segundo
 function batchGroupStep(){ const GR=BATCH.grp, T=GR.T, groups=GR.groups, tg=performance.now();
   for(let k=0;;k++){ if((k&63)===63 && performance.now()-tg>1.2) return; const nx=GR.it.next(); if(nx.done) break; const [o,r]=nx.value; if(r.bad || r.batch || !o.parent) continue; let key, local=false;
@@ -22349,9 +22401,9 @@ function areaCullBegin(){ const now=performance.now();
   for(const it of AREA.list){ const c=it[0]; if(!c.visible || c.parent!==scene) continue; if(c.userData._areaDyn){ const n=areaBounds(c); if(n && n.radius<400) it[1]=n; } if(!it[1]) continue;   // lo que se mueve (coches, aviones, otros jugadores): cada cuadro
     const sp=it[1], S=AREA.s; S.center.copy(sp.center); S.radius=sp.radius+20;   // margen: algunas cosas se mueven (coches, aviones)
     const d=cp.distanceTo(S.center)-S.radius; let out=d>far; if(!out && !shadows && d>8) out=!AREA.fr.intersectsSphere(S);
-    if(out){ c.visible=false; AREA.off.push(c); } } }
-function areaCullEnd(){ for(const c of AREA.off) c.visible=true; AREA.off.length=0; }
-{ const rr=renderer.render.bind(renderer); renderer.render=(sc,cam)=>{ if(sc===scene && cam===camera){ if(cam.position.y<CAVE_TOP) caveCull(); else areaCullBegin(); try{ rr(sc,cam); } finally{ areaCullEnd(); } } else rr(sc,cam); }; }
+    if(out){ c.visible=false; c._acOff=true; AREA.off.push(c); } } }
+function areaCullEnd(){ for(const c of AREA.off){ c.visible=true; c._acOff=false; } AREA.off.length=0; }
+{ const rr=renderer.render.bind(renderer); renderer.render=(sc,cam)=>{ if(sc===scene && cam===camera){ if(cam.position.y<CAVE_TOP) caveCull(); else areaCullBegin(); UMW.skip=true; try{ rr(sc,cam); } finally{ UMW.skip=false; areaCullEnd(); } } else rr(sc,cam); }; }
 
 // ---------- Calidad Máxima ----------
 // El mundo se dibuja primero en una imagen aparte (con más rango de luz: puede pasar de blanco) y con bordes suavizados.
