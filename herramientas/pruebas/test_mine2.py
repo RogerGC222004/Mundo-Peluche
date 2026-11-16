@@ -13,7 +13,7 @@ async def m():
       elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")
       else: await r.abort()
     await pg.route("https://**/*", route); await pg.goto("https://test.local/"); await pg.wait_for_function("window.__T", timeout=120000); await pg.wait_for_timeout(2000)
-    await pg.evaluate("document.getElementById('playBtn').click()"); await pg.wait_for_timeout(1500)
+    await pg.evaluate("document.getElementById('soloBtn').click()"); await pg.wait_for_timeout(1500)
     ev=lambda s: pg.evaluate("s=>__T.ev(s)", s)
     await ev("(()=>{ const n=Date.now(); const cur=((n/1000)%DAY_LEN)/DAY_LEN; window.__off+=(("+sys.argv[1]+"-cur)*DAY_LEN*1000); window.__stop=true; return 1; })()"); await pg.wait_for_timeout(300)
     shots=[]

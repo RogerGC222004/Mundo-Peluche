@@ -20,7 +20,7 @@ async def m():
       elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")
       else: await r.abort()
     await pg.route("https://**/*", route); await pg.goto("https://test.local/"); await pg.wait_for_function("window.__M", timeout=120000); await pg.wait_for_timeout(1500)
-    await pg.evaluate("document.getElementById('playBtn').click()"); await pg.wait_for_timeout(2500)
+    await pg.evaluate("document.getElementById('soloBtn').click()"); await pg.wait_for_timeout(2500)
     await pg.evaluate("window.__stop=true"); await pg.wait_for_timeout(500)
     await pg.evaluate("document.querySelectorAll('#hud,#touch,.hud,#controlsHud').forEach(e=>e.style.visibility='hidden')")
     for name,ph,cam,look,qs in JOBS:

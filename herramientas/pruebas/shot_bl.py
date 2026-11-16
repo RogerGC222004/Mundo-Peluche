@@ -13,7 +13,7 @@ async def m():
       elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")
       else: await r.abort()
     await pg.route("https://**/*", route); await pg.goto("https://test.local/"); await pg.wait_for_function("window.__B", timeout=120000); await pg.wait_for_timeout(2500)
-    await pg.evaluate("document.getElementById('playBtn').click()"); await pg.wait_for_timeout(1500); await pg.evaluate("window.__stop=true"); await pg.wait_for_timeout(300)
+    await pg.evaluate("document.getElementById('soloBtn').click()"); await pg.wait_for_timeout(1500); await pg.evaluate("window.__stop=true"); await pg.wait_for_timeout(300)
     for k,(up,fw,n) in enumerate([(1,0,140),(1,1,120),(0,1,80)]):
       d=await pg.evaluate(f"""(()=>{{ const B=__B, b=B.BL[3], P=B.P(); if(!P.balloon){{ P.pos.set(b.x+1.2,b.y,b.z); B.blEnter(b); }}
         B.touchHold.up={'true' if up else 'false'}; B.stick.y={-1 if fw else 0}; let t=200+{k}*10; for(let i=0;i<{n};i++){{ t+=.033; B.update(.033,t); }} B.touchHold.up=false; B.stick.y=0;

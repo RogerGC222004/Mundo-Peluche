@@ -11,7 +11,7 @@ async def m():
       elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")
       else: await r.abort()
     await pg.route("https://**/*", route); await pg.goto("https://test.local/"); await pg.wait_for_function("window.__CU", timeout=120000); await pg.wait_for_timeout(3000)
-    await pg.evaluate("document.getElementById('playBtn').click()"); await pg.wait_for_timeout(1500)
+    await pg.evaluate("document.getElementById('soloBtn').click()"); await pg.wait_for_timeout(1500)
     await pg.evaluate("(()=>{ const C=__CU, P=__P(); P.pos.set(C.x+Math.cos(C.h)*7.5, 0.2, C.z-Math.sin(C.h)*7.5); })()"); await pg.wait_for_timeout(800)
     await pg.keyboard.press('KeyE'); await pg.wait_for_timeout(2500)
     print('montado', await pg.evaluate("JSON.stringify(__P().pg)"))

@@ -14,7 +14,7 @@ async def m():
       elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")
       else: await r.abort()
     await pg.route("https://**/*", route); await pg.goto("https://test.local/"); await pg.wait_for_function("window.__F", timeout=120000); await pg.wait_for_timeout(1500)
-    await pg.evaluate("document.getElementById('playBtn').click()"); await pg.wait_for_timeout(1500)
+    await pg.evaluate("document.getElementById('soloBtn').click()"); await pg.wait_for_timeout(1500)
     r=await pg.evaluate("""(()=>{ const F=__F, P=F.P(), out=[];
       // 1) diana: pegar la flecha y subir
       const T=F.FI_TARGETS[0]; P.pos.set(T.c.x+T.n.x*12, F.groundAt(T.c.x+T.n.x*12,T.c.z+T.n.z*12,50), T.c.z+T.n.z*12); F.step(3);

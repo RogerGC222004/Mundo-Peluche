@@ -11,7 +11,7 @@ async def m():
       elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")
       else: await r.abort()
     await pg.route("https://**/*", route); await pg.goto("https://test.local/"); await pg.wait_for_function("window.__PI", timeout=120000); await pg.wait_for_timeout(2500)
-    await pg.evaluate("document.getElementById('playBtn').click()"); await pg.wait_for_timeout(1500)
+    await pg.evaluate("document.getElementById('soloBtn').click()"); await pg.wait_for_timeout(1500)
     await pg.evaluate("(()=>{ const C=__PI.CU, P=__PI.P(); P.hand=2; const d=C.B+5.2; P.pos.set(C.x+Math.sin(C.h)*d+Math.cos(C.h)*1.5, 0, C.z+Math.cos(C.h)*d-Math.sin(C.h)*1.5); P.facing=C.h+Math.PI; })()")
     await pg.wait_for_timeout(2500); print('acts', await pg.evaluate("JSON.stringify(__PI.acts())"))
     await pg.evaluate("__PI.run(0)")
