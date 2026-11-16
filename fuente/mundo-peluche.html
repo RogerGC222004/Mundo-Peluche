@@ -1356,7 +1356,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='202';
+const GAME_VERSION='203';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -5193,7 +5193,7 @@ function plushLod(o){ const u=o.userData; if(!u || !u.body) return;
 const TGCAM={on:false}, _TGM=new THREE.Matrix4();
 function tgLook(dx,dy,s){ const tg=plush.userData.tg; if(!TGCAM.on || !tg || !tg.want) return false;
   tg.hyT=THREE.MathUtils.clamp(tg.hyT-dx*s,-.9,.9); tg.hpT=THREE.MathUtils.clamp(tg.hpT+dy*s*.6*(settings.invert?-1:1),-.25,.25); return true; }
-function tgChip(){ const c=ui('camFixChip'); if(!c) return; const tg=plush.userData.tg, show=state==='play' && !!(tg && tg.want); if(!show && TGCAM.on){ TGCAM.on=false; }
+function tgChip(){ const c=ui('camFixChip'); if(!c) return; const show=false; if(!show && TGCAM.on){ TGCAM.on=false; }   /* v203: Roger: ya no hace falta «Fijar cámara» con la lengua */
   if(c.hidden===show) c.hidden=!show; const t=TGCAM.on?'Soltar cámara':'Fijar cámara'; if(c.dataset.lbl!==t){ c.dataset.lbl=t; c.textContent=t; } c.classList.toggle('on',TGCAM.on); }
 function tongueToggle(){ const tg=plush.userData.tg; if(tg && tg.want){ tongueSet(plush,0); try{ sendPresence(true); }catch(e){} return; }
   if(plush.userData.av==='c' || plush.userData.av==='a'){ flashNote('Sacar la lengua es solo del frijolito'); return; }
@@ -11656,6 +11656,7 @@ const shopEl=ui('shop'); let shopCat='sudaderas', shopTry=null;
 let shopOnly=null;   // v144: 'dulce' cuando abres la Dulcería
 const myAv=()=>wardrobe.eq.body==='av_chibi'?'c':wardrobe.eq.body==='av_amigu'?'a':'f', catAv=id=>(SHOP_CATS.find(c=>c.id===id)||{}).av||'f';
 const owns=it=>!!it.free || wardrobe.own.includes(it.id);
+try{ waveLabel(); }catch(e){}   // v203: el botón de atajo dice tu gesto desde que abres el juego
 const diShopVis=it=>shopOnly ? (it.dulce===1 || (!!it.dulce && wardrobe.own.includes(it.id))) : ((it.cat==='cuerpo' || it.all || it.av===myAv()) && (!it.dulce || wardrobe.own.includes(it.id)));   // v152: solo lo del cuerpo que traes
 // ---- Filtros de la tienda: buscar por nombre o color, lo nuevo, lo mío y lo que me alcanza ----
 const NEW_RE=/^(arg_|arc_|ara_|arb_|arz_|ahp_|ahc_|acj_|amj_|aor_|ap_|ae_|rg_|rc_|ra_|rb_|rz_|hp_|hc_|cj_|bo_|mj_|or_|cp_|co_|sdd_|cmd_|sud_|god_|gud_|cad_|hn_|gln_|gun_|zn_|zp_dino$|sdn_|pln_|cmn_|sun2_|can_|dg_(aurora|chicle|caribe|volcan)$|pa_(salmon|pistache)$|ne_(dorado|menta)$|fo_amarillo$|ar_rayas$|tx_(huellitas|mezclilla|vichy|hojas|notas|burbujas|fresas|sandia|cuadritos|metalazul)$)/;
@@ -11934,8 +11935,8 @@ function stTipSync(){ const el=ui('stTip'); if(!el) return; const m=shopCat==='p
   const t = !shopOpen() ? '' : m==='paint' ? (SW.last ? 'Toca la pared para lanzar otro · gírala o acércate' : 'Toca un globo para lanzarlo a la pared') : m==='poster' ? 'Toca el póster para verla completa' : shopCat==='gestos' ? (SHOPG.last ? 'Toca tu peluche para verlo otra vez' : 'Toca un gesto para verlo') : '';
   if(el.textContent!==t) el.textContent=t; el.hidden=!t; }
 function openShop(){ shopTry=null; shopKeep.clear(); try{ gEnd(plush); }catch(e){} batchDropUnder(plush); menuEl.hidden=true; shopEl.hidden=false; studio.add(plush); stView.auto=true; stView.dist=4.6; stView.pitch=.12; renderShop(); }
-function closeShop(){ shopOutfitT=0; shopTry=null; petTry=null; try{ shopPreviewsOff(); }catch(e){} applyOutfit(plush, wardrobe.eq); shopEl.hidden=true; scene.add(plush); if(state==='menu') menuEl.hidden=false; try{ diShopClosed(); }catch(e){} }
-ui('shopBtn').onclick=openShop; ui('shopBack').onclick=closeShop; ui('shopBack2').onclick=closeShop;
+function closeShop(){ shopOutfitT=0; shopTry=null; petTry=null; shopEl.hidden=true; try{ shopPreviewsOff(); }catch(e){} try{ applyOutfit(plush, wardrobe.eq); }catch(e){ console.warn('ropa',e); flashNote('Aviso para Roger: falló vestir al peluche ('+String(e&&e.message||e).slice(0,60)+')'); } scene.add(plush); plush.visible=true; if(state==='menu') menuEl.hidden=false; try{ diShopClosed(); }catch(e){} }   // v203: la tienda se cierra primero, pase lo que pase
+ui('shopBtn').onclick=openShop; tap(ui('shopBack'),()=>closeShop()); tap(ui('shopBack2'),()=>closeShop());   // v203: salir responde al tocar (sin esperar el «click» del teléfono)
 addEventListener('keydown',e=>{ if(e.code==='Escape' && !shopEl.hidden){ e.preventDefault(); closeShop(); } });
 const shopOpen=()=>!shopEl.hidden;
 let shopRightPx=0, shopRightT=0;
