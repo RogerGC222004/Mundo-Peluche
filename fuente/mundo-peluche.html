@@ -5954,7 +5954,7 @@ function sendPresence(force){
     p: [r2(player.pos.x), r2(player.pos.y), r2(player.pos.z)],
     f: r2(Math.atan2(Math.sin(player.facing), Math.cos(player.facing))),
     m: playing ? r2(Math.min(1, player.vel.length()/4.2)) : 0,
-    pub: mp.pub?1:0, gv: GAME_VERSION, a: playing && !player.grounded && !player.swim, w: mp.waveStamp, sf: player.sitF?1:undefined, d: r2(player.diveAngle), s: player.swim, h: heldItem()||'',
+    pub: mp.pub?1:0, gv: GAME_VERSION, a: playing && !player.grounded && !player.swim, w: mp.waveStamp, ge: gestPresence(), sf: player.sitF?1:undefined, d: r2(player.diveAngle), s: player.swim, h: heldItem()||'',
     vc: player.car && player.car.kind!=='exit' ? [player.car.i, player.car.seat] : null,
     dv: iDrive() ? (c=>[c.i, r2(c.x), r2(c.z), Math.round(c.h*1000)/1000, r2(c.v), r2(c.steer), c.braking?1:0])(cars[player.car.i]) : null,
     lt: cars.map(c=>[c.lights?1:0, c.lightT]),
@@ -6049,7 +6049,7 @@ function onPeers({peers}){
     r.diveTarget=nd; r.held = pr.h==='map' ? 'map' : pr.h==='bow' ? 'bow' : pr.h==='lamp' ? 'lamp' : null; parseMine(r,pr); parseBow(r,pr); parseMg(r,pr); parseArena(r,pr); houseParse(r,pr); tblParse(r,pr); parseSpace(r,pr); vehParse(r,pr);
     const w=clampN(pr.w,0,Infinity,0);
     if(r.w!==undefined && w!==r.w){ r.waveUntil=clock.elapsedTime+1.6; audio.wave(); }
-    r.sf=pr.sf===1;
+    r.sf=pr.sf===1; gestParse(r,pr);   // v201
     r.w=w;
     // ¿tiene la misma versión del juego?
     const gv=typeof pr.gv==='string' ? pr.gv.slice(0,8) : '';
@@ -6136,6 +6136,7 @@ function updateRemotes(dt,t){
     else r.obj.position.set(r.pos.x, r.pos.y+bob+diveLift(r.dive), r.pos.z);
     r.obj.rotation.x=r.dive;
     r.obj.rotation.z=Math.sin(r.walk)*.08*mv;
+    if(r.obj.userData.gs) gestTick(r.obj,dt,mv,r.swim||r.air||!!r.carAnim);   // v201: gestos de los demás
     if(r.sitK>.002 && r.obj.userData.av==='c') r.obj.position.y-=CH.sitDrop*r.sitK;
     chSwayTick(r.obj,dt);
     { const now=performance.now()/1000, ph=Math.floor(r.walk/Math.PI), stepped=ph!==r.stepPh && r.moving>.2 && !r.air && !r.swim; r.stepPh=ph;
@@ -6299,7 +6300,7 @@ function waveLabel(){ const b=ui('tWave'), g=GEST_BY[gestAtajo()], t=g.n.length>
 // hacer un gesto (la parte 4 les da movimiento a todos; por ahora saludar y sentarse)
 function playGesture(id){ if(state!=='play' || !gestAllowed(id)) return;
   if(id==='sentarse'){ chibiSitToggle(); return; }
-  if(id==='saludar'){ player.waveUntil=clock.elapsedTime+1.6; audio.wave(); mp.waveStamp=Date.now(); sendPresence(true); return; }
+  if(id==='saludar' && !gestBlocked()) mp.waveStamp=Date.now();   // (los de versiones viejas ven el saludo de antes)
   try{ if(typeof gestStart==='function') return gestStart(id); }catch(e){}
   flashNote(GEST_BY[id].n); }
 function wave(){ playGesture(gestAtajo()); }
@@ -6357,6 +6358,105 @@ function gpToggle(it){ const L=gpList(it), k=gpKey(it), i=L.indexOf(k);
   else if(L.length>=MAX_RUEDA){ flashNote(`Tu ruedita ya tiene ${MAX_RUEDA}: toca uno que tengas puesto para quitarlo primero`); return; }
   else { L.push(k); flashNote(`${it.name}: ya está en tu ruedita`+(it.cat==='gestos' && !gestAllowed(k) ? ` (solo ${GEST_BY[k].av==='c'?'con el Chibi':'con el frijolito'})`:'')); }
   saveWardrobe(); try{ audio.cam(); }catch(e){} }
+// ---------- v201: los gestos se mueven (parte 4) ----------
+// Cada gesto: duración, momentos clave (pose de los brazos, piernas y cuerpo) y adornitos (letreros, manzana, cuerda, confeti).
+// Se ven igual en tu pantalla y en la de los demás: en la presencia solo va "cuál gesto y cuándo empezó".
+const GEST_REACH={"f":{"aplaudir0":[[-0.328,-0.685,-0.136,-0.73],[0.309,-0.7,-1.144,-0.732]],"aplaudir1":[[-0.449,-1.184,0.495,-0.42],[-0.449,-1.184,-0.495,-0.42]],"aplaudir2":[[0.248,-0.475,0.587,-1.244],[0.248,-0.475,-0.587,-1.244]],"abrazo2":[[-0.692,-1.122,0.826,-0.828],[-0.692,-1.236,-0.826,-0.828]],"comer1":[null,[-0.368,-1.918,-0.905,-0.73]],"pensar1":[null,[-0.378,-0.997,-0.3,-1.267]],"robot0":[[-0.162,-1.759,-0.616,-1.802],[-0.4,0.099,0.551,-1.463]],"robot1":[[-0.4,0.099,-0.551,-1.463],[-0.162,-1.759,0.616,-1.802]],"robot2":[[0.272,-0.944,0.839,-0.715],[0.912,-0.441,-1.216,-0.728]]},"c":{"aplaudir0":[[0.002,-1.221,0.808,-0.068],[0.005,-1.235,-1.209,-0.051]],"aplaudir1":[[-0.377,-1.482,0.551,-0.042],[-0.377,-1.482,-0.551,-0.042]],"aplaudir2":[[0.106,-1.206,0.677,-0.085],[0.106,-1.206,-0.677,-0.085]],"abrazo2":[[-0.572,-1.189,0.8,-0.6],[-0.692,-1.47,-0.728,-0.408]],"comer1":[null,[-0.358,-1.73,0.641,-0.044]],"pensar1":[null,[-0.37,-1.48,0.941,-0.032]],"robot0":[[1.596,-1.194,0.915,-0.07],[0.57,-0.525,-0.6,-0.047]],"robot1":[[0.57,-0.525,0.6,-0.047],[1.596,-1.194,-0.915,-0.07]],"robot2":[[0.106,-1.465,0.059,-0.07],[0.106,-1.465,-0.059,-0.07]]},"a":{"aplaudir0":[[1.341,0.3,0.633,-1.583],[1.341,0.3,-0.633,-1.583]],"aplaudir1":[[0.622,-0.215,0.872,-1.537],[0.622,-0.215,-0.872,-1.537]],"aplaudir2":[[0.592,-0.135,0.206,-1.726],[0.592,-0.135,-0.206,-1.726]],"abrazo2":[[-0.464,-0.828,0.891,-1.106],[-0.428,-1.174,-1.179,-1.159]],"comer1":[null,[-0.38,-1.956,0.906,-0.085]],"pensar1":[null,[0.291,-1.7,-0.863,-0.743]],"robot0":[[2.125,-0.644,0.053,-1.2],[1.031,0.257,-0.228,-1.312]],"robot1":[[1.031,0.257,0.228,-1.312],[2.125,-0.644,-0.053,-1.2]],"robot2":[[2.3,0.55,0.3,-1.6],[2.3,0.55,-0.3,-1.6]]}};   // ángulos de brazo ya calculados (para llevar la mano a un punto) por cuerpo: f, c, a
+const gArmRest=null;
+const gR=(k,i)=>o=>{ const T=(GEST_REACH[o.userData.av||'f']||GEST_REACH.f)[k]; return T&&T[i]?T[i].slice(0,4):null; };
+const gSeq=(dur,list)=>({dur, keys:[[0,-1],...list,[dur,-1]]});
+const gLoop=(t0,step,frames,n)=>{ const out=[]; for(let i=0;i<n;i++) out.push([t0+i*step,frames[i%frames.length]]); return out; };
+const GEST_DEF={
+  saludar:{...gSeq(2.2,[[.25,0],[.5,1],[.75,2],[1.0,1],[1.25,2],[1.5,1],[1.8,0]]), F:[{A:[null,[2.2,0,0,-.3]]},{A:[null,[2.75,0,0,-.2]],rz:-.06},{A:[null,[2.2,0,0,-.3]],rz:.04}],
+    fx:[['¡Hola!','#ff6fa0',.55,.55,.15,.35,1.9]]},
+  baile:{...gSeq(4,gLoop(.3,.3,[0,1,2,1],12)), F:[{A:[[2.4,0,0,0],[.9,0,0,0]],L:[.3,-.2,.2],rz:.22},{A:[[2.6,0,0,0],[2.6,0,0,0]],L:[-.4,.4,.6],py:.18},{A:[[.9,0,0,0],[2.4,0,0,0]],L:[-.2,.3,.2],rz:-.22}],
+    fx:[['♪','#b392e8',.4,-.6,0,.4,1.6],['♫','#ff6fa0',.45,.6,.1,1.4,2.6],['♪','#5aa8ff',.4,-.55,.05,2.4,3.6]]},
+  aplaudir:{...gSeq(2.4,[...gLoop(.25,.2,[0,1],8),[1.95,2]]), F:[{A:[gR('aplaudir0',0),gR('aplaudir0',1)]},{A:[gR('aplaudir1',0),gR('aplaudir1',1)]},{A:[gR('aplaudir2',0),gR('aplaudir2',1)],py:.06}],
+    fx:[['✦','#ffd23f',.3,0,-.3,.4,2.1,'hy'],['✦','#ffd23f',.18,-.3,-.05,.5,2.0,'hy'],['✦','#ffd23f',.2,.3,-.03,.6,2.1,'hy']]},
+  vuelta:{...gSeq(2.6,[[.25,0],[1.45,0],[1.7,1],[2.3,1]]), F:[{A:[[1.6,0,0,0],[1.6,0,0,0]]},{A:[[1.1,0,0,0],[.5,0,0,0]],rz:.18}], spin:[.25,1.45],
+    fx:[['~','#7fd0ff',.5,.6,.05,.4,1.4],['@','#b392e8',.35,.3,.15,1.6,2.4]]},
+  abrazo:{...gSeq(2.6,[[.3,0],[.7,1],[1.1,2],[2.1,2]]), F:[{A:[[1.7,-.3,0,0],[1.7,-.3,0,0]]},{A:[[1.2,-1.1,0,-.9],[1.2,-1.1,0,-.9]]},{A:[gR('abrazo2',0),gR('abrazo2',1)],rz:.08}],
+    fx:[['♥','#ff5d7a',.35,.4,.05,1.1,2.4],['♥','#ff8fb8',.25,-.45,-.15,1.3,2.4]]},
+  comer:{...gSeq(3.2,[[.3,0],[.8,1],[1.3,0],[1.8,1],[2.3,2],[2.8,2]]), F:[{A:[null,[.6,-.9,0,-1.0]]},{A:[null,gR('comer1',1)]},{A:[null,[.6,-.9,0,-1.0]]}],
+    apple:[.15,3.0,2.1], fx:[['ñam','#e8323c',.45,.55,0,2.2,3.0]]},
+  siesta:{...gSeq(4.6,[[.4,0],[1.0,0],[1.6,1],[2.0,1],[4.1,1]]), F:[{A:[[2.7,0,0,0],[2.7,0,0,0]]},{A:[[1.2,0,0,0],[1.0,0,0,0]],L:[.1,-.1,.2],rz:1.45,px:.55,py:.18,sleep:1}],
+    fx:[['~','#7fd0ff',.4,.45,.1,.3,1.1],['Z','#5aa8ff',.32,-.55,'lie',2.0,4.2],['z','#5aa8ff',.25,-.8,'lie2',2.3,4.2],['z','#5aa8ff',.19,-1.0,'lie3',2.6,4.2]]},
+  pensar:{...gSeq(3,[[.3,0],[.8,1],[2.5,1]]), F:[{A:[null,[.8,-.9,0,-1.6]]},{A:[null,gR('pensar1',1)],rz:-.12}], fx:[['?','#b392e8',.42,.5,.1,.8,2.7]]},
+  celebrar:{...gSeq(2.6,[[.25,0],...gLoop(.55,.3,[1,2],6)]), F:[{A:[[.9,0,0,0],[.9,0,0,0]],L:[0,0,.8],py:-.04},{A:[[2.8,0,0,0],[2.8,0,0,0]],L:[-.3,.3,.6],py:.32},{A:[[2.6,0,0,0],[2.6,0,0,0]],py:.1}],
+    confetti:.5, fx:[['¡Sí!','#ff6fa0',.55,0,.3,.85,2.4]]},
+  robot:{...gSeq(3.6,[[.3,0],[.6,0],[.75,1],[1.2,1],[1.35,0],[1.8,0],[1.95,1],[2.4,1],[2.6,2],[3.2,2]]), F:[{A:[gR('robot0',0),gR('robot0',1)],ry:.3},{A:[gR('robot1',0),gR('robot1',1)],ry:-.3},{A:[gR('robot2',0),gR('robot2',1)]}],
+    fx:[['bip','#5aa8ff',.4,.5,.1,2.6,3.3]]},
+  cuerda:{...gSeq(3.8,[[.3,0],[3.4,0]]), F:[{A:[[.9,-.2,0,0],[.9,-.2,0,0]]}], rope:[.3,3.5]} };
+const GEST_IDX=GESTS.map(g=>g.id);
+// letreritos (texto con borde blanco) que siempre miran a la cámara
+const GSPR={};
+function gSprite(txt,col,size){ const key=txt+col; let m=GSPR[key];
+  if(!m){ const c=document.createElement('canvas'), g0=c.getContext('2d'), F='bold 96px Sniglet, Nunito, sans-serif'; g0.font=F; const w=Math.max(128,Math.ceil(g0.measureText(txt).width+40)); c.width=w; c.height=128;
+    const g=c.getContext('2d'); g.font=F; g.textAlign='center'; g.textBaseline='middle'; g.lineWidth=12; g.lineJoin='round'; g.strokeStyle='#ffffff'; g.strokeText(txt,w/2,70); g.fillStyle=col; g.fillText(txt,w/2,70);
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; m=GSPR[key]=new THREE.SpriteMaterial({map:t, transparent:true, depthTest:false, fog:false}); m.userData.w=w; }
+  const s=new THREE.Sprite(m); s.renderOrder=10; s.scale.set(size*m.userData.w/128,size,1); s.userData.noBatch=true; return s; }
+const gTop=o=>o.userData.av==='c'?{top:2.05,hy:.85}:o.userData.av==='a'?{top:2.6,hy:1.36}:{top:1.7,hy:1.42};
+const GMAT={}; const gMat=h=>GMAT[h]||(GMAT[h]=new THREE.MeshStandardMaterial({color:new THREE.Color(h).convertSRGBToLinear(), roughness:.6}));
+function gApple(bitten){ const g=new THREE.Group(), r=new THREE.Mesh(sphereG,gMat('#e8323c')); r.scale.set(.11,.1,.11); g.add(r);
+  const st=new THREE.Mesh(chCylGeo(),gMat('#6a4020')); st.scale.set(.008,.06,.008); st.position.y=.11; g.add(st); const lf=new THREE.Mesh(sphereG,gMat('#3fae4a')); lf.scale.set(.035,.012,.021); lf.position.set(.035,.12,0); g.add(lf);
+  const b=new THREE.Mesh(sphereG,gMat('#fff2d6')); b.scale.set(.06,.072,.048); b.position.set(.075,.02,.06); b.visible=!!bitten; g.add(b); g.userData.bite=b; return g; }
+let gRopeGeo=null;
+function gRope(){ if(!gRopeGeo){ const R=.62, pts=[]; for(let i=0;i<=30;i++){ const t=i/30; pts.push(new THREE.Vector3(-R+2*R*t, Math.sin(Math.PI*t), 0)); } gRopeGeo=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),30,.018,6,false); }
+  const g=new THREE.Group(), rope=new THREE.Mesh(gRopeGeo,gMat('#ff6fa0')); g.add(rope);
+  for(const s of [-1,1]){ const hd=new THREE.Mesh(chCylGeo(),gMat('#ffd23f')); hd.scale.set(.035,.14,.035); hd.position.set(s*.62,0,0); hd.rotation.z=Math.PI/2; g.add(hd); } g.userData.rope=rope; return g; }
+let gConfGeo=null;
+function gStart(o,id,t0){ const D=GEST_DEF[id]; if(!D) return null; gEnd(o); const u=o.userData, gs={id, D, t0, fx:new THREE.Group(), spr:[], w:1, kill:0};
+  gs.fx.userData.noBatch=true; scene.add(gs.fx); const H=gTop(o);
+  (D.fx||[]).forEach(([txt,col,sz,x,y,a,b,ref])=>{ const s=gSprite(txt,col,sz); const yy=y==='lie'?.95:y==='lie2'?1.25:y==='lie3'?1.5:(ref==='hy'?H.hy:H.top)+y; s.position.set(x,yy,ref==='hy'?.7:0); s.visible=false; s.userData.win=[a,b]; gs.fx.add(s); gs.spr.push(s); });
+  if(D.apple){ gs.apple=gApple(false); gs.apple.position.set(0,-.3,.08); gs.apple.visible=false; u.arms[1].userData.joint.add(gs.apple); }
+  if(D.rope){ gs.rope=gRope(); gs.rope.position.y=u.av==='c'?.6:u.av==='a'?1.0:.9; gs.rope.visible=false; o.add(gs.rope); }
+  if(D.confetti){ if(!gConfGeo) gConfGeo=new THREE.BoxGeometry(.05,.012,.035); const C=['#ff5a5a','#ffd23f','#5aa8ff','#6ad07a','#ff8fb8','#b392e8'];
+    gs.conf=Array.from({length:26},(_,i)=>{ const m=new THREE.Mesh(gConfGeo,gMat(C[i%6])); m.visible=false; m.userData.v=[(Math.random()-.5)*2.2,2.2+Math.random()*1.6,(Math.random()-.5)*1.4,Math.random()*9]; gs.fx.add(m); return m; }); }
+  return u.gs=gs; }
+function gEnd(o){ const u=o.userData, gs=u.gs; if(!gs) return; u.gs=null;
+  if(gs.fx.parent) gs.fx.parent.remove(gs.fx); if(gs.apple && gs.apple.parent) gs.apple.parent.remove(gs.apple); if(gs.rope && gs.rope.parent) gs.rope.parent.remove(gs.rope);
+  if(gs.sleep) (u.eyes||[]).forEach(e=>{ e.scale.y=.085; }); }
+const gSm=x=>x<=0?0:x>=1?1:x*x*(3-2*x);
+function gFrameAt(D,T){ const K=D.keys; let i=0; while(i<K.length-2 && T>=K[i+1][0]) i++; const a=K[i], b=K[i+1], m=gSm((T-a[0])/Math.max(1e-3,b[0]-a[0])); return [a[1]<0?null:D.F[a[1]], b[1]<0?null:D.F[b[1]], m, a[1]<0?0:1, b[1]<0?0:1]; }
+const _gc=[0,0,0,0];
+// pone la pose del gesto encima de la pose normal (después de poseLimbs); mv = qué tanto se está moviendo
+function gestTick(o,dt,mv,blocked){ const u=o.userData, gs=u.gs; if(!gs) return; const T=clock.elapsedTime-gs.t0, D=gs.D;
+  if(!gs.kill && (blocked || mv>.15 || T>=D.dur)) gs.kill=T>=D.dur?1e-3:.2;
+  if(gs.kill){ gs.w-=dt/gs.kill; if(gs.w<=0){ gEnd(o); return; } }
+  const [fa,fb,m,wa,wb]=gFrameAt(D,Math.min(T,D.dur-1e-3)), W=gs.w;
+  const val=(k)=>((fa&&fa[k])||0)*(1-m)+((fb&&fb[k])||0)*m;
+  // brazos
+  u.arms.forEach((a,i)=>{ const s=a.userData.side, j=a.userData.joint; const sa=fa&&fa.A[i], sb=fb&&fb.A[i]; if(!sa && !sb) return;
+    _gc[0]=a.rotation.z*s; _gc[1]=a.rotation.x; _gc[2]=a.rotation.y; _gc[3]=j.rotation.x;
+    const A=typeof sa==='function'?sa(o):sa, B=typeof sb==='function'?sb(o):sb;
+    const P=q=>{ const x=(A?A[q]:_gc[q])*(1-m)+(B?B[q]:_gc[q])*m; return _gc[q]+(x-_gc[q])*W; };
+    const z=P(0), x=P(1), y=P(2), e=P(3); a.rotation.set(x,y,s*z); j.rotation.x=e; });
+  // piernas
+  const la=fa&&fa.L, lb=fb&&fb.L; if(la||lb){ u.legs.forEach((l,i)=>{ const c=l.rotation.x, ck=l.userData.joint.rotation.x, A=la?la[i]:c, B=lb?lb[i]:c, AK=la?la[2]:ck, BK=lb?lb[2]:ck;
+    l.rotation.x=c+((A*(1-m)+B*m)-c)*W; l.userData.joint.rotation.x=ck+((AK*(1-m)+BK*m)-ck)*W; }); }
+  // cuerpo: inclinar, girar, brincar, acostarse
+  const face=o.rotation.y; let ry=val('ry'), rz=val('rz'), py=val('py'), px=val('px');
+  if(D.spin){ const k=gSm((T-D.spin[0])/(D.spin[1]-D.spin[0])); ry+=Math.PI*2*k; }
+  if(gs.rope){ const on=T>D.rope[0] && T<D.rope[1]; gs.rope.visible=on && W>.5; const ph=(T-D.rope[0])*Math.PI*2*1.4; gs.rope.rotation.x=ph;
+    const hop=Math.max(0,Math.sin(ph-Math.PI*.5)); if(on){ py+=.24*hop*W; u.legs.forEach(l=>{ l.userData.joint.rotation.x+=(.7*hop)*W; }); } }
+  o.rotation.y=face+ry*W; o.rotation.z+=rz*W; o.position.y+=py*W; if(px){ o.position.x+=Math.cos(face)*px*W; o.position.z-=Math.sin(face)*px*W; }
+  // ojos cerrados (solo el frijolito tiene ojos de verdad)
+  const sl=((fa&&fa.sleep)?1-m:0)+((fb&&fb.sleep)?m:0); if(u.av!=='c' && u.av!=='a'){ if(sl>.5 && W>.5){ (u.eyes||[]).forEach(e=>e.scale.y=.085*.18); gs.sleep=1; } else if(gs.sleep){ (u.eyes||[]).forEach(e=>e.scale.y=.085); gs.sleep=0; } }
+  // adornitos
+  gs.fx.position.copy(o.position); gs.fx.rotation.set(0,face,0);
+  gs.spr.forEach(s=>{ const [a,b]=s.userData.win; s.visible=W>.5 && T>=a && T<=b; if(s.visible){ const k=(T-a)/(b-a); s.material.opacity=Math.min(1,Math.min(T-a,b-T)*5); s.position.y+=dt*.12; } });
+  if(gs.apple){ const [a,b,bite]=D.apple; gs.apple.visible=T>a && T<b && W>.3; gs.apple.userData.bite.visible=T>bite; }
+  if(gs.conf){ const t0=D.confetti; gs.conf.forEach(c=>{ const tt=T-t0; c.visible=tt>0 && tt<1.8; if(!c.visible) return; const v=c.userData.v; c.position.set(v[0]*tt, gTop(o).hy-.2+v[1]*tt-2.6*tt*tt, v[2]*tt); c.rotation.set(v[3]+tt*7,tt*5,tt*3); }); } }
+// ¿se puede hacer un gesto ahora? (a pie, en el suelo, sin estar en juegos ni vehículos)
+function gestBlocked(){ return state!=='play' || !player.grounded || player.swim || !!player.dive || !!player.car || !!player.ac || !!player.pg || !!player.mg || !!player.busy || !!player.balloon || player.sitF || SP.on; }
+function gestStart(id){ if(gestBlocked()){ flashNote('Para hacer un gesto, quédate quieto en el suelo'); return; }
+  if(!GEST_DEF[id]){ flashNote(GEST_BY[id].n+': muy pronto'); return; }
+  const gs=gStart(plush,id,clock.elapsedTime); if(!gs) return; gs.stamp=(Date.now()%1e7); try{ audio.wave(); }catch(e){} sendPresence(true); }
+// en la presencia: "índice.sello" mientras dura el gesto
+function gestPresence(){ const gs=plush.userData.gs; return gs && !gs.kill && gs.stamp ? GEST_IDX.indexOf(gs.id)+'.'+gs.stamp : undefined; }
+function gestParse(r,pr){ const ge=typeof pr.ge==='string' && pr.ge.length<16 ? pr.ge : '';
+  if(ge && ge!==r.geKey){ const id=GEST_IDX[parseInt(ge,10)]; if(id && GEST_DEF[id]) gStart(r.obj,id,clock.elapsedTime); }
+  r.geKey=ge; }
 // fila "Botón de atajo" en la pestaña de gestos
 function shopAtajoRow(){ let box=document.getElementById('shopAtajo'); if(!box){ box=document.createElement('div'); box.id='shopAtajo'; box.className='shop-filter'; (document.getElementById('shopAccF')||ui('shopFilter')).after(box); }
   box.hidden=shopCat!=='gestos'; if(box.hidden) return; const cur=gestAtajo();
@@ -10476,8 +10576,8 @@ I('cuerpo','av_amigu','Amigurumi',0,{free:1, thumb:'amigu', plain:'#f4efe6'});
   cp('cpelo','ahp_','apelo'); cp('ccolor','ahc_','acolor'); cp('ccejas','acj_','acejas'); cp('cmejillas','amj_','amejillas'); cp('corejas','aor_','aorejas'); }
 // v201: gestos y globos de pintura (para todos los cuerpos)
 SHOP_CATS.push({id:'gestos', name:'Gestos', ic:'💃', all:1}, {id:'pinturas', name:'Globos de pintura', ic:'🎈', all:1}); SLOT_OF.gestos='gest'; SLOT_OF.pinturas='pint';
-GESTS.forEach(g=>I('gestos','ge_'+g.id,g.n,g.p,{gest:g.id, nw:1, ...(g.p?{}:{free:1}), ...(g.av?{desc:g.av==='c'?'solo con el Chibi':'solo con el frijolito'}:{})}));
-PAINTS.forEach(p=>I('pinturas','gp_'+p.id,'Globo '+(p.id==='estrella'?'de estrella':'de '+p.n.toLowerCase()),p.p,{paint:p.id, nw:1, ...(p.p?{}:{free:1})}));
+GESTS.forEach(g=>I('gestos','ge_'+g.id,g.n,g.p*3,{gest:g.id, nw:1, ...(g.p?{}:{free:1}), ...(g.av?{desc:g.av==='c'?'solo con el Chibi':'solo con el frijolito'}:{})}));
+PAINTS.forEach(p=>I('pinturas','gp_'+p.id,'Globo '+(p.id==='estrella'?'de estrella':'de '+p.n.toLowerCase()),p.p*3,{paint:p.id, nw:1, ...(p.p?{}:{free:1})}));
 const SHOP_BY={}; SHOP.forEach(it=>{ it.slot=SLOT_OF[it.cat]; const cat0=SHOP_CATS.find(c=>c.id===it.cat)||{}; it.av=cat0.av||'f'; if(cat0.all) it.all=1; if(it.price>0) it.price=Math.max(15,it.price*5); SHOP_BY[it.id]=it; });   // v124: precios ×5 (economía más justa)
 SHOP.forEach(it=>{ if(!it.ak) return; const as=it.as||({gorro:'cabeza',cara:'cara',cuerpo:'cuello',espalda:'espalda'})[it.view]||'cabeza'; it.as=as; it.slot=(it.av==='a'?'a':'c')+({cabeza:'acc',cara:'acf',cuello:'acn',espalda:'acb',mano:'ach'})[as]; });   // v190: cada accesorio va en su lugar (se pueden usar varios)
 const OUT_SLOTS=['top','hat','gloves','socks','shoes','glasses','skin','tex','body','cskin','ceyes','chair','chcol','cbrows','cmouth','ccheeks','cears','ctop','cbot','cshoe','chat','cacc','askin','aeyes','ahair','ahcol','abrows','acheeks','aears','atop','abot','ashoe','ahat','aacc','cacf','cacn','cacb','cach','aacf','aacn','aacb','aach'];
@@ -22645,6 +22745,7 @@ function update(dt,t){ myLabelUpdate();
   plush.rotation.y = state==='menu' ? (shopOpen() ? 0 : Math.sin(t*.4)*.5) : player.facing;
   plush.rotation.x = player.diveAngle;
   plush.rotation.z = player.swim ? 0 : Math.sin(player.walk)*.08*moving;
+  if(plush.userData.gs) gestTick(plush,dt,moving,gestBlocked());   // v201: gestos
   if(carPoseNow){ const w=placeInCar(plush, player.car, carPoseNow); player.pos.copy(w); }
   if(acPose){ const w=placeInAircraft(plush, aircraft[player.ac.i], acPose); player.pos.copy(w); player.groundY=w.y; }
   if(pgPose){ placePlay(plush,pgPose); player.pos.set(...pgPose.pos); player.groundY=pgPose.pos[1]; player.facing=pgPose.yaw; }
