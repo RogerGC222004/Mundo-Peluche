@@ -1005,7 +1005,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='200';
+const GAME_VERSION='201';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -4006,7 +4006,7 @@ const stainMat=new THREE.MeshStandardMaterial({color:0x4a2614, roughness:.3});  
 // ---------- v152: el Chibi, otro tipo de cuerpo ----------
 // Usa los MISMOS brazos y piernas del peluche (solo cambian de forma y tamaño), así le sirven todas las poses:
 // caminar, saltar, nadar, coches, juegos… La cabeza y el cuerpo van dentro de "body", así se aplastan igual al caer.
-const CH={HY:1.36, RX:.66, RY:.58, RZ:.57, sitDrop:.23, armRest:.72};
+const CH={HY:1.38, RX:.6, RY:.6, RZ:.6, sitDrop:.23, armRest:.72};   // v201: cabeza redonda (antes .66/.58/.57)
 const chSkinMats={};
 const chSkinMat=hex=>chSkinMats[hex]||(chSkinMats[hex]=new THREE.MeshStandardMaterial({color:new THREE.Color(hex).convertSRGBToLinear(), roughness:.92}));
 const chHideMat=new THREE.MeshBasicMaterial({visible:false});
@@ -4020,18 +4020,39 @@ function chGeos(){ if(CH_GEO.head) return CH_GEO;
 // --- ojos del Chibi: se dibujan sobre una calcomanía curva (frente en el centro; ojos en x=512±178, y=300) ---
 const CH_EYE_TEX={}, CH_EYE_MAT={};
 function chEyeDraw(g,w,h,st){ const L=[-1,1], cy=300, X=s=>w/2+s*178;
-  const anime=(s,c,pup)=>{ const cx=X(s), ex=82, ey=96;
-    g.fillStyle='#ffffff'; g.beginPath(); g.ellipse(cx,cy,ex,ey*.86,0,0,Math.PI*2); g.fill();
-    const ir=g.createLinearGradient(0,cy-80,0,cy+80); ir.addColorStop(0,c[0]); ir.addColorStop(.55,c[1]); ir.addColorStop(1,c[2]); g.fillStyle=ir; g.beginPath(); g.ellipse(cx+s*6,cy+6,60,74,0,0,Math.PI*2); g.fill();
-    g.strokeStyle=c[0]; g.lineWidth=5; g.stroke();
-    if(pup!==false){ g.fillStyle='#160904'; g.beginPath(); g.ellipse(cx+s*6,cy+4,24,30,0,0,Math.PI*2); g.fill(); }
-    g.fillStyle='#fff'; g.beginPath(); g.ellipse(cx-s*16,cy-26,15,17,0,0,Math.PI*2); g.fill(); g.beginPath(); g.ellipse(cx+s*24,cy+34,6,7,0,0,Math.PI*2); g.fill();
-    g.strokeStyle='#1b120c'; g.lineCap='round'; g.lineWidth=14; g.beginPath(); g.moveTo(cx-ex-4,cy-38); g.quadraticCurveTo(cx-10,cy-ey-14,cx+ex+6,cy-50); g.stroke();
-    g.lineWidth=9; g.beginPath(); g.moveTo(cx+s*(ex-4),cy-60); g.lineTo(cx+s*(ex+22),cy-84); g.stroke();
-    g.lineWidth=5; g.beginPath(); g.moveTo(cx-ex+10,cy+ey*.86-4); g.quadraticCurveTo(cx,cy+ey*.86+10,cx+ex-10,cy+ey*.86-4); g.stroke(); };
+  const thread=(x0,y0,w,h,ang,alpha)=>{ g.save(); g.globalAlpha=alpha; g.strokeStyle='#ffffff'; g.lineWidth=1.6; g.translate(x0,y0); g.rotate(ang); for(let i=-w;i<w;i+=5){ g.beginPath(); g.moveTo(i,-h); g.lineTo(i,h); g.stroke(); } g.restore(); };
+  const lidBlock=(s,x0,y0,xm,ym,x1,y1,th,tail)=>{ g.fillStyle='#1b120c'; g.beginPath(); g.moveTo(x0,y0); g.quadraticCurveTo(xm,ym-th*.5,x1,y1-th*.35); if(tail) g.lineTo(x1+s*tail[0],y1+tail[1]); g.lineTo(x1,y1+th*.35); g.quadraticCurveTo(xm,ym+th*.5,x0,y0+th*.25); g.closePath(); g.fill(); };
+  // v201: ojos anime con más detalle (estilo de las referencias): párpado grueso con colita, pestañas, iris en tres tonos y dos brillos
+  const anime=(s,c,pup)=>{ const cx=X(s), ex=84, ey=98, icx=cx+s*4, icy=cy+12, irx=70, iry=88;
+  g.save(); g.beginPath(); g.moveTo(cx-s*ex,cy-6); g.quadraticCurveTo(cx-s*ex*.2,cy-ey,cx+s*(ex+6),cy-34); g.quadraticCurveTo(cx+s*(ex+14),cy+ey*.55,cx+s*ex*.2,cy+ey*.95); g.quadraticCurveTo(cx-s*ex*.9,cy+ey*.85,cx-s*ex,cy-6); g.closePath();
+  g.fillStyle='#ffffff'; g.fill(); g.clip();
+  const ir=g.createLinearGradient(0,icy-iry,0,icy+iry); ir.addColorStop(0,c[0]); ir.addColorStop(.42,c[0]); ir.addColorStop(.5,c[1]); ir.addColorStop(.78,c[1]); ir.addColorStop(.86,c[2]); ir.addColorStop(1,c[2]);
+  g.fillStyle=ir; g.beginPath(); g.ellipse(icx,icy,irx,iry,0,0,Math.PI*2); g.fill();
+  g.fillStyle=c[2]; g.beginPath(); g.ellipse(icx,icy+iry*.62,irx*.7,iry*.3,0,0,Math.PI*2); g.fill();
+  if(pup!==false){ g.fillStyle='#140806'; g.beginPath(); g.ellipse(icx,icy-8,irx*.34,iry*.4,0,0,Math.PI*2); g.fill(); }
+  thread(icx,icy,irx,iry,s*.5,.10);
+  g.fillStyle='#ffffff'; g.strokeStyle='rgba(0,0,0,.25)'; g.lineWidth=2; g.beginPath(); g.ellipse(icx-s*irx*.3,icy-iry*.32,irx*.3,iry*.24,0,0,Math.PI*2); g.fill(); g.stroke();
+  g.beginPath(); g.ellipse(icx+s*irx*.38,icy+iry*.4,irx*.13,iry*.1,0,0,Math.PI*2); g.fill();
+  g.restore();
+  lidBlock(s,cx-s*(ex+4),cy-2,cx-s*ex*.1,cy-ey-14,cx+s*(ex+8),cy-36,28,[22,-26]);
+  g.fillStyle='#1b120c'; for(const [dx,dy,l] of [[-10,-62,26],[10,-48,22]]){ g.beginPath(); g.moveTo(cx+s*(ex+dx-8),cy+dy+6); g.lineTo(cx+s*(ex+dx+l),cy+dy-16); g.lineTo(cx+s*(ex+dx+4),cy+dy+14); g.closePath(); g.fill(); }
+  g.strokeStyle='#1b120c'; g.lineCap='round'; g.lineWidth=5; g.beginPath(); g.moveTo(cx+s*(ex+4),cy+ey*.3); g.quadraticCurveTo(cx+s*ex*.6,cy+ey*.95,cx+s*ex*.05,cy+ey*.98); g.stroke();
+  g.lineWidth=4; for(const k of [.35,.62]){ const px=cx+s*ex*k, py=cy+ey*(.98-.1*k); g.beginPath(); g.moveTo(px,py); g.lineTo(px+s*4,py+13); g.stroke(); } };
+  // v201: ojo de chico: párpado grueso en ángulo, iris en media luna (lo de arriba lo tapa el párpado), un brillo, sin pestañas
+const chico=(s,c)=>{ const FULL=0, cx=X(s), icx=cx+s*6, icy=FULL?cy+30:cy+14, r=FULL?56:64;
+  g.save(); g.beginPath(); g.moveTo(cx-s*84,cy-10); g.quadraticCurveTo(cx+s*4,cy-62,cx+s*96,cy-48); g.quadraticCurveTo(cx+s*96,cy+(FULL?70:52),cx+s*22,cy+(FULL?92:80)); g.quadraticCurveTo(cx-s*66,cy+(FULL?88:74),cx-s*84,cy-10); g.closePath(); g.fillStyle='#ffffff'; g.fill(); g.clip();
+  const ir=g.createLinearGradient(0,icy-r,0,icy+r); ir.addColorStop(0,c[0]); ir.addColorStop(.45,c[0]); ir.addColorStop(.6,c[1]); ir.addColorStop(1,c[2]);
+  g.fillStyle=ir; g.beginPath(); g.arc(icx,icy,r,0,Math.PI*2); g.fill();
+  g.fillStyle='#120704'; g.beginPath(); g.ellipse(icx,icy-14,r*.42,r*.5,0,0,Math.PI*2); g.fill();
+  g.strokeStyle='#120704'; g.lineWidth=7; g.beginPath(); g.arc(icx,icy,r,0,Math.PI*2); g.stroke();
+  thread(icx,icy,r,r,s*.5,.08);
+  g.fillStyle='#fff'; g.beginPath(); g.arc(icx+s*r*.32,icy-r*.3,10,0,Math.PI*2); g.fill(); g.restore();
+  lidBlock(s,cx-s*84,cy-12,cx+s*4,cy-66,cx+s*98,cy-50,28,[20,26]);
+  g.lineWidth=6; const dy=FULL?12:0; g.beginPath(); g.moveTo(cx+s*62,cy+50+dy); g.quadraticCurveTo(cx+s*30,cy+80+dy,cx-s*16,cy+78+dy); g.stroke(); };
   const star=(x,y,r,col)=>{ g.fillStyle=col; g.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*.45:r; g.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } g.closePath(); g.fill(); };
   const heart=(x,y,r,col)=>{ g.fillStyle=col; g.beginPath(); g.moveTo(x,y+r*.9); g.bezierCurveTo(x-r*1.5,y-r*.1,x-r*.7,y-r*1.25,x,y-r*.45); g.bezierCurveTo(x+r*.7,y-r*1.25,x+r*1.5,y-r*.1,x,y+r*.9); g.fill(); };
-  if(st==='cafe') L.forEach(s=>anime(s,['#5a240a','#b85a1c','#e59a3c']));
+  if(st.startsWith('ch:')) L.forEach(s=>chico(s,st.slice(3).split(',')));
+  else if(st==='cafe') L.forEach(s=>anime(s,['#5a240a','#b85a1c','#e59a3c']));
   else if(st==='azul') L.forEach(s=>anime(s,['#0d2560','#2f6fd0','#86c6ff']));
   else if(st==='verde') L.forEach(s=>anime(s,['#0b4122','#2f9a55','#93e3a4']));
   else if(st==='boton') L.forEach(s=>{ const cx=X(s); g.fillStyle='#121014'; g.beginPath(); g.arc(cx,cy,56,0,Math.PI*2); g.fill(); g.fillStyle='#fff'; g.beginPath(); g.ellipse(cx-s*14-6,cy-20,15,15,0,0,Math.PI*2); g.fill(); g.beginPath(); g.arc(cx+18,cy+22,6,0,Math.PI*2); g.fill(); });
@@ -4245,8 +4266,68 @@ const CH_HAIR2_LIST=[];
   add('h2_mechones_cortos','Corto con mechones al frente',{F:.52,fz:.01,part:.09,S:.86,B:.72},{ears:1});
   add('h2_ondas_trenza','Ondas con trenza',{F:.52,fz:.01,part:.09,S:1.0,B:.7,wave:.03},{ears:1,flare:.16,extra:'trenza'});
   add('h2_largo_chongo','Largo con chongo alto',{F:.55,fz:.01,S:.95,B:.99},{ears:1,flare:.12,extra:'chongoalto',hatHide:1}); }
-// pieza de cabello: una sola malla cerrada (afuera, adentro y el canto); aSway = cuánto se mece cada punto (solo lo que cuelga)
-function chHairGeo(style){ const S=CH_HAIR[style], hk='geo'+(CH.key||'c'); if(S[hk]) return S[hk];
+// ---------- v201: cabello nuevo del Chibi (mechones con volumen, cortecitos, brillo, puntas más oscuras, sombra del fleco y capa de abajo) ----------
+// Se arma con el MISMO largo de cada peinado (S.len), así los 100 peinados cambian solos y conservan su forma. El Amigurumi sigue con el de antes.
+const chSq=x=>x*x;
+// --- dónde se corta cada mechón (columnas) y en qué parte del mechón está cada columna ---
+function chHairLocks(style,L,COLS){ const isMin=c=>{ const a=L[(c-1+COLS)%COLS], b=L[c], d=L[(c+1)%COLS]; return (b<a-1e-6 && b<=d) || (b<=a && b<d-1e-6); };
+  let cuts=[]; for(let c=0;c<COLS;c++) if(isMin(c) && (L[(c-3+COLS)%COLS]-L[c]>.006 || L[(c+3)%COLS]-L[c]>.006)) cuts.push(c);
+  let seed=17; for(const ch of style) seed=(seed*31+ch.charCodeAt(0))|0; const rnd=()=>{ seed=(Math.imul(seed,1103515245)+12345)|0; return ((seed>>>8)&0xffff)/65536; };
+  if(!cuts.length) cuts=[0];
+  const out=[], ART=new Uint8Array(COLS); for(let i=0;i<cuts.length;i++){ const a=cuts[i], b=i+1<cuts.length?cuts[i+1]:cuts[0]+COLS; out.push(a); let x=a; while(b-x>16){ x+=7+Math.floor(rnd()*7); if(b-x<5) break; out.push(x%COLS); ART[x%COLS]=1; } }
+  cuts=[...new Set(out)].sort((a,b)=>a-b);
+  const Q=new Float32Array(COLS), D=new Float32Array(COLS), W=new Int16Array(COLS), K=new Int16Array(COLS), shine=[];
+  for(let i=0;i<cuts.length;i++){ const a=cuts[i], b=i+1<cuts.length?cuts[i+1]:cuts[0]+COLS, n=b-a; shine.push(rnd()<.7);
+    for(let k=0;k<n;k++){ const c=(a+k)%COLS; Q[c]=k/n; D[c]=Math.min(k,n-k); W[c]=n; K[c]=i; } }
+  return {Q,D,W,K,shine,ART}; }
+
+// hat: con gorro, la parte de la cabeza no se sale del gorro (sin el volumen extra de los mechones)
+function chHairGeo2(style,hat){ const S=CH_HAIR[style], hk='geo2'+(CH.key||'c')+(hat?'h':''); if(S[hk]) return S[hk]; const HC=(t,sc,m)=>hat && t<=.56 ? Math.min(sc,m) : sc;
+  const HY=CH.HY, RX=CH.RX, RY=CH.RY, RZ=CH.RZ, TC=.56, DROP=1.8, FLARE=S.flare||.1, OUT=CH.OUT||1.075, IN=CH.IN||1.025, COLS=Q0==='min'||Q0==='low'?150:200, ROWS=22;
+  const L0=[]; for(let c=0;c<COLS;c++){ const u=c/COLS, d=Math.abs(((u+.5)%1)-.5); L0.push(S.len(u)-(CH.fr||0)*(1-chSm(.1,.2,d))); }
+  const LK=chHairLocks(style,L0,COLS), SL=.022, L=L0.map((l,c)=>{ let a=0; for(let k=-1;k<=1;k++) a=Math.max(a,LK.ART[(c+k+COLS)%COLS]*(1-Math.abs(k)/1.6)); return l-SL*a; });       // cortecito entre mechón y mechón
+  const BH=.024, LIFT=.045, EDGE=.018;
+  const front=c=>{ const u=c/COLS, d=Math.abs(((u+.5)%1)-.5); return 1-chSm(.1,.2,d); };
+  const sub=c=>LK.W[c]>=10?Math.exp(-chSq((LK.Q[c]-.5)/.06)):0, bump=c=>Math.pow(Math.sin(Math.PI*LK.Q[c]),.4)*(1-.3*sub(c));
+  const pos=[], uv=[], col=[], sw=[], idx=[];
+  const P=(u,t,sc)=>{ const ph=u*Math.PI*2, sx=Math.sin(ph), cz=Math.cos(ph), th=Math.min(t,TC)*Math.PI;
+    let x=RX*sc*Math.sin(th)*sx, y=HY+RY*sc*Math.cos(th), z=RZ*sc*Math.sin(th)*cz, w=0;
+    if(t>TC){ const dl=(t-TC)*DROP, f=dl*FLARE; y-=dl; x+=sx*f; z+=cz*f; w=Math.pow(Math.min(1,dl/.45),1.6); }
+    pos.push(x,y,z); sw.push(w); };
+  const lift=(c,t)=>front(c)*LIFT*chSm(.3,Math.max(.31,L[c]),t)+EDGE*chSm(L[c]-.1,L[c],t)*(L[c]<=TC+.02?1:0);
+  const grid=(outer)=>{ const b=pos.length/3; for(let c=0;c<COLS;c++){ const bq=bump(c), sh=LK.shine[LK.K[c]]; for(let r=0;r<=ROWS;r++){ const t=L[c]*r/ROWS, u=c/COLS;
+      const top=chSm(.2,.4,t), sc=HC(t,(outer?OUT+BH*(bq-.62)*top:IN)+lift(c,t),outer?1.093:1.08); P(u,t,sc); uv.push(u*3,t);
+      let k; if(outer){ k=(1-.4*chSq(1-bq)*top)*(1-.12*sub(c)*top); k*=1-.17*chSm(L[c]-.09,L[c],t); const du=Math.abs(u-.5); k*=1-.22*Math.exp(-chSq(du/.005))*(1-chSm(.3,.45,t)); if(sh) k+=.18*Math.exp(-chSq((t-.21)/.04))*(.4+.6*chSq(bq)); }
+      else k=.6;
+      col.push(k,k,k); } } return b; };
+  const o=grid(true), i=grid(false), V=(b,c,r)=>b+(c%COLS)*(ROWS+1)+r;
+  for(let c=0;c<COLS;c++) for(let r=0;r<ROWS;r++){
+    idx.push(V(o,c,r),V(o,c,r+1),V(o,c+1,r), V(o,c+1,r),V(o,c,r+1),V(o,c+1,r+1));
+    idx.push(V(i,c,r),V(i,c+1,r),V(i,c,r+1), V(i,c+1,r),V(i,c+1,r+1),V(i,c,r+1)); }
+  const rb=pos.length/3; for(let c=0;c<=COLS;c++){ const cc=c%COLS, t=L[cc], bq=bump(cc); P(cc/COLS,t,HC(t,OUT+BH*(bq-.62)*chSm(.2,.4,t)+lift(cc,t),1.093)); P(cc/COLS,t,HC(t,IN+lift(cc,t),1.08)); uv.push(c/COLS*3,0,c/COLS*3,.02); col.push(.66,.66,.66,.66,.66,.66); }
+  for(let c=0;c<COLS;c++){ const a=rb+c*2; idx.push(a,a+2,a+1, a+1,a+2,a+3); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  g.setAttribute('color',new THREE.Float32BufferAttribute(col,3)); g.setAttribute('aSway',new THREE.Float32BufferAttribute(sw,1)); g.setIndex(idx); g.computeVertexNormals();
+  g.userData={L,L0,COLS}; return S[hk]=g; }
+function chHairShadowGeo(style){ const S=CH_HAIR[style], hk='sh2'+(CH.key||'c'); if(S[hk]) return S[hk]; const G=chHairGeo2(style), L0=G.userData.L0, COLS=G.userData.COLS, TC=.56, RW=5, DT=.065, L=[], LM=[], FD=[]; for(let c=0;c<COLS;c++){ let a=0, m=9; for(let k=-6;k<=6;k++){ const v=L0[(c+k+COLS)%COLS]; a+=v; m=Math.min(m,v); } L.push(a/13); LM.push(m); }
+  for(let c=0;c<COLS;c++){ let f=0; for(let k=-10;k<=10;k++) f+=1-chSm(TC-.03,TC+.02,L[(c+k+COLS)%COLS]); FD.push(f/21); }
+  const HY=CH.HY, RX=CH.RX*1.014, RY=CH.RY*1.014, RZ=CH.RZ*1.024, SH=[.42,.3,.26], pos=[], col=[], idx=[];
+  for(let c=0;c<=COLS;c++){ const cc=c%COLS, u=cc/COLS, ph=u*Math.PI*2, fade=FD[cc], d=Math.abs(((u+.5)%1)-.5), fr=1-chSm(.1,.2,d), A=(.34+.16*fr)*fade;
+    for(let r=0;r<=RW;r++){ const t0=Math.min(LM[cc]-.02,TC), t1=L[cc]+DT*(1+.4*fr), t=Math.min(t0+(t1-t0)*r/RW,TC+.06), th=t*Math.PI; pos.push(RX*Math.sin(th)*Math.sin(ph), HY+RY*Math.cos(th), RZ*Math.sin(th)*Math.cos(ph));
+      const a=A*Math.pow(1-r/RW,1.4); col.push(1-(1-SH[0])*a,1-(1-SH[1])*a,1-(1-SH[2])*a); } }
+  for(let c=0;c<COLS;c++) for(let r=0;r<RW;r++){ const a=c*(RW+1)+r, b=a+RW+1; idx.push(a,a+1,b, b,a+1,b+1); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(col,3)); g.setIndex(idx);
+  return S[hk]=g; }
+function chHairUnderGeo(style){ const S=CH_HAIR[style], hk='un2'+(CH.key||'c'); if(S[hk]) return S[hk]; const G=chHairGeo2(style), L0=G.userData.L0, COLS=G.userData.COLS, TC=.56, RW=6;
+  const HY=CH.HY, RX=CH.RX*1.006, RY=CH.RY*1.006, RZ=CH.RZ*1.008, pos=[], col=[], idx=[];
+  for(let c=0;c<=COLS;c++){ const cc=c%COLS, u=cc/COLS, ph=u*Math.PI*2; let lo=9; for(let k=-2;k<=2;k++) lo=Math.min(lo,L0[(cc+k+COLS)%COLS]); const bot=Math.min(lo-.007,TC), top=Math.max(.02,bot-.18);
+    for(let r=0;r<=RW;r++){ const t=top+(bot-top)*r/RW, th=t*Math.PI; pos.push(RX*Math.sin(th)*Math.sin(ph), HY+RY*Math.cos(th), RZ*Math.sin(th)*Math.cos(ph)); col.push(.42,.42,.42); } }
+  for(let c=0;c<COLS;c++) for(let r=0;r<RW;r++){ const a=c*(RW+1)+r, b=a+RW+1; idx.push(a,a+1,b, b,a+1,b+1); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(col,3)); g.setIndex(idx); g.computeVertexNormals();
+  return S[hk]=chPrep(g); }
+function chHairGeo(style){ return CH.key==='a' ? chHairGeoOld(style) : chHairGeo2(style); }
+// pieza de cabello de antes (la usa el Amigurumi): una sola malla cerrada (afuera, adentro y el canto); aSway = cuánto se mece cada punto (solo lo que cuelga)
+function chHairGeoOld(style){ const S=CH_HAIR[style], hk='geo'+(CH.key||'c'); if(S[hk]) return S[hk];
   const HY=CH.HY, RX=CH.RX, RY=CH.RY, RZ=CH.RZ, TC=.56, DROP=1.8, FLARE=S.flare||.1, OUT=CH.OUT||1.075, IN=CH.IN||1.025, COLS=Q0==='min'||Q0==='low'?150:200, ROWS=22;
   const pos=[], uv=[], col=[], sw=[], idx=[], L=[]; for(let c=0;c<COLS;c++){ const u=c/COLS, d=Math.abs(((u+.5)%1)-.5); L.push(S.len(u)-(CH.fr||0)*(1-chSm(.1,.2,d))); }   // fr: el fleco un poco más arriba (Amigurumi)
   const P=(u,t,sc)=>{ const ph=u*Math.PI*2, sx=Math.sin(ph), cz=Math.cos(ph), th=Math.min(t,TC)*Math.PI;
@@ -4274,9 +4355,23 @@ const chBraidGeo=()=>{ if(CH_XG.br) return CH_XG.br; const P=[new THREE.Vector2(
   for(let i=0;i<=72;i++){ const t=i/72, y=-.62*t, seg=t*6, r=(.1-.042*t)*(.72+.28*Math.sin(Math.PI*(seg%1))); P.push(new THREE.Vector2(r,y)); } P.push(new THREE.Vector2(0,-.62));
   return CH_XG.br=chPrep(new THREE.LatheGeometry(P,14)); };
 const chSph=()=>CH_XG.sph||(CH_XG.sph=chPrep(new THREE.SphereGeometry(1,16,12)));
+// v201: colas con mechones girados y chongos con remolino (solo Chibi)
+function chTailGeo2(len,r){ const k='t2_'+len+'_'+r; if(CH_XG[k]) return CH_XG[k];
+  const prof=[[0,0],[r*.55,-.02],[r,-len*.32],[r*.85,-len*.62],[r*.4,-len*.9],[0,-len]], P=new THREE.SplineCurve(prof.map(p=>new THREE.Vector2(p[0],p[1]))).getPoints(30); P[0].x=0; P[P.length-1].x=0;
+  const SEG=40, NR=6, TW=7, pos=[], col=[], idx=[];
+  P.forEach((p,j)=>{ for(let i=0;i<=SEG;i++){ const a=i/SEG*Math.PI*2, w=Math.abs(Math.sin((a*NR+p.y*TW)/2)), rr=p.x*(1+.11*(Math.pow(w,.55)-.62)); pos.push(Math.sin(a)*rr,p.y,Math.cos(a)*rr); const kk=1-.3*chSq(1-w); col.push(kk,kk,kk); } });
+  for(let j=0;j<P.length-1;j++) for(let i=0;i<SEG;i++){ const a=j*(SEG+1)+i, b=a+SEG+1; idx.push(a,b,a+1, a+1,b,b+1); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(col,3)); g.setIndex(idx); g.computeVertexNormals();
+  return CH_XG[k]=chPrep(g); }
+const chSwirlGeo=()=>{ if(CH_XG.sw) return CH_XG.sw; const g=new THREE.SphereGeometry(1,40,28), p=g.attributes.position, col=[];
+  for(let i=0;i<p.count;i++){ const x=p.getX(i), y=p.getY(i), z=p.getZ(i), th=Math.atan2(x,z), ph=Math.acos(Math.max(-1,Math.min(1,y))), w=Math.abs(Math.sin(2.5*th+4*ph)), k=1+.06*(Math.pow(w,.55)-.62);
+    p.setXYZ(i,x*k,y*k,z*k); const kk=1-.28*chSq(1-w); col.push(kk,kk,kk); }
+  g.setAttribute('color',new THREE.Float32BufferAttribute(col,3)); g.computeVertexNormals(); return CH_XG.sw=chPrep(g); };
 const chAhogeGeo=()=>CH_XG.ah||(CH_XG.ah=chPrep(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0,0,0),new THREE.Vector3(.03,.1,.04),new THREE.Vector3(.09,.19,.01),new THREE.Vector3(.15,.17,-.06)]),12,.022,6,false)));
 // extras que cuelgan: cada uno en un pivote que se mece con el cuerpo (k = cuánto)
+const chTailGeoOld=(l,r)=>chTailGeo(l,r), chSphOld=()=>chSph();
 function chHairExtras(kind,mat){ const out=[], piv=(x,y,z,rx,rz,k)=>{ const p=new THREE.Group(); p.position.set(x,y,z); p.rotation.set(rx,0,rz); p.userData.sw={bx:rx, bz:rz, k}; out.push(p); return p; },
+    NW=CH.key!=='a', chTailGeo=NW?chTailGeo2:chTailGeoOld, chSph=NW?chSwirlGeo:chSphOld,   // v201: en el Chibi, colas con mechones y chongos con remolino
     M=(p,geo,x,y,z,sx,sy,sz)=>{ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.castShadow=true; p.add(m); return m; }, H=CH.HY, RX=CH.RX, RY=CH.RY, RZ=CH.RZ;
   if(kind==='coletas') for(const s of [-1,1]){ const p=piv(s*RX*.86,H+.2,-RZ*.5,.18,s*.3,3.2); M(p,chSph(),0,0,0,.09,.07,.09); M(p,chTailGeo(.6,.13),0,-.02,0,1,1,1); }
   else if(kind==='cola'){ const p=piv(0,H+RY*.62,-RZ*.93,.32,0,2.6); M(p,chSph(),0,0,0,.1,.08,.1); M(p,chTailGeo(.72,.16),0,-.02,0,1,1,1); }
@@ -4291,9 +4386,14 @@ function chHairExtras(kind,mat){ const out=[], piv=(x,y,z,rx,rz,k)=>{ const p=ne
   return out; }
 // el material del cabello es de cada peluche (lleva su propio balanceo); el color se cambia sin rehacerlo
 let chHairLines=null;
+const CH_HAIR_SHMAT=new THREE.MeshBasicMaterial({vertexColors:true, transparent:true, blending:THREE.MultiplyBlending, premultipliedAlpha:true, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-3});   // v201
 function chHairMat(u){ if(u.hairMat) return u.hairMat;
-  if(!chHairLines){ const c=document.createElement('canvas'); c.width=512; c.height=256; const g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,512,256); g.strokeStyle='rgba(110,70,40,.26)'; g.lineWidth=2;
-    for(let n=0;n<34;n++){ const x=Math.random()*512; g.beginPath(); g.moveTo(x,0); g.lineTo(x+(Math.random()-.5)*14,256); g.stroke(); } chHairLines=new THREE.CanvasTexture(c); chHairLines.wrapS=chHairLines.wrapT=THREE.RepeatWrapping; }
+  // v201: felpa finita (puntitos) + pocas hebras muy suaves
+  if(!chHairLines) chHairLines=(()=>{ const c=document.createElement('canvas'); c.width=512; c.height=256; const g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,512,256);
+  let s=7; const R=()=>(s=(s*16807)%2147483647)/2147483647;
+  for(let i=0;i<9000;i++){ const x=R()*512, y=R()*256, d=R()<.5; g.fillStyle=d?'rgba(90,60,40,.07)':'rgba(255,255,255,.09)'; g.fillRect(x,y,1.5,2.5); }
+  g.strokeStyle='rgba(110,70,40,.10)'; g.lineWidth=1.5; for(let n=0;n<26;n++){ const x=R()*512; g.beginPath(); g.moveTo(x,0); g.bezierCurveTo(x+(R()-.5)*10,90,x+(R()-.5)*10,170,x+(R()-.5)*12,256); g.stroke(); }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=4; return t; })();
   const S=u.hsw||(u.hsw={off:new THREE.Vector3(), vel:new THREE.Vector3(), prev:null, prevV:new THREE.Vector3(), yaw:0, yawV:0, U:{uSw:{value:new THREE.Vector3()}}, pieces:[]});
   const m=new THREE.MeshStandardMaterial({color:0xffffff, map:chHairLines, vertexColors:true, roughness:.95});
   m.onBeforeCompile=sh=>{ sh.uniforms.uSw=S.U.uSw; sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute float aSway; uniform vec3 uSw;').replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed += uSw*aSway;'); };
@@ -4518,8 +4618,10 @@ function chibiDress(u,eq){ const C=u.ch, B=x=>eq && SHOP_BY[eq[x]] ? SHOP_BY[eq[
   const hairIt=B('chair'), colIt=B('chcol')||SHOP_BY.hc_castano, hairHex=colIt.c, earIt=B('cears');
   // cabello
   const hs=hairIt ? hairIt.hs : null, hm=chHairMat(u); hm.color.set(hairHex).convertSRGBToLinear();
-  if(hs!==C.hairStyle){ if(C.hair){ C.g.remove(C.hair); C.hair=null; } (C.hairX||[]).forEach(p=>C.g.remove(p)); C.hairX=[];
-    if(hs){ const m=new THREE.Mesh(chHairGeo(hs),hm); m.castShadow=true; m.receiveShadow=true; C.g.add(m); C.hair=m; if(CH_HAIR[hs].extra){ C.hairX=chHairExtras(CH_HAIR[hs].extra,hm); C.hairX.forEach(p=>C.g.add(p)); } }
+  if(hs!==C.hairStyle){ if(C.hair){ C.g.remove(C.hair); C.hair=null; } (C.hairX||[]).forEach(p=>C.g.remove(p)); C.hairX=[]; for(const k of ['hairSh','hairUn']) if(C[k]){ C.g.remove(C[k]); C[k]=null; }
+    if(hs){ const m=new THREE.Mesh(chHairGeo(hs),hm); m.castShadow=true; m.receiveShadow=true; C.g.add(m); C.hair=m;
+      // v201: sombrita del fleco y capa de abajo
+      C.hairSh=new THREE.Mesh(chHairShadowGeo(hs),CH_HAIR_SHMAT); C.hairSh.renderOrder=6; C.g.add(C.hairSh); C.hairUn=new THREE.Mesh(chHairUnderGeo(hs),hm); C.g.add(C.hairUn); if(CH_HAIR[hs].extra){ C.hairX=chHairExtras(CH_HAIR[hs].extra,hm); C.hairX.forEach(p=>C.g.add(p)); } }
     C.hairStyle=hs; }
   // orejitas
   const es=earIt ? earIt.ear : null, ek=es ? es+'|'+(CH_EARS[es].hair?hairHex:'') : null;
@@ -4529,7 +4631,8 @@ function chibiDress(u,eq){ const C=u.ch, B=x=>eq && SHOP_BY[eq[x]] ? SHOP_BY[eq[
   const S=u.hsw; if(S) S.pieces=[...(C.hairX||[]),...(C.earX||[])];
   // cara
   const bc='#'+new THREE.Color(hairHex).multiplyScalar(.5).getHexString();
-  const F={eye:B('ceyes')&&B('ceyes').eye, br:B('cbrows')&&B('cbrows').br, bc, mo:B('cmouth')&&B('cmouth').mo, ck:B('ccheeks')&&B('ccheeks').ck};
+  const eyIt=B('ceyes')||(eq && CH_EYES_RETIRED[eq.ceyes] ? SHOP_BY.co_cafe : null);   // v201: ojos de corazón (ya no existen) → ojos café
+  const F={eye:eyIt&&eyIt.eye, br:B('cbrows')&&B('cbrows').br, bc, mo:B('cmouth')&&B('cmouth').mo, ck:B('ccheeks')&&B('ccheeks').ck};
   const any=F.eye||F.br||F.mo||F.ck; C.face.visible=!!any; if(any) C.face.material=chFaceMat(F); }
 // retrato chiquito del Chibi (para la tienda: peinados y orejitas). Se dibuja una vez en una imagen aparte.
 const AV_PORTRAIT={}; let avPortraitRig=null;
@@ -4864,6 +4967,7 @@ function chibiHatAcc(o,eq,list,C,add){ const u=o.userData, it=k=>eq && SHOP_BY[e
   const hat=it('chat'), accs=['cacc','cacf','cacn','cacb','cach'].map(it).filter(Boolean);   // v190: varios accesorios a la vez (cabeza, cara, cuello, espalda y mano)
   const arm=(u.arms||[]).find(x=>x.userData && x.userData.side>0)||(u.arms||[])[0], hand=arm&&arm.userData.joint;
   // con gorro: lo que va arriba de la cabeza se esconde (chonguitos, mechón, orejitas), para que nada atraviese el gorro
+  if(!C.mat && C.hair && C.hairStyle) C.hair.geometry=chHairGeo2(C.hairStyle,!!hat);   // v201: con gorro, el cabello del Chibi va pegadito para no atravesarlo
   const hideTop=!!hat; (C.hairX||[]).forEach(p=>{ if(C.hairStyle==='chongos'||C.hairStyle==='picudo'||(CH_HAIR[C.hairStyle]||{}).hatHide) p.visible=!hideTop; }); (C.earX||[]).forEach(p=>p.visible=!hideTop);
   if(hat){ const k=hat.hk, a=M(hat.c), b=M(hat.c2||'#ffffff'), S=1.11;
     const dome=(t1,sc=S,mat=a)=>add(g,chDomeGeo(t1),mat,0,H,0,RX*sc,RY*sc,RZ*sc);
@@ -5415,6 +5519,7 @@ addEventListener('keydown',e=>{
 
 function lockPointer(){ if(isTouch) return; try{ const p=canvas.requestPointerLock&&canvas.requestPointerLock(); if(p&&p.catch)p.catch(()=>{}); }catch(e){} }
 function startGame(){
+  if(window.__eyeRefund){ const b=window.__eyeRefund; window.__eyeRefund=0; setTimeout(()=>flashNote('Los ojos de corazón del Chibi ya no están en la tienda: te devolvimos '+b+' monedas'),4200); }
   if(window.__econBoost){ const b=window.__econBoost; window.__econBoost=0; setTimeout(()=>flashNote('¡Cambiaron los precios de la tienda! Por eso tus monedas se multiplicaron ×5: ahora tienes '+b),2500); } controlsEl.hidden=true; optionsEl.hidden=true; setCam(settings.startCam); show('play'); lockPointer(); }
 
 ui('playBtn').onclick=startGame;
@@ -9795,7 +9900,7 @@ I('cuerpo','av_amigu','Amigurumi',0,{free:1, thumb:'amigu', plain:'#f4efe6'});
 [['porcelana','Porcelana','#f8e1d0'],['durazno','Durazno','#efc2a2'],['miel','Miel','#dba57c'],['canela','Canela','#b97c52'],['cacao','Cacao','#8a5634'],['chocolate','Chocolate','#5e3a24']]
   .forEach(([k,n,c])=>I('cpiel','cp_'+k,'Piel '+n,0,{free:1, c, def:k==='durazno'?1:0}));
 [['celeste','Celeste','#b8d9f7'],['lavanda','Lavanda','#cdb8f2'],['menta','Menta','#bfe9cc'],['chicle','Rosa chicle','#f7b6cf']].forEach(([k,n,c])=>I('cpiel','cp_'+k,'Piel '+n,12,{c}));
-[['cafe','Anime café',0],['boton','Botón',0],['puntos','Puntitos',0],['felices','Felices',0],['azul','Anime azul',10],['verde','Anime verde',10],['dormilon','Dormilones',10],['estrellas','Estrellitas',14],['corazones','Corazones',14],['kawaii','Brillantes',16]]
+[['cafe','Anime café',0],['boton','Botón',0],['puntos','Puntitos',0],['felices','Felices',0],['azul','Anime azul',10],['verde','Anime verde',10],['dormilon','Dormilones',10],['estrellas','Estrellitas',14],['kawaii','Brillantes',16]]
   .forEach(([k,n,p])=>I('cojos','co_'+k,'Ojos '+n,p,p?{eye:k}:{eye:k, free:1}));
 // v153: peinados, color de cabello, cejas, boca, mejillas y orejitas del Chibi (los primeros de cada uno, gratis)
 [['lado','Fleco de lado',0],['corto','Cortito',0],['bob','Bob',0],['largo','Largo lacio',0],['coletas','Coletas',18],['cola','Cola de caballo',16],['chongos','Chonguitos',16],['picudo','Picudo',18],['ondas','Ondas largas',20],['trenza','Trenza',18]]
@@ -10027,8 +10132,9 @@ I('cuerpo','av_amigu','Amigurumi',0,{free:1, thumb:'amigu', plain:'#f4efe6'});
     .forEach(([n,C])=>I('cojos','co2_g_'+n,'Ojos de gatito '+n,14,{eye:'g:'+C.join(','),...nw}));
   [['azul','#1d4fa8'],['rojo','#a8202a'],['verde','#1f7a43'],['morado','#6a2ab0'],['rosa','#d0407a'],['café','#5a3018']].forEach(([n,c])=>I('cojos','co2_b_'+n,'Ojos botón '+n,10,{eye:'b:'+c,...nw}));
   [['azules','#1d4fa8'],['verdes','#1f7a43'],['morados','#6a2ab0'],['cafés','#5a3018']].forEach(([n,c])=>I('cojos','co2_p_'+n,'Ojos puntitos '+n,10,{eye:'p:'+c,...nw}));
-  [['morados',['#4a0a6a','#a050e0','#e0b0ff']],['azules',['#0a2a6a','#4a90f0','#b8e0ff']],['rojos',['#6a0a0a','#e03040','#ffb0b0']],['naranjas',['#6a2a00','#f08a20','#ffd0a0']]]
-    .forEach(([n,C])=>I('cojos','co2_h_'+n,'Ojos de corazón '+n,14,{eye:'h:'+C.join(','),...nw}));
+  // v201: ojos de chico (párpado grueso, iris redondo, sin pestañas)
+  [['cafés',['#3a1a08','#8a4a1a','#d89a50']],['ámbar',['#3a2004','#d89a10','#ffd860']],['azules',['#081838','#2a5ab0','#7ab0f0']],['verdes',['#08301a','#2a8a4a','#8ad8a0']],['grises',['#1a1a20','#5a6070','#a8b0c0']]]
+    .forEach(([n,C],i)=>I('cojos','co3_ch_'+['cafe','ambar','azul','verde','gris'][i],'Ojos de chico '+n,i?10:0,i?{eye:'ch:'+C.join(','),...nw}:{eye:'ch:'+C.join(','), free:1, ...nw}));
   [['rosas',['#a02a6a','#f070b0','#ffd0e8']],['azules',['#1a3a8a','#5a9af0','#c8e4ff']],['verdes',['#0a5a2a','#40c070','#c0f8d0']],['morados',['#4a1a8a','#9a60f0','#e0c8ff']]]
     .forEach(([n,C])=>I('cojos','co2_s_'+n,'Ojos de estrella '+n,14,{eye:'s:'+C.join(','),...nw}));
   [['morada',['#1a0a3a','#5a2ab0','#c070ff']],['azul',['#000a2a','#1a3aa0','#60b0ff']],['rosa',['#3a0a2a','#c02a8a','#ff90d0']]].forEach(([n,C])=>I('cojos','co2_gal_'+n,'Ojos de galaxia '+n,16,{eye:'gal:'+C.join(','),...nw}));
@@ -10089,7 +10195,11 @@ const SHOP_BY={}; SHOP.forEach(it=>{ it.slot=SLOT_OF[it.cat]; it.av=(SHOP_CATS.f
 SHOP.forEach(it=>{ if(!it.ak) return; const as=it.as||({gorro:'cabeza',cara:'cara',cuerpo:'cuello',espalda:'espalda'})[it.view]||'cabeza'; it.as=as; it.slot=(it.av==='a'?'a':'c')+({cabeza:'acc',cara:'acf',cuello:'acn',espalda:'acb',mano:'ach'})[as]; });   // v190: cada accesorio va en su lugar (se pueden usar varios)
 const OUT_SLOTS=['top','hat','gloves','socks','shoes','glasses','skin','tex','body','cskin','ceyes','chair','chcol','cbrows','cmouth','ccheeks','cears','ctop','cbot','cshoe','chat','cacc','askin','aeyes','ahair','ahcol','abrows','acheeks','aears','atop','abot','ashoe','ahat','aacc','cacf','cacn','cacb','cach','aacf','aacn','aacb','aach'];
 // lo comprado y lo puesto
-const wardrobe=(()=>{ let w={own:[], eq:{}}; try{ const s=JSON.parse(localStorage.getItem('mundoPelucheRopa')||'null'); if(s){ w.own=(s.own||[]).filter(id=>SHOP_BY[id]); for(const k of OUT_SLOTS) if(s.eq && SHOP_BY[s.eq[k]] && (w.own.includes(s.eq[k]) || SHOP_BY[s.eq[k]].free)) w.eq[SHOP_BY[s.eq[k]].slot]=s.eq[k]; } }catch(e){} return w; })();
+// v201: los ojos de corazón del Chibi se quitaron de la tienda: a quien los tenía se le devuelven sus monedas (una sola vez)
+const CH_EYES_RETIRED={co_corazones:14, co2_h_morados:14, co2_h_azules:14, co2_h_rojos:14, co2_h_naranjas:14};
+const wardrobe=(()=>{ let w={own:[], eq:{}}; try{ const s=JSON.parse(localStorage.getItem('mundoPelucheRopa')||'null');
+    if(s && !localStorage.getItem('mundoPelucheRet201')){ localStorage.setItem('mundoPelucheRet201','1'); const r=(s.own||[]).reduce((a,id)=>a+(CH_EYES_RETIRED[id]||0),0); if(r>0){ coins+=r; saveCoins(); window.__eyeRefund=r; } }
+    if(s){ w.own=(s.own||[]).filter(id=>SHOP_BY[id]); for(const k of OUT_SLOTS) if(s.eq && SHOP_BY[s.eq[k]] && (w.own.includes(s.eq[k]) || SHOP_BY[s.eq[k]].free)) w.eq[SHOP_BY[s.eq[k]].slot]=s.eq[k]; } }catch(e){} return w; })();
 function saveWardrobe(){ try{ localStorage.setItem('mundoPelucheRopa', JSON.stringify(wardrobe)); }catch(e){} }
 const outfitList=eq=>OUT_SLOTS.map(k=>eq[k]).filter(Boolean);
 function parseOutfit(a){ const eq={}; if(Array.isArray(a)) a.slice(0,52).forEach(id=>{ const it=typeof id==='string' && SHOP_BY[id]; if(it) eq[it.slot]=id; }); return eq; }
