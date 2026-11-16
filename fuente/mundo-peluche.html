@@ -4191,7 +4191,7 @@ function avatarShape(o,eq){ const u=o.userData; if(!u.arms || !u.legs || !u.body
   if(av==='c'){ const C=chibiParts(u), sk=chSkinMat(skin);
     C.g.visible=true; C.skinned.forEach(m=>m.material=sk); chibiDress(u,eq);   // v153: cabello, cara y orejitas
     if(u.am){ u.am.g.visible=false; u.am.hands.forEach(h=>h.visible=false); }
-    u.body.material=chHideMat; (u.eyes||[]).forEach(e=>e.visible=false); if(tag) tag.visible=false;
+    u.body.material=chHideMat; (u.eyes||[]).forEach(e=>e.visible=false); if(tag) tag.visible=false; if(u.crease) u.crease.visible=false;
     u.arms.forEach(a=>{ const s=a.userData.side, j=a.userData.joint, up=a.children.find(m=>m.isMesh);
       up.geometry=capsuleGeo(.1,.15); up.position.y=-.075; up.material=sk; j.position.y=-.15; a.userData.low.geometry=capsuleGeo(.105,.17); a.userData.low.position.y=-.085; a.userData.low.material=sk;
       a.userData.base.set(s*.24,.78,0); a.position.copy(a.userData.base); });
@@ -4200,7 +4200,7 @@ function avatarShape(o,eq){ const u=o.userData; if(!u.arms || !u.legs || !u.body
       if(f){ f.scale.set(.14,.11,.18); f.position.set(0,-.16,.04); f.material=sk; } });
     u.armRest=CH.armRest; }
   else if(av==='a'){ const A=amiguParts(u); if(u.ch) u.ch.g.visible=false; A.g.visible=true; const {mL}=amiguDress(u,eq);   // v156: el Amigurumi
-    u.body.material=chHideMat; (u.eyes||[]).forEach(e=>e.visible=false); if(tag) tag.visible=false;
+    u.body.material=chHideMat; (u.eyes||[]).forEach(e=>e.visible=false); if(tag) tag.visible=false; if(u.crease) u.crease.visible=false;
     u.arms.forEach(a=>{ const s=a.userData.side, j=a.userData.joint, up=a.children.find(m=>m.isMesh);
       up.geometry=capsuleGeo(.065,.3); up.position.y=-.15; up.material=mL; j.position.y=-.3; a.userData.low.geometry=capsuleGeo(.06,.3); a.userData.low.position.y=-.15; a.userData.low.material=mL;
       a.userData.base.set(s*.2,1.31,0); a.position.copy(a.userData.base); });
@@ -4209,7 +4209,7 @@ function avatarShape(o,eq){ const u=o.userData; if(!u.arms || !u.legs || !u.body
       if(f){ f.scale.set(.1,.085,.135); f.position.set(0,-.38,.035); f.material=mL; } });
     u.armRest=AM.armRest; }
   else { const pm=plushMatFor(u.colorIdx|0); if(u.ch) u.ch.g.visible=false; if(u.am){ u.am.g.visible=false; u.am.hands.forEach(h=>h.visible=false); }
-    u.body.material=pm; (u.eyes||[]).forEach(e=>e.visible=true); if(tag) tag.visible=true;
+    u.body.material=pm; (u.eyes||[]).forEach(e=>e.visible=true); if(tag) tag.visible=true; if(u.crease) u.crease.visible=true;
     u.arms.forEach((a,i)=>{ const L=F.arms[i]; L.up.geometry=L.upGeo; L.up.position.y=L.upY; L.up.material=pm; a.userData.joint.position.y=L.jy; L.low.geometry=L.lowGeo; L.low.position.y=L.lowY; L.low.material=pm;
       a.userData.base.copy(L.base); a.position.copy(L.base); });
     u.legs.forEach((l,i)=>{ const L=F.legs[i]; l.position.set(L.x,L.y,0); L.up.geometry=L.upGeo; L.up.position.y=L.upY; L.up.material=pm; l.userData.joint.position.y=L.jy; L.low.geometry=L.lowGeo; L.low.position.y=L.lowY; L.low.material=pm;
@@ -4613,6 +4613,107 @@ function chEarsBuild(st,hairHex){ const E=CH_EARS[st], col=E.hair && hairHex ? h
     if(E.sc) p.scale.setScalar(E.sc);
     p.userData.sw={bx:p.rotation.x, bz:p.rotation.z, k:sw}; out.push(p); }
   return out; }
+// ---------- v201: bocas de verdad ----------
+// Frijolito: la boquita cerrada es un hundimiento real de la tela (sonrisa metida hacia adentro) + una sombrita en el pliegue.
+// Chibi: las bocas abiertas (sorpresa, risa, con dientes) son un hueco real en la cabeza, con su "bolsita" roja por dentro y su lengua.
+const smB=(a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
+// forma del hueco (u = de lado, v = arriba/abajo respecto al centro de la boca); negativo = adentro. La misma cuenta va en el shader.
+function mouthSD(M,u,v){ const vt=M.top, vb=M.bot, span=vt-vb;
+  if(M.shape==='oval'){ const cy=(vt+vb)/2, ry=span/2, rx=M.W; return (Math.hypot(u/rx,(v-cy)/ry)-1)*Math.min(rx,ry); }
+  if(M.shape==='gajo'){ const W=M.W, D=vt-vb, x=Math.min(1,Math.abs(u)/W), top=vt-M.dip*(1-x*x), py=v-vt;
+    const k0=Math.hypot(u/W,py/D), k1=Math.hypot(u/(W*W),py/(D*D)), a=k0<1e-6?-Math.min(W,D):k0*(k0-1)/k1, b=v-top, r=M.k;
+    return Math.min(-r,Math.max(a,b))+Math.hypot(Math.max(0,a+r),Math.max(0,b+r)); }
+  const tt=Math.min(1,Math.max(0,(vt-v)/span)), hw=M.W*Math.sqrt(Math.max(0,1-tt*tt))*(1-M.taper*tt), top=vt-M.arc*chSq(u/M.W);
+  return Math.max(Math.abs(u)-hw, v-top, vb-v); }
+const MOUTH_SD_GLSL=`float mouthSD(vec2 q){ float u=q.x, v=q.y, span=uMB.x-uMB.y;
+  if(uMB.w>2.5){ float W=uMB.z, D=span, x=min(1.,abs(u)/W), top=uMB.x-uMC.x*(1.-x*x), py=v-uMB.x;
+    float k0=length(vec2(u/W,py/D)), k1=length(vec2(u/(W*W),py/(D*D))), a=k0<1e-6?-min(W,D):k0*(k0-1.)/k1, b=v-top, r=uMC.y;
+    return min(-r,max(a,b))+length(max(vec2(a+r,b+r),0.)); }
+  if(uMB.w>.5){ float cy=(uMB.x+uMB.y)*.5, ry=span*.5, rx=uMB.z; return (length(vec2(u/rx,(v-cy)/ry))-1.)*min(rx,ry); }
+  float tt=clamp((uMB.x-v)/span,0.,1.), hw=uMB.z*sqrt(max(0.,1.-tt*tt))*(1.-uMC.x*tt), top=uMB.x-uMC.y*(u/uMB.z)*(u/uMB.z);
+  return max(max(abs(u)-hw, v-top), uMB.y-v); }`;
+// cuánto se hunde la tela en cada punto alrededor de la boca
+function mouthField(M,u,v){
+  if(M.kind==='closed'){ const W=M.W, au=Math.abs(u); if(au>W*1.6) return null;
+    const dv=v-M.K*u*u, e=1-smB(W*.7,W*1.2,au), sg=M.sig*(1-.45*chSq(u/W));
+    const g=Math.exp(-chSq(dv/sg))*e, e2=1-smB(W*.9,W*1.55,au), puff=(M.puff||0)*Math.exp(-chSq((Math.abs(dv)-2.3*M.sig)/(1.3*M.sig)))*e2;
+    return {dep:M.D*g-puff, up:M.D*.12*g, aD:Math.min(1,Math.exp(-chSq(dv/(sg*1.25)))*e*(M.dk||1.15))}; }
+  const sd=mouthSD(M,u,v); if(sd>.05) return null;
+  return {dep:M.curl*(sd<=0?1:Math.exp(-chSq(sd/M.curlW))), up:0, aD:0}; }
+// --- Frijolito ---
+const FJ_PROF=[[0,0],[.34,.03],[.47,.18],[.5,.45],[.47,.75],[.4,1.0],[.36,1.15],[.37,1.32],[.33,1.5],[.2,1.64],[0,1.68]];
+const FJ_CURVE=new THREE.SplineCurve(FJ_PROF.map(p=>new THREE.Vector2(p[0],p[1])));
+const FJ_MOUTH={kind:'closed', Y:1.215, W:.085, K:3.0, D:.018, sig:.014, puff:.003, dk:.75};
+const fjTofY=y=>{ let lo=0, hi=1; for(let k=0;k<40;k++){ const m=(lo+hi)/2; if(FJ_CURVE.getPoint(m).y<y) lo=m; else hi=m; } return (lo+hi)/2; };
+// hileras: parejas en todo el cuerpo y muy juntitas cerca de la boca (ahí está el detalle); columnas más juntas al frente
+function fjRows(M){ const r=[]; for(let j=0;j<=64;j++) r.push(j/64); if(M){ const a=fjTofY(M.Y-.07), b=fjTofY(M.Y+.06); for(let k=0;k<=40;k++) r.push(a+(b-a)*k/40); }
+  r.sort((a,b)=>a-b); return r.filter((t,i)=>!i || t-r[i-1]>1e-4); }
+const FJ_GEO={};
+function fjBodyGeo(){ if(FJ_GEO.body) return FJ_GEO.body; const M=FJ_MOUTH, NU=100, a=.25, rows=fjRows(M), NV=rows.length-1, pos=[], uv=[], idx=[];
+  rows.forEach((t,j)=>{ const p=FJ_CURVE.getPoint(t), r=(j===0||j===NV)?0:p.x, y=p.y;
+    for(let i=0;i<=NU;i++){ const x=2*i/NU-1, phi=Math.PI*(a*x+(1-a)*x*x*x); let X=r*Math.sin(phi), Y=y, Z=r*Math.cos(phi);
+      if(Math.cos(phi)>.3 && Math.abs(y-M.Y)<.2){ const f=mouthField(M, phi*r, y-M.Y); if(f){ X-=Math.sin(phi)*f.dep; Z-=Math.cos(phi)*f.dep; Y+=f.up; } }
+      pos.push(X,Y,Z); uv.push(i/NU,t); } });
+  for(let j=0;j<NV;j++) for(let i=0;i<NU;i++){ const A=j*(NU+1)+i, B=A+NU+1; idx.push(A,A+1,B, A+1,B+1,B); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); g.setIndex(idx); g.computeVertexNormals();
+  return FJ_GEO.body=g; }
+// sombrita del pliegue: un pedacito de tela pegado encima que oscurece lo de abajo (sirve con cualquier tela o color)
+const FJ_CREASE_MAT=new THREE.MeshBasicMaterial({vertexColors:true, transparent:true, blending:THREE.MultiplyBlending, premultipliedAlpha:true, depthWrite:false, fog:false, polygonOffset:true, polygonOffsetFactor:-2});
+function fjCreaseGeo(){ if(FJ_GEO.crease) return FJ_GEO.crease; const M=FJ_MOUTH, NU=56, P0=.48, ta=fjTofY(M.Y-.05), tb=fjTofY(M.Y+.045), NV=36, pos=[], col=[], idx=[];
+  for(let j=0;j<=NV;j++){ const t=ta+(tb-ta)*j/NV, p=FJ_CURVE.getPoint(t), r=p.x;
+    for(let i=0;i<=NU;i++){ const phi=-P0+2*P0*i/NU, sx=Math.sin(phi), cz=Math.cos(phi); let X=r*sx, Y=p.y, Z=r*cz, d=0;
+      const f=mouthField(M, phi*r, p.y-M.Y); if(f){ X-=sx*f.dep; Z-=cz*f.dep; Y+=f.up; d=f.aD; }
+      X+=sx*.0012; Z+=cz*.0012; pos.push(X,Y,Z); const k=1-.78*d; col.push(k,k,k); } }
+  for(let j=0;j<NV;j++) for(let i=0;i<NU;i++){ const A=j*(NU+1)+i, B=A+NU+1; idx.push(A,A+1,B, A+1,B+1,B); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(col,3)); g.setIndex(idx);
+  return FJ_GEO.crease=g; }
+function fjAddCrease(body){ const m=new THREE.Mesh(fjCreaseGeo(),FJ_CREASE_MAT); m.renderOrder=2; m.userData.noBatch=true; body.add(m); return m; }
+// --- Chibi: bocas abiertas en 3D (medidas en la cabeza; Y = altura respecto al centro de la cabeza) ---
+const CH_MOUTH3={
+  sorpresa:{kind:'open', shape:'oval', Y:-.3, top:.035, bot:-.045, W:.034, curl:.008, curlW:.008},
+  risa:{kind:'open', shape:'D', Y:-.2845, top:.02, bot:-.05, W:.06, taper:.15, arc:.004, curl:.008, curlW:.008},
+  dientes:{kind:'open', shape:'D', Y:-.2845, top:.02, bot:-.045, W:.064, taper:.1, arc:.004, curl:.008, curlW:.008, teeth:1} };
+// qué boca de la tienda va en 3D: las de sorpresa, risa / boca abierta feliz y sonrisa con dientes (de cualquier color)
+function chMouth3Kind(mo){ if(!mo) return null; if(CH_MOUTH3[mo]) return mo; const m=/^m:(sorpresa|abierta|dientes):/.exec(mo); return m ? (m[1]==='abierta'?'risa':m[1]) : null; }
+const CH_M3={geo:{}, mat:{}};
+function chHeadGeo3(kind){ if(CH_M3.geo[kind]) return CH_M3.geo[kind]; const M=CH_MOUTH3[kind], NU=140, NV=110, a=.35, pos=[], uv=[], idx=[], RX=CH.RX, RY=CH.RY, RZ=CH.RZ, n=new THREE.Vector3();
+  for(let j=0;j<=NV;j++){ const s=j/NV, th=Math.PI*s;
+    for(let i=0;i<=NU;i++){ const x=2*i/NU-1, phi=Math.PI*(a*x+(1-a)*x*x*x), ux=Math.sin(th)*Math.sin(phi), uy=Math.cos(th), uz=Math.sin(th)*Math.cos(phi);
+      let qx=ux*RX, qy=uy*RY, qz=uz*RZ;
+      if(uz>.4){ const f=mouthField(M, qx, qy-M.Y); if(f){ n.set(qx/RX/RX,qy/RY/RY,qz/RZ/RZ).normalize(); qx-=n.x*f.dep; qy-=n.y*f.dep-f.up; qz-=n.z*f.dep; } }
+      pos.push(qx/RX,qy/RY,qz/RZ); uv.push(i/NU,1-s); } }
+  for(let j=0;j<NV;j++) for(let i=0;i<NU;i++){ const A=j*(NU+1)+i, B=A+NU+1; idx.push(A,B,A+1, A+1,B,B+1); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); g.setIndex(idx); g.computeVertexNormals();
+  return CH_M3.geo[kind]=g; }
+// la piel de la cabeza con el hueco recortado pixel por pixel (borde liso) y un poquito más oscuro en la orilla
+function chHeadMat3(base,kind){ const key=base.uuid+'|'+kind; if(CH_M3.mat[key]) return CH_M3.mat[key]; const M=CH_MOUTH3[kind], m=base.clone();
+  const U={uMB:{value:new THREE.Vector4(M.top,M.bot,M.W,M.shape==='oval'?1:0)}, uMC:{value:new THREE.Vector4(M.taper||0,M.arc||0,M.Y,1)}, uR:{value:new THREE.Vector3(CH.RX,CH.RY,CH.RZ)}};
+  m.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,U);
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vOP;').replace('#include <begin_vertex>','#include <begin_vertex>\nvOP=position;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform vec4 uMB; uniform vec4 uMC; uniform vec3 uR; varying vec3 vOP;\n'+MOUTH_SD_GLSL)
+      .replace('#include <alphamap_fragment>','{ vec3 s=vOP*uR; float sd=mouthSD(vec2(s.x,s.y-uMC.z)); if(sd<0.) discard; diffuseColor.rgb*=1.-.45*exp(-sd*sd/(0.0045*0.0045)); }\n#include <alphamap_fragment>'); };
+  m.customProgramCacheKey=()=>'chMouth3';
+  const keys=Object.keys(CH_M3.mat); if(keys.length>24){ CH_M3.mat[keys[0]].dispose(); delete CH_M3.mat[keys[0]]; }
+  return CH_M3.mat[key]=m; }
+// adentro: la bolsita roja (se ve por dentro y no se asoma fuera de la cabeza), la lengua acostada y los dientes
+const CH_BAG_U={uHR:{value:new THREE.Vector3()}};
+function chBagMat(c,s){ const m=new THREE.MeshStandardMaterial({color:new THREE.Color('#6e1a28').convertSRGBToLinear(), roughness:.85, side:THREE.BackSide}), U={uBC:{value:c}, uBS:{value:s}, uHR:CH_BAG_U.uHR};
+  m.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,U);
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vHP; uniform vec3 uBC; uniform vec3 uBS;').replace('#include <begin_vertex>','#include <begin_vertex>\nvHP=position*uBS+uBC;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vHP; uniform vec3 uHR;').replace('#include <clipping_planes_fragment>','#include <clipping_planes_fragment>\nvec3 hq=vHP/uHR; if(dot(hq,hq)>0.985) discard;'); };
+  m.customProgramCacheKey=()=>'chBag'; return m; }
+const CH_TONGUE_MAT=new THREE.MeshStandardMaterial({color:new THREE.Color('#ee7f97').convertSRGBToLinear(), roughness:.55}), CH_TEETH_MAT=new THREE.MeshStandardMaterial({color:0xffffff, roughness:.35});
+function chMouth3Parts(kind){ const M=CH_MOUTH3[kind], G=new THREE.Group(), cy=CH.HY+M.Y, zf=CH.RZ*Math.sqrt(Math.max(0,1-chSq(M.Y/CH.RY))), mid=cy+(M.top+M.bot)/2, hh=M.top-M.bot;
+  CH_BAG_U.uHR.value.set(CH.RX,CH.RY,CH.RZ);
+  const c=new THREE.Vector3(0,mid-CH.HY,zf-.035), sc=new THREE.Vector3(M.W*1.4,hh*.85,.06), b=new THREE.Mesh(new THREE.SphereGeometry(1,24,16),chBagMat(c,sc)); b.position.set(0,mid,zf-.035); b.scale.copy(sc); G.add(b);
+  const t=new THREE.Mesh(sphereG,CH_TONGUE_MAT); t.scale.set(M.W*.82,.02,.036); t.position.set(0,cy+M.bot+.016,zf-.058); G.add(t);
+  if(M.teeth){ const d=new THREE.Mesh(sphereG,CH_TEETH_MAT); d.scale.set(M.W*.97,.011,.03); d.position.set(0,cy+M.top-.012,zf-.03); G.add(d); }
+  G.traverse(o=>{ o.userData.noBatch=true; }); return G; }
+// pone (o quita) la boca 3D en la cabeza del Chibi
+function chMouth3(C,kind){ const head=C.skinned[1], sk=C.skinned[0].material;
+  head.geometry=kind ? chHeadGeo3(kind) : chGeos().head; head.material=kind ? chHeadMat3(sk,kind) : sk;
+  if(C.m3Kind!==kind){ if(C.m3){ C.g.remove(C.m3); C.m3.traverse(o=>{ if(o.isMesh && o.material.customProgramCacheKey && o.material.customProgramCacheKey()==='chBag'){ o.material.dispose(); o.geometry.dispose(); } }); C.m3=null; }
+    if(kind){ C.m3=chMouth3Parts(kind); C.g.add(C.m3); } C.m3Kind=kind; } }
 // arma (o cambia) cabello, cara y orejitas del Chibi según lo que trae puesto
 function chibiDress(u,eq){ const C=u.ch, B=x=>eq && SHOP_BY[eq[x]] ? SHOP_BY[eq[x]] : null;
   const hairIt=B('chair'), colIt=B('chcol')||SHOP_BY.hc_castano, hairHex=colIt.c, earIt=B('cears');
@@ -4633,6 +4734,7 @@ function chibiDress(u,eq){ const C=u.ch, B=x=>eq && SHOP_BY[eq[x]] ? SHOP_BY[eq[
   const bc='#'+new THREE.Color(hairHex).multiplyScalar(.5).getHexString();
   const eyIt=B('ceyes')||(eq && CH_EYES_RETIRED[eq.ceyes] ? SHOP_BY.co_cafe : null);   // v201: ojos de corazón (ya no existen) → ojos café
   const F={eye:eyIt&&eyIt.eye, br:B('cbrows')&&B('cbrows').br, bc, mo:B('cmouth')&&B('cmouth').mo, ck:B('ccheeks')&&B('ccheeks').ck};
+  const m3=chMouth3Kind(F.mo); if(m3) F.mo=null; chMouth3(C,m3);   // v201: bocas abiertas en 3D (no se dibujan en la calcomanía)
   const any=F.eye||F.br||F.mo||F.ck; C.face.visible=!!any; if(any) C.face.material=chFaceMat(F); }
 // retrato chiquito del Chibi (para la tienda: peinados y orejitas). Se dibuja una vez en una imagen aparte.
 const AV_PORTRAIT={}; let avPortraitRig=null;
@@ -5039,12 +5141,9 @@ function makePlush(colorIdx){
   const plushMat=plushMatFor(colorIdx);
   const root=new THREE.Group();
   // Cuerpo en forma de frijol (cabeza y cuerpo de una pieza)
-  const prof=[[0,0],[.34,.03],[.47,.18],[.5,.45],[.47,.75],[.4,1.0],[.36,1.15],[.37,1.32],[.33,1.5],[.2,1.64],[0,1.68]];
-  const curve=new THREE.SplineCurve(prof.map(p=>new THREE.Vector2(p[0],p[1])));
-  const pts=curve.getPoints(40); pts[0].x=0; pts[pts.length-1].x=0;
-  const bodyG=new THREE.LatheGeometry(pts,40);
-  const body=new THREE.Mesh(bodyG,plushMat); body.scale.set(1,1,.78); body.position.y=BODY_Y;
-  root.add(body);
+  // v201: misma forma de frijol, con la boquita hundida en la tela (la forma la comparten todos los peluches)
+  const body=new THREE.Mesh(fjBodyGeo(),plushMat); body.scale.set(1,1,.78); body.position.y=BODY_Y;
+  root.add(body); const crease=fjAddCrease(body);
   [[0,.62,.47,.27,.36,.07],[-.13,.95,.41,.11,.09,.06],[.17,.34,.44,.12,.1,.06],[.06,1.08,.37,.07,.06,.05]].forEach(([x,y,z,a,b,c])=>{
     const m=new THREE.Mesh(sphereG,stainMat); m.position.set(x,y,z); m.scale.set(a,b,c); m.visible=false; body.add(m); stains.front.push(m); });
   // Ojos
@@ -5074,7 +5173,7 @@ function makePlush(colorIdx){
   });
   root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
   root.rotation.order='YXZ';   // girar (Y) y luego inclinarse hacia adelante (X)
-  root.userData={body,arms,legs,eyes,stains,colorIdx:colorIdx|0};
+  root.userData={body,arms,legs,eyes,stains,crease,colorIdx:colorIdx|0};
    // los detallitos (ojos, botones, costuras) no hacen sombra: a ese tamaño no se ve y cuesta dibujarlos dos veces
    root.updateMatrixWorld(true); root.traverse(o=>{ if(!o.isMesh || !o.castShadow) return; const g=o.geometry; if(!g.boundingSphere) g.computeBoundingSphere(); if(g.boundingSphere.radius*o.matrixWorld.getMaxScaleOnAxis()<.09) o.castShadow=false; });
    return root;
