@@ -435,8 +435,12 @@ body.ar-noinv #hotbar, body.ar-noinv #inv, body.ar-noinv #mapWrap{display:none!i
 .mgq-wait{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;} .mgq-wait h3{margin:0;font:800 22px var(--display);} .mgq-wait .pic{width:180px;aspect-ratio:16/9;border-radius:10px;background:center/cover no-repeat;}
 .mgq-count{margin:0;font:900 30px var(--display);color:var(--felt-dk);} .mgq-who{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-height:90px;overflow:auto;}
 .mgq-who li{background:#fffdf6;border-radius:999px;padding:3px 10px;font-weight:800;font-size:13px;box-shadow:0 2px 0 #ddd5bd;} .mgq-who li.me{background:#e6f4cf;}
+.mgq-how{display:flex;gap:10px;justify-content:center;} .mgq-how canvas{width:min(200px,38vw);aspect-ratio:1;border-radius:10px;box-shadow:0 3px 8px var(--shadow);cursor:zoom-in;background:#fff6e3;}
+.mgq-big{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(40,30,20,.55);cursor:zoom-out;} .mgq-big canvas{width:min(92vw,92vh);aspect-ratio:1;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.35);}
 .mgq-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;} #mgqGo[disabled]{opacity:.45;}
-@media (max-height:520px){ .mgq-card{padding:10px 14px;gap:6px;max-width:760px;} .mgq-wait .pic{width:130px;} .mgq-list{max-height:calc(100dvh - 120px);} .mgq-count{font-size:24px;} .mgq-wait h3{font-size:18px;} }
+@media (max-height:520px){ .mgq-card{padding:10px 14px;gap:6px;max-width:760px;max-height:100%;overflow-y:auto;} .mgq-wait .pic{width:130px;}
+  .mgq-wait{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"pic how" "name how" "count how" "who how" "btns how";column-gap:16px;row-gap:4px;align-items:center;justify-items:center;}
+  .mgq-wait[hidden]{display:none;} .mgq-wait .pic{grid-area:pic;} #mgqName{grid-area:name;} .mgq-count{grid-area:count;} .mgq-who{grid-area:who;} .mgq-btns{grid-area:btns;flex-direction:column;} .mgq-how{grid-area:how;} .mgq-how canvas{width:min(240px,29vw,64vh);} .mgq-list{max-height:calc(100dvh - 120px);} .mgq-count{font-size:24px;} .mgq-wait h3{font-size:18px;} }
 .mp-card{max-width:560px;display:flex;flex-direction:column;gap:14px;}
 .mp-card h2{margin:0;}
 .mp-lead{margin:0;font-weight:700;font-size:15px;}
@@ -811,6 +815,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <div class="mgq-list" id="mgqList"></div>
     <div class="mgq-wait" id="mgqWait" hidden>
       <span class="pic" id="mgqPic" aria-hidden="true"></span><h3 id="mgqName"></h3><p class="mgq-count" id="mgqCount"></p><ul class="mgq-who" id="mgqWho"></ul>
+      <div class="mgq-how" id="mgqHow"></div>
       <div class="mgq-btns"><button class="btn primary" id="mgqGo">¡Todo listo!</button><button class="btn" id="mgqOut">Salir de la fila</button></div>
     </div>
   </div>
@@ -1399,7 +1404,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='206';
+const GAME_VERSION='207';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -6491,8 +6496,14 @@ function mgqRender(){ const wait=MGQ.a>=0; ui('mgqList').hidden=wait; ui('mgqWai
       b.onclick=()=>mgqJoin(a); box.appendChild(b); }); return; }
   const A=AR_SPOTS[MGQ.a], ps=mgqIn(MGQ.a), me=mgqMyId(), n=Math.min(ps.length,MGQ_MAX), key='W'+MGQ.a+'|'+ps.map(p=>p.peer+(p.presence.n||'')).join(','); if(key===mgqKey) return; mgqKey=key;
   ui('mgqName').textContent=(MGQ_EMO[A.id]||'🎮')+' '+A.name; ui('mgqPic').style.backgroundImage=MGQ_PIC[A.id]?`url(${MGQ_PIC[A.id]})`:''; ui('mgqCount').textContent=n+'/'+MGQ_MAX+' jugadores';
+  if(ui('mgqHow').dataset.g!==A.id) mgqHowRender(A.id);
   const ul=ui('mgqWho'); ul.textContent=''; ps.slice(0,MGQ_MAX).forEach(p=>{ const li=document.createElement('li'); li.textContent=(cleanName(p.presence.n)||'Peluche')+(p.peer===me?' (tú)':''); if(p.peer===me) li.className='me'; ul.appendChild(li); });
   const go=ui('mgqGo'); go.disabled=n<2; go.textContent=n<2?'Esperando a otro jugador…':'¡Todo listo!'; }
+const MGQ_HOWID={laberinto:'lab', carritos:'carros'};   // (los carteles usan otros nombres para estos dos)
+function mgqHowRender(id){ const box=ui('mgqHow'); box.dataset.g=id; box.textContent=''; let cs=null; try{ cs=window.__howtoCanvases && window.__howtoCanvases(MGQ_HOWID[id]||id); }catch(e){} if(!cs) return;
+  cs.forEach(src=>{ const c=document.createElement('canvas'); c.width=c.height=256; const draw=()=>{ try{ c.getContext('2d').drawImage(src,0,0,256,256); }catch(e){} }; draw(); setTimeout(draw,600); setTimeout(draw,2000);   // (otra vez cuando llegue la letra de peluche)
+    c.onclick=()=>{ const ov=document.createElement('div'); ov.className='mgq-big'; const big=document.createElement('canvas'); big.width=big.height=512; try{ big.getContext('2d').drawImage(src,0,0); }catch(e){} ov.appendChild(big); ov.onclick=()=>ov.remove(); document.body.appendChild(ov); };
+    box.appendChild(c); }); }
 ui('mgqBack').onclick=()=>{ if(MGQ.a>=0) mgqLeave(); else closeMgq(); };
 ui('mgqOut').onclick=()=>mgqLeave(); ui('mgqGo').onclick=()=>mgqGo();
 function lobbyRoom(room, code){
@@ -16091,6 +16102,8 @@ const HOWTO=(()=>{ const F='Sniglet, Nunito, sans-serif', W=512, H=512;
     hockey:['hockey','#1565c0','Mete el disco en su portería',['Para 2 jugadores: cada uno pisa una placa (un lado de la mesa).','Mueve tu paleta con WASD o la palanca.','Mete el disco en la portería del otro.','Gana quien meta 5 goles (o más goles a los 2 minutos).']],
   };
   const tex={}; const get=id=>tex[id]||(tex[id]=[pic(G[id][0],G[id][1],G[id][2]), text(G[id][1],G[id][3])]);
+  // v207: los mismos dos carteles para la pantalla de la fila de Minijuegos (se pintan solo cuando hacen falta)
+  window.__howtoCanvases=id=>{ if(!G[id]) return null; const t=get(id); t.forEach(x=>{ try{ x.__paint(); }catch(e){} }); return t.map(x=>x.image); };
   // el cartel: tabla con dibujo al frente, orilla de madera y dos postes
   const wood=FM('#c79a6a');
   function sign(id,which,size){ const g=new THREE.Group(), m=new THREE.MeshStandardMaterial({map:get(id)[which], roughness:.85, emissive:0xffffff, emissiveIntensity:0}); fairGlow.push(m);

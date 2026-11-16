@@ -25,7 +25,7 @@ async def m():
     await A.screenshot(path='/tmp/v206_fila_ana.png')
     await G(B,"mgqJoin(1)"); await B.wait_for_timeout(1500)
     r=json.loads(await G(A,"[ui('mgqCount').textContent, ui('mgqGo').disabled, ui('mgqWho').textContent]")); ok(r[0]=='2/12 jugadores' and r[1] is False and 'Beto' in r[2], 'llega Beto: 2/12 y aparece «¡Todo listo!» %s'%r)
-    await A.screenshot(path='/tmp/v206_fila_lista.png')
+    await A.screenshot(path='/tmp/v206_fila_lista.png'); r=json.loads(await G(A,"[ui('mgqHow').children.length, ui('mgqHow').dataset.g]")); ok(r==[2,'papa'], 'mientras esperas se ven los dos carteles del minijuego %s'%r)
     await G(B,"ui('mgqGo').click()"); await B.wait_for_timeout(4000)
     ra=json.loads(await G(A,"[mp.code, state, AR.me.a, AR.me.st, ui('mgq').hidden, mp.pub]")); rb=json.loads(await G(B,"[mp.code, state, AR.me.a, AR.me.st, ui('mgq').hidden]"))
     ok(ra[0] and ra[0]==rb[0] and ra[1]=='play' and rb[1]=='play' and ra[2]==1 and rb[2]==1 and ra[3]==1 and rb[3]==1 and ra[4] and rb[4] and ra[5] is False, 'Beto toca «¡Todo listo!»: los dos entran a la misma sala privada, junto a Papa caliente y formados %s %s'%(ra,rb))
