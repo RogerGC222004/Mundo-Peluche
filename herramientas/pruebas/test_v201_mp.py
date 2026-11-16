@@ -30,7 +30,7 @@ async def m():
     print('A lanza', await G(A,U+U+U+U+"PBALL.last=0; throwPaint('estrella'); [PBALL.fly.length, JSON.stringify(paintPresence())]"))
     await B.wait_for_timeout(1500); r=json.loads(await G(B,"(()=>{ const r="+R+"; const a=PBALL.fly.length; for(let i=0;i<60;i++) paintTick(.05); return [a, PBALL.splats.length]; })()")); ok(r==[1,1],'B ve el globo de A volar y la mancha %s'%r)
     # 4) Chibi con boca 3D
-    print('A chibi', await G(A,"shopPick(SHOP_BY.av_chibi); wardrobe.own.push('bo_risa'); shopPick(SHOP_BY.bo_risa); closeShop&&0; sendPresence(true); [plush.userData.av, plush.userData.ch.m3Kind, mp.presBytes]"))
+    print('A chibi', await G(A,"shopPick(SHOP_BY.av_chibi); wardrobe.own.push('bo_risa'); shopPick(SHOP_BY.bo_risa); shopFlush(); closeShop&&0; sendPresence(true); [plush.userData.av, plush.userData.ch.m3Kind, mp.presBytes]"))
     await B.wait_for_timeout(1500); r=json.loads(await G(B,"(()=>{ const r="+R+"; const C=r.obj.userData.ch; return [r.obj.userData.av, C&&C.m3Kind, C&&C.hairStyle!==undefined]; })()")); ok(r[0]=='c' and r[1]=='risa','B ve al Chibi de A con su boca abierta 3D %s'%r)
     r=json.loads(await G(A,"(()=>{ playGesture('aplaudir'); return JSON.stringify({ge:gestPresence(), hd:tgHeadPresence(), pb:paintPresence()}).length; })()")); ok(r<200,'lo nuevo en la presencia es poquito: %s bytes'%r)
     print('errores', ea[:3], eb[:3]); await b.close()
