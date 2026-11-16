@@ -273,6 +273,7 @@ body.in-mg #hint{display:none!important;}
 /* Controles táctiles */
 .touch{position:fixed;inset:0;pointer-events:none;}
 .gwheel{position:fixed;inset:0;z-index:35;touch-action:none;user-select:none;-webkit-user-select:none;}   /* v201: ruedita de gestos y pinturas */
+.chip#camFixChip.on{background:#ffd23f;}
 .shop-filter .atj{font-weight:800;font-size:13px;align-self:center;margin-right:4px;}
 .stick{position:fixed;left:calc(28px + env(safe-area-inset-left,0px));bottom:calc(86px + env(safe-area-inset-bottom,0px));width:120px;height:120px;border-radius:50%;
   background:rgba(251,248,239,.45);outline:2px dashed rgba(44,58,26,.5);outline-offset:-8px;pointer-events:auto;}
@@ -874,6 +875,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
   <div class="mg-hud ar-hud" id="arHud" hidden><b id="arTitle"></b><span id="arTxt"></span><button class="chip mg-exit" id="arExit" title="Salir del juego" aria-label="Salir del juego">✕</button></div>
   <div style="display:flex;gap:8px;align-items:center">
     <span class="hint" id="hint">V cambia la cámara · Clic para mirar con el ratón</span>
+    <button class="chip" id="camFixChip" hidden title="Con la cámara fija, mover la cámara gira tu cabeza">Fijar cámara</button>
     <button class="chip" id="camChip">3ª persona</button>
   </div>
 </div>
@@ -4652,17 +4654,18 @@ const FJ_CURVE=new THREE.SplineCurve(FJ_PROF.map(p=>new THREE.Vector2(p[0],p[1])
 const FJ_MOUTH={kind:'closed', Y:1.215, W:.085, K:3.0, D:.018, sig:.014, puff:.003, dk:.75};
 const fjTofY=y=>{ let lo=0, hi=1; for(let k=0;k<40;k++){ const m=(lo+hi)/2; if(FJ_CURVE.getPoint(m).y<y) lo=m; else hi=m; } return (lo+hi)/2; };
 // hileras: parejas en todo el cuerpo y muy juntitas cerca de la boca (ahí está el detalle); columnas más juntas al frente
-function fjRows(M){ const r=[]; for(let j=0;j<=64;j++) r.push(j/64); if(M){ const a=fjTofY(M.Y-.07), b=fjTofY(M.Y+.06); for(let k=0;k<=40;k++) r.push(a+(b-a)*k/40); }
+function fjRows(M){ const r=[]; for(let j=0;j<=64;j++) r.push(j/64); if(M){ const a=fjTofY(M.Y-.15), b=fjTofY(M.Y+.06); for(let k=0;k<=60;k++) r.push(a+(b-a)*k/60); }   // (v201: hasta donde llega la boca abierta)
   r.sort((a,b)=>a-b); return r.filter((t,i)=>!i || t-r[i-1]>1e-4); }
 const FJ_GEO={};
-function fjBodyGeo(){ if(FJ_GEO.body) return FJ_GEO.body; const M=FJ_MOUTH, NU=100, a=.25, rows=fjRows(M), NV=rows.length-1, pos=[], uv=[], idx=[];
+function fjBodyGeo(){ return FJ_GEO.body||(FJ_GEO.body=fjBodyBuild(FJ_MOUTH)); }
+function fjBodyBuild(M){ const NU=100, a=.25, rows=fjRows(FJ_MOUTH), NV=rows.length-1, pos=[], uv=[], idx=[];
   rows.forEach((t,j)=>{ const p=FJ_CURVE.getPoint(t), r=(j===0||j===NV)?0:p.x, y=p.y;
     for(let i=0;i<=NU;i++){ const x=2*i/NU-1, phi=Math.PI*(a*x+(1-a)*x*x*x); let X=r*Math.sin(phi), Y=y, Z=r*Math.cos(phi);
       if(Math.cos(phi)>.3 && Math.abs(y-M.Y)<.2){ const f=mouthField(M, phi*r, y-M.Y); if(f){ X-=Math.sin(phi)*f.dep; Z-=Math.cos(phi)*f.dep; Y+=f.up; } }
       pos.push(X,Y,Z); uv.push(i/NU,t); } });
   for(let j=0;j<NV;j++) for(let i=0;i<NU;i++){ const A=j*(NU+1)+i, B=A+NU+1; idx.push(A,A+1,B, A+1,B+1,B); }
   const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); g.setIndex(idx); g.computeVertexNormals();
-  return FJ_GEO.body=g; }
+  return g; }
 // sombrita del pliegue: un pedacito de tela pegado encima que oscurece lo de abajo (sirve con cualquier tela o color)
 const FJ_CREASE_MAT=new THREE.MeshBasicMaterial({vertexColors:true, transparent:true, blending:THREE.MultiplyBlending, premultipliedAlpha:true, depthWrite:false, fog:false, polygonOffset:true, polygonOffsetFactor:-2});
 function fjCreaseGeo(){ if(FJ_GEO.crease) return FJ_GEO.crease; const M=FJ_MOUTH, NU=56, P0=.48, ta=fjTofY(M.Y-.05), tb=fjTofY(M.Y+.045), NV=36, pos=[], col=[], idx=[];
@@ -4720,6 +4723,123 @@ function chMouth3(C,kind){ const head=C.skinned[1], sk=C.skinned[0].material;
   head.geometry=kind ? chHeadGeo3(kind) : chGeos().head; head.material=kind ? chHeadMat3(sk,kind) : sk;
   if(C.m3Kind!==kind){ if(C.m3){ C.g.remove(C.m3); C.m3.traverse(o=>{ if(o.isMesh && o.material.customProgramCacheKey && o.material.customProgramCacheKey()==='chBag'){ o.material.dispose(); o.geometry.dispose(); } }); C.m3=null; }
     if(kind){ C.m3=chMouth3Parts(kind); C.g.add(C.m3); } C.m3Kind=kind; } }
+// ---------- v201: SACAR LA LENGUA (solo el frijolito) ----------
+// La boca se abre poco a poco (hueco real en la tela), luego la lengua sale poco a poco; al guardarla, al revés.
+// La lengua es una cadenita de puntos con resortes: se queda atrás, se balancea al caminar, sube al caer, rebota al aterrizar
+// y se mueve si giras la cabeza. Nunca atraviesa el cuerpo (cada punto se empuja hacia afuera de la forma del frijol).
+// En la presencia solo va "tiene la lengua afuera" y el ángulo de la cabeza: cada teléfono calcula su propio balanceo.
+const FJ_MOUTH_OPEN={kind:'open', shape:'gajo', Y:1.215, W:.195, top:.03, bot:-.115, dip:.012, k:.06, curl:.018, curlW:.014};
+// radio del frijol a cada altura (tabla), para saber dónde está la tela
+const FJ_RT=(()=>{ const N=240, T=new Float32Array(N+1); for(let i=0;i<=N;i++) T[i]=0; let last=0;
+  for(let k=0;k<=1200;k++){ const p=FJ_CURVE.getPoint(k/1200), i=Math.round(p.y/1.68*N); if(i>=0&&i<=N) T[i]=Math.max(T[i],p.x); }
+  for(let i=1;i<N;i++) if(!T[i]) T[i]=T[i-1]; return T; })();
+const fjR=y=>{ const f=Math.min(240,Math.max(0,y/1.68*240)), i=Math.floor(f), j=Math.min(240,i+1); return FJ_RT[i]+(FJ_RT[j]-FJ_RT[i])*(f-i); };
+// la "bolsita" roja de adentro de la boca (se recorta para que no se salga del cuerpo)
+let FJ_BAG_MAT=null;
+function fjBagMat(){ if(FJ_BAG_MAT) return FJ_BAG_MAT; const M=FJ_MOUTH_OPEN, r0=fjR(M.Y), m=new THREE.MeshStandardMaterial({color:new THREE.Color('#6e1a28').convertSRGBToLinear(), roughness:.85, side:THREE.BackSide}),
+    U={uBC:{value:new THREE.Vector3(0,M.Y+(M.top+M.bot)/2,r0-.06)}, uBS:{value:new THREE.Vector3(M.W*1.35,(M.top-M.bot)*.85,.1)}, uCy:{value:r0-.004}};
+  m.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,U);
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vHP; uniform vec3 uBC; uniform vec3 uBS;').replace('#include <begin_vertex>','#include <begin_vertex>\nvHP=position*uBS+uBC;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vHP; uniform float uCy;').replace('#include <clipping_planes_fragment>','#include <clipping_planes_fragment>\nif(length(vHP.xz)>uCy) discard;'); };
+  m.customProgramCacheKey=()=>'fjBag'; return FJ_BAG_MAT=m; }
+// la tela del cuerpo con el hueco de la boca (cada peluche con la lengua afuera lleva su copia, para abrir a su ritmo)
+function fjMouthMat(base){ const m=base.clone(), prev=base.onBeforeCompile, pk=base.customProgramCacheKey?base.customProgramCacheKey():'';
+  const U={uMB:{value:new THREE.Vector4(0,0,1,3)}, uMC:{value:new THREE.Vector4(0,0,FJ_MOUTH_OPEN.Y,0)}};
+  m.onBeforeCompile=(sh,r)=>{ if(prev) prev.call(m,sh,r); Object.assign(sh.uniforms,U);
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vOP;').replace('#include <begin_vertex>','#include <begin_vertex>\nvOP=position;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform vec4 uMB; uniform vec4 uMC; varying vec3 vOP;\n'+MOUTH_SD_GLSL)
+      .replace('#include <alphamap_fragment>','float mRim=0.; { vec2 q=vec2(atan(vOP.x,vOP.z)*length(vOP.xz), vOP.y-uMC.z); float sd=mouthSD(q); if(sd<0.) discard; mRim=exp(-sd*sd/(0.0045*0.0045)); }\ndiffuseColor.rgb*=1.-.45*mRim;\n#include <alphamap_fragment>')
+      .replace('fr*fr*fr*rimK','fr*fr*fr*rimK*(1.-mRim)'); };
+  m.customProgramCacheKey=()=>'fjMouth'+pk; m.userData.fjMouth=U; return m; }
+function fjMouthSet(U,o){ const M=FJ_MOUTH_OPEN, top=M.top*o+.001, bot=M.bot*o-.001, D=top-bot;
+  U.uMB.value.set(top,bot,M.W*(.45+.55*o),3); U.uMC.value.x=M.dip*o; U.uMC.value.y=Math.min(M.k,D*.4); }
+// el camino de la lengua en reposo (medidas del cuerpo, sin aplastar): sale de adentro, pasa sobre el labio y cuelga sobre la panza
+const TG={W:.15, H:.036, N:12, tip:.74, groove:.45, wrapR:.42};
+const TG_PATH=(()=>{ const M=FJ_MOUTH_OPEN, Y=M.Y, YL=Y+M.bot, H=TG.H, T=.05, L=.66, zs=y=>fjR(y), V=(y,z)=>new THREE.Vector3(0,y,z);
+  return [V(Y-.03,zs(Y)-.13/.78), V(YL+H*1.45,zs(Y)-.045/.78), V(YL+H*1.05,zs(YL)+H*.7/.78), V(YL-.06,zs(YL-.06)+(T+.006)/.78), V(YL-.15,zs(YL-.15)+T/.78), V(YL-.3,zs(YL-.3)+T/.78), V(YL-.45,zs(YL-.45)+T/.78), V(Y-L,zs(Y-L)+T/.78)]; })();
+const TG_CURVE=new THREE.CatmullRomCurve3(TG_PATH);
+const TG_LEN=TG_CURVE.getLength(), TG_FIX=(()=>{ const P=TG_PATH, a=P[0].distanceTo(P[1])+P[1].distanceTo(P[2])+.03; return a/TG_LEN; })();   // hasta un poquito después del labio va pegada
+const TG_REST=[]; for(let i=0;i<=200;i++) TG_REST.push(TG_CURVE.getPointAt(i/200));
+const tgRestAt=(f,out)=>{ const x=Math.min(200,Math.max(0,f*200)), i=Math.floor(x), j=Math.min(200,i+1); return out.copy(TG_REST[i]).lerp(TG_REST[j],x-i); };
+const TG_MAT=new THREE.MeshStandardMaterial({vertexColors:true, roughness:.55, metalness:0});
+const TG_NS=28, TG_NA=14;
+function tgGeo(){ const n=(TG_NS+1)*(TG_NA+1), g=new THREE.BufferGeometry(), idx=[], col=new Float32Array(n*3), pink=new THREE.Color('#f07f98').convertSRGBToLinear(), dk=new THREE.Color('#c8506a').convertSRGBToLinear(), c=new THREE.Color();
+  for(let k=0;k<TG_NS;k++) for(let q=0;q<TG_NA;q++){ const A=k*(TG_NA+1)+q, B=A+TG_NA+1; idx.push(A,A+1,B, A+1,B+1,B); }
+  for(let k=0;k<=TG_NS;k++){ const s=k/TG_NS, gr=TG.groove*smB(.05,.25,s)*(1-smB(TG.tip-.05,TG.tip+.1,s));
+    for(let q=0;q<=TG_NA;q++){ const ang=q/TG_NA*Math.PI*2, ca=Math.cos(ang), sa=Math.sin(ang), kk=sa>0?Math.exp(-chSq(ca/.1))*gr:0; c.copy(pink).lerp(dk,Math.min(1,kk*1.4)); col.set([c.r,c.g,c.b],(k*(TG_NA+1)+q)*3); } }
+  g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(n*3),3)); g.setAttribute('color',new THREE.BufferAttribute(col,3)); g.setIndex(idx); return g; }
+// --- encender / apagar ---
+function tongueSet(o,on){ const u=o.userData; if(on && (u.av==='c'||u.av==='a')) return;
+  let tg=u.tg; if(!on){ if(tg) tg.want=0; return; }
+  if(!tg){ tg=u.tg={want:1, o:0, e:0, hy:0, hp:0, hyT:0, hpT:0, pts:null, stamp:(Date.now()%1e7)};
+    tg.mesh=new THREE.Mesh(tgGeo(),TG_MAT); tg.mesh.frustumCulled=false; tg.mesh.castShadow=true; tg.mesh.userData.noBatch=true; tg.mesh.visible=false; o.add(tg.mesh);
+    tg.bag=new THREE.Mesh(sphereG,fjBagMat()); const M=FJ_MOUTH_OPEN, r0=fjR(M.Y); tg.bag.position.set(0,M.Y+(M.top+M.bot)/2,r0-.06); tg.bag.scale.set(M.W*1.35,(M.top-M.bot)*.85,.1); tg.bag.userData.noBatch=true; tg.bag.visible=false; u.body.add(tg.bag); }
+  else if(!tg.want){ tg.want=1; tg.stamp=(Date.now()%1e7); } }
+function tongueClean(o){ const u=o.userData, tg=u.tg; if(!tg) return; u.tg=null;
+  if(tg.mesh.parent) tg.mesh.parent.remove(tg.mesh); tg.mesh.geometry.dispose(); if(tg.bag.parent) tg.bag.parent.remove(tg.bag);
+  if(u.body.geometry===FJ_GEO.open) u.body.geometry=fjBodyGeo(); if(tg.mat && u.body.material===tg.mat) u.body.material=tg.base; if(tg.mat) tg.mat.dispose(); if(u.crease) u.crease.visible=(u.av!=='c'&&u.av!=='a'); }
+// --- cada cuadro: abrir/cerrar, la física y la malla ---
+const _tgw_=new THREE.Vector3(), _tgl_=new THREE.Vector3(), _tgv_=new THREE.Vector3(), _tgq_=new THREE.Vector3(), _tgT_=new THREE.Vector3(), _tgB_=new THREE.Vector3(), _tgN_=new THREE.Vector3(), _tgP_=new THREE.Vector3();
+function tongueTick(o,dt,blocked){ const u=o.userData, tg=u.tg; if(!tg) return; const body=u.body;
+  if(u.av==='c' || u.av==='a'){ tongueClean(o); return; }   // cambió de cuerpo: se quita de una vez
+  if(blocked) tg.want=0;
+  dt=Math.min(dt,.05);
+  if(tg.want){ tg.o=Math.min(1,tg.o+dt/.35); if(tg.o>.9) tg.e=Math.min(1,tg.e+dt/.6); }
+  else { tg.e=Math.max(0,tg.e-dt/.45); if(tg.e<.02) tg.o=Math.max(0,tg.o-dt/.3); if(tg.o<=0 && tg.e<=0){ tongueClean(o); return; } }
+  // la tela con el hueco (si alguien cambió la tela, se vuelve a copiar)
+  if(body.material!==tg.mat){ if(tg.mat) tg.mat.dispose(); tg.base=body.material; tg.mat=fjMouthMat(tg.base); body.material=tg.mat; }
+  body.geometry=FJ_GEO.open||fjBodyGeoOpen(); fjMouthSet(tg.mat.userData.fjMouth,tg.o); tg.bag.visible=true; if(u.crease) u.crease.visible=tg.o<.15;
+  // la cabeza (el frijolito es todo cabeza): girar y asentir un poquito
+  tg.hy+=(tg.hyT-tg.hy)*Math.min(1,dt*10); tg.hp+=(tg.hpT-tg.hp)*Math.min(1,dt*10); if(!tg.want){ tg.hyT*=.9; tg.hpT*=.9; }
+  o.rotation.y+=tg.hy; o.rotation.x+=tg.hp; o.updateMatrixWorld(true);
+  // la cadenita
+  const N=TG.N, e=Math.max(.001,tg.e), seg=TG_LEN*e/(N-1);
+  if(!tg.pts){ tg.pts=[]; tg.prv=[]; for(let i=0;i<N;i++){ tgRestAt(i/(N-1)*e,_tgl_); body.localToWorld(_tgw_.copy(_tgl_)); tg.pts.push(_tgw_.clone()); tg.prv.push(_tgw_.clone()); } }
+  const P=tg.pts, Q=tg.prv, sub=2, h=dt/sub;
+  for(let st=0;st<sub;st++){
+    for(let i=0;i<N;i++){ const f=i/(N-1)*e; tgRestAt(f,_tgl_); body.localToWorld(_tgw_.copy(_tgl_));
+      if(f<=TG_FIX){ Q[i].copy(P[i]); P[i].copy(_tgw_); continue; }
+      if(tg.e<1){ Q[i].copy(P[i]); P[i].lerp(_tgw_,1-Math.exp(-h*14)); continue; }   // saliendo o entrando: sigue su camino
+      const k=140-95*(i/(N-1)), damp=Math.exp(-h*3.2);
+      _tgv_.subVectors(P[i],Q[i]).multiplyScalar(damp); Q[i].copy(P[i]);
+      _tgq_.subVectors(_tgw_,P[i]).multiplyScalar(k*h*h); _tgq_.y-=2.2*h*h;
+      P[i].add(_tgv_).add(_tgq_); }
+    // largo de cada pedacito (3 vueltas) y no atravesar el cuerpo
+    for(let it=0;it<4;it++){ for(let i=0;i<N-1;i++){ const a=P[i], b=P[i+1], fa=i/(N-1)*e<=TG_FIX, fb=(i+1)/(N-1)*e<=TG_FIX; if(fa&&fb) continue;
+        _tgv_.subVectors(b,a); const d=_tgv_.length()||1e-6, c=(d-seg)/d; if(fa) b.addScaledVector(_tgv_,-c); else if(fb) a.addScaledVector(_tgv_,c); else { a.addScaledVector(_tgv_,c*.5); b.addScaledVector(_tgv_,-c*.5); } }
+      for(let i=0;i<N-2;i++){ if((i+2)/(N-1)*e<=TG_FIX) continue; const a=P[i], b=P[i+2], fa=i/(N-1)*e<=TG_FIX; _tgv_.subVectors(b,a); const d=_tgv_.length()||1e-6, mn=1.9*seg; if(d>=mn) continue; const c=(d-mn)/d;   // no doblarse de golpe
+        if(fa) b.addScaledVector(_tgv_,-c); else { a.addScaledVector(_tgv_,c*.5); b.addScaledVector(_tgv_,-c*.5); } }
+      for(let i=0;i<N;i++){ if(i/(N-1)*e<=TG_FIX) continue; body.worldToLocal(_tgl_.copy(P[i])); const y=_tgl_.y; if(y<.02||y>1.66) continue;
+        const r=Math.hypot(_tgl_.x,_tgl_.z), need=fjR(y)+.055; if(r<need){ if(r<1e-4){ _tgl_.z=need; } else { _tgl_.x*=need/r; _tgl_.z*=need/r; } body.localToWorld(P[i].copy(_tgl_)); } } } }
+  // la malla, en medidas del peluche (sigue los puntos con una curva suave)
+  const pos=tg.mesh.geometry.attributes.position, arr=pos.array, L=[]; for(let i=0;i<N;i++) L.push(o.worldToLocal(_tgP_.copy(P[i])).clone());
+  _TGM.copy(body.matrix).invert();
+  const cr=(s,out)=>{ const x=s*(N-1), i=Math.min(N-2,Math.floor(x)), t=x-i, p0=L[Math.max(0,i-1)], p1=L[i], p2=L[i+1], p3=L[Math.min(N-1,i+2)], t2=t*t, t3=t2*t;
+    out.set(0,0,0).addScaledVector(p0,-.5*t3+t2-.5*t).addScaledVector(p1,1.5*t3-2.5*t2+1).addScaledVector(p2,-1.5*t3+2*t2+.5*t).addScaledVector(p3,.5*t3-.5*t2); return out; };
+  for(let k=0;k<=TG_NS;k++){ const s=k/TG_NS; cr(s,_tgP_); cr(Math.min(1,s+.01),_tgT_); cr(Math.max(0,s-.01),_tgq_); _tgT_.sub(_tgq_).normalize();
+    // lo ancho va acostado sobre la tela: perpendicular a la lengua y a la normal de la panza (sirve aunque se columpie de lado o hacia arriba)
+    _tgl_.copy(_tgP_).applyMatrix4(_TGM); const ph=Math.atan2(_tgl_.x,_tgl_.z), bs=body.scale; _tgN_.set(Math.sin(ph)/bs.x,0,Math.cos(ph)/bs.z).normalize();
+    const B=_tgv_.crossVectors(_tgN_,_tgT_); if(B.lengthSq()<.04) B.set(Math.cos(ph)*bs.x,0,-Math.sin(ph)*bs.z); B.normalize(); _tgN_.crossVectors(_tgT_,B).normalize();
+    const root=smB(0,.18,s), tp=s>TG.tip?Math.sqrt(Math.max(0,1-chSq((s-TG.tip)/(1-TG.tip)))):1, w=TG.W*(.6+.4*smB(.17,.42,s))*tp*(.35+.65*Math.min(1,tg.e*3)), hh=(TG.H*(.8+.2*root)*tp+.002)*(.55+.45*Math.min(1,tg.e*1.6)), gr=TG.groove*smB(.05,.25,s)*(1-smB(TG.tip-.05,TG.tip+.1,s)), wr=smB(.12,.3,s)/(2*TG.wrapR);
+    for(let q=0;q<=TG_NA;q++){ const ang=q/TG_NA*Math.PI*2, ca=Math.cos(ang), sa=Math.sin(ang), x=w*Math.sign(ca)*Math.pow(Math.abs(ca),.75); let n=hh*sa; if(sa>0) n-=gr*hh*Math.exp(-chSq(ca/.2))*1.1; n-=x*x*wr;
+      const j=(k*(TG_NA+1)+q)*3; arr[j]=_tgP_.x+B.x*x+_tgN_.x*n; arr[j+1]=_tgP_.y+B.y*x+_tgN_.y*n; arr[j+2]=_tgP_.z+B.z*x+_tgN_.z*n; } }
+  // ningún pedacito de la lengua se mete en la tela (salvo dentro del hueco de la boca)
+  { const M=FJ_MOUTH_OPEN, BM=body.matrix; for(let j=0;j<arr.length;j+=3){ _tgl_.set(arr[j],arr[j+1],arr[j+2]).applyMatrix4(_TGM); const y=_tgl_.y; if(y<.02||y>1.66) continue;
+      const r=Math.hypot(_tgl_.x,_tgl_.z), R=fjR(y), need=R+.004; if(r>=need) continue; if(y>M.Y+M.bot-.02 && mouthSD(M,Math.atan2(_tgl_.x,_tgl_.z)*R,y-M.Y)<.012) continue;
+      if(r<1e-4){ _tgl_.z=need; } else { _tgl_.x*=need/r; _tgl_.z*=need/r; } _tgl_.applyMatrix4(BM); arr[j]=_tgl_.x; arr[j+1]=_tgl_.y; arr[j+2]=_tgl_.z; } }
+  pos.needsUpdate=true; tg.mesh.geometry.computeVertexNormals(); tg.mesh.visible=tg.e>.01; }
+function fjBodyGeoOpen(){ if(FJ_GEO.open) return FJ_GEO.open; return FJ_GEO.open=fjBodyBuild(FJ_MOUTH_OPEN); }
+// --- cámara fija: mientras tienes la lengua afuera, mover la cámara gira tu cabeza (con límites) ---
+const TGCAM={on:false}, _TGM=new THREE.Matrix4();
+function tgLook(dx,dy,s){ const tg=plush.userData.tg; if(!TGCAM.on || !tg || !tg.want) return false;
+  tg.hyT=THREE.MathUtils.clamp(tg.hyT-dx*s,-.9,.9); tg.hpT=THREE.MathUtils.clamp(tg.hpT+dy*s*.6*(settings.invert?-1:1),-.25,.25); return true; }
+function tgChip(){ const c=ui('camFixChip'); if(!c) return; const tg=plush.userData.tg, show=state==='play' && !!(tg && tg.want); if(!show && TGCAM.on){ TGCAM.on=false; }
+  if(c.hidden===show) c.hidden=!show; const t=TGCAM.on?'Soltar cámara':'Fijar cámara'; if(c.dataset.lbl!==t){ c.dataset.lbl=t; c.textContent=t; } c.classList.toggle('on',TGCAM.on); }
+function tongueToggle(){ const tg=plush.userData.tg; if(tg && tg.want){ tongueSet(plush,0); try{ sendPresence(true); }catch(e){} return; }
+  if(plush.userData.av==='c' || plush.userData.av==='a'){ flashNote('Sacar la lengua es solo del frijolito'); return; }
+  if(tongueBlocked()){ flashNote('Ahora no puedes sacar la lengua'); return; }
+  if(plush.userData.gs) gEnd(plush); tongueSet(plush,1); try{ audio.wave(); }catch(e){} try{ sendPresence(true); }catch(e){} }
+function tongueBlocked(){ return state!=='play' || player.swim || !!player.car || !!player.ac || !!player.pg || !!player.mg || !!player.busy || SP.on; }
 // arma (o cambia) cabello, cara y orejitas del Chibi según lo que trae puesto
 function chibiDress(u,eq){ const C=u.ch, B=x=>eq && SHOP_BY[eq[x]] ? SHOP_BY[eq[x]] : null;
   const hairIt=B('chair'), colIt=B('chcol')||SHOP_BY.hc_castano, hairHex=colIt.c, earIt=B('cears');
@@ -5691,6 +5811,7 @@ let lastLookT=0;
 function look(dx,dy,s){
   lastLookT=performance.now();
   s *= settings.sens;
+  if(tgLook(dx,dy,s)) return;   // v201: cámara fija con la lengua afuera
   yaw -= dx*s;
   pitch = THREE.MathUtils.clamp(pitch - dy*s*(settings.invert?-1:1), -1.3, 1.2);
 }
@@ -5954,7 +6075,7 @@ function sendPresence(force){
     p: [r2(player.pos.x), r2(player.pos.y), r2(player.pos.z)],
     f: r2(Math.atan2(Math.sin(player.facing), Math.cos(player.facing))),
     m: playing ? r2(Math.min(1, player.vel.length()/4.2)) : 0,
-    pub: mp.pub?1:0, gv: GAME_VERSION, a: playing && !player.grounded && !player.swim, w: mp.waveStamp, ge: gestPresence(), sf: player.sitF?1:undefined, d: r2(player.diveAngle), s: player.swim, h: heldItem()||'',
+    pub: mp.pub?1:0, gv: GAME_VERSION, a: playing && !player.grounded && !player.swim, w: mp.waveStamp, ge: gestPresence(), hd: tgHeadPresence(), sf: player.sitF?1:undefined, d: r2(player.diveAngle), s: player.swim, h: heldItem()||'',
     vc: player.car && player.car.kind!=='exit' ? [player.car.i, player.car.seat] : null,
     dv: iDrive() ? (c=>[c.i, r2(c.x), r2(c.z), Math.round(c.h*1000)/1000, r2(c.v), r2(c.steer), c.braking?1:0])(cars[player.car.i]) : null,
     lt: cars.map(c=>[c.lights?1:0, c.lightT]),
@@ -6121,7 +6242,7 @@ function updateRemotes(dt,t){
     if(r.carAnim && updateRemoteInCar(r,dt,t)) continue;
     r.pos.lerp(r.target,k);
     if(!r.swim && !r.air && r.pos.y>CAVE_TOP){ const g=groundAt(r.pos.x,r.pos.z,r.pos.y+.6); if(Math.abs(r.pos.y-g)<1.5) r.pos.y=g; }   // pegado a MI suelo (con otra calidad la malla del suelo cambia un poquito) (v123)
-    let d=r.facing-r.obj.rotation.y; d=Math.atan2(Math.sin(d),Math.cos(d)); r.obj.rotation.y+=d*k;
+    if(r.rotY===undefined || (!r.obj.userData.gs && !r.obj.userData.tg)) r.rotY=r.obj.rotation.y; let d=r.facing-r.rotY; d=Math.atan2(Math.sin(d),Math.cos(d)); r.rotY+=d*k; r.obj.rotation.y=r.rotY;   // (v201: se guarda aparte; los gestos le suman su giro encima)
     r.walk += dt*(6+r.moving*6)*(r.moving>.05?1:0);
     r.dive += (r.diveTarget-r.dive)*(1-Math.exp(-dt*18));
     const dk=r.swim?0:r.dive/DIVE_FLAT, mv=r.moving*(1-dk);
@@ -6137,6 +6258,7 @@ function updateRemotes(dt,t){
     r.obj.rotation.x=r.dive;
     r.obj.rotation.z=Math.sin(r.walk)*.08*mv;
     if(r.obj.userData.gs) gestTick(r.obj,dt,mv,r.swim||r.air||!!r.carAnim);   // v201: gestos de los demás
+    if(r.obj.userData.tg) tongueTick(r.obj,dt,r.swim||!!r.carAnim);
     if(r.sitK>.002 && r.obj.userData.av==='c') r.obj.position.y-=CH.sitDrop*r.sitK;
     chSwayTick(r.obj,dt);
     { const now=performance.now()/1000, ph=Math.floor(r.walk/Math.PI), stepped=ph!==r.stepPh && r.moving>.2 && !r.air && !r.swim; r.stepPh=ph;
@@ -6300,6 +6422,7 @@ function waveLabel(){ const b=ui('tWave'), g=GEST_BY[gestAtajo()], t=g.n.length>
 // hacer un gesto (la parte 4 les da movimiento a todos; por ahora saludar y sentarse)
 function playGesture(id){ if(state!=='play' || !gestAllowed(id)) return;
   if(id==='sentarse'){ chibiSitToggle(); return; }
+  if(id==='lengua'){ tongueToggle(); return; }   // v201 parte 5
   if(id==='saludar' && !gestBlocked()) mp.waveStamp=Date.now();   // (los de versiones viejas ven el saludo de antes)
   try{ if(typeof gestStart==='function') return gestStart(id); }catch(e){}
   flashNote(GEST_BY[id].n); }
@@ -6345,6 +6468,7 @@ function gwHit(x,y){ const g=GW.geo; if(!g) return null; const dx=x-g.cx, dy=y-g
     else { GW.sel=-1; gwRender(); } GW.down=null; });
   addEventListener('resize',()=>{ if(GW.open) gwRender(); }); }
 tap(ui('tGest'),()=>{ GW.open ? gwClose() : gwOpen(); });
+ui('camFixChip').onclick=()=>{ TGCAM.on=!TGCAM.on; tgChip(); flashNote(TGCAM.on?'Cámara fija: mueve la cámara para girar la cabeza':'Cámara libre otra vez'); };
 addEventListener('keydown',e=>{ if(e.code==='Escape' && GW.open){ e.preventDefault(); gwClose(); return; }
   if(state!=='play' || e.repeat || e.target instanceof HTMLInputElement) return;
   if(e.code==='KeyT' && !player.car){ GW.open ? gwClose() : gwOpen(); }
@@ -6367,6 +6491,7 @@ const gR=(k,i)=>o=>{ const T=(GEST_REACH[o.userData.av||'f']||GEST_REACH.f)[k]; 
 const gSeq=(dur,list)=>({dur, keys:[[0,-1],...list,[dur,-1]]});
 const gLoop=(t0,step,frames,n)=>{ const out=[]; for(let i=0;i<n;i++) out.push([t0+i*step,frames[i%frames.length]]); return out; };
 const GEST_DEF={
+  // (lengua: va aparte, ver tongueSet/tongueTick)
   saludar:{...gSeq(2.2,[[.25,0],[.5,1],[.75,2],[1.0,1],[1.25,2],[1.5,1],[1.8,0]]), F:[{A:[null,[2.2,0,0,-.3]]},{A:[null,[2.75,0,0,-.2]],rz:-.06},{A:[null,[2.2,0,0,-.3]],rz:.04}],
     fx:[['¡Hola!','#ff6fa0',.55,.55,.15,.35,1.9]]},
   baile:{...gSeq(4,gLoop(.3,.3,[0,1,2,1],12)), F:[{A:[[2.4,0,0,0],[.9,0,0,0]],L:[.3,-.2,.2],rz:.22},{A:[[2.6,0,0,0],[2.6,0,0,0]],L:[-.4,.4,.6],py:.18},{A:[[.9,0,0,0],[2.4,0,0,0]],L:[-.2,.3,.2],rz:-.22}],
@@ -6449,12 +6574,15 @@ function gestTick(o,dt,mv,blocked){ const u=o.userData, gs=u.gs; if(!gs) return;
   if(gs.conf){ const t0=D.confetti; gs.conf.forEach(c=>{ const tt=T-t0; c.visible=tt>0 && tt<1.8; if(!c.visible) return; const v=c.userData.v; c.position.set(v[0]*tt, gTop(o).hy-.2+v[1]*tt-2.6*tt*tt, v[2]*tt); c.rotation.set(v[3]+tt*7,tt*5,tt*3); }); } }
 // ¿se puede hacer un gesto ahora? (a pie, en el suelo, sin estar en juegos ni vehículos)
 function gestBlocked(){ return state!=='play' || !player.grounded || player.swim || !!player.dive || !!player.car || !!player.ac || !!player.pg || !!player.mg || !!player.busy || !!player.balloon || player.sitF || SP.on; }
-function gestStart(id){ if(gestBlocked()){ flashNote('Para hacer un gesto, quédate quieto en el suelo'); return; }
+function gestStart(id){ if(plush.userData.tg) tongueSet(plush,0);
+  if(gestBlocked()){ flashNote('Para hacer un gesto, quédate quieto en el suelo'); return; }
   if(!GEST_DEF[id]){ flashNote(GEST_BY[id].n+': muy pronto'); return; }
   const gs=gStart(plush,id,clock.elapsedTime); if(!gs) return; gs.stamp=(Date.now()%1e7); try{ audio.wave(); }catch(e){} sendPresence(true); }
 // en la presencia: "índice.sello" mientras dura el gesto
-function gestPresence(){ const gs=plush.userData.gs; return gs && !gs.kill && gs.stamp ? GEST_IDX.indexOf(gs.id)+'.'+gs.stamp : undefined; }
+function gestPresence(){ const tg=plush.userData.tg; if(tg && tg.want) return GEST_IDX.indexOf('lengua')+'.'+tg.stamp; const gs=plush.userData.gs; return gs && !gs.kill && gs.stamp ? GEST_IDX.indexOf(gs.id)+'.'+gs.stamp : undefined; }
+function tgHeadPresence(){ const tg=plush.userData.tg; return tg && tg.want && (Math.abs(tg.hyT)>.01 || Math.abs(tg.hpT)>.01) ? [Math.round(tg.hyT*100),Math.round(tg.hpT*100)] : undefined; }
 function gestParse(r,pr){ const ge=typeof pr.ge==='string' && pr.ge.length<16 ? pr.ge : '';
+  { const isT=!!ge && GEST_IDX[parseInt(ge,10)]==='lengua', tg=r.obj.userData.tg; if(isT){ tongueSet(r.obj,1); const T=r.obj.userData.tg; if(T){ const hd=Array.isArray(pr.hd)?pr.hd:[0,0]; T.hyT=clampN(hd[0]/100,-.9,.9,0); T.hpT=clampN(hd[1]/100,-.25,.25,0); } } else if(tg) tongueSet(r.obj,0); }
   if(ge && ge!==r.geKey){ const id=GEST_IDX[parseInt(ge,10)]; if(id && GEST_DEF[id]) gStart(r.obj,id,clock.elapsedTime); }
   r.geKey=ge; }
 // fila "Botón de atajo" en la pestaña de gestos
@@ -22746,6 +22874,7 @@ function update(dt,t){ myLabelUpdate();
   plush.rotation.x = player.diveAngle;
   plush.rotation.z = player.swim ? 0 : Math.sin(player.walk)*.08*moving;
   if(plush.userData.gs) gestTick(plush,dt,moving,gestBlocked());   // v201: gestos
+  if(plush.userData.tg) tongueTick(plush,dt,tongueBlocked()); tgChip();   // v201: la lengua
   if(carPoseNow){ const w=placeInCar(plush, player.car, carPoseNow); player.pos.copy(w); }
   if(acPose){ const w=placeInAircraft(plush, aircraft[player.ac.i], acPose); player.pos.copy(w); player.groundY=w.y; }
   if(pgPose){ placePlay(plush,pgPose); player.pos.set(...pgPose.pos); player.groundY=pgPose.pos[1]; player.facing=pgPose.yaw; }
