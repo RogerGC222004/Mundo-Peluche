@@ -1,0 +1,36 @@
+# v206: Minijuegos con fila pública: dos jugadores desde el menú se forman en «Papa caliente», ven 2/12, uno toca «¡Todo listo!»
+# y los dos entran a la misma sala nueva, junto al minijuego y formados para jugar.
+import asyncio, re, sys, json, os
+os.chdir('/tmp/claude-0/-home-claude/71ba1456-fe89-5ecb-af02-76c832933a55/scratchpad')
+exec(open('test_book_mp.py').read().split('async def m():')[0])
+page_html=page_html.replace("function wiMapDraw(g){","window.__G=s=>eval(s); function wiMapDraw(g){",1)
+async def m():
+  async with async_playwright() as p:
+    b=await p.chromium.launch(args=["--use-gl=swiftshader","--enable-unsafe-swiftshader"]); ctx=await b.new_context(viewport={"width":844,"height":390})
+    await ctx.add_init_script("window.__NOR=true; localStorage.setItem('mundoPelucheOpciones', JSON.stringify({quality:'min', qDef:1, hints:false, weather:false, shadows:false}));")
+    async def route(r):
+      if r.request.url.startswith("https://test.local"): await r.fulfill(body=page_html.encode(), content_type="text/html; charset=utf-8")
+      elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")
+      else: await r.abort()
+    await ctx.route("https://**/*", route)
+    A,ea=await open_game(ctx,'Ana'); B,eb=await open_game(ctx,'Beto')
+    G=lambda P,s: P.evaluate("s=>{ try{ const v=__G(s); return JSON.stringify(v===undefined?null:v); }catch(e){ return JSON.stringify('ERR '+e); } }", s)
+    ok=lambda c,t: print(('BIEN ' if c else 'MAL  ')+t, flush=True)
+    for P in (A,B): await G(P,"ui('mpBack').click(), menuModes(true), ui('mgBtn').click(), 1")
+    await A.wait_for_timeout(1500)
+    r=json.loads(await G(A,"[!ui('mgq').hidden, ui('mgqList').children.length, ui('mgqList').textContent.includes('Papa caliente')]")); ok(r[0] and r[1]==13 and r[2], 'Minijuegos abre la lista de los 13 minijuegos %s'%r)
+    await G(A,"mgqJoin(1)"); await A.wait_for_timeout(1200)
+    r=json.loads(await G(A,"[ui('mgqCount').textContent, ui('mgqGo').disabled]")); ok(r==['1/12 jugadores',True], 'Ana sola en la fila: 1/12 y «Todo listo» apagado %s'%r)
+    r=json.loads(await G(B,"[...ui('mgqList').querySelectorAll('.mgq-g.hot .n')].map(e=>e.textContent)")); ok(len(r)==1 and '1 esperando' in r[0], 'Beto ve que hay 1 esperando en Papa caliente %s'%r)
+    await A.screenshot(path='/tmp/v206_fila_ana.png')
+    await G(B,"mgqJoin(1)"); await B.wait_for_timeout(1500)
+    r=json.loads(await G(A,"[ui('mgqCount').textContent, ui('mgqGo').disabled, ui('mgqWho').textContent]")); ok(r[0]=='2/12 jugadores' and r[1] is False and 'Beto' in r[2], 'llega Beto: 2/12 y aparece «¡Todo listo!» %s'%r)
+    await A.screenshot(path='/tmp/v206_fila_lista.png')
+    await G(B,"ui('mgqGo').click()"); await B.wait_for_timeout(4000)
+    ra=json.loads(await G(A,"[mp.code, state, AR.me.a, AR.me.st, ui('mgq').hidden, mp.pub]")); rb=json.loads(await G(B,"[mp.code, state, AR.me.a, AR.me.st, ui('mgq').hidden]"))
+    ok(ra[0] and ra[0]==rb[0] and ra[1]=='play' and rb[1]=='play' and ra[2]==1 and rb[2]==1 and ra[3]==1 and rb[3]==1 and ra[4] and rb[4] and ra[5] is False, 'Beto toca «¡Todo listo!»: los dos entran a la misma sala privada, junto a Papa caliente y formados %s %s'%(ra,rb))
+    r=json.loads(await G(A,"(()=>{ const A=AR_SPOTS[1]; return +Math.hypot(player.pos.x-A.plate[0], player.pos.z-A.plate[1]).toFixed(1); })()")); ok(r<3, 'Ana aparece junto al minijuego (%s m)'%r)
+    await A.wait_for_timeout(2000)
+    r=json.loads(await G(A,"(()=>{ for(let i=0;i<40;i++) updateRemotes(.05,performance.now()/1000+i*.05); renderArHud(); return [mp.remotes.size, ui('arTxt').textContent]; })()")); ok(r[0]==1 and 'Fila: 2' in r[1], 'en el juego se ven y la fila del minijuego ya cuenta a los dos %s'%r)
+    ok(not ea and not eb, 'sin errores %s %s'%(ea[:2],eb[:2])); await b.close()
+asyncio.run(m())
