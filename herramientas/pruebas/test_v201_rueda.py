@@ -34,7 +34,7 @@ async def m():
     await pg.touchscreen.tap(g['cx'], g['cy']); await pg.wait_for_timeout(200); r=await ev("GW.open"); ok(r==False,'el centro (✕) cierra')
     # escoger Saludar desde la ruedita
     await ev("gwOpen(); GW.level='gest'; gwRender(); 1"); g=await ev("GW.geo"); await pg.touchscreen.tap(g['cx'], g['cy']-(g['r0']+g['r1'])/2); await pg.wait_for_timeout(200)
-    r=await ev("[GW.open, player.waveUntil>0, mp.waveStamp>0]"); ok(r==[False,True,True],'tocar Saludar en la ruedita saluda y cierra %s'%r)
+    r=await ev("[GW.open, !!plush.userData.gs && plush.userData.gs.id==='saludar', mp.waveStamp>0]"); ok(r==[False,True,True],'tocar Saludar en la ruedita saluda y cierra %s'%r)
     # comprar bailecito y 4 globos: entran solos a la ruedita (hasta 5)
     await ev("['ge_baile','ge_robot','gp_flor','gp_luna','gp_dino','gp_rayo','gp_pez'].forEach(id=>{ coins-=SHOP_BY[id].price; grantItem(SHOP_BY[id]); }); 1")
     r=await ev("[wardrobe.gest.join(','), wardrobe.pint.join(','), wardrobe.own.length]"); ok(r[0]=='saludar,sentarse,baile,robot' and r[1]=='estrella,flor,luna,dino,rayo','lo comprado entra a la ruedita, máximo 5 %s'%r[:2])
