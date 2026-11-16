@@ -272,6 +272,8 @@ body.in-mg #hint{display:none!important;}
 
 /* Controles táctiles */
 .touch{position:fixed;inset:0;pointer-events:none;}
+.gwheel{position:fixed;inset:0;z-index:35;touch-action:none;user-select:none;-webkit-user-select:none;}   /* v201: ruedita de gestos y pinturas */
+.shop-filter .atj{font-weight:800;font-size:13px;align-self:center;margin-right:4px;}
 .stick{position:fixed;left:calc(28px + env(safe-area-inset-left,0px));bottom:calc(86px + env(safe-area-inset-bottom,0px));width:120px;height:120px;border-radius:50%;
   background:rgba(251,248,239,.45);outline:2px dashed rgba(44,58,26,.5);outline-offset:-8px;pointer-events:auto;}
 .knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:var(--felt);box-shadow:0 4px 0 var(--felt-dk);}
@@ -664,7 +666,8 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       <dt><kbd>Deslizar</kbd></dt><dd>Mirar alrededor: desliza el dedo en la mitad derecha</dd>
       <dt><kbd>Saltar</kbd></dt><dd>Saltar · en el mar, subir</dd>
       <dt><kbd>Tirarse</kbd></dt><dd>Tirarse al suelo hacia adelante · en el mar, bajar</dd>
-      <dt><kbd>Saludar</kbd></dt><dd>Saludar a otros jugadores (con el Chibi: sentarse en el piso)</dd>
+      <dt><kbd>Gestos</kbd></dt><dd>Abre la ruedita: tus gestos y tus globos de pintura (los escoges en Personalizar)</dd>
+      <dt><kbd>Saludar</kbd></dt><dd>Atajo: hace el gesto que escojas en Personalizar → Gestos (con el Chibi, al principio: sentarse)</dd>
       <dt><kbd>Botones de acción</kbd></dt><dd>Aparecen al acercarte a algo: abrir puertas, subir al coche, jugar, hablar…</dd>
       <dt><kbd>Acelerar</kbd> <kbd>Frenar</kbd></dt><dd>En el coche: avanzar y frenar (o reversa); la palanca gira · <kbd>Luces</kbd></dd>
       <dt><kbd>Acelerar</kbd> <kbd>Frenar</kbd></dt><dd>En el avión y el helicóptero: más potencia o subir, y menos potencia o bajar; la palanca dirige</dd>
@@ -680,7 +683,8 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       <dt><kbd>Ratón</kbd></dt><dd>Mirar alrededor (clic para fijar el cursor, o arrastra)</dd>
       <dt><kbd>V</kbd></dt><dd>Cambiar entre primera y tercera persona</dd>
       <dt><kbd>Q</kbd></dt><dd>Tirarse al suelo hacia adelante · en el mar, bajar</dd>
-      <dt><kbd>G</kbd></dt><dd>Saludar a otros jugadores (con el Chibi: sentarse en el piso)</dd>
+      <dt><kbd>T</kbd></dt><dd>Abre la ruedita de gestos y pinturas (luego 1-5 para escoger)</dd>
+      <dt><kbd>G</kbd></dt><dd>Atajo: hace el gesto que escojas en Personalizar → Gestos (con el Chibi, al principio: sentarse)</dd>
       <dt><kbd>E</kbd> <kbd>R</kbd></dt><dd>Acciones: abrir o cerrar puertas, subir y bajar del coche</dd>
       <dt><kbd>W</kbd> <kbd>S</kbd></dt><dd>En el coche: acelerar y frenar (o reversa)</dd>
       <dt><kbd>A</kbd> <kbd>D</kbd></dt><dd>En el coche: girar · <kbd>H</kbd> claxon · <kbd>L</kbd> luces</dd>
@@ -927,10 +931,12 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
   </div>
 </div>
 
+<div class="gwheel" id="gWheel" hidden></div>
 <div class="touch" id="touch" hidden>
   <div class="stick" id="stick"><div class="knob" id="knob"></div></div>
   <div class="tbtns" id="tbtnsFoot">
-    <button class="tbtn small" id="tWave" style="grid-column:2">Saludar</button>
+    <button class="tbtn small" id="tGest" style="grid-column:1;grid-row:1">Gestos</button>
+    <button class="tbtn small" id="tWave" style="grid-column:2;grid-row:1">Saludar</button>
     <button class="tbtn dive" id="tDive">Tirarse</button>
     <button class="tbtn jump" id="tJump">Saltar</button>
   </div>
@@ -5709,7 +5715,7 @@ function look(dx,dy,s){
 
 // ---------- Botones en pantalla: mover y cambiar tamaño ----------
 // Cada control guarda un desplazamiento (en fracción de pantalla) y una escala, aparte para horizontal y vertical.
-const LAYOUT_ITEMS=[['stick','Joystick'],['tWave','Saludar'],['tDive','Tirarse'],['tJump','Saltar'],
+const LAYOUT_ITEMS=[['stick','Joystick'],['tGest','Gestos'],['tWave','Saludar (atajo)'],['tDive','Tirarse'],['tJump','Saltar'],
   ['tLights','Luces'],['tBrake','Frenar'],['tGas','Acelerar'],['tFx','Especial ⭐ (vehículo)'],['tSiren','Sirena (vehículo)'],['tVLights','Luces (vehículo)'],['tHorn','Claxon (vehículo)'],
   ['hotbar','Barra de objetos'],['actions','Botones de acción'],['pauseChip','Pausa'],['camChip','Cambiar cámara']];
 const orientKey=()=>innerWidth>=innerHeight?'land':'port';
@@ -5723,7 +5729,7 @@ const editor={on:false, sel:null, set:'foot', saved:null, drag:null};
 const EDIT_SHOW=['touch','hud','hotbar','actions','tbtnsFoot','tcar','pause','options','act1','act2','tveh','tFx','tSiren','tVLights','tHorn','tLights','tBrake','tGas'];
 function editorVisible(id){ const foot=editor.set==='foot';
   if(id==='tLights'||id==='tBrake'||id==='tGas'||id==='tSiren'||id==='tVLights'||id==='tHorn'||id==='tFx') return !foot;
-  if(id==='tWave'||id==='tDive'||id==='tJump') return foot;
+  if(id==='tWave'||id==='tDive'||id==='tJump'||id==='tGest') return foot;
   return true; }
 function markEditor(){ LAYOUT_ITEMS.forEach(([id])=>{ const el=ui(id); if(!el) return; el.classList.toggle('edit-mark', editor.on && editorVisible(id)); el.classList.toggle('sel', editor.on && editor.sel===id); }); }
 function editorSetVisibility(){ const foot=editor.set==='foot';
@@ -6173,12 +6179,190 @@ function chibiSitToggle(){ if(state!=='play') return;
   if(player.sitF) player.sitF=false;
   else { if(!player.grounded || player.swim || player.dive || player.car || player.ac || player.pg || player.mg || player.busy || player.balloon) return; player.vel.set(0,0,0); player.sitF=true; try{ audio.land(.35); }catch(e){} }
   try{ sendPresence(true); }catch(e){} }
-function waveLabel(){ const b=ui('tWave'), t=plush.userData.av==='c'?'Sentarse':'Saludar'; if(b && b.dataset.lbl!==t){ b.dataset.lbl=t; centerText(b,t); } }
-function wave(){
-  if(plush.userData.av==='c'){ chibiSitToggle(); return; }
-  player.waveUntil=clock.elapsedTime+1.6; audio.wave();
-  mp.waveStamp=Date.now(); sendPresence(true);
-}
+// ======================================================================================
+// ---------- v201: GESTOS y GLOBOS DE PINTURA: botón "Gestos", ruedita y tienda ----------
+// ======================================================================================
+// Se compran en Personalizar (Gestos / Globos de pintura) como la ropa. En la ruedita van hasta 5 de cada uno.
+// El botón Saludar es un atajo: cada quien escoge qué gesto hace (con el Chibi, por defecto, Sentarse).
+const GESTS=[
+  {id:'saludar', n:'Saludar', p:0}, {id:'sentarse', n:'Sentarse', p:0, av:'c'}, {id:'lengua', n:'Sacar la lengua', p:16, av:'f'},
+  {id:'baile', n:'Bailecito feliz', p:20}, {id:'aplaudir', n:'Aplaudir', p:14}, {id:'vuelta', n:'Vuelta de peluche', p:16}, {id:'abrazo', n:'Abrazo', p:14},
+  {id:'comer', n:'Comer una manzana', p:16}, {id:'siesta', n:'Siesta', p:16}, {id:'pensar', n:'Pensar', p:12}, {id:'celebrar', n:'Celebrar', p:20},
+  {id:'robot', n:'Baile robot', p:20}, {id:'cuerda', n:'Saltar la cuerda', p:18}];
+const GEST_BY={}; GESTS.forEach(g=>GEST_BY[g.id]=g);
+const PAINTS=[['estrella','Estrella','#ff6fa0',0],['flor','Flor','#7fd0ff',10],['arcoiris','Arcoíris','#b392e8',12],['cohete','Cohete','#6ad07a',12],['corazon','Corazón','#ff8fb8',10],
+  ['carita','Carita feliz','#ffb13d',10],['gatito','Gatito','#7fd0ff',12],['huellita','Huellita','#b392e8',10],['pez','Pececito','#ffd23f',10],['mariposa','Mariposa','#6ad07a',12],
+  ['hongo','Hongo','#7fd0ff',10],['nube','Nube','#5aa8ff',10],['rayo','Rayo','#b392e8',10],['luna','Luna','#3b4a9a',12],['sandia','Sandía','#ffd23f',10],
+  ['dino','Dinosaurio','#ff6fa0',14],['planeta','Planeta','#2a2f6a',12],['trebol','Trébol','#ffd23f',10],['notas','Notas musicales','#7fd0ff',10],['frijolito','Frijolito','#ff8fb8',14]]
+  .map(([id,n,c,p])=>({id,n,c,p}));
+const PAINT_BY={}; PAINTS.forEach(p=>PAINT_BY[p.id]=p);
+// --- dibujitos (sin emojis) para la ruedita y la tienda ---
+const gBean=(extra='',arms='')=>`${arms}<path d="M-15,22 C-19,6 -17,-14 -10,-21 C-4,-27 6,-27 11,-21 C17,-14 19,6 15,22 C10,28 -10,28 -15,22Z" fill="#9fd23c" stroke="#5c8a1c" stroke-width="2"/><ellipse cx="-5" cy="-11" rx="2.4" ry="3.6" fill="#222"/><ellipse cx="5" cy="-11" rx="2.4" ry="3.6" fill="#222"/>${extra}`;
+const gArm=(x1,y1,x2,y2)=>`<path d="M${x1},${y1} L${x2},${y2}" stroke="#7fb22c" stroke-width="5" stroke-linecap="round"/>`;
+const gNote=(x,y,c='#fff')=>`<g transform="translate(${x},${y})" fill="${c}"><ellipse cx="0" cy="6" rx="4" ry="3"/><rect x="3" y="-8" width="2" height="14"/><path d="M3,-8 q7,2 7,8" stroke="${c}" stroke-width="2" fill="none"/></g>`;
+const gHeart=(x,y,r,c)=>`<path d="M${x},${y+r*.9} C${x-r*1.5},${y-r*.1} ${x-r*.7},${y-r*1.25} ${x},${y-r*.45} C${x+r*.7},${y-r*1.25} ${x+r*1.5},${y-r*.1} ${x},${y+r*.9}Z" fill="${c}"/>`;
+const G_ICON={
+  saludar:gBean(`<path d="M28,-30 q4,4 0,8 M33,-33 q6,7 0,14" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/>`, gArm(-13,2,-22,14)+gArm(13,-2,24,-20)),
+  sentarse:`<g transform="translate(0,6) scale(.9)">${gBean('',gArm(-13,2,-20,12)+gArm(13,2,20,12))}<path d="M-12,24 h24" stroke="#5c8a1c" stroke-width="7" stroke-linecap="round"/></g>`,
+  lengua:gBean(`<path d="M-7,-3 q7,4 14,0 l-1,4 q-6,3 -12,0z" fill="#7a1f2c"/><path d="M-5,-1 h10 v13 q-5,6 -10,0z" fill="#f28fa6"/><path d="M0,1 v9" stroke="#c8506a" stroke-width="1.2"/>`, gArm(-13,2,-22,14)+gArm(13,2,22,14)),
+  baile:gBean(gNote(-24,-34)+gNote(20,-38), gArm(-13,-2,-25,-20)+gArm(13,-2,25,-20)),
+  aplaudir:gBean(`<path d="M-14,-24 l3,5 M0,-30 v6 M14,-24 l-3,5" stroke="#ffe36a" stroke-width="2.5" stroke-linecap="round"/>`, gArm(-13,0,-3,-6)+gArm(13,0,3,-6)),
+  vuelta:gBean(`<path d="M-24,4 a24,10 0 1 0 48,0" stroke="#7fd0ff" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M24,4 l-6,-5 M24,4 l-7,3" stroke="#7fd0ff" stroke-width="3" stroke-linecap="round"/>`, gArm(-13,0,-26,0)+gArm(13,0,26,0)),
+  abrazo:gBean(gHeart(0,-36,8,'#ff5d7a'), gArm(-13,0,-4,8)+gArm(13,0,4,8)),
+  comer:gBean(`<circle cx="20" cy="-6" r="8" fill="#e8323c"/><path d="M20,-14 v-4" stroke="#6a4020" stroke-width="2"/><ellipse cx="24" cy="-18" rx="4" ry="2" fill="#3fae4a"/>`, gArm(-13,2,-22,14)+gArm(13,0,18,-2)),
+  siesta:`<g transform="rotate(-80)">${gBean('',gArm(-13,2,-20,12)+gArm(13,2,20,12))}</g><text x="14" y="-18" font-size="16" font-weight="800" fill="#5aa8ff" font-family="Sniglet,Nunito,sans-serif">z</text><text x="22" y="-28" font-size="12" font-weight="800" fill="#5aa8ff" font-family="Sniglet,Nunito,sans-serif">z</text>`,
+  pensar:gBean(`<text x="14" y="-24" font-size="18" font-weight="800" fill="#b392e8" font-family="Sniglet,Nunito,sans-serif">?</text>`, gArm(-13,2,-22,14)+gArm(13,0,4,-4)),
+  celebrar:gBean(['#ff5a5a','#ffd23f','#5aa8ff','#6ad07a','#ff8fb8'].map((c,i)=>`<rect x="${-26+i*12}" y="${-34+(i%2)*8}" width="5" height="3" fill="${c}" transform="rotate(${i*40} ${-24+i*12} ${-33+(i%2)*8})"/>`).join(''), gArm(-13,-2,-22,-24)+gArm(13,-2,22,-24)),
+  robot:gBean(`<path d="M-4,-30 v-5 M4,-30 v-5" stroke="#8b919c" stroke-width="2"/><circle cx="-4" cy="-36" r="2" fill="#5aa8ff"/><circle cx="4" cy="-36" r="2" fill="#5aa8ff"/>`, `<path d="M-13,0 h-10 v-12" stroke="#7fb22c" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M13,0 h10 v12" stroke="#7fb22c" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`),
+  cuerda:`<path d="M-22,6 Q0,-56 22,6" stroke="#ff6fa0" stroke-width="2.5" fill="none"/>`+gBean('',gArm(-13,2,-22,6)+gArm(13,2,22,6))};
+const gIconSvg=(id,bg)=>`<svg xmlns="http://www.w3.org/2000/svg" viewBox="-40 -40 80 80">${bg?`<rect x="-40" y="-40" width="80" height="80" fill="${bg}"/>`:''}${G_ICON[id]||''}</svg>`;
+const gIconUrl=(id,bg)=>'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(gIconSvg(id,bg));
+// dibujito de cada globo de pintura (la mancha con su dibujo), chiquito, guardado
+const paintRnd=(s=>()=>(s=(s*16807)%2147483647)/2147483647);
+const PAINT_TH={};
+function paintThumb(id){ if(PAINT_TH[id]) return PAINT_TH[id]; const P=PAINT_BY[id]; return PAINT_TH[id]=paintCanvas(id,P.c,7,false,128).toDataURL(); }
+function paintCanvas(kind,col,seed=7,noSplat,N=512){ const c=document.createElement('canvas'); c.width=c.height=N; const g=c.getContext('2d'), R=paintRnd(seed), cx=256, cy=256; if(N!==512){ g.scale(N/512,N/512); }
+  const base=new THREE.Color(col), dk='#'+base.clone().multiplyScalar(.72).getHexString(), lt='#'+base.clone().lerp(new THREE.Color('#ffffff'),.35).getHexString();
+  // 1) la mancha: un círculo grande con "olas" en el borde, salpicaduras y gotitas
+  if(!noSplat){ g.fillStyle=col; g.beginPath(); const K=64; for(let i=0;i<=K;i++){ const a=i/K*Math.PI*2, r=150+18*Math.sin(a*5+R()*6)+10*Math.sin(a*11+seed)+(R()<.12?28:0); g.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r); } g.fill();
+  for(let i=0;i<14;i++){ const a=R()*Math.PI*2, d=160+R()*70, r=6+R()*16; g.beginPath(); g.arc(cx+Math.cos(a)*d,cy+Math.sin(a)*d,r,0,Math.PI*2); g.fill();
+    if(r>12){ g.beginPath(); g.moveTo(cx+Math.cos(a)*150,cy+Math.sin(a)*150); g.lineTo(cx+Math.cos(a)*d,cy+Math.sin(a)*d); g.lineWidth=r*.9; g.strokeStyle=col; g.stroke(); } }
+  // brillito de pintura fresca
+  const gr=g.createRadialGradient(cx-40,cy-50,10,cx,cy,170); gr.addColorStop(0,'rgba(255,255,255,.28)'); gr.addColorStop(.6,'rgba(255,255,255,0)'); gr.addColorStop(1,'rgba(0,0,0,.12)');
+  g.globalCompositeOperation='source-atop'; g.fillStyle=gr; g.fillRect(0,0,N,N); g.globalCompositeOperation='source-over'; }
+  // 2) el dibujo (con borde blanco grueso, como hecho con pintura)
+  g.lineJoin='round'; g.lineCap='round';
+  const ink=(path,fill,w=14)=>{ g.save(); path(); g.lineWidth=w+10; g.strokeStyle='#ffffff'; g.stroke(); g.fillStyle=fill; g.fill(); g.lineWidth=w*.45; g.strokeStyle='rgba(40,30,30,.55)'; g.stroke(); g.restore(); };
+  const face=(x,y,s)=>{ g.fillStyle='#2b2020'; for(const sx of [-1,1]){ g.beginPath(); g.ellipse(x+sx*16*s,y-6*s,6*s,9*s,0,0,Math.PI*2); g.fill(); g.fillStyle='#fff'; g.beginPath(); g.arc(x+sx*16*s-2*s,y-9*s,2.5*s,0,Math.PI*2); g.fill(); g.fillStyle='#2b2020'; }
+    g.strokeStyle='#2b2020'; g.lineWidth=4*s; g.beginPath(); g.arc(x,y+6*s,10*s,.15*Math.PI,.85*Math.PI); g.stroke();
+    g.fillStyle='rgba(255,120,140,.7)'; for(const sx of [-1,1]){ g.beginPath(); g.ellipse(x+sx*28*s,y+6*s,7*s,4.5*s,0,0,Math.PI*2); g.fill(); } };
+  if(kind==='estrella'){ ink(()=>{ g.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, r=i%2?52:115; g.lineTo(cx+Math.cos(a)*r,cy+8+Math.sin(a)*r); } g.closePath(); },'#ffd23f'); face(cx,cy+16,1.4);
+    g.fillStyle='#fff'; for(const [x,y,r] of [[-120,-95,10],[118,-70,7],[-95,110,6]]){ g.beginPath(); for(let i=0;i<8;i++){ const a=i*Math.PI/4, rr=i%2?r*.35:r; g.lineTo(cx+x+Math.cos(a)*rr,cy+y+Math.sin(a)*rr); } g.fill(); } }
+  else if(kind==='flor'){ const P=['#ff8fb8','#ffa6c8']; for(let i=0;i<6;i++){ const a=i*Math.PI/3; ink(()=>{ g.beginPath(); g.ellipse(cx+Math.cos(a)*62,cy+Math.sin(a)*62,48,34,a,0,Math.PI*2); },P[i%2],12); }
+    ink(()=>{ g.beginPath(); g.arc(cx,cy,46,0,Math.PI*2); },'#ffd23f',12); face(cx,cy+2,1.1); }
+  else if(kind==='arcoiris'){ const C=['#ff5a5a','#ffb13d','#ffe36a','#6ad07a','#5aa8ff','#b392e8']; g.lineCap='butt';
+    g.lineWidth=170; g.strokeStyle='#fff'; g.beginPath(); g.arc(cx,cy+60,100,Math.PI,0); g.stroke();
+    C.forEach((cc,i)=>{ g.lineWidth=24; g.strokeStyle=cc; g.beginPath(); g.arc(cx,cy+60,150-i*20,Math.PI,0); g.stroke(); });
+    for(const sx of [-1,1]){ const B=[[-40,4,26],[-14,-10,30],[14,-6,30],[40,6,24]]; g.fillStyle='rgba(60,50,60,.45)'; for(const [dx,dy,r] of B){ g.beginPath(); g.arc(cx+sx*120+dx,cy+74+dy,r+6,0,Math.PI*2); g.fill(); }
+      g.fillStyle='#ffffff'; for(const [dx,dy,r] of B){ g.beginPath(); g.arc(cx+sx*120+dx,cy+70+dy,r+2,0,Math.PI*2); g.fill(); } } }
+  else if(kind==='cohete'){ ink(()=>{ g.beginPath(); g.moveTo(cx,cy-130); g.quadraticCurveTo(cx+62,cy-60,cx+50,cy+60); g.lineTo(cx-50,cy+60); g.quadraticCurveTo(cx-62,cy-60,cx,cy-130); },'#f4f4f8');
+    for(const sx of [-1,1]) ink(()=>{ g.beginPath(); g.moveTo(cx+sx*48,cy+10); g.lineTo(cx+sx*92,cy+80); g.lineTo(cx+sx*44,cy+66); g.closePath(); },'#ff5a5a',10);
+    ink(()=>{ g.beginPath(); g.arc(cx,cy-40,26,0,Math.PI*2); },'#5aa8ff',10);
+    ink(()=>{ g.beginPath(); g.moveTo(cx-30,cy+66); g.quadraticCurveTo(cx,cy+150,cx+30,cy+66); },'#ffb13d',10); }
+  if(PAINT_X[kind]) PAINT_X[kind]({g,cx,cy,ink,face,R}); return c; }
+const PAINT_X={};   // los 16 dibujos nuevos
+{ const star=(g,x,y,r,col)=>{ g.fillStyle=col; g.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*.45:r; g.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } g.closePath(); g.fill(); };
+const heartP=(g,x,y,r)=>{ g.beginPath(); g.moveTo(x,y+r*.95); g.bezierCurveTo(x-r*1.55,y-r*.05,x-r*.75,y-r*1.3,x,y-r*.45); g.bezierCurveTo(x+r*.75,y-r*1.3,x+r*1.55,y-r*.05,x,y+r*.95); g.closePath(); };
+PAINT_X.corazon=({g,cx,cy,ink,face})=>{ ink(()=>heartP(g,cx,cy+5,92),'#ff5d7a'); face(cx,cy-5,1.2); };
+PAINT_X.carita=({g,cx,cy,ink,face})=>{ ink(()=>{ g.beginPath(); g.arc(cx,cy,98,0,Math.PI*2); },'#ffd23f'); face(cx,cy+4,1.6); };
+PAINT_X.gatito=({g,cx,cy,ink,face})=>{ ink(()=>{ g.beginPath(); g.moveTo(cx-90,cy-30); g.lineTo(cx-78,cy-120); g.lineTo(cx-30,cy-78); g.quadraticCurveTo(cx,cy-88,cx+30,cy-78); g.lineTo(cx+78,cy-120); g.lineTo(cx+90,cy-30); g.quadraticCurveTo(cx+104,cy+80,cx,cy+86); g.quadraticCurveTo(cx-104,cy+80,cx-90,cy-30); g.closePath(); },'#ffb347');
+  face(cx,cy+6,1.3); g.strokeStyle='#2b2020'; g.lineWidth=4; g.lineCap='round'; for(const s of [-1,1]) for(const d of [-8,6]){ g.beginPath(); g.moveTo(cx+s*44,cy+22+d); g.lineTo(cx+s*96,cy+14+d*1.6); g.stroke(); }
+  g.fillStyle='#ff8fb8'; for(const s of [-1,1]){ g.beginPath(); g.moveTo(cx+s*68,cy-48); g.lineTo(cx+s*72,cy-98); g.lineTo(cx+s*42,cy-70); g.closePath(); g.fill(); } };
+PAINT_X.huellita=({g,cx,cy,ink})=>{ ink(()=>{ g.beginPath(); g.ellipse(cx,cy+40,66,54,0,0,Math.PI*2); },'#8a5a3a'); for(const [x,y] of [[-78,-30],[-30,-78],[30,-78],[78,-30]]) ink(()=>{ g.beginPath(); g.ellipse(cx+x,cy+y,26,32,x/120,0,Math.PI*2); },'#8a5a3a',10); };
+PAINT_X.pez=({g,cx,cy,ink})=>{ ink(()=>{ g.beginPath(); g.ellipse(cx-14,cy,90,62,0,0,Math.PI*2); g.moveTo(cx+62,cy); g.lineTo(cx+120,cy-56); g.lineTo(cx+120,cy+56); g.closePath(); },'#4fb0ff');
+  g.fillStyle='#2f86d8'; for(const x of [-40,0]){ g.beginPath(); g.ellipse(cx+x,cy,10,52,0,0,Math.PI*2); g.fill(); }
+  g.fillStyle='#fff'; g.beginPath(); g.arc(cx-62,cy-14,16,0,Math.PI*2); g.fill(); g.fillStyle='#2b2020'; g.beginPath(); g.arc(cx-64,cy-14,8,0,Math.PI*2); g.fill();
+  g.strokeStyle='#2b2020'; g.lineWidth=4; g.beginPath(); g.arc(cx-82,cy+16,10,.2*Math.PI,.8*Math.PI); g.stroke(); };
+PAINT_X.mariposa=({g,cx,cy,ink})=>{ for(const s of [-1,1]){ ink(()=>{ g.beginPath(); g.ellipse(cx+s*58,cy-36,58,50,s*.4,0,Math.PI*2); },'#b392e8',10); ink(()=>{ g.beginPath(); g.ellipse(cx+s*48,cy+48,40,36,-s*.4,0,Math.PI*2); },'#ff8fb8',10);
+    g.fillStyle='#fff'; g.beginPath(); g.arc(cx+s*62,cy-40,14,0,Math.PI*2); g.fill(); }
+  ink(()=>{ g.beginPath(); g.ellipse(cx,cy,14,74,0,0,Math.PI*2); },'#5a3a2a',8); g.strokeStyle='#5a3a2a'; g.lineWidth=5; g.lineCap='round'; for(const s of [-1,1]){ g.beginPath(); g.moveTo(cx,cy-70); g.quadraticCurveTo(cx+s*16,cy-110,cx+s*34,cy-118); g.stroke(); g.fillStyle='#5a3a2a'; g.beginPath(); g.arc(cx+s*36,cy-118,7,0,Math.PI*2); g.fill(); } };
+PAINT_X.hongo=({g,cx,cy,ink,face})=>{ ink(()=>{ g.beginPath(); g.moveTo(cx-44,cy+10); g.lineTo(cx-40,cy+100); g.quadraticCurveTo(cx,cy+112,cx+40,cy+100); g.lineTo(cx+44,cy+10); g.closePath(); },'#fff1d8',10); face(cx,cy+56,.8);
+  ink(()=>{ g.beginPath(); g.moveTo(cx-118,cy+18); g.quadraticCurveTo(cx-110,cy-110,cx,cy-112); g.quadraticCurveTo(cx+110,cy-110,cx+118,cy+18); g.closePath(); },'#ff4d4d');
+  g.fillStyle='#fff'; for(const [x,y,r] of [[-60,-40,18],[0,-80,14],[52,-36,20],[-10,-20,12],[88,-6,10],[-92,-2,10]]){ g.beginPath(); g.arc(cx+x,cy+y,r,0,Math.PI*2); g.fill(); } };
+PAINT_X.nube=({g,cx,cy,ink})=>{ const B=[[-60,-10,46],[-10,-44,58],[54,-18,48],[90,14,34],[-96,18,32]], path=(e)=>{ g.beginPath(); for(const [x,y,r] of B){ g.moveTo(cx+x+r+e,cy+y); g.arc(cx+x,cy+y,r+e,0,Math.PI*2); } g.rect(cx-96-e,cy-10-e,186+2*e,56+2*e); };
+  path(12); g.fillStyle='#ffffff'; g.fill(); path(4); g.fillStyle='rgba(40,30,30,.45)'; g.fill(); path(0); g.fillStyle='#eef4ff'; g.fill();
+  for(const [x,y] of [[-60,80],[-10,100],[40,78],[84,100]]) ink(()=>{ g.beginPath(); g.moveTo(cx+x,cy+y-24); g.quadraticCurveTo(cx+x+16,cy+y,cx+x,cy+y+10); g.quadraticCurveTo(cx+x-16,cy+y,cx+x,cy+y-24); },'#4fa8ff',6); };
+PAINT_X.rayo=({g,cx,cy,ink})=>{ ink(()=>{ g.beginPath(); g.moveTo(cx+20,cy-124); g.lineTo(cx-66,cy+12); g.lineTo(cx-6,cy+12); g.lineTo(cx-34,cy+124); g.lineTo(cx+70,cy-26); g.lineTo(cx+8,cy-26); g.closePath(); },'#ffe14d'); };
+PAINT_X.luna=({g,cx,cy,ink})=>{ ink(()=>{ g.beginPath(); g.arc(cx-10,cy,100,.35*Math.PI,1.65*Math.PI); g.arc(cx+34,cy-14,80,1.5*Math.PI,.42*Math.PI,true); g.closePath(); },'#fff2a8');
+  g.fillStyle='#2b2020'; g.beginPath(); g.arc(cx-56,cy-14,7,0,Math.PI*2); g.fill(); g.strokeStyle='#2b2020'; g.lineWidth=4; g.beginPath(); g.arc(cx-44,cy+18,12,.1*Math.PI,.9*Math.PI); g.stroke();
+  star(g,cx+74,cy-80,22,'#fff'); star(g,cx+96,cy+30,14,'#fff'); star(g,cx+50,cy+86,10,'#fff'); };
+PAINT_X.sandia=({g,cx,cy,ink})=>{ ink(()=>{ g.beginPath(); g.moveTo(cx-120,cy-30); g.arc(cx,cy-30,120,0,Math.PI); g.closePath(); },'#3cae5c'); g.fillStyle='#fff7e0'; g.beginPath(); g.moveTo(cx-104,cy-30); g.arc(cx,cy-30,104,0,Math.PI); g.closePath(); g.fill();
+  g.fillStyle='#ff4d5e'; g.beginPath(); g.moveTo(cx-94,cy-30); g.arc(cx,cy-30,94,0,Math.PI); g.closePath(); g.fill(); g.fillStyle='#2b2020'; for(const [x,y] of [[-50,0],[-14,30],[24,8],[56,-6],[0,-10],[-30,40],[40,40]]){ g.beginPath(); g.ellipse(cx+x,cy+y,5,9,0,0,Math.PI*2); g.fill(); } };
+PAINT_X.dino=({g,cx,cy,ink})=>{ ink(()=>{ g.beginPath(); g.moveTo(cx-120,cy+40); g.quadraticCurveTo(cx-60,cy+10,cx-40,cy-20); g.quadraticCurveTo(cx-10,cy-70,cx+40,cy-40); g.lineTo(cx+60,cy-80); g.quadraticCurveTo(cx+110,cy-100,cx+116,cy-60); g.quadraticCurveTo(cx+118,cy-36,cx+80,cy-30);
+    g.quadraticCurveTo(cx+70,cy+30,cx+40,cy+50); g.lineTo(cx+40,cy+96); g.lineTo(cx+14,cy+96); g.lineTo(cx+12,cy+60); g.lineTo(cx-20,cy+60); g.lineTo(cx-22,cy+96); g.lineTo(cx-48,cy+96); g.lineTo(cx-46,cy+56); g.quadraticCurveTo(cx-90,cy+60,cx-120,cy+40); g.closePath(); },'#6ad07a');
+  g.fillStyle='#3a9a4a'; for(const [x,y] of [[-30,-40],[0,-60],[30,-50]]){ g.beginPath(); g.moveTo(cx+x-12,cy+y+14); g.lineTo(cx+x,cy+y-14); g.lineTo(cx+x+12,cy+y+14); g.closePath(); g.fill(); }
+  g.fillStyle='#2b2020'; g.beginPath(); g.arc(cx+92,cy-64,7,0,Math.PI*2); g.fill(); g.fillStyle='rgba(255,120,140,.7)'; g.beginPath(); g.ellipse(cx+86,cy-44,9,6,0,0,Math.PI*2); g.fill(); };
+PAINT_X.planeta=({g,cx,cy,ink})=>{ ink(()=>{ g.beginPath(); g.ellipse(cx,cy,130,38,-.3,0,Math.PI*2); },'#ffb13d',10); ink(()=>{ g.beginPath(); g.arc(cx,cy,76,0,Math.PI*2); },'#b392e8');
+  g.fillStyle='#9a7ad8'; for(const [x,y,r] of [[-26,-22,14],[22,20,18],[30,-34,8]]){ g.beginPath(); g.arc(cx+x,cy+y,r,0,Math.PI*2); g.fill(); }
+  g.save(); g.beginPath(); g.rect(cx-140,cy-6,280,80); g.clip(); g.lineWidth=12; g.strokeStyle='#ffb13d'; g.beginPath(); g.ellipse(cx,cy,118,30,-.3,0,Math.PI); g.stroke(); g.restore(); };
+PAINT_X.trebol=({g,cx,cy,ink})=>{ for(const a of [0,1,2,3]){ g.save(); g.translate(cx,cy-6); g.rotate(a*Math.PI/2); ink(()=>{ heartP(g,0,-52,46); },'#3cae5c',10); g.restore(); }
+  ink(()=>{ g.beginPath(); g.moveTo(cx,cy); g.quadraticCurveTo(cx+20,cy+70,cx+50,cy+118); g.lineTo(cx+40,cy+122); g.quadraticCurveTo(cx+10,cy+76,cx-8,cy); g.closePath(); },'#2e8a48',8); };
+PAINT_X.notas=({g,cx,cy,ink})=>{ ink(()=>{ g.beginPath(); g.ellipse(cx-70,cy+70,34,26,-.4,0,Math.PI*2); g.ellipse(cx+60,cy+50,34,26,-.4,0,Math.PI*2); g.rect(cx-44,cy-80,16,150); g.rect(cx+86,cy-100,16,150); g.moveTo(cx-44,cy-80); g.lineTo(cx+102,cy-100); g.lineTo(cx+102,cy-60); g.lineTo(cx-44,cy-40); g.closePath(); },'#ff6fa0'); };
+PAINT_X.frijolito=({g,cx,cy,ink})=>{ ink(()=>{ g.beginPath(); g.moveTo(cx-60,cy+100); g.bezierCurveTo(cx-80,cy+30,cx-74,cy-70,cx-40,cy-104); g.bezierCurveTo(cx-10,cy-128,cx+30,cy-126,cx+52,cy-102); g.bezierCurveTo(cx+80,cy-70,cx+84,cy+30,cx+62,cy+100); g.bezierCurveTo(cx+30,cy+124,cx-30,cy+124,cx-60,cy+100); g.closePath(); },'#9fd23c');
+  g.fillStyle='#2b2020'; for(const s of [-1,1]){ g.beginPath(); g.ellipse(cx+s*22,cy-50,9,14,0,0,Math.PI*2); g.fill(); } g.strokeStyle='#5c8a1c'; g.lineWidth=5; g.beginPath(); g.arc(cx,cy-10,12,.15*Math.PI,.85*Math.PI); g.stroke(); }; }
+// --- lo que trae equipado cada quien (se guarda con la ropa) ---
+const MAX_RUEDA=5;
+function gestAllowed(id){ const g=GEST_BY[id]; return !!g && (!g.av || g.av===myAv()); }
+function gestDefaultAtajo(){ return myAv()==='c' ? 'sentarse' : 'saludar'; }
+function gestAtajo(){ const a=(wardrobe.atajo||{})[myAv()]; return a && gestAllowed(a) && (owns(SHOP_BY['ge_'+a])) ? a : gestDefaultAtajo(); }
+function waveLabel(){ const b=ui('tWave'), g=GEST_BY[gestAtajo()], t=g.n.length>9 ? g.n.split(' ')[0] : g.n; if(b && b.dataset.lbl!==t){ b.dataset.lbl=t; centerText(b,t); } }
+// hacer un gesto (la parte 4 les da movimiento a todos; por ahora saludar y sentarse)
+function playGesture(id){ if(state!=='play' || !gestAllowed(id)) return;
+  if(id==='sentarse'){ chibiSitToggle(); return; }
+  if(id==='saludar'){ player.waveUntil=clock.elapsedTime+1.6; audio.wave(); mp.waveStamp=Date.now(); sendPresence(true); return; }
+  try{ if(typeof gestStart==='function') return gestStart(id); }catch(e){}
+  flashNote(GEST_BY[id].n); }
+function wave(){ playGesture(gestAtajo()); }
+function throwPaint(id){ if(state!=='play' || !PAINT_BY[id]) return; try{ if(typeof paintThrow==='function') return paintThrow(id); }catch(e){} flashNote('Globo de '+PAINT_BY[id].n.toLowerCase()); }
+// --- la ruedita (semitransparente): primero Gestos / Pinturas, luego lo equipado de cada uno ---
+const GW={open:false, level:'root', items:[]};
+function gwSlice(cx,cy,r0,r1,a0,a1){ const p=(r,a)=>(cx+Math.cos(a)*r).toFixed(1)+','+(cy+Math.sin(a)*r).toFixed(1), lg=(a1-a0)>Math.PI?1:0;
+  return `M${p(r1,a0)} A${r1},${r1} 0 ${lg} 1 ${p(r1,a1)} L${p(r0,a1)} A${r0},${r0} 0 ${lg} 0 ${p(r0,a0)}Z`; }
+function gwItems(level){
+  if(level==='root') return [{label:'Gestos', svg:G_ICON.baile, go:'gest'},{label:'Pinturas', img:paintThumb((wardrobe.pint||[])[0]||'estrella'), go:'pint'}];
+  if(level==='gest') return (wardrobe.gest||[]).filter(gestAllowed).map(id=>({label:GEST_BY[id].n, svg:G_ICON[id], gest:id}));
+  return (wardrobe.pint||[]).filter(id=>PAINT_BY[id]).map(id=>({label:PAINT_BY[id].n, img:paintThumb(id), paint:id})); }
+function gwRender(){ const el=ui('gWheel'); if(!GW.open){ el.hidden=true; return; } el.hidden=false;
+  const W=innerWidth, H=innerHeight, cx=W/2, cy=H/2-6, r0=44, r1=Math.min(H*.4,Math.min(W*.42,160)), it=GW.items=gwItems(GW.level), n=Math.max(1,it.length), gap=n>1?.035:0, start=-Math.PI/2-Math.PI/n;
+  GW.geo={cx,cy,r0,r1,start,n};
+  let s=`<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="font-family:Sniglet,Nunito,sans-serif"><defs><filter id="gwSh"><feDropShadow dx="0" dy="1.5" stdDeviation="1.2" flood-color="#000" flood-opacity=".55"/></filter></defs><rect width="${W}" height="${H}" fill="rgba(20,16,12,.18)"/>`;
+  if(!it.length){ s+=`<circle cx="${cx}" cy="${cy}" r="${r1}" fill="rgba(30,24,18,.46)" stroke="rgba(255,255,255,.6)" stroke-width="1.6"/><text x="${cx}" y="${cy-r0-18}" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" filter="url(#gwSh)">${GW.level==='gest'?'No tienes gestos en tu ruedita':'No tienes globos en tu ruedita'}</text><text x="${cx}" y="${cy+r0+30}" text-anchor="middle" font-size="13" font-weight="800" fill="#fff" filter="url(#gwSh)">Ponlos en Personalizar</text>`; }
+  it.forEach((t,i)=>{ const a0=start+i*2*Math.PI/n+gap/2, a1=start+(i+1)*2*Math.PI/n-gap/2, am=(a0+a1)/2, rm=(r0+r1)/2+4, x=cx+Math.cos(am)*rm, y=cy+Math.sin(am)*rm, two=n<=2, sc=two?1.25:.95;
+    s+=`<path d="${n===1?`M${cx+r1},${cy} A${r1},${r1} 0 1 1 ${cx-r1},${cy} A${r1},${r1} 0 1 1 ${cx+r1},${cy} M${cx+r0},${cy} A${r0},${r0} 0 1 0 ${cx-r0},${cy} A${r0},${r0} 0 1 0 ${cx+r0},${cy}Z`:gwSlice(cx,cy,r0,r1,a0,a1)}" fill-rule="evenodd" fill="${GW.sel===i?'rgba(255,255,255,.42)':'rgba(30,24,18,.46)'}" stroke="rgba(255,255,255,.6)" stroke-width="1.6"/>`;
+    const yy=n===1?cy-r0-(r1-r0)/2:y, xx=n===1?cx:x;
+    if(t.svg) s+=`<g transform="translate(${xx.toFixed(1)},${(yy-10).toFixed(1)}) scale(${sc})">${t.svg}</g>`;
+    else s+=`<image href="${t.img}" x="${(xx-26*sc).toFixed(1)}" y="${(yy-36*sc).toFixed(1)}" width="${(52*sc).toFixed(1)}" height="${(52*sc).toFixed(1)}"/>`;
+    s+=`<text x="${xx.toFixed(1)}" y="${(yy+(two?44:34)).toFixed(1)}" text-anchor="middle" font-size="${two?17:13}" font-weight="800" fill="#fff" filter="url(#gwSh)">${t.label}</text>`; });
+  s+=`<circle cx="${cx}" cy="${cy}" r="${r0-6}" fill="rgba(255,255,255,.88)" stroke="rgba(0,0,0,.15)" stroke-width="2"/>`;
+  s+=GW.level!=='root' ? `<path d="M${cx+12},${cy-5} H${cx-11} M${cx-3},${cy-13} L${cx-12},${cy-5} L${cx-3},${cy+3}" stroke="#2c3a1a" stroke-width="3.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><text x="${cx}" y="${cy+18}" text-anchor="middle" font-size="11" font-weight="800" fill="#2c3a1a">Atrás</text>`
+    : `<path d="M${cx-9},${cy-9} L${cx+9},${cy+9} M${cx+9},${cy-9} L${cx-9},${cy+9}" stroke="#2c3a1a" stroke-width="3.6" stroke-linecap="round"/>`;
+  el.innerHTML=s+'</svg>'; }
+function gwOpen(){ if(state!=='play' || GW.open) return; if(document.pointerLockElement) document.exitPointerLock(); GW.open=true; GW.level='root'; GW.sel=-1; gwRender(); }
+function gwClose(){ if(!GW.open) return; GW.open=false; gwRender(); }
+function gwPick(i){ const t=GW.items[i]; if(!t) return;
+  if(t.go){ GW.level=t.go; GW.sel=-1; gwRender(); return; }
+  gwClose(); if(t.gest) playGesture(t.gest); else if(t.paint) throwPaint(t.paint); }
+function gwHit(x,y){ const g=GW.geo; if(!g) return null; const dx=x-g.cx, dy=y-g.cy, d=Math.hypot(dx,dy);
+  if(d<g.r0) return 'center'; if(d>g.r1+16) return 'out'; if(!GW.items.length) return 'out';
+  let a=Math.atan2(dy,dx)-g.start; a=((a%(2*Math.PI))+2*Math.PI)%(2*Math.PI); return Math.min(g.n-1,Math.floor(a/(2*Math.PI/g.n))); }
+{ const el=ui('gWheel');
+  el.addEventListener('pointerdown',e=>{ e.preventDefault(); e.stopPropagation(); const h=gwHit(e.clientX,e.clientY); GW.down=h; if(typeof h==='number'){ GW.sel=h; gwRender(); } });
+  el.addEventListener('pointerup',e=>{ e.preventDefault(); e.stopPropagation(); const h=gwHit(e.clientX,e.clientY);
+    if(h==='center' && GW.down==='center'){ if(GW.level==='root') gwClose(); else { GW.level='root'; GW.sel=-1; gwRender(); } }
+    else if(h==='out' && GW.down==='out') gwClose();
+    else if(typeof h==='number' && h===GW.down) gwPick(h);
+    else { GW.sel=-1; gwRender(); } GW.down=null; });
+  addEventListener('resize',()=>{ if(GW.open) gwRender(); }); }
+tap(ui('tGest'),()=>{ GW.open ? gwClose() : gwOpen(); });
+addEventListener('keydown',e=>{ if(e.code==='Escape' && GW.open){ e.preventDefault(); gwClose(); return; }
+  if(state!=='play' || e.repeat || e.target instanceof HTMLInputElement) return;
+  if(e.code==='KeyT' && !player.car){ GW.open ? gwClose() : gwOpen(); }
+  else if(GW.open){ const m=/^Digit([1-5])$/.exec(e.code); if(m){ e.stopImmediatePropagation(); gwPick(+m[1]-1); } } }, true);
+// --- en la tienda: tocar uno tuyo lo pone o lo quita de la ruedita (máximo 5) ---
+function gpList(it){ return it.cat==='gestos' ? (wardrobe.gest=wardrobe.gest||[]) : (wardrobe.pint=wardrobe.pint||[]); }
+function gpKey(it){ return it.cat==='gestos' ? it.gest : it.paint; }
+function gpOn(it){ return gpList(it).includes(gpKey(it)); }
+function gpToggle(it){ const L=gpList(it), k=gpKey(it), i=L.indexOf(k);
+  if(i>=0){ L.splice(i,1); flashNote(`${it.name}: lo quitaste de tu ruedita`); }
+  else if(L.length>=MAX_RUEDA){ flashNote(`Tu ruedita ya tiene ${MAX_RUEDA}: toca uno que tengas puesto para quitarlo primero`); return; }
+  else { L.push(k); flashNote(`${it.name}: ya está en tu ruedita`+(it.cat==='gestos' && !gestAllowed(k) ? ` (solo ${GEST_BY[k].av==='c'?'con el Chibi':'con el frijolito'})`:'')); }
+  saveWardrobe(); try{ audio.cam(); }catch(e){} }
+// fila "Botón de atajo" en la pestaña de gestos
+function shopAtajoRow(){ let box=document.getElementById('shopAtajo'); if(!box){ box=document.createElement('div'); box.id='shopAtajo'; box.className='shop-filter'; (document.getElementById('shopAccF')||ui('shopFilter')).after(box); }
+  box.hidden=shopCat!=='gestos'; if(box.hidden) return; const cur=gestAtajo();
+  const mine=GESTS.filter(g=>gestAllowed(g.id) && owns(SHOP_BY['ge_'+g.id]));
+  box.innerHTML='<span class="atj">Botón de atajo:</span>'+mine.map(g=>`<button type="button" class="fchip${g.id===cur?' on':''}" data-g="${g.id}">${g.n}</button>`).join('');
+  box.querySelectorAll('button').forEach(b=>b.onclick=()=>{ wardrobe.atajo=wardrobe.atajo||{}; wardrobe.atajo[myAv()]=b.dataset.g; saveWardrobe(); waveLabel(); flashNote(`El botón de atajo ahora hace: ${GEST_BY[b.dataset.g].n}`); renderShop(); }); }
 ui('roomChip').onclick=()=>{
   if(mp.pub){ flashNote('Sala pública: cualquiera entra desde Salas activas. El código está en la pausa.'); return; }
   const code=mp.code; if(!code) return;
@@ -10290,15 +10474,21 @@ I('cuerpo','av_amigu','Amigurumi',0,{free:1, thumb:'amigu', plain:'#f4efe6'});
   cp('cgorros','arg_','agorros'); cp('caccesorios','arc_','aaccesorios');
   cp('carriba','ara_','aarriba'); cp('cabajo','arb_','aabajo'); cp('czapatos','arz_','azapatos');
   cp('cpelo','ahp_','apelo'); cp('ccolor','ahc_','acolor'); cp('ccejas','acj_','acejas'); cp('cmejillas','amj_','amejillas'); cp('corejas','aor_','aorejas'); }
-const SHOP_BY={}; SHOP.forEach(it=>{ it.slot=SLOT_OF[it.cat]; it.av=(SHOP_CATS.find(c=>c.id===it.cat)||{}).av||'f'; if(it.price>0) it.price=Math.max(15,it.price*5); SHOP_BY[it.id]=it; });   // v124: precios ×5 (economía más justa)
+// v201: gestos y globos de pintura (para todos los cuerpos)
+SHOP_CATS.push({id:'gestos', name:'Gestos', ic:'💃', all:1}, {id:'pinturas', name:'Globos de pintura', ic:'🎈', all:1}); SLOT_OF.gestos='gest'; SLOT_OF.pinturas='pint';
+GESTS.forEach(g=>I('gestos','ge_'+g.id,g.n,g.p,{gest:g.id, nw:1, ...(g.p?{}:{free:1}), ...(g.av?{desc:g.av==='c'?'solo con el Chibi':'solo con el frijolito'}:{})}));
+PAINTS.forEach(p=>I('pinturas','gp_'+p.id,'Globo '+(p.id==='estrella'?'de estrella':'de '+p.n.toLowerCase()),p.p,{paint:p.id, nw:1, ...(p.p?{}:{free:1})}));
+const SHOP_BY={}; SHOP.forEach(it=>{ it.slot=SLOT_OF[it.cat]; const cat0=SHOP_CATS.find(c=>c.id===it.cat)||{}; it.av=cat0.av||'f'; if(cat0.all) it.all=1; if(it.price>0) it.price=Math.max(15,it.price*5); SHOP_BY[it.id]=it; });   // v124: precios ×5 (economía más justa)
 SHOP.forEach(it=>{ if(!it.ak) return; const as=it.as||({gorro:'cabeza',cara:'cara',cuerpo:'cuello',espalda:'espalda'})[it.view]||'cabeza'; it.as=as; it.slot=(it.av==='a'?'a':'c')+({cabeza:'acc',cara:'acf',cuello:'acn',espalda:'acb',mano:'ach'})[as]; });   // v190: cada accesorio va en su lugar (se pueden usar varios)
 const OUT_SLOTS=['top','hat','gloves','socks','shoes','glasses','skin','tex','body','cskin','ceyes','chair','chcol','cbrows','cmouth','ccheeks','cears','ctop','cbot','cshoe','chat','cacc','askin','aeyes','ahair','ahcol','abrows','acheeks','aears','atop','abot','ashoe','ahat','aacc','cacf','cacn','cacb','cach','aacf','aacn','aacb','aach'];
 // lo comprado y lo puesto
 // v201: los ojos de corazón del Chibi se quitaron de la tienda: a quien los tenía se le devuelven sus monedas (una sola vez)
 const CH_EYES_RETIRED={co_corazones:14, co2_h_morados:14, co2_h_azules:14, co2_h_rojos:14, co2_h_naranjas:14};
-const wardrobe=(()=>{ let w={own:[], eq:{}}; try{ const s=JSON.parse(localStorage.getItem('mundoPelucheRopa')||'null');
+const wardrobe=(()=>{ let w={own:[], eq:{}, gest:['saludar','sentarse'], pint:['estrella'], atajo:{}}; try{ const s=JSON.parse(localStorage.getItem('mundoPelucheRopa')||'null');
     if(s && !localStorage.getItem('mundoPelucheRet201')){ localStorage.setItem('mundoPelucheRet201','1'); const r=(s.own||[]).reduce((a,id)=>a+(CH_EYES_RETIRED[id]||0),0); if(r>0){ coins+=r; saveCoins(); window.__eyeRefund=r; } }
-    if(s){ w.own=(s.own||[]).filter(id=>SHOP_BY[id]); for(const k of OUT_SLOTS) if(s.eq && SHOP_BY[s.eq[k]] && (w.own.includes(s.eq[k]) || SHOP_BY[s.eq[k]].free)) w.eq[SHOP_BY[s.eq[k]].slot]=s.eq[k]; } }catch(e){} return w; })();
+    w.gest=['saludar','sentarse']; w.pint=['estrella']; w.atajo={};   // v201: lo que va en la ruedita y el botón de atajo
+    if(s){ if(Array.isArray(s.gest)) w.gest=s.gest.filter(id=>GEST_BY[id]).slice(0,MAX_RUEDA); if(Array.isArray(s.pint)) w.pint=s.pint.filter(id=>PAINT_BY[id]).slice(0,MAX_RUEDA); if(s.atajo && typeof s.atajo==='object') for(const k of ['f','c','a']) if(GEST_BY[s.atajo[k]]) w.atajo[k]=s.atajo[k];
+      w.own=(s.own||[]).filter(id=>SHOP_BY[id]); for(const k of OUT_SLOTS) if(s.eq && SHOP_BY[s.eq[k]] && (w.own.includes(s.eq[k]) || SHOP_BY[s.eq[k]].free)) w.eq[SHOP_BY[s.eq[k]].slot]=s.eq[k]; } }catch(e){} return w; })();
 function saveWardrobe(){ try{ localStorage.setItem('mundoPelucheRopa', JSON.stringify(wardrobe)); }catch(e){} }
 const outfitList=eq=>OUT_SLOTS.map(k=>eq[k]).filter(Boolean);
 function parseOutfit(a){ const eq={}; if(Array.isArray(a)) a.slice(0,52).forEach(id=>{ const it=typeof id==='string' && SHOP_BY[id]; if(it) eq[it.slot]=id; }); return eq; }
@@ -10803,7 +10993,7 @@ const shopEl=ui('shop'); let shopCat='sudaderas', shopTry=null;
 let shopOnly=null;   // v144: 'dulce' cuando abres la Dulcería
 const myAv=()=>wardrobe.eq.body==='av_chibi'?'c':wardrobe.eq.body==='av_amigu'?'a':'f', catAv=id=>(SHOP_CATS.find(c=>c.id===id)||{}).av||'f';
 const owns=it=>!!it.free || wardrobe.own.includes(it.id);
-const diShopVis=it=>shopOnly ? (it.dulce===1 || (!!it.dulce && wardrobe.own.includes(it.id))) : ((it.cat==='cuerpo' || it.av===myAv()) && (!it.dulce || wardrobe.own.includes(it.id)));   // v152: solo lo del cuerpo que traes
+const diShopVis=it=>shopOnly ? (it.dulce===1 || (!!it.dulce && wardrobe.own.includes(it.id))) : ((it.cat==='cuerpo' || it.all || it.av===myAv()) && (!it.dulce || wardrobe.own.includes(it.id)));   // v152: solo lo del cuerpo que traes
 // ---- Filtros de la tienda: buscar por nombre o color, lo nuevo, lo mío y lo que me alcanza ----
 const NEW_RE=/^(arg_|arc_|ara_|arb_|arz_|ahp_|ahc_|acj_|amj_|aor_|ap_|ae_|rg_|rc_|ra_|rb_|rz_|hp_|hc_|cj_|bo_|mj_|or_|cp_|co_|sdd_|cmd_|sud_|god_|gud_|cad_|hn_|gln_|gun_|zn_|zp_dino$|sdn_|pln_|cmn_|sun2_|can_|dg_(aurora|chicle|caribe|volcan)$|pa_(salmon|pistache)$|ne_(dorado|menta)$|fo_amarillo$|ar_rayas$|tx_(huellitas|mezclilla|vichy|hojas|notas|burbujas|fresas|sandia|cuadritos|metalazul)$)/;
 const isNewItem=it=>!!it.nw, isNewPet=p=>p.i>=12;
@@ -10873,11 +11063,11 @@ function renderShop(){ shopThGen++; shopThN=0; SHOP_THQ.length=0;
   shopCoinsUI();
   const tabs=ui('shopTabs'); tabs.textContent='';
   ui('shopFilter').querySelectorAll('.fchip').forEach(b=>b.classList.toggle('on',!!shopF[b.dataset.f]));
-  if(!shopOnly && shopCat!=='mascotas' && shopCat!=='cuerpo' && catAv(shopCat)!==myAv()) shopCat='cuerpo';
+  if(!shopOnly && shopCat!=='mascotas' && shopCat!=='cuerpo' && !(SHOP_CATS.find(c=>c.id===shopCat)||{}).all && catAv(shopCat)!==myAv()) shopCat='cuerpo';
   if(shopCat==='cuerpo') try{ localStorage.setItem('mpCuerpoVisto','1'); }catch(e){}
   let cuerpoVisto=true; try{ cuerpoVisto=!!localStorage.getItem('mpCuerpoVisto'); }catch(e){}
   SHOP_CATS.forEach(c=>{ if(shopOnly && (c.id==='mascotas' || !SHOP.some(it=>it.cat===c.id && diShopVis(it)))) return;
-    if(!shopOnly && c.id!=='mascotas' && c.id!=='cuerpo' && (c.av||'f')!==myAv()) return; const b=document.createElement('button'); b.type='button'; b.className='shop-tab'+(c.id===shopCat?' on':''); b.innerHTML=`<span aria-hidden="true">${c.ic}</span>`;
+    if(!shopOnly && c.id!=='mascotas' && c.id!=='cuerpo' && !c.all && (c.av||'f')!==myAv()) return; const b=document.createElement('button'); b.type='button'; b.className='shop-tab'+(c.id===shopCat?' on':''); b.innerHTML=`<span aria-hidden="true">${c.ic}</span>`;
     if(c.id==='mascotas' ? PETS.some(p=>isNewPet(p)&&!pets.own.includes(p.id)) : SHOP.some(it=>it.cat===c.id&&isNewItem(it)&&!wardrobe.own.includes(it.id)&&diShopVis(it)) || (c.id==='cuerpo' && !cuerpoVisto)) b.innerHTML+='<i class="tnw" title="Hay cosas nuevas"></i>'; const t=document.createElement('span'); t.textContent=c.name; b.appendChild(t);
     b.onclick=()=>{ shopCat=c.id; renderShop(); }; tabs.appendChild(b); });
   const grid=ui('shopGrid'); grid.textContent='';
@@ -10887,16 +11077,17 @@ function renderShop(){ shopThGen++; shopThN=0; SHOP_THQ.length=0;
   { let box=document.getElementById('shopAccF'); if(!box){ box=document.createElement('div'); box.id='shopAccF'; box.className='shop-filter'; ui('shopFilter').after(box); } box.hidden=!accCat;
     if(accCat){ box.innerHTML=[['','Todos'],['cabeza','🎀 Cabeza'],['cara','👓 Cara'],['cuello','🧣 Cuello'],['espalda','🎒 Espalda'],['mano','🎈 Mano']].map(([k,n])=>'<button type="button" class="fchip'+((shopAs||'')===k?' on':'')+'" data-as="'+k+'">'+n+'</button>').join('');
       box.querySelectorAll('button').forEach(b=>b.onclick=()=>{ shopAs=b.dataset.as; renderShop(); }); } }
+  shopAtajoRow();   // v201
   const inCat=SHOP.filter(it=>it.cat===shopCat && diShopVis(it) && (!accCat || !shopAs || it.as===shopAs)), list=inCat.filter(it=>shopMatch(it.name, wardrobe.own.includes(it.id), it.price, isNewItem(it)));
   shopCountTxt(list.length, inCat.length); if(!list.length) shopEmpty(grid);
   list.forEach(it=>{
-    const own=owns(it), on=wardrobe.eq[it.slot]===it.id || (!wardrobe.eq[it.slot] && !!it.def), trying=shopTry&&shopTry.id===it.id;
+    const own=owns(it), gp=it.cat==='gestos'||it.cat==='pinturas', on=gp ? own && gpOn(it) : wardrobe.eq[it.slot]===it.id || (!wardrobe.eq[it.slot] && !!it.def), trying=shopTry&&shopTry.id===it.id;
     const b=document.createElement('button'); b.type='button'; b.className='shop-item'+(on?' on':'')+(trying?' try':'');
-    const sw=document.createElement('span'); sw.className='sw'; const bgf=()=>chSwatch(it) || (it.eye ? `url(${canUrl(chEyeThumb(it.eye))}) center/cover` : it.thumb ? `url(${canUrl(it.thumbC||(it.thumbC=avThumb(it.thumb)))}) center/contain no-repeat, ${it.plain}` : swatchCss(it));
+    const sw=document.createElement('span'); sw.className='sw'; const bgf=()=>(it.gest ? `url("${gIconUrl(it.gest)}") center/120% no-repeat, #eaf3e0` : it.paint ? `url(${paintThumb(it.paint)}) center/contain no-repeat, #ffffff` : '') || chSwatch(it) || (it.eye ? `url(${canUrl(chEyeThumb(it.eye))}) center/cover` : it.thumb ? `url(${canUrl(it.thumbC||(it.thumbC=avThumb(it.thumb)))}) center/contain no-repeat, ${it.plain}` : swatchCss(it));
     if(shopThN++<12 || !(it.av==='c'||it.av==='a')) sw.style.background=bgf(); else { sw.style.background='#efe8d4'; SHOP_THQ.push([shopThGen,sw,bgf]); shopThPump(); }   // v190: las miniaturas de abajo se dibujan poco a poco (ya son 100 por lista)
     if(KIND_IC[it.k]){ const ic=document.createElement('i'); ic.className='ic'; ic.textContent=KIND_IC[it.k]; sw.appendChild(ic); } if(it.neon) sw.style.boxShadow=`0 0 12px ${it.neon}`;   // v192: esto había quedado dentro del comentario
     const nm=document.createElement('span'); nm.className='nm'; nm.textContent=it.name;
-    const st=document.createElement('span'); st.className='st'; st.innerHTML = on ? 'Puesto ✓' : it.soon ? 'Muy pronto' : own ? (it.free && !wardrobe.own.includes(it.id) ? 'Gratis · ponértelo' : 'Tuyo · ponértelo') : `<i class="cn"></i>${it.price}`;
+    const st=document.createElement('span'); st.className='st'; st.innerHTML = on ? (gp?'En tu ruedita ✓':'Puesto ✓') : it.soon ? 'Muy pronto' : own ? (it.free && !wardrobe.own.includes(it.id) ? 'Gratis · ponértelo' : 'Tuyo · ponértelo') : `<i class="cn"></i>${it.price}`;
     b.append(sw,nm,st); if(isNewItem(it) && !own){ const n=document.createElement('span'); n.className='nw'; n.textContent='Nuevo'; b.appendChild(n); } b.onclick=()=>shopPick(it); grid.appendChild(b); });
   const bar=ui('shopBuy'), it=shopTry;
   if(it && !owns(it)){ bar.hidden=false; const can=coins>=it.price;
@@ -10904,8 +11095,9 @@ function renderShop(){ shopThGen++; shopThN=0; SHOP_THQ.length=0;
     const bb=ui('shopBuyBtn'); bb.disabled=!can; bb.innerHTML=`Comprar · <i class="cn"></i>${it.price}`; shopAdRender('r:'+it.id,it.price); }
   else bar.hidden=true;
 }
-function previewEq(){ const eq={...wardrobe.eq}; if(shopTry) eq[shopTry.slot]=shopTry.id; return eq; }
+function previewEq(){ const eq={...wardrobe.eq}; if(shopTry && !shopTry.gest && !shopTry.paint) eq[shopTry.slot]=shopTry.id; return eq; }
 function shopPick(it){
+  if((it.gest||it.paint) && owns(it)){ shopTry=null; gpToggle(it); renderShop(); return; }   // v201: ponerlo o quitarlo de la ruedita
   if(it.soon){ flashNote(`El ${it.name} llega muy pronto`); return; }
   if(owns(it)){ shopTry=null;
     if(it.slot==='body'){ if(it.def) delete wardrobe.eq.body; else wardrobe.eq.body=it.id; player.sitF=false; }   // v152: cambiar de cuerpo
@@ -10913,7 +11105,7 @@ function shopPick(it){
   else shopTry = shopTry&&shopTry.id===it.id ? null : it;   // probártelo antes de comprar
   applyOutfit(plush, previewEq()); renderShop(); try{ sendPresence(true); }catch(e){}
 }
-function grantItem(it){ if(wardrobe.own.includes(it.id)) return; wardrobe.own.push(it.id); wardrobe.eq[it.slot]=it.id; saveWardrobe(); shopTry=null;
+function grantItem(it){ if(wardrobe.own.includes(it.id)) return; wardrobe.own.push(it.id); if(it.gest||it.paint){ const L=gpList(it); if(!L.includes(gpKey(it)) && L.length<MAX_RUEDA) L.push(gpKey(it)); } else wardrobe.eq[it.slot]=it.id; saveWardrobe(); shopTry=null;
   try{ coinSound(3); }catch(e){} applyOutfit(plush, wardrobe.eq); renderShop(); try{ sendPresence(true); }catch(e){} }
 ui('shopBuyBtn').onclick=()=>{ if(shopCat==='mascotas'){ petBuy(); return; } const it=shopTry; if(!it || coins<it.price || wardrobe.own.includes(it.id)) return;
   coins-=it.price; saveCoins(); renderCoins(); grantItem(it); };
@@ -22706,7 +22898,7 @@ function fxRender(S,cam){
   fxPass(FX.mComp,null); renderer.autoClear=ac; }
 renderer.info.autoReset=false;   // cuenta todos los dibujos del cuadro (en Máxima son varios pasos)
 function frame(){
-  requestAnimationFrame(frame);
+  requestAnimationFrame(frame); if(GW.open && state!=='play') gwClose();
   { const cap=FPS_CAPS[settings.fpsCap]; if(cap){ const n=performance.now(), iv=1000/cap, tol=Math.min(4,iv*.25); if(n<capLast-tol) return; capLast=Math.max(capLast+iv, n-tol); } }   // ritmo parejo: lleva la cuenta de cuándo toca el siguiente cuadro (así 90 en una pantalla de 120 da 90 exactos)   // ritmo parejo de 30 (por tiempo: si el equipo no llega a 60, ya no baja a 15)
   const raw=clock.getDelta(), dt=Math.min(raw,.05), t=clock.elapsedTime;
   const pf=settings.fps, p0=pf?performance.now():0;
