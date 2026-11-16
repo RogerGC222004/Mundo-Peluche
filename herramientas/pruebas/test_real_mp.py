@@ -20,7 +20,7 @@ BUS = """
 async def open_game(ctx,name):
   pg=await ctx.new_page(); errs=[]; pg.on("pageerror", lambda e: errs.append(str(e)))
   await pg.add_init_script(BUS)
-  await pg.goto("https://test.local/"); await pg.wait_for_timeout(300)
+  await pg.goto("https://test.local/"); await pg.wait_for_function("(()=>{const l=document.getElementById('loader'); return !l || l.hidden || getComputedStyle(l).display==='none';})()", polling=250, timeout=120000)
   await pg.evaluate(f"document.getElementById('mpBtn').click()"); await pg.fill('#mpName', name)
   return pg, errs
 async def m():

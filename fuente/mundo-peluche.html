@@ -4980,28 +4980,32 @@ const FJ_CURVE=new THREE.SplineCurve(FJ_PROF.map(p=>new THREE.Vector2(p[0],p[1])
 const FJ_MOUTH={kind:'closed', Y:1.215, W:.085, K:3.0, D:.018, sig:.014, puff:.003, dk:.75};
 const fjTofY=y=>{ let lo=0, hi=1; for(let k=0;k<40;k++){ const m=(lo+hi)/2; if(FJ_CURVE.getPoint(m).y<y) lo=m; else hi=m; } return (lo+hi)/2; };
 // hileras: parejas en todo el cuerpo y muy juntitas cerca de la boca (ahí está el detalle); columnas más juntas al frente
-function fjRows(M){ const r=[]; for(let j=0;j<=64;j++) r.push(j/64); if(M){ const a=fjTofY(M.Y-.15), b=fjTofY(M.Y+.06); for(let k=0;k<=60;k++) r.push(a+(b-a)*k/60); }   // (v201: hasta donde llega la boca abierta)
+// v201 (revisión final): 72 columnas y 48+40 hileras se ven igual que 100 y 64+60 (fotos lado a lado) y pesan la mitad
+function fjRows(M,nu,nb){ nu=nu||48; nb=nb==null?40:nb; const r=[]; for(let j=0;j<=nu;j++) r.push(j/nu); if(M && nb){ const a=fjTofY(M.Y-.15), b=fjTofY(M.Y+.06); for(let k=0;k<=nb;k++) r.push(a+(b-a)*k/nb); }   // (v201: hasta donde llega la boca abierta)
   r.sort((a,b)=>a-b); return r.filter((t,i)=>!i || t-r[i-1]>1e-4); }
 const FJ_GEO={};
 function fjBodyGeo(){ return FJ_GEO.body||(FJ_GEO.body=fjBodyBuild(FJ_MOUTH)); }
-function fjBodyBuild(M){ const NU=100, a=.25, rows=fjRows(FJ_MOUTH), NV=rows.length-1, pos=[], uv=[], idx=[];
+// de lejos: frijol liso y sencillo (la boquita la pone su calcomanía); ver plushLod
+function fjBodyGeoLo(){ return FJ_GEO.lo||(FJ_GEO.lo=fjBodyBuild(null,{NU:40, nu:32, nb:0})); }
+function fjBodyBuild(M,q){ q=q||{}; const NU=q.NU||72, a=.25, rows=fjRows(FJ_MOUTH,q.nu,q.nb), NV=rows.length-1, pos=[], uv=[], idx=[];
   rows.forEach((t,j)=>{ const p=FJ_CURVE.getPoint(t), r=(j===0||j===NV)?0:p.x, y=p.y;
     for(let i=0;i<=NU;i++){ const x=2*i/NU-1, phi=Math.PI*(a*x+(1-a)*x*x*x); let X=r*Math.sin(phi), Y=y, Z=r*Math.cos(phi);
-      if(Math.cos(phi)>.3 && Math.abs(y-M.Y)<.2){ const f=mouthField(M, phi*r, y-M.Y); if(f){ X-=Math.sin(phi)*f.dep; Z-=Math.cos(phi)*f.dep; Y+=f.up; } }
+      if(M && Math.cos(phi)>.3 && Math.abs(y-M.Y)<.2){ const f=mouthField(M, phi*r, y-M.Y); if(f){ X-=Math.sin(phi)*f.dep; Z-=Math.cos(phi)*f.dep; Y+=f.up; } }
       pos.push(X,Y,Z); uv.push(i/NU,t); } });
   for(let j=0;j<NV;j++) for(let i=0;i<NU;i++){ const A=j*(NU+1)+i, B=A+NU+1; idx.push(A,A+1,B, A+1,B+1,B); }
   const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); g.setIndex(idx); g.computeVertexNormals();
   return g; }
 // sombrita del pliegue: un pedacito de tela pegado encima que oscurece lo de abajo (sirve con cualquier tela o color)
 const FJ_CREASE_MAT=new THREE.MeshBasicMaterial({vertexColors:true, transparent:true, blending:THREE.MultiplyBlending, premultipliedAlpha:true, depthWrite:false, fog:false, polygonOffset:true, polygonOffsetFactor:-2});
-function fjCreaseGeo(){ if(FJ_GEO.crease) return FJ_GEO.crease; const M=FJ_MOUTH, NU=56, P0=.48, ta=fjTofY(M.Y-.05), tb=fjTofY(M.Y+.045), NV=36, pos=[], col=[], idx=[];
+// (lo=true: la de lejos, sencilla y sobre el frijol liso de fjBodyGeoLo)
+function fjCreaseGeo(lo){ const key=lo?'creaseLo':'crease'; if(FJ_GEO[key]) return FJ_GEO[key]; const M=FJ_MOUTH, NU=lo?28:56, P0=.48, ta=fjTofY(M.Y-.05), tb=fjTofY(M.Y+.045), NV=lo?14:36, off=lo?.003:.0012, pos=[], col=[], idx=[];
   for(let j=0;j<=NV;j++){ const t=ta+(tb-ta)*j/NV, p=FJ_CURVE.getPoint(t), r=p.x;
     for(let i=0;i<=NU;i++){ const phi=-P0+2*P0*i/NU, sx=Math.sin(phi), cz=Math.cos(phi); let X=r*sx, Y=p.y, Z=r*cz, d=0;
-      const f=mouthField(M, phi*r, p.y-M.Y); if(f){ X-=sx*f.dep; Z-=cz*f.dep; Y+=f.up; d=f.aD; }
-      X+=sx*.0012; Z+=cz*.0012; pos.push(X,Y,Z); const k=1-.78*d; col.push(k,k,k); } }
+      const f=mouthField(M, phi*r, p.y-M.Y); if(f){ if(!lo){ X-=sx*f.dep; Z-=cz*f.dep; Y+=f.up; } d=f.aD; }
+      X+=sx*off; Z+=cz*off; pos.push(X,Y,Z); const k=1-.78*d; col.push(k,k,k); } }
   for(let j=0;j<NV;j++) for(let i=0;i<NU;i++){ const A=j*(NU+1)+i, B=A+NU+1; idx.push(A,A+1,B, A+1,B+1,B); }
   const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(col,3)); g.setIndex(idx);
-  return FJ_GEO.crease=g; }
+  return FJ_GEO[key]=g; }
 function fjAddCrease(body){ const m=new THREE.Mesh(fjCreaseGeo(),FJ_CREASE_MAT); m.renderOrder=2; m.userData.noBatch=true; body.add(m); return m; }
 // --- Chibi: bocas abiertas en 3D (medidas en la cabeza; Y = altura respecto al centro de la cabeza) ---
 const CH_MOUTH3={
@@ -5011,7 +5015,8 @@ const CH_MOUTH3={
 // qué boca de la tienda va en 3D: las de sorpresa, risa / boca abierta feliz y sonrisa con dientes (de cualquier color)
 function chMouth3Kind(mo){ if(!mo) return null; if(CH_MOUTH3[mo]) return mo; const m=/^m:(sorpresa|abierta|dientes):/.exec(mo); return m ? (m[1]==='abierta'?'risa':m[1]) : null; }
 const CH_M3={geo:{}, mat:{}};
-function chHeadGeo3(kind){ if(CH_M3.geo[kind]) return CH_M3.geo[kind]; const M=CH_MOUTH3[kind], NU=140, NV=110, a=.35, pos=[], uv=[], idx=[], RX=CH.RX, RY=CH.RY, RZ=CH.RZ, n=new THREE.Vector3();
+// (v201 revisión final: 80×60 se ve igual que 140×110 —el hueco se recorta por pixel— y pesa la tercera parte)
+function chHeadGeo3(kind){ if(CH_M3.geo[kind]) return CH_M3.geo[kind]; const M=CH_MOUTH3[kind], NU=80, NV=60, a=.35, pos=[], uv=[], idx=[], RX=CH.RX, RY=CH.RY, RZ=CH.RZ, n=new THREE.Vector3();
   for(let j=0;j<=NV;j++){ const s=j/NV, th=Math.PI*s;
     for(let i=0;i<=NU;i++){ const x=2*i/NU-1, phi=Math.PI*(a*x+(1-a)*x*x*x), ux=Math.sin(th)*Math.sin(phi), uy=Math.cos(th), uz=Math.sin(th)*Math.cos(phi);
       let qx=ux*RX, qy=uy*RY, qz=uz*RZ;
@@ -5103,7 +5108,7 @@ function tongueSet(o,on){ const u=o.userData; if(on && (u.av==='c'||u.av==='a'))
   else if(!tg.want){ tg.want=1; tg.stamp=(Date.now()%1e7); } }
 function tongueClean(o){ const u=o.userData, tg=u.tg; if(!tg) return; u.tg=null;
   if(tg.mesh.parent) tg.mesh.parent.remove(tg.mesh); tg.mesh.geometry.dispose(); if(tg.bag.parent) tg.bag.parent.remove(tg.bag);
-  if(u.body.geometry===FJ_GEO.open) u.body.geometry=fjBodyGeo(); if(tg.mat && u.body.material===tg.mat) u.body.material=tg.base; if(tg.mat) tg.mat.dispose(); if(u.crease) u.crease.visible=(u.av!=='c'&&u.av!=='a'); }
+  if(u.body.geometry===FJ_GEO.open || u.body.geometry===FJ_GEO.lo) u.body.geometry=u.lodFar?fjBodyGeoLo():fjBodyGeo(); if(tg.mat && u.body.material===tg.mat) u.body.material=tg.base; if(tg.mat) tg.mat.dispose(); if(u.crease) u.crease.visible=(u.av!=='c'&&u.av!=='a'); }
 // --- cada cuadro: abrir/cerrar, la física y la malla ---
 const _tgw_=new THREE.Vector3(), _tgl_=new THREE.Vector3(), _tgv_=new THREE.Vector3(), _tgq_=new THREE.Vector3(), _tgT_=new THREE.Vector3(), _tgB_=new THREE.Vector3(), _tgN_=new THREE.Vector3(), _tgP_=new THREE.Vector3();
 function tongueTick(o,dt,blocked){ const u=o.userData, tg=u.tg; if(!tg) return; const body=u.body;
@@ -5114,7 +5119,7 @@ function tongueTick(o,dt,blocked){ const u=o.userData, tg=u.tg; if(!tg) return; 
   else { tg.e=Math.max(0,tg.e-dt/.45); if(tg.e<.02) tg.o=Math.max(0,tg.o-dt/.3); if(tg.o<=0 && tg.e<=0){ tongueClean(o); return; } }
   // la tela con el hueco (si alguien cambió la tela, se vuelve a copiar)
   if(body.material!==tg.mat){ if(tg.mat) tg.mat.dispose(); tg.base=body.material; tg.mat=fjMouthMat(tg.base); body.material=tg.mat; }
-  body.geometry=FJ_GEO.open||fjBodyGeoOpen(); fjMouthSet(tg.mat.userData.fjMouth,tg.o); tg.bag.visible=true; if(u.crease) u.crease.visible=tg.o<.15;
+  body.geometry=u.lodFar?fjBodyGeoLo():(FJ_GEO.open||fjBodyGeoOpen()); fjMouthSet(tg.mat.userData.fjMouth,tg.o); tg.bag.visible=true; if(u.crease) u.crease.visible=tg.o<.15;
   // la cabeza (el frijolito es todo cabeza): girar y asentir un poquito
   tg.hy+=(tg.hyT-tg.hy)*Math.min(1,dt*10); tg.hp+=(tg.hpT-tg.hp)*Math.min(1,dt*10); if(!tg.want){ tg.hyT*=.9; tg.hpT*=.9; }
   o.rotation.y+=tg.hy; o.rotation.x+=tg.hp; o.updateMatrixWorld(true);
@@ -5137,7 +5142,8 @@ function tongueTick(o,dt,blocked){ const u=o.userData, tg=u.tg; if(!tg) return; 
         if(fa) b.addScaledVector(_tgv_,-c); else { a.addScaledVector(_tgv_,c*.5); b.addScaledVector(_tgv_,-c*.5); } }
       for(let i=0;i<N;i++){ if(i/(N-1)*e<=TG_FIX) continue; body.worldToLocal(_tgl_.copy(P[i])); const y=_tgl_.y; if(y<.02||y>1.66) continue;
         const r=Math.hypot(_tgl_.x,_tgl_.z), need=fjR(y)+.055; if(r<need){ if(r<1e-4){ _tgl_.z=need; } else { _tgl_.x*=need/r; _tgl_.z*=need/r; } body.localToWorld(P[i].copy(_tgl_)); } } } }
-  // la malla, en medidas del peluche (sigue los puntos con una curva suave)
+  // la malla, en medidas del peluche (sigue los puntos con una curva suave); de lejos se rehace solo 1 de cada 3 cuadros
+  if(u.lodFar && tg.built && ((tg.mk=(tg.mk|0)+1)%3)){ tg.mesh.visible=tg.e>.01; return; } tg.built=1;
   const pos=tg.mesh.geometry.attributes.position, arr=pos.array, L=[]; for(let i=0;i<N;i++) L.push(o.worldToLocal(_tgP_.copy(P[i])).clone());
   _TGM.copy(body.matrix).invert();
   const cr=(s,out)=>{ const x=s*(N-1), i=Math.min(N-2,Math.floor(x)), t=x-i, p0=L[Math.max(0,i-1)], p1=L[i], p2=L[i+1], p3=L[Math.min(N-1,i+2)], t2=t*t, t3=t2*t;
@@ -5155,6 +5161,17 @@ function tongueTick(o,dt,blocked){ const u=o.userData, tg=u.tg; if(!tg) return; 
       if(r<1e-4){ _tgl_.z=need; } else { _tgl_.x*=need/r; _tgl_.z*=need/r; } _tgl_.applyMatrix4(BM); arr[j]=_tgl_.x; arr[j+1]=_tgl_.y; arr[j+2]=_tgl_.z; } }
   pos.needsUpdate=true; tg.mesh.geometry.computeVertexNormals(); tg.mesh.visible=tg.e>.01; }
 function fjBodyGeoOpen(){ if(FJ_GEO.open) return FJ_GEO.open; return FJ_GEO.open=fjBodyBuild(FJ_MOUTH_OPEN); }
+// ---------- v201 (revisión final): detalle según la distancia a la cámara ----------
+// La boquita del frijolito y la boca 3D del Chibi llevan muchos triangulitos, pero solo se notan de cerca. Lejos (más de 11 m)
+// se usa una versión sencilla: el frijol liso con una calcomanía de boquita más simple, y la cabeza redonda normal del Chibi
+// (el hueco de la boca se recorta igual, pixel por pixel). A menos de 9.5 m regresa lo detallado (así no parpadea en la orilla).
+const PL_LOD={far:11, near:9.5}, _plLodV=new THREE.Vector3();
+function plushLod(o){ const u=o.userData; if(!u || !u.body) return;
+  const d=o.getWorldPosition(_plLodV).distanceTo(camera.position), far=u.lodFar ? d>PL_LOD.near : d>PL_LOD.far; u.lodFar=far;
+  if(u.av==='c'){ const C=u.ch; if(C && C.m3Kind){ const h=C.skinned[1], g=far?chGeos().head:chHeadGeo3(C.m3Kind); if(h.geometry!==g) h.geometry=g; } return; }
+  if(u.av==='a') return;
+  if(!u.tg){ const b=u.body, g=far?fjBodyGeoLo():fjBodyGeo(); if(b.geometry!==g && (b.geometry===FJ_GEO.body || b.geometry===FJ_GEO.lo)) b.geometry=g; }
+  if(u.crease){ const cg=fjCreaseGeo(far); if(u.crease.geometry!==cg) u.crease.geometry=cg; } }
 // --- cámara fija: mientras tienes la lengua afuera, mover la cámara gira tu cabeza (con límites) ---
 const TGCAM={on:false}, _TGM=new THREE.Matrix4();
 function tgLook(dx,dy,s){ const tg=plush.userData.tg; if(!TGCAM.on || !tg || !tg.want) return false;
@@ -5624,6 +5641,7 @@ function makePlush(colorIdx){
     if(s===1){ const tag=new THREE.Mesh(new THREE.PlaneGeometry(.1,.15),tagMat); tag.position.set(.125,-LEG_UP*.55,0); tag.rotation.y=Math.PI/2+.2; pivot.add(tag); }
   });
   root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+  crease.castShadow=false;   // v201: la sombrita de la boca es una calcomanía: no hace sombra (ahorra triángulos en la sombra)
   root.rotation.order='YXZ';   // girar (Y) y luego inclinarse hacia adelante (X)
   root.userData={body,arms,legs,eyes,stains,crease,colorIdx:colorIdx|0};
    // los detallitos (ojos, botones, costuras) no hacen sombra: a ese tamaño no se ve y cuesta dibujarlos dos veces
@@ -6585,6 +6603,7 @@ function updateRemotes(dt,t){
     r.obj.rotation.x=r.dive;
     r.obj.rotation.z=Math.sin(r.walk)*.08*mv;
     if(r.obj.userData.gs) gestTick(r.obj,dt,mv,r.swim||r.air||!!r.carAnim);   // v201: gestos de los demás
+    plushLod(r.obj);   // v201: menos detalle de lejos
     if(r.obj.userData.tg) tongueTick(r.obj,dt,r.swim||!!r.carAnim);
     if(r.sitK>.002 && r.obj.userData.av==='c') r.obj.position.y-=CH.sitDrop*r.sitK;
     chSwayTick(r.obj,dt);
@@ -9735,7 +9754,7 @@ function updateHouse(dt,t){ const P=PIER;
   let want=Math.PI; if(inH){ want=Math.atan2(lx-o.position.x, lz-o.position.z); }
   T.yaw=lerpAng(T.yaw,want,1-Math.exp(-dt*3)); o.rotation.y=T.yaw;
   if(inH && !T.saw){ T.saw=true; T.wave=t+1.8; audio.wave(); } if(!inH) T.saw=false;
-  poseLimbs(o,t,dt,0,false,0,t<T.wave,null,0,0,false);
+  poseLimbs(o,t,dt,0,false,0,t<T.wave,null,0,0,false); plushLod(o);
   o.userData.body.scale.set(1,1+Math.sin(t*2)*.012,.78);
   // mini Cuco: va de la arena al agua y del agua a la arena
   const M=P.mini, tk=P.tank; M.wait-=dt;
@@ -22440,8 +22459,10 @@ const econCoins=o=>(parseInt(o.Monedas||'0',10)||0)*((+o.e||0)>=124?1:5);   // u
 function mergeSaves(a,b){ const o={v:1, e:124};
   o.Monedas=String(Math.max(econCoins(a), econCoins(b)));
   const ra=jparse(a.Ropa,{own:[],eq:{}}), rb=jparse(b.Ropa,{own:[],eq:{}});
-  const own=[...new Set([...(ra.own||[]),...(rb.own||[])])].filter(id=>SHOP_BY[id]); const eq=(ra.own||[]).length||Object.keys(ra.eq||{}).length?(ra.eq||{}):(rb.eq||{});
-  o.Ropa=JSON.stringify({own, eq});
+  const own=[...new Set([...(ra.own||[]),...(rb.own||[])])].filter(id=>SHOP_BY[id]); const rs=(ra.own||[]).length||Object.keys(ra.eq||{}).length?ra:rb, eq=rs.eq||{};
+  // v201: también la ruedita de gestos y pinturas, los botones de atajo y la pantalla de carga elegida (se revisan al abrir el juego)
+  const R={own, eq}; for(const k of ['gest','pint','atajo','carga']) if(rs[k]!=null) R[k]=rs[k];
+  o.Ropa=JSON.stringify(R);
   const fa=jparse(a.Banderas,[]), fb=jparse(b.Banderas,[]), fk=f=>f.w+':'+(f.w==='isla'?[f.x,f.z]:[f.dx,f.dy,f.dz]).map(v=>Math.round((+v||0)*100)).join(',');
   const fl=[...(Array.isArray(fa)?fa:[])]; const seen=new Set(fl.map(fk)); for(const f of (Array.isArray(fb)?fb:[])) if(f && typeof f.n==='string' && !seen.has(fk(f))){ fl.push(f); seen.add(fk(f)); }
   o.Banderas=JSON.stringify(fl.slice(-12));
@@ -23274,7 +23295,7 @@ function update(dt,t){ myLabelUpdate();
   plush.rotation.x = player.diveAngle;
   plush.rotation.z = player.swim ? 0 : Math.sin(player.walk)*.08*moving;
   if(plush.userData.gs) gestTick(plush,dt,moving,gestBlocked());   // v201: gestos
-  if(plush.userData.tg) tongueTick(plush,dt,tongueBlocked()); tgChip();   // v201: la lengua
+  plushLod(plush); if(plush.userData.tg) tongueTick(plush,dt,tongueBlocked()); tgChip();   // v201: la lengua (y menos detalle de lejos)
   if(carPoseNow){ const w=placeInCar(plush, player.car, carPoseNow); player.pos.copy(w); }
   if(acPose){ const w=placeInAircraft(plush, aircraft[player.ac.i], acPose); player.pos.copy(w); player.groundY=w.y; }
   if(pgPose){ placePlay(plush,pgPose); player.pos.set(...pgPose.pos); player.groundY=pgPose.pos[1]; player.facing=pgPose.yaw; }
