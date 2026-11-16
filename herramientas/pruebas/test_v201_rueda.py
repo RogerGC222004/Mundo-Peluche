@@ -40,7 +40,7 @@ async def m():
     r=await ev("[wardrobe.gest.join(','), wardrobe.pint.join(','), wardrobe.own.length]"); ok(r[0]=='saludar,sentarse,baile,robot' and r[1]=='estrella,flor,luna,dino,rayo','lo comprado entra a la ruedita, máximo 5 %s'%r[:2])
     await ev("gwOpen(); GW.level='pint'; gwRender(); 1"); await pg.wait_for_timeout(200); await pg.screenshot(path=OUT+'/rueda_3.png'); await ev("gwClose(); 1")
     # en la tienda: quitar y poner; atajo
-    await ev("openShop(); shopCat='gestos'; renderShop(); 1"); await pg.wait_for_timeout(600)
+    await ev("show('menu'); openShop(); shopCat='gestos'; renderShop(); 1"); await pg.wait_for_timeout(600)
     r=await ev("[!document.getElementById('shopAtajo').hidden, [...document.querySelectorAll('#shopAtajo button')].map(b=>b.textContent).join(',')]"); ok(r[0] and r[1]=='Saludar,Bailecito feliz,Baile robot','fila del atajo con tus gestos %s'%r)
     await pg.screenshot(path=OUT+'/tienda_gestos.png')
     await ev("[...document.querySelectorAll('#shopAtajo button')].find(b=>b.dataset.g==='baile').click(); 1"); r=await ev("[gestAtajo(), ui('tWave').dataset.lbl]"); ok(r==['baile','Bailecito'],'atajo cambiado a Bailecito %s'%r)
