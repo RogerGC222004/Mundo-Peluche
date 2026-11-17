@@ -21,7 +21,7 @@ function lobbyAnnounce(){}                     // (en claude.ai ya se anuncia co
 `// Vestíbulo por PeerJS: todos los que abren el juego se conectan aquí y avisan en qué sala están (sin el código a la vista)
 let webLobby=null, lobbyRef=null;
 function getLobby(){ if(!webLobby){ webLobby = peerNet ? peerNet.join('LOBBY0').then(L=>{ lobbyRef=L; lobbyAnnounce(); return L; }).catch(()=>{ webLobby=null; return null; }) : Promise.resolve(null); } return webLobby; }
-function lobbyAnnounce(){ if(!lobbyRef){ getLobby(); return; } try{ lobbyRef.presence({rm:mp.code?lobbyKey(mp.code,mp.pub):null, n:cleanName(profile.name)||'Peluche', pub:mp.code&&mp.pub?1:0}); }catch(e){} }
+function lobbyAnnounce(){ if(!lobbyRef){ getLobby(); return; } try{ lobbyRef.presence({rm:mp.code?lobbyKey(mp.code,mp.pub):null, n:cleanName(profile.name)||'Peluche', pub:mp.code&&mp.pub?1:0, fz:(typeof FNET!=='undefined'&&FNET.on&&FNET.host)?1:null}); }catch(e){} }
 setTimeout(getLobby,1200);`);
 rep(`function lobbyKey(code,pub){ return code; }      // en claude.ai la sala se identifica por su código`,
 `function lobbyKey(code,pub){ if(pub) return code; let h=7; for(const ch of code) h=(Math.imul(h,31)+ch.charCodeAt(0))>>>0; return 'p'+h.toString(36).padStart(7,'0').slice(-7); }   // las privadas se anuncian con una clave disfrazada`);
