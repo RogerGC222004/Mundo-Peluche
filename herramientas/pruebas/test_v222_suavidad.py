@@ -33,7 +33,7 @@ async def m():
     r=await ev("(async()=>{ startGame(); { const x=PG.x+6, z=PG.z+10; player.pos.set(x,groundAt(x,z,99)+.05,z); } for(let i=0;i<40;i++){ frame(); await new Promise(r=>setTimeout(r,25)); } return ui('fps').textContent; })()")
     ok('peor' in r and ' ms' in r, 'el medidor enseña el peor cuadro: «%s»'%r)
     # 3. las olas ya no se rehacen cada segundo
-    r=await ev("""(async()=>{ let mk=0; const om=swMake; swMake=function(c,n){ mk++; return om(c,n); }; for(let i=0;i<30;i++){ swellTick(); await new Promise(r=>setTimeout(r,30)); } const a=mk;
+    r=await ev("""(async()=>{ let mk=0; const om=swMake; swMake=function(c,n){ mk++; return om(c,n); }; for(let i=0;i<160;i++){ swellTick(); await new Promise(r=>setTimeout(r,10)); } const a=mk;   /* primero se terminan de hacer las de los lugares nuevos (de pocas en pocas) */
       for(let i=0;i<120;i++){ swellTick(); await new Promise(r=>setTimeout(r,25)); } swMake=om; return [a, mk-a, SWELL.all.length, SWELL.map.size]; })()""")
     ok(r[1]<=150 and r[2]>50, 'olas: en ~3 s solo se hacen las nuevas (%s; antes ~90 por segundo); hay %s en el mar'%(r[1],r[2]))
     # 4. coches, aviones y bichitos no se juntan con lo de alrededor
@@ -51,6 +51,11 @@ async def m():
     r=await ev("""(async()=>{ const T=MAP.trees[40]; { const x=T[0]+5, z=T[1]+5; player.pos.set(x,groundAt(x,z,99)+.05,z); } let n=0, part=0; for(let i=0;i<80 && (n<12 || ICULL.q<ICULL.L.length);i++){ __S(1); n++; if(ICULL.q<ICULL.L.length) part++; }
       let hit=false; for(const R of ICULL.L){ const m=R.m; if(m.material!==trunkMat) continue; for(let k=0;k<m.count;k++){ const a=m.instanceMatrix.array; if(Math.abs(a[k*16+12]-T[0])<.01 && Math.abs(a[k*16+14]-T[1])<.01) hit=true; } } return [n, ICULL.q===ICULL.L.length, hit, part]; })()""")
     ok(r[1] and r[2], 'al llegar caminando, todos los grupos quedan acomodados (%s cuadros a medias de %s) y el árbol de junto se dibuja %s'%(r[3],r[0],r))
+    # 7b. las piezas sueltas no rearman su clave en cada vuelta de juntar
+    r=await ev("""(async()=>{ let on=false, n=0, passes=0; const ob=batchSig, og=batchGroupStep; batchSig=function(o){ if(on) n++; return ob(o); }; batchGroupStep=function(){ on=true; try{ return og(); } finally { on=false; if(!BATCH.grp) passes++; } };
+      const t0=performance.now(); while(passes<3 && performance.now()-t0<30000){ __S(2); await new Promise(r=>setTimeout(r,50)); }
+      batchSig=ob; batchGroupStep=og; let loose=0; BATCH.recs.forEach((r,o)=>{ if(!r.bad && !r.batch && o.parent) loose++; }); return [passes, n, loose, BATCH.batches.size]; })()""")
+    ok(r[0]>=2 and r[2]>300 and r[1]<r[2]*r[0]/4, 'al juntar: en %s vueltas se armaron %s claves para %s piezas sueltas (antes, todas en cada vuelta); %s grupos'%tuple(r))
     # 8. la lista de piezas lejanas se arma de a poco
     r=await ev("(async()=>{ LEJOS.ts=-1e9; let k=0; for(;k<40;k++){ renderer.render(scene,camera); if(!LEJOS.scanning && k>0) break; } return [k, LEJOS.L.length]; })()")
     ok(r[0]>=2 and r[1]>200, 'la lista de piezas lejanas se arma en %s cuadros (%s piezas)'%(r[0],r[1]))

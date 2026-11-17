@@ -24841,22 +24841,29 @@ function slimSet(o,S,base){ if(S.cur===base) return; S.cur=base; let g=S.orig;
   o.geometry=g; }
 // v197: agrupar también poco a poco (~1 ms por cuadro); antes revisaba las 11 mil piezas de golpe una vez por segundo
 function batchGroupStep(){ const GR=BATCH.grp, T=GR.T, groups=GR.groups, tg=performance.now();
-  for(let k=0;;k++){ if((k&63)===63 && performance.now()-tg>1.2) return; if(GR.i>=GR.ks.length) break; const o=GR.ks[GR.i++], r=BATCH.recs.get(o); if(!r || r.bad || r.batch || !o.parent) continue; let key, local=false;
-    const MI=matInfo(o.material), colored=MI.key[0]==='C' && !o.geometry.attributes.color && !o.geometry.attributes.feltSpk, tex=MI.key[0]==='X' && !!o.geometry.attributes.uv;
-    const base=(colored||tex?MI.key:'M|'+o.material.uuid)+'|'+o.castShadow+'|'+o.receiveShadow+'|'+o.renderOrder+'|'+batchSig(o);
-    if(r.dyn){ if(T-r.ls>=3 && o.visible && o.parent && o.parent!==scene){ key='L|'+o.parent.uuid+'|'+base; local=true; } else continue; }   // partes de un peluche: solo dentro de su grupo
-    else if(r.moves<=3 && T-r.ws>=3 && r.vis){ const g=o.geometry; if(!g.boundingSphere) g.computeBoundingSphere(); const sc=o.matrixWorld.getMaxScaleOnAxis(); if(g.boundingSphere.radius*sc>25){ r.bad=true; r.why='big'; continue; }   // lo grande se queda solo (así se sigue saltando cuando no se ve)
-      const rad=g.boundingSphere.radius*sc, tiny=rad<BATCH.TINY;   // piezas diminutas van aparte: de lejos (menos de un par de píxeles) no se dibujan
-      _btvq.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld); key='W|'+base+'|'+Math.floor((_btvq.x+BATCH.CELL*.37)/BATCH.CELL)+','+Math.floor((_btvq.z+BATCH.CELL*.37)/BATCH.CELL)+(tiny?'|t':''); }   // la cuadrícula no corta justo en el centro de la isla (el castillo)
-    else if(r.moves>3 && T-r.ls>=3 && o.visible && o.parent && o.parent!==scene){ key='L|'+o.parent.uuid+'|'+base; local=true; }   // se mueve con su grupo: se junta dentro de él
+  for(let k=0;;k++){ if((k&63)===63 && performance.now()-tg>1.2) return; if(GR.i>=GR.ks.length) break; const o=GR.ks[GR.i++], r=BATCH.recs.get(o); if(!r || r.bad || r.batch || !o.parent) continue; let key, local=false, md=0;
+    /* v222: primero se ve si ya se puede juntar (sin armar textos): antes se armaba la clave de todo lo suelto en cada vuelta y eso dejaba basura */
+    if(r.dyn){ if(T-r.ls>=3 && o.visible && o.parent!==scene) md=2; else continue; }   // partes de un peluche: solo dentro de su grupo
+    else if(r.moves<=3 && T-r.ws>=3 && r.vis) md=1;
+    else if(r.moves>3 && T-r.ls>=3 && o.visible && o.parent!==scene) md=2;   // se mueve con su grupo: se junta dentro de él
     else continue;
+    let g=null, sc=0; if(md===1){ g=o.geometry; if(!g.boundingSphere) g.computeBoundingSphere(); sc=o.matrixWorld.getMaxScaleOnAxis(); if(g.boundingSphere.radius*sc>25){ r.bad=true; r.why='big'; continue; } }   // lo grande se queda solo (así se sigue saltando cuando no se ve)
+    const MI=matInfo(o.material), colored=MI.key[0]==='C' && !o.geometry.attributes.color && !o.geometry.attributes.feltSpk, tex=MI.key[0]==='X' && !!o.geometry.attributes.uv; local=md===2;
+    if(r.kc!==undefined && r.kw===r.ws && r.kl===r.ls && r.kd===md) key=r.kc;   /* v222: la clave se guarda mientras la pieza no cambie (las sueltas que no alcanzan grupo la armaban en cada vuelta) */
+    else { const base=(colored||tex?MI.key:'M|'+o.material.uuid)+'|'+o.castShadow+'|'+o.receiveShadow+'|'+o.renderOrder+'|'+batchSig(o);
+      if(md===2) key='L|'+o.parent.uuid+'|'+base;
+      else { const tiny=g.boundingSphere.radius*sc<BATCH.TINY;   // piezas diminutas van aparte: de lejos (menos de un par de píxeles) no se dibujan
+        _btvq.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld); key='W|'+base+'|'+Math.floor((_btvq.x+BATCH.CELL*.37)/BATCH.CELL)+','+Math.floor((_btvq.z+BATCH.CELL*.37)/BATCH.CELL)+(tiny?'|t':''); }   // la cuadrícula no corta justo en el centro de la isla (el castillo)
+      r.kc=key; r.kw=r.ws; r.kl=r.ls; r.kd=md; }
     let l=groups.get(key); if(!l) groups.set(key,l={list:[],local,par:o.parent,colored,tex,props:MI.props}); l.list.push(o); }
-  BATCH.grp=null; BATCH.bq={ks:Array.from(groups.keys()), i:0, G:groups}; }
+  const bk=new Map(); BATCH.batches.forEach(b=>bk.set(b.key,b));   // v222: buscar el grupo viejo de cada clave sin recorrer todos los grupos cada vez
+  BATCH.grp=null; BATCH.bq={ks:Array.from(groups.keys()), i:0, G:groups, bk}; }
 // v197: armar los grupos también poco a poco (máximo ~2.5 ms por cuadro), en los cuadros siguientes
 function batchBuildStep(){ const tb2=performance.now(), Q=BATCH.bq;
   for(;;){ if(performance.now()-tb2>2.5) return; if(Q.i>=Q.ks.length){ BATCH.bq=null; return; } const key=Q.ks[Q.i++], G=Q.G.get(key);
+    let old=Q.bk.get(key)||null; if(old && !BATCH.batches.has(old)) old=null;
+    if(!old && G.list.length<3) continue;   /* v222: las sueltas que no alcanzan para un grupo se saltan sin más (antes se filtraban y se buscaba su grupo entre todos) */
     G.list=G.list.filter(o=>{ const rr=o.parent && BATCH.recs.get(o); return rr && !rr.batch && !rr.bad; });
-    let old=null; for(const b of BATCH.batches) if(b.key===key){ old=b; break; }
     let all=old?[...old.src,...G.list]:G.list, bkey=key; if(all.length<3) continue;
     let verts=0; for(const o of all) verts+=o.geometry.attributes.position.count;
     if(verts>30000){ // v197: lo grande se junta en pedazos (cada pedazo en su propio cuadro); el resto en la próxima vuelta
