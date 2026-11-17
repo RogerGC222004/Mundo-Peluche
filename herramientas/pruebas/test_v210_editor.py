@@ -22,7 +22,7 @@ async def m():
       window.__tap=(x,y,z,n=2)=>{ const [cx,cy]=__scr(x,y,z); for(let i=0;i<n;i++) medTap(cx,cy,true); }; 1""")
     await ev("menuModes(true); ui('mapBtn').click(); ui('mapName').value='Editor'; ui('mapNew').click(); 1"); await pg.wait_for_timeout(1500); await ev("(window.requestAnimationFrame=()=>0, __run(1), 1)")
     r=await ev("[MED.on, !MED.ui.inv.hidden, !MED.ui.bar.hidden, document.body.classList.contains('in-med'), getComputedStyle(ui('hud')).display, [...MED.ui.inv.querySelectorAll('.hed-tabs button')].length, MED.ui.inv.querySelectorAll('.hed-card').length]")
-    ok(r[0] and r[1] and r[2] and r[3] and r[4]=='none' and r[5]==5 and r[6]==7, 'al crear un mapa entras al editor desde arriba: panel de piezas (★ + 4 pestañas (v217: + 🎡 Parque), 7 piezas de juego) y se esconden los botones del juego %s'%r)
+    ok(r[0] and r[1] and r[2] and r[3] and r[4]=='none' and r[5]==6 and r[6]==7, 'al crear un mapa entras al editor desde arriba: panel de piezas (★ + 5 pestañas (v217: + 🎡 Parque; v218: + 🌳 Naturaleza), 7 piezas de juego) y se esconden los botones del juego %s'%r)
     await pg.screenshot(path='/tmp/v210_editor.png')
     # poner con dos toques; el primero solo muestra el fantasma
     r=await ev("""(()=>{ medSelect({k:'b',a:0,b:3}); const X=FREE.X+2.5, Z=FREE.Z+.5; const n0=FREE.objs.length; __tap(X,FREE.Y,Z,1); const a=[FREE.objs.length===n0, !!MED.hov, MED.ghost&&MED.ghost.visible];

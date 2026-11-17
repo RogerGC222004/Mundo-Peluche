@@ -24,7 +24,7 @@ async def m():
     r=await ev("[FREE.on, FREE.ctx!=='libre', FREE.play, FREE.objs.map(o=>o.game).join(','), Math.round(player.pos.z-FREE.Z), !ui('freePlay').hidden]")
     ok(r[0] and r[1] and r[2] is False and r[3]=='inicio,meta' and r[4]==8 and r[5], 'mapa nuevo: ya trae Inicio y Meta, apareces en el Inicio y está «▶ Probar» %s'%r)
     r=await ev("(()=>{ ui('freeObj').click(); for(let i=0;i<30;i++) freeThumbPump(); const n=ui('freeGrid').querySelectorAll('.free-it').length, tabs=[...ui('freeTabs').children].map(b=>b.textContent); ui('freeBox').hidden=true; return [n, tabs[0], tabs.length]; })()")
-    ok(r==[7,'🎮 Juego',4], 'Minijuego: en Objetos solo salen Juego (7 piezas), Bloques, Física y 🎡 Parque (v217) %s'%r)
+    ok(r==[7,'🎮 Juego',5], 'Minijuego: en Objetos solo salen Juego (7 piezas), Bloques, Física, 🎡 Parque (v217) y 🌳 Naturaleza (v218) %s'%r)
     await pg.screenshot(path='/tmp/v209_juego.png')
     # 2. armar el mapa: lava, estrella, bandera, plataforma que se mueve, bloque que se cae
     await ev("""(()=>{ const X=FREE.X, Y=FREE.Y, Z=FREE.Z, A=(id,x,z,r=0)=>freeAddStatic({k:'g',a:id,b:0},X+x,Y,Z+z,r,true);
@@ -51,7 +51,7 @@ async def m():
     r=await ev("(()=>{ ui('mapItems').querySelector('.chip.play').click(); const a=[FREE.play, FREE.objs.length]; ui('toMenuBtn').click(); freeEnter(); const b=[FREE.ctx, FREE.objs.some(o=>o.game)]; ui('toMenuBtn').click(); return [...a,...b]; })()")
     ok(r==[True,8,'libre',False], '«▶ Jugar» entra directo a jugar; el modo libre sigue con sus propias cosas %s'%r)
     r=await ev("(()=>{ menuModes(true); ui('mapBtn').click(); const t=[...ui('mapTypes').children].map(b=>b.textContent); [...ui('mapTypes').children][1].click(); ui('mapName').value='Mi isla'; ui('mapNew').click(); const tabs=mapTabs().map(x=>x[1]); ui('toMenuBtn').click(); menuModes(true); ui('mapBtn').click(); return [t.length, t[2].includes('Pronto'), t[3].includes('Pronto'), tabs.length, ui('mapItems').textContent.includes('🏝️ Mundo')]; })()")
-    ok(r==[4,False,False,8,True], 'qué vas a hacer: Minijuego / Mundo completo (todas las pestañas, con 🐾) / Criatura (v211) / Objeto (v212) %s'%r)
+    ok(r==[4,False,False,9,True], 'qué vas a hacer: Minijuego / Mundo completo (todas las pestañas, con 🐾) / Criatura (v211) / Objeto (v212) %s'%r)
     r=await ev("(()=>{ mapsStore(mapsLoad().filter(m=>m.t!=='mundo')); renderMaps(); return 1; })()")
     r=await ev("(()=>{ menuModes(true); ui('mapBtn').click(); [...ui('mapTypes').children][0].click(); const del=ui('mapItems').querySelector('.chip.del'); del.click(); del.click(); return mapsLoad().length; })()"); ok(r==0, 'borrar un mapa pide tocar dos veces y lo borra')
     ok(not errs,'sin errores %s'%errs[:3]); await b.close()

@@ -30,7 +30,7 @@ async def m():
       MED.tab='creaciones'; MED.sub=''; medRender(); const subs=[...MED.ui.inv.querySelectorAll('.hed-subs button')].map(b=>b.textContent); const n1=MED.ui.inv.querySelectorAll('.hed-card').length;
       MED.sub='cr'; medRender(); const n2=MED.ui.inv.querySelectorAll('.hed-card').length; MED.sub='ob'; medRender(); const n3=MED.ui.inv.querySelectorAll('.hed-card').length;
       return [tabs.join(','), subs.join(','), n1, n2, n3]; })()""")
-    ok(r[0]=='juego,bloques,fisica,parque,creaciones,construir,casa,jardin' and r[1]=='🎯 Minijuegos,🐾 Criaturas,🎒 Objetos' and r[2:]==[1,1,1], 'Mundo completo: pestaña 📦 Mis creaciones con Minijuegos, Criaturas y Objetos %s'%r)
+    ok(r[0]=='juego,bloques,fisica,parque,natura,creaciones,construir,casa,jardin' and r[1]=='🎯 Minijuegos,🐾 Criaturas,🎒 Objetos' and r[2:]==[1,1,1], 'Mundo completo: pestaña 📦 Mis creaciones con Minijuegos, Criaturas y Objetos %s'%r)
     # 2. escoger el minijuego: calcula su espacio; verde donde cabe, rojo encima del Inicio del mundo
     r=await ev("""(()=>{ const M=mapsLoad().find(m=>m.t==='juego'); window.__G=M.id; medSelect({k:'m',a:M.id,b:0}); const tip=MED.ui.tip.textContent; const L=mgiLayout(M);
       const X=FREE.X, Y=FREE.Y, Z=FREE.Z, bad=mgiFits(M.id,{x:X,y:Y,z:Z},0), good=mgiFits(M.id,{x:X+25,y:Y,z:Z},0), edge=mgiFits(M.id,{x:X+FREE.R-1,y:Y,z:Z},0);
