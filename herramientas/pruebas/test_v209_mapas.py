@@ -19,7 +19,7 @@ async def m():
     await ev("window.__run=(sec,fn)=>{ let t=clock.elapsedTime; const n=Math.round(sec/.05); for(let i=0;i<n;i++){ clock.elapsedTime=(t+=.05); if(fn) fn(i); update(.05,t); } }; 1")
     # 1. lista y mapa nuevo
     await ev("menuModes(true); ui('mapBtn').click(); 1"); await pg.wait_for_timeout(300)
-    r=await ev("[!ui('mapList').hidden, ui('mapItems').textContent.includes('Todavía no tienes mapas')]"); ok(r==[True,True], 'Crear mapa abre «Mis mapas» (vacía) %s'%r)
+    r=await ev("[!ui('mapList').hidden, ui('mapItems').textContent.includes('Todavía no tienes minijuegos')]"); ok(r==[True,True], 'Crear mapa abre «Mis creaciones» (vacía) %s'%r)
     await ev("ui('mapName').value='Obby de Roger'; ui('mapNew').click(); 1"); await pg.wait_for_timeout(1500); await ev("(window.requestAnimationFrame=()=>0, __run(.5), 1)")
     r=await ev("[FREE.on, FREE.ctx!=='libre', FREE.play, FREE.objs.map(o=>o.game).join(','), Math.round(player.pos.z-FREE.Z), !ui('freePlay').hidden]")
     ok(r[0] and r[1] and r[2] is False and r[3]=='inicio,meta' and r[4]==8 and r[5], 'mapa nuevo: ya trae Inicio y Meta, apareces en el Inicio y está «▶ Probar» %s'%r)
@@ -50,9 +50,9 @@ async def m():
     # 5. jugar desde la lista y el modo libre sigue aparte
     r=await ev("(()=>{ ui('mapItems').querySelector('.chip.play').click(); const a=[FREE.play, FREE.objs.length]; ui('toMenuBtn').click(); freeEnter(); const b=[FREE.ctx, FREE.objs.some(o=>o.game)]; ui('toMenuBtn').click(); return [...a,...b]; })()")
     ok(r==[True,8,'libre',False], '«▶ Jugar» entra directo a jugar; el modo libre sigue con sus propias cosas %s'%r)
-    r=await ev("(()=>{ menuModes(true); ui('mapBtn').click(); const t=[...ui('mapTypes').children].map(b=>b.textContent); [...ui('mapTypes').children][1].click(); ui('mapName').value='Mi isla'; ui('mapNew').click(); const tabs=mapTabs().map(x=>x[1]); ui('toMenuBtn').click(); menuModes(true); ui('mapBtn').click(); return [t.length, t[2].includes('Pronto'), tabs.length, ui('mapItems').textContent.includes('🏝️ Mundo')]; })()")
-    ok(r==[4,True,6,True], 'qué vas a hacer: Minijuego / Mundo completo (todas las pestañas) / Criatura y Objeto «pronto» %s'%r)
+    r=await ev("(()=>{ menuModes(true); ui('mapBtn').click(); const t=[...ui('mapTypes').children].map(b=>b.textContent); [...ui('mapTypes').children][1].click(); ui('mapName').value='Mi isla'; ui('mapNew').click(); const tabs=mapTabs().map(x=>x[1]); ui('toMenuBtn').click(); menuModes(true); ui('mapBtn').click(); return [t.length, t[2].includes('Pronto'), t[3].includes('Pronto'), tabs.length, ui('mapItems').textContent.includes('🏝️ Mundo')]; })()")
+    ok(r==[4,False,True,7,True], 'qué vas a hacer: Minijuego / Mundo completo (todas las pestañas, con 🐾) / Criatura (v211) y Objeto «pronto» %s'%r)
     r=await ev("(()=>{ mapsStore(mapsLoad().filter(m=>m.t!=='mundo')); renderMaps(); return 1; })()")
-    r=await ev("(()=>{ menuModes(true); ui('mapBtn').click(); const del=ui('mapItems').querySelector('.chip.del'); del.click(); del.click(); return mapsLoad().length; })()"); ok(r==0, 'borrar un mapa pide tocar dos veces y lo borra')
+    r=await ev("(()=>{ menuModes(true); ui('mapBtn').click(); [...ui('mapTypes').children][0].click(); const del=ui('mapItems').querySelector('.chip.del'); del.click(); del.click(); return mapsLoad().length; })()"); ok(r==0, 'borrar un mapa pide tocar dos veces y lo borra')
     ok(not errs,'sin errores %s'%errs[:3]); await b.close()
 asyncio.run(m())
