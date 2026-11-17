@@ -50,7 +50,7 @@ async def m():
       return [heldItem()==='o:'+obLoad()[0].id, !!H && H.model!=null, a[0].label, fly, sent, hidden, +far.toFixed(1), OBH.fly.length, H.holder.visible]; })()""")
     ok(r[0] and r[1] and r[2].startswith('Lanzar') and r[3]==1 and r[4]==1 and r[5] and r[6]>4 and r[7]==0 and r[8], 'en la isla: lo traes en la mano; «Lanzar» lo avienta (llegó a %s m), y regresa a tu mano %s'%(r[6],r))
     # 5. luz de noche y en la cueva
-    r=await ev("""(()=>{ useSlot(4); __run(.1); const k=Math.floor(Date.now()/1000/DAY_LEN)*DAY_LEN; const old=Date.now; Date.now=()=>(k+.75*DAY_LEN)*1000; __run(1); const H=plush.userData.obH, U=H.model.userData.ob;
+    r=await ev("""(()=>{ useSlot(4); __run(.1); const k=Math.floor(Date.now()/1000/DAY_LEN)*DAY_LEN; const old=Date.now; Date.now=()=>(k+.75*DAY_LEN)*1000; __run(1,()=>updateSky(.05)); const H=plush.userData.obH, U=H.model.userData.ob;
       const night=1-(sky.dayK??1), on=U.glow.visible, at=!!OBH.lightAt, lab=obActions()[0].label; obActions()[0].run(); __run(.1); const off=U.glow.visible, em=U.mat.emissiveIntensity; obActions()[0].run(); __run(.1); Date.now=old; __run(.5);
       return [+night.toFixed(2), on, at, lab, off, em]; })()""")
     ok(r[0]>.2 and r[1] and r[2] and r[3]=='Apagar luz' and r[4] is False and r[5]==0, 'la Linterna da luz de noche (y en la cueva); «Apagar luz» la apaga %s'%r)
