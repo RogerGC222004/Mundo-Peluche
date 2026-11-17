@@ -860,7 +860,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <div class="overlay" id="freeStart" hidden style="background:rgba(207,231,242,.6)">
   <div class="card free-card"><h2>Modo libre</h2><p>Una planicie solo para ti: pon bloques, muebles, plantas, pelotas y lo que quieras enfrente de tu peluche. Lo que hagas se guarda.</p>
     <div class="btns"><button class="btn primary" id="freeSolo">Empezar solo</button><button class="btn back" id="freeBack">← Volver</button></div>
-    <h3 class="free-h">👥 Construir con amigos <small>hasta 6 · el mundo es de quien crea la sala · cada quien quita solo lo suyo</small></h3>
+    <h3 class="free-h">👥 Construir con amigos <small>hasta 6 · cada sala empieza vacía · cada quien quita solo lo suyo · al salir te llevas una copia</small></h3>
     <div class="btns"><button class="btn" id="freePub">Crear sala pública</button><button class="btn" id="freePriv">Crear sala privada</button></div>
     <form class="free-join" id="freeJoinF"><input id="freeCode" maxlength="6" placeholder="Código de la sala" autocomplete="off" autocapitalize="characters"><button class="btn primary" id="freeJoin" type="submit">Unirse</button></form>
     <ul class="mp-rooms free-rooms" id="freeRooms"></ul></div>
@@ -22737,11 +22737,11 @@ function freeExit(){ if(!FREE.on) return; if(MED.on) medExit(); freePlayStop(); 
 // ---- botones y el menú de objetos ----
 function freeSelect(sel){ FREE.sel=sel; FREE.del=false; FREE.rot=0; FREE.gBad=null; ui('freeBox').hidden=true; freeRenderHud(); }
 function freeSetDel(on){ FREE.del=!!on; if(on) FREE.sel=null; freeRenderHud(); }
-function freeRenderHud(){ const map=FREE.ctx!=='libre' && FREE.ctx!=='net', pl=FREE.play; ui('freeCopy').hidden=!(FNET.on && !FNET.host); ui('freeDel').classList.toggle('on',FREE.del); ui('freeDrop').hidden=!FREE.sel || pl;
+function freeRenderHud(){ const map=FREE.ctx!=='libre' && FREE.ctx!=='net', pl=FREE.play; ui('freeCopy').hidden=!FNET.on; ui('freeDel').classList.toggle('on',FREE.del); ui('freeDrop').hidden=!FREE.sel || pl;
   ui('freeObj').hidden=pl; ui('freeDel').hidden=pl; ui('freePlay').hidden=!map || pl; ui('freeEdit').hidden=!pl; ui('freeRestart').hidden=!pl; if(pl) return;
   const M=map?mapById(FREE.ctx):null;
   const t=FREE.del?'Quitar: ponte enfrente de algo y toca «Quitar»':FREE.sel?freeSelName(FREE.sel)+' · '+freeOwn()+'/'+FREE_MAX:(M?'«'+(M.n||'Mi mapa')+'» · toca «Objetos»':'Toca «Objetos» para escoger qué poner');
-  ui('freeTxt').textContent=FNET.on ? '👥 '+FNET.code+' · '+Math.min(FN_MAX,mp.remotes.size+1)+'/'+FN_MAX+' · '+(FNET.host?'tu mundo':(fnSynced()?'mundo de '+(FNET.hostName||'tu amigo'):'cargando el mundo de '+(FNET.hostName||'tu amigo')+'…'))+(FREE.sel||FREE.del?' · '+t:'') : t; }
+  ui('freeTxt').textContent=FNET.on ? '👥 '+FNET.code+' · '+Math.min(FN_MAX,mp.remotes.size+1)+'/'+FN_MAX+' · '+(FNET.host?'tu sala':(fnSynced()?'sala de '+(FNET.hostName||'tu amigo'):'cargando la sala de '+(FNET.hostName||'tu amigo')+'…'))+(FREE.sel||FREE.del?' · '+t:'') : t; }
 function freeSelName(s){ if(s.k==='b') return FREE_SHAPES[s.a].n; if(s.k==='m') return (mapById(s.a)||{}).n||'Minijuego'; if(s.k==='o') return (obById(s.a)||{}).n||'Objeto'; if(s.k==='h') return (HK_BY[s.a]||{}).n||'Pieza'; if(s.k==='g') return (FREE_GAME_BY[s.a]||{}).n||'Pieza'; if(s.k==='c') return (crGet(s.a)||{}).n||'Criatura'; return (FREE_PHYS_BY[s.a]||{}).n||'Objeto'; }
 // v208: dibujito sin fondo de cada bloque y cosa con física (como las piezas del Taller), hecho una vez y guardado
 const FTH={c:{}, q:[], rig:null};
@@ -23492,7 +23492,8 @@ function obPickup(o){ o.got=true; o.root.visible=false; const id=o.sel.a, key='o
 
 // ======================================================================================
 // ---------------- v215: CONSTRUIR CON AMIGOS en el Modo libre ----------------
-// Quien crea la sala es el dueño: se carga SU Modo libre y lo que construyan juntos se guarda ahí. Hasta 6 por sala.
+// Quien crea la sala es el dueño (lleva la cuenta), pero cada sala empieza VACÍA y no se guarda sola: al salir, cada quien
+// (también el dueño) se puede llevar una copia a sus mapas. Hasta 6 por sala.
 // Cada pieza recuerda quién la puso (MY_PID: un número tuyo que se guarda en tu teléfono y en tu código de progreso)
 // y en una sala cada quien solo puede quitar lo suyo, también el dueño.
 // Todo viaja en la presencia: el dueño manda el mundo en 8 partes (una cada ratito; la que cambió va primero) y dónde
@@ -23537,8 +23538,7 @@ function fnKick(d,vx,vy,vz){ if(FNET.on && !FNET.host && d && d.nid) fnOp(['k',d
 function fnOp(op){ FNET.opN=Math.max(FNET.opN+1,Date.now()); FNET.ops.push([FNET.opN,...op]); if(FNET.ops.length>12) FNET.ops.shift(); try{ sendPresence(true); }catch(e){} }
 // ¿la puedo quitar? (en una sala, solo lo tuyo; solito, lo de tus amigos te lo pregunta)
 function fnCanRemove(o){ if(fnMine(o)){ FREE.delOk=null; return true; } const who=fnName(o.au);
-  if(FNET.on){ flashNote('Esta la puso '+who+': solo '+who+' la puede quitar'); return false; }
-  if(FREE.delOk!==o){ FREE.delOk=o; flashNote('Esta la puso '+who+'. Si de todos modos la quieres quitar, toca «Quitar» otra vez'); return false; } FREE.delOk=null; return true; }
+  if(FNET.on){ flashNote('Esta la puso '+who+': solo '+who+' la puede quitar'); return false; } return true; }
 // ---- presencia ----
 function fnPresence(){ if(typeof FNET==='undefined' || !FNET.on || !FREE.on) return {}; const o={fz:FNET.host?1:2, pi:MY_PID};
   if(FNET.host){ fnRebuild(); const now=performance.now();
@@ -23596,8 +23596,8 @@ function fnRoomErr(){ const m=ui('mpMsg').textContent; flashNote(m && /No se/.te
 async function fnCreate(pub){ if(FNET.joining) return; FNET.joining=true; ui('freeStart').hidden=true; const code=newCode();
   try{ await joinRoom(code,pub); }catch(e){} FNET.joining=false;
   if(!mp.room){ ui('freeStart').hidden=false; fnRoomErr(); return; }
-  fnReset(); FNET.on=true; FNET.host=true; FNET.code=code; FREE.loaded=null; freeEnter('libre'); fnHostInit(); try{ lobbyAnnounce(); }catch(e){} sendPresence(true);
-  setTimeout(()=>flashNote((pub?'Sala pública':'Sala privada')+' '+code+': hasta '+(FN_MAX-1)+' amigos pueden construir contigo'+(pub?'':' (diles el código)')),700); }
+  fnReset(); FNET.on=true; FNET.host=true; FNET.code=code; FNET.hostPid=MY_PID; FNET.hostName=cleanName(profile.name)||'Peluche'; FREE.loaded=null; freeEnter('net'); fnHostInit();   // v215b: cada sala empieza vacía (no se toca tu Modo libre) try{ lobbyAnnounce(); }catch(e){} sendPresence(true);
+  setTimeout(()=>flashNote((pub?'Sala pública':'Sala privada')+' '+code+': hasta '+(FN_MAX-1)+' amigos pueden construir contigo'+(pub?'':' (diles el código)')+' · empieza vacía; al salir te puedes llevar una copia'),700); }
 async function fnJoin(code){ code=cleanCode(code); if(code.length!==6){ flashNote('El código tiene 6 letras o números'); return; } if(FNET.joining) return;
   const ps=await fnPeersIn(code); if(ps.length>=FN_MAX){ flashNote('Esa sala ya está llena ('+FN_MAX+' de '+FN_MAX+')'); return; }
   const H=ps.find(p=>p.presence.fz===1); if(ps.length && !H){ flashNote('Esa sala no es de Modo libre: entra desde Multijugador'); return; }
@@ -23606,12 +23606,12 @@ async function fnJoin(code){ code=cleanCode(code); if(code.length!==6){ flashNot
   fnStartGuest(H?H.presence.pi:'', H?cleanName(H.presence.n):''); }
 function fnStartGuest(pid,name){ fnReset(); FNET.on=true; FNET.host=false; FNET.code=mp.code; FNET.hostSeen=performance.now(); FNET.hostPid=pid||''; FNET.hostName=name||'';
   FREE.loaded=null; freeEnter('net'); const a=Math.random()*Math.PI*2; player.pos.set(FREE.X+Math.cos(a)*3,FREE.Y+.05,FREE.Z+Math.sin(a)*3); try{ lobbyAnnounce(); }catch(e){} sendPresence(true);
-  setTimeout(()=>flashNote('Construyes en el mundo de '+(FNET.hostName||'tu amigo')+': lo que pongas se queda ahí · solo puedes quitar lo tuyo'),700); }
+  setTimeout(()=>flashNote('Construyes con '+(FNET.hostName||'tu amigo')+' · solo puedes quitar lo tuyo · al salir te puedes llevar una copia'),700); }
 function fnBecomeGuest(pid,name){ FNET.joining=true; try{ menuModes(false); }catch(e){} ui('freeStart').hidden=true; mpEl.hidden=true; FNET.joining=false; fnStartGuest(pid,name); }
 // llevarte una copia del mundo de tu amigo (a tus mapas, como 🏝️ Mundo completo)
-function fnCopy(){ const L=mapsLoad(); let M=L.find(m=>m.from===FNET.hostPid && m.t==='mundo');
+function fnCopy(){ const L=mapsLoad(), from='sala:'+FNET.code+':'+MY_PID; let M=L.find(m=>m.from===from && m.t==='mundo');
   if(!M){ if(L.length>=MAPS_MAX){ flashNote('Ya tienes '+MAPS_MAX+' mapas: borra uno para guardar la copia'); return false; }
-    M={id:'m'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36), n:cleanName('Mundo de '+(FNET.hostName||'mi amigo'))||'Mundo de mi amigo', t:'mundo', from:FNET.hostPid}; L.push(M); }
+    M={id:'m'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36), n:cleanName(FNET.host?'Con mis amigos':'Con '+(FNET.hostName||'mi amigo'))||'Con mis amigos', t:'mundo', from}; L.push(M); }
   M.s=FREE.objs.filter(o=>!o.par).map(o=>[o.sel.k, o.sel.k==='c'?fnA(o):o.sel.a, o.sel.b|0, +(o.x-FREE.X).toFixed(2), +(o.y-FREE.Y).toFixed(2), +(o.z-FREE.Z).toFixed(2), o.r]);
   M.d=FREE.dyn.map(o=>{ const p=o.root.position; return [o.id, +(p.x-FREE.X).toFixed(2), +(p.y-o.r-FREE.Y).toFixed(2), +(p.z-FREE.Z).toFixed(2)]; });
   mapsStore(L); FNET.copied=true; flashNote('📥 Te llevaste una copia: está en Mis creaciones → 🏝️ Mundo completo'); return true; }
@@ -23623,7 +23623,7 @@ function fnAsk(title,cont){ let el=document.getElementById('fnAsk'); if(!el){ el
 function fnEnded(){ FNET.ended=true; const go=()=>{ try{ _fnToMenu(); }catch(e){} };
   if(FREE.objs.length || FREE.dyn.length) fnAsk((FNET.hostName||'El dueño')+' cerró la sala', go); else { flashNote('Se cerró la sala'); go(); } }
 const _fnToMenu=ui('toMenuBtn').onclick;
-ui('toMenuBtn').onclick=e=>{ if(FNET.on && !FNET.host && !FNET.copied && !FNET.ended && FREE.on && (FREE.objs.length || FREE.dyn.length)){ fnAsk('¿Te llevas una copia del mundo de '+(FNET.hostName||'tu amigo')+'?', ()=>_fnToMenu(e)); return; } _fnToMenu(e); };
+ui('toMenuBtn').onclick=e=>{ if(FNET.on && !FNET.copied && !FNET.ended && FREE.on && (FREE.objs.length || FREE.dyn.length)){ fnAsk('¿Te llevas una copia de lo que construyeron?', ()=>_fnToMenu(e)); return; } _fnToMenu(e); };
 // ---- la pantalla del Modo libre: crear, unirse y las salas abiertas ----
 function fnRooms(){ Promise.resolve(getLobby()).then(L=>{ if(!L || ui('freeStart').hidden) return; let ps=[]; try{ ps=L.peers(); }catch(e){} const g=new Map();
     for(const p of ps){ const pr=p.presence||{}, rm=typeof pr.rm==='string'?pr.rm:''; if(!rm || p.sameTab || p.kind==='agent') continue; let e=g.get(rm); if(!e){ e={rm, n:0, host:'', free:false, pub:false}; g.set(rm,e); }
