@@ -1441,7 +1441,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='209';
+const GAME_VERSION='210';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -6206,7 +6206,7 @@ ui('freeSolo').onclick=()=>freeEnter(); ui('freeBack').onclick=()=>{ ui('freeSta
 ui('freeObj').onclick=()=>freeOpenBox(); ui('freeClose').onclick=()=>{ ui('freeBox').hidden=true; }; ui('freeDel').onclick=()=>freeSetDel(!FREE.del); ui('freeDrop').onclick=()=>freeSelect(null);
 ui('mapBtn').onclick=()=>openMaps(); ui('mapBack').onclick=()=>{ ui('mapList').hidden=true; };   // v209
 ui('mapForm').addEventListener('submit',e=>{ e.preventDefault(); mapCreate(); });
-ui('freePlay').onclick=()=>freePlayStart(); ui('freeEdit').onclick=()=>{ freePlayStop(); const [x,y,z]=freeSpawnPos(); player.pos.set(x,y,z); }; ui('freeRestart').onclick=()=>freePlayStart();
+ui('freePlay').onclick=()=>freePlayStart(); ui('freeEdit').onclick=()=>{ freePlayStop(); const [x,y,z]=freeSpawnPos(); player.pos.set(x,y,z); medEnter(); }; ui('freeRestart').onclick=()=>freePlayStart();
 ui('controlsBtn').onclick=()=>{ ['ctlTouch','ctlTouchNote'].forEach(id=>ui(id).hidden=!isTouch); ['ctlKeys','ctlKeysNote'].forEach(id=>ui(id).hidden=isTouch); controlsEl.hidden=false; };   // v131: táctil o teclado
 ui('closeControls').onclick=()=>{controlsEl.hidden=true;};
 ui('resumeBtn').onclick=()=>{show('play'); lockPointer();};
@@ -17632,7 +17632,7 @@ function edLot(){ return HS.mine!==null ? LOTS[HS.mine] : null; }
 function edPieces(){ return hpDec(myHouseStr()); }
 function edFilter(P){ return P.filter(p=>p.lv<=ED.lv && (ED.roof || !(p.t===HT.TEJA||p.t===HT.CUMBRE||hIsCap(p.t)||p.t===HT.HAST_A||p.t===HT.HAST_B||p.t===HT.HAST_R) || p.lv<ED.lv)); }
 // ---- UI ----
-(function edUI(){ const st=document.createElement('style'); st.textContent=`
+(function edUI(){ const st=document.createElement('style'); st.dataset.hed='1'; st.textContent=`
 #hedLayer{position:fixed;inset:0;z-index:40;touch-action:none;}
 #hedInv{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:calc(8px + env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));width:178px;z-index:42;overflow-y:auto;background:rgba(255,250,238,.95);border-radius:16px;padding:6px;box-shadow:0 4px 18px rgba(0,0,0,.18);display:flex;flex-direction:column;gap:6px;}
 #hedInv.off{display:none;}
@@ -22687,8 +22687,9 @@ function freeEnter(ctx,playNow){ ctx=typeof ctx==='string'?ctx:'libre'; if(ctx!=
   freeBuildWorld(); freeLoad(); FREE.on=true; FREE.g.visible=true; try{ menuModes(false); }catch(e){} ui('freeStart').hidden=true; ui('mapList').hidden=true;
   startGame(); const [x,y,z]=freeSpawnPos(); player.pos.set(x,y,z); player.vel.set(0,0,0); player.vy=0; player.grounded=true; player.swim=false; player.facing=Math.PI; yaw=0;
   ui('freeHud').hidden=false; freeRenderHud(); if(playNow) freePlayStart();
-  else setTimeout(()=>flashNote(ctx==='libre'?'Modo libre: toca «Objetos» y escoge algo para ponerlo enfrente de ti':'Editando tu mapa: pon piezas enfrente de ti y toca «▶ Probar» para jugarlo'),600); }
-function freeExit(){ if(!FREE.on) return; freePlayStop(); freeSave(); FREE.on=false; FREE.sel=null; FREE.del=false; freeGhostSet(); if(FREE.g) FREE.g.visible=false; ui('freeHud').hidden=true; ui('freeBox').hidden=true; }
+  else if(ctx!=='libre') medEnter();   // v210: los mapas se editan desde arriba
+  else setTimeout(()=>flashNote('Modo libre: toca «Objetos» y escoge algo para ponerlo enfrente de ti'),600); }
+function freeExit(){ if(!FREE.on) return; if(MED.on) medExit(); freePlayStop(); freeSave(); FREE.on=false; FREE.sel=null; FREE.del=false; freeGhostSet(); if(FREE.g) FREE.g.visible=false; ui('freeHud').hidden=true; ui('freeBox').hidden=true; }
 // ---- botones y el menú de objetos ----
 function freeSelect(sel){ FREE.sel=sel; FREE.del=false; FREE.rot=0; FREE.gBad=null; ui('freeBox').hidden=true; freeRenderHud(); }
 function freeSetDel(on){ FREE.del=!!on; if(on) FREE.sel=null; freeRenderHud(); }
@@ -22813,7 +22814,148 @@ function renderMaps(){ const L=mapsLoad(), ul=ui('mapItems'); ul.textContent='';
 function mapCreate(){ const L=mapsLoad(); if(L.length>=MAPS_MAX) return; let n=cleanName(ui('mapName').value)||''; if(!n){ n='Mi mapa '+(L.length+1); }
   const id='m'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);
   L.push({id, n, t:mapType, s:[['g','inicio',0,0,0,8,2],['g','meta',0,0,0,-12,0]], d:[]}); mapsStore(L); ui('mapName').value=''; freeEnter(id,false);
-  setTimeout(()=>flashNote('Tu mapa ya tiene Inicio y Meta: en «Objetos → 🎮 Juego» hay lava, estrellas, plataformas y más'),1200); }
+  setTimeout(()=>{ if(MED.on) medTip('Tu mapa ya tiene <b>Inicio</b> y <b>Meta</b>. En 🎮 a la derecha hay lava, estrellas, plataformas y más'); },900); }
+
+// ======================================================================================
+// ---------------- v210: EDITOR DE MAPAS desde arriba (como el de las casitas) ----------------
+// La cámara ve el mapa desde lo alto: un dedo la mueve, dos dedos acercan y giran (ratón: rueda y clic derecho).
+// A la derecha las piezas (pestañas, buscador y favoritas ★). Escoges una y tocas el piso: se pinta verde (cabe) o rojo;
+// tocas otra vez el mismo lugar y se pone. Herramientas: Girar, Quitar, Mover, Deshacer, Subir/Bajar altura. ▶ Probar.
+// (El modo libre se queda con la forma fácil: poner las cosas enfrente de tu peluche.)
+// ======================================================================================
+const MED={on:false, cam:{yaw:.6, pitch:.95, dist:34, tx:0, tz:0}, sel:null, rot:0, h:0, tool:'place', ghost:null, ghostKey:'', hov:null, mark:null, undo:[], q:'', tab:'', sub:'', col:0, toolsOpen:false, invOff:false, grid:null, ui:null, moving:null};
+const _mRay=new THREE.Raycaster(), _mV=new THREE.Vector2(), _mPl=new THREE.Plane(new THREE.Vector3(0,1,0),0), _mP=new THREE.Vector3(), _mHit=new THREE.Vector3();
+function medFav(){ try{ return JSON.parse(localStorage.getItem('mundoPelucheMapFav')||'[]')||[]; }catch(e){ return []; } }
+function medFavToggle(key){ let F=medFav(); F=F.includes(key)?F.filter(k=>k!==key):[...F,key].slice(-40); try{ localStorage.setItem('mundoPelucheMapFav',JSON.stringify(F)); }catch(e){} medRender(); }
+// ---- la ventana: estilos copiados del editor de casitas ----
+(function medUI(){ const src=document.querySelector('style[data-hed]'); const st=document.createElement('style');
+  st.textContent=(src?src.textContent:'').replace(/#hed(Layer|Inv|Tog|Bar|Tools|Tip|Lv)\b/g,'#med$1').replace(/body\.in-hed/g,'body.in-med')+`
+body.in-med #freeHud, body.in-med #freeBox{display:none!important;}
+#medTip b{color:#3d8a2c;}`;
+  document.head.appendChild(st);
+  const mk=(tag,id)=>{ const e=document.createElement(tag); e.id=id; e.hidden=true; document.body.appendChild(e); return e; };
+  const U=MED.ui={layer:mk('div','medLayer'), inv:mk('div','medInv'), bar:mk('div','medBar'), tip:mk('div','medTip'), tog:mk('button','medTog'), tools:mk('div','medTools')};
+  U.tog.type='button'; U.tog.textContent='▶'; U.tog.onclick=e=>{ e.stopPropagation(); MED.invOff=!MED.invOff; U.inv.classList.toggle('off',MED.invOff); U.tog.classList.toggle('off',MED.invOff); U.bar.classList.toggle('wide',MED.invOff); U.tog.textContent=MED.invOff?'◀':'▶'; };
+  const B=(label,title,fn,cls)=>{ const b=document.createElement('button'); b.type='button'; b.innerHTML='<span>'+label+'</span><small>'+title+'</small>'; b.title=title; b.setAttribute('aria-label',title); if(cls) b.className=cls; b.onclick=e=>{ e.stopPropagation(); fn(b); }; U.bar.appendChild(b); return b; };
+  U.bTools=B('🧰','Más',()=>{ MED.toolsOpen=!MED.toolsOpen; medRender(); });
+  U.bRot=B('⟳','Girar',()=>medRotate());
+  U.bDel=B('🗑️','Quitar',()=>medTool(MED.tool==='del'?'place':'del'));
+  U.bPlay=B('▶','Probar',()=>medPlay(),'play');
+  B('✓','Listo',()=>medDone(),'ok');
+  const T=(ic,lab,fn,id)=>{ const b=document.createElement('button'); b.type='button'; b.innerHTML='<span>'+ic+'</span>'+lab; if(id) b.dataset.t=id; b.onclick=e=>{ e.stopPropagation(); fn(); }; U.tools.appendChild(b); return b; };
+  T('↶','Deshacer',()=>medUndo()); T('✋','Mover',()=>medTool(MED.tool==='move'?'place':'move'),'move'); T('⬆️','Más alto',()=>medHeight(1)); T('⬇️','Más bajo',()=>medHeight(-1)); T('🎯','Centrar',()=>{ MED.cam.tx=0; MED.cam.tz=0; MED.cam.dist=34; });
+  // tocar, arrastrar, pellizcar
+  const L=U.layer, ptrs=new Map(); let down=null, two=null, rmb=null;
+  const pair=()=>{ const [a,b]=[...ptrs.values()]; return {d:Math.hypot(a.x-b.x,a.y-b.y)||1, ang:Math.atan2(b.y-a.y,b.x-a.x), mx:(a.x+b.x)/2, my:(a.y+b.y)/2}; };
+  L.addEventListener('contextmenu',e=>e.preventDefault());
+  L.addEventListener('pointerdown',e=>{ e.preventDefault(); try{ L.setPointerCapture(e.pointerId); }catch(_){} ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(MED.toolsOpen){ MED.toolsOpen=false; medRender(); }
+    if(e.pointerType==='mouse' && e.button===2){ rmb={x:e.clientX, yaw:MED.cam.yaw}; return; }
+    if(ptrs.size===2){ const p=pair(); two={...p, dist:MED.cam.dist, yaw:MED.cam.yaw, tx:MED.cam.tx, tz:MED.cam.tz}; if(down) down.cancel=true; return; }
+    down={x:e.clientX, y:e.clientY, moved:false, tx:MED.cam.tx, tz:MED.cam.tz, id:e.pointerId, touch:e.pointerType!=='mouse'}; });
+  L.addEventListener('pointermove',e=>{ if(ptrs.has(e.pointerId)) ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(rmb){ MED.cam.yaw=rmb.yaw-(e.clientX-rmb.x)*.008; return; }
+    if(two && ptrs.size>=2){ const p=pair(); MED.cam.dist=Math.max(8,Math.min(90,two.dist*two.d/p.d)); MED.cam.yaw=two.yaw-(p.ang-two.ang); medPan(two.tx,two.tz,-(p.mx-two.mx),-(p.my-two.my)); return; }
+    if(down && e.pointerId===down.id && !down.cancel){ const dx=e.clientX-down.x, dy=e.clientY-down.y; if(Math.hypot(dx,dy)>12) down.moved=true; if(down.moved) medPan(down.tx,down.tz,-dx,-dy); return; }
+    if(e.pointerType==='mouse' && !down) medHover(e.clientX,e.clientY); });
+  const up=e=>{ ptrs.delete(e.pointerId); if(rmb && e.pointerType==='mouse'){ rmb=null; return; } if(ptrs.size<2) two=null;
+    if(!down || e.pointerId!==down.id) return; const d=down; down=null; if(d.cancel || d.moved || e.type==='pointercancel') return;
+    medTap(e.clientX,e.clientY,d.touch); };
+  L.addEventListener('pointerup',up); L.addEventListener('pointercancel',up);
+  L.addEventListener('wheel',e=>{ e.preventDefault(); MED.cam.dist=Math.max(8,Math.min(90,MED.cam.dist*(e.deltaY>0?1.1:.9))); },{passive:false});
+  addEventListener('keydown',e=>{ if(!MED.on || (e.target && e.target.tagName==='INPUT')) return; if(e.code==='KeyR'){ medRotate(); e.preventDefault(); }
+    if(e.code==='KeyQ') MED.cam.yaw+=Math.PI/8; if(e.code==='KeyE') MED.cam.yaw-=Math.PI/8; if(e.code==='PageUp') medHeight(1); if(e.code==='PageDown') medHeight(-1);
+    if((e.ctrlKey||e.metaKey) && e.code==='KeyZ'){ medUndo(); e.preventDefault(); }
+    const pk={KeyW:[0,-60],ArrowUp:[0,-60],KeyS:[0,60],ArrowDown:[0,60],KeyA:[-60,0],ArrowLeft:[-60,0],KeyD:[60,0],ArrowRight:[60,0]}[e.code]; if(pk){ medPan(MED.cam.tx,MED.cam.tz,pk[0],pk[1]); e.preventDefault(); e.stopPropagation(); } },true);
+})();
+function medPan(tx0,tz0,px,py){ const k=MED.cam.dist/innerHeight*1.4, y=MED.cam.yaw, rx=Math.cos(y), rz=-Math.sin(y), fx=-Math.sin(y), fz=-Math.cos(y), lim=FREE.R;
+  MED.cam.tx=Math.max(-lim,Math.min(lim,tx0+rx*px*k-fx*py*k)); MED.cam.tz=Math.max(-lim,Math.min(lim,tz0+rz*px*k-fz*py*k)); }
+function medCamera(dt){ if(!MED.on) return false; hThumbPump(); freeThumbPump(); const C=MED.cam, tx=FREE.X+C.tx, tz=FREE.Z+C.tz, ty=FREE.Y+MED.h;
+  _mP.set(tx+Math.sin(C.yaw)*Math.cos(C.pitch)*C.dist, ty+Math.sin(C.pitch)*C.dist, tz+Math.cos(C.yaw)*Math.cos(C.pitch)*C.dist);
+  camera.position.lerp(_mP,1-Math.exp(-dt*8)); camera.lookAt(tx,ty,tz); plush.visible=true; medGhostTick(); return true; }
+// ---- de la pantalla al mapa ----
+function medRay(cx,cy){ const r=canvas.getBoundingClientRect(); _mV.set((cx-r.left)/r.width*2-1, -(cy-r.top)/r.height*2+1); _mRay.setFromCamera(_mV,camera); return _mRay.ray; }
+function medPickObj(cx,cy){ const ray=medRay(cx,cy); let best=null, bd=1e9; const bx=new THREE.Box3();
+  for(const o of FREE.objs){ if(!o.root.visible) continue; if(ray.intersectBox(o.box,_mHit)){ const d=_mHit.distanceTo(ray.origin); if(d<bd){ bd=d; best=o; } } }
+  for(const o of FREE.dyn){ const p=o.root.position; bx.min.set(p.x-o.r,p.y-o.r,p.z-o.r); bx.max.set(p.x+o.r,p.y+o.r,p.z+o.r); if(ray.intersectBox(bx,_mHit)){ const d=_mHit.distanceTo(ray.origin); if(d<bd){ bd=d; best=o; } } }
+  return best; }
+function medPickSpot(cx,cy){ const ray=medRay(cx,cy); let top=null, bd=1e9;   // primero: ¿le pegas a la tapa de algo? (para apilar)
+  for(const o of FREE.objs){ if(!o.solid || !o.root.visible) continue; if(ray.intersectBox(o.box,_mHit) && _mHit.y>=o.box.max.y-.02){ const d=_mHit.distanceTo(ray.origin); if(d<bd){ bd=d; top=_mHit.clone(); } } }
+  let x, z; if(top){ x=top.x; z=top.z; } else { _mPl.constant=-(FREE.Y+MED.h); if(!ray.intersectPlane(_mPl,_mP)) return null; x=_mP.x; z=_mP.z; }
+  const s=MED.sel, snap=!(s && s.k==='p' && !FREE_PHYS_BY[s.a].pad); if(snap){ x=Math.floor(x-FREE.X)+.5+FREE.X; z=Math.floor(z-FREE.Z)+.5+FREE.Z; }
+  const g=freeGround(x,z,(top?top.y:FREE.Y+MED.h)+.05); if(g===null) return {x,z,y:FREE.Y,ok:false};
+  const y=Math.max(g, FREE.Y+MED.h); return {x, y, z, ok:freeInside(x,z,.5), key:Math.round(x*2)+','+Math.round(z*2)+','+Math.round(y*4)}; }
+// ---- el fantasma ----
+function medGhostSet(){ const key=freeSelKey(MED.sel)+(MED.tool==='place'?'':'x'); if(key===MED.ghostKey) return; MED.ghostKey=key; if(MED.ghost){ FREE.g.remove(MED.ghost); MED.ghost=null; }
+  if(!MED.sel || MED.tool!=='place') return; const o=freeMake(MED.sel); if(!o) return; o.traverse(q=>{ q.userData.noBatch=true; if(q.isMesh){ q.material=FREE_GHOST; q.castShadow=false; q.receiveShadow=false; } }); o.visible=false; MED.ghost=o; MED.gBad=null; FREE.g.add(o); }
+function medGhostTick(){ medGhostSet(); const g=MED.ghost, h=MED.hov;
+  if(g){ if(!h){ g.visible=false; } else { g.visible=true; const P=MED.sel.k==='p'&&!FREE_PHYS_BY[MED.sel.a].pad?FREE_PHYS_BY[MED.sel.a]:null; g.position.set(h.x,h.y+(P?P.r:0),h.z); g.rotation.y=P?0:MED.rot*Math.PI/2;
+      const bad=!h.ok || FREE.objs.length>=FREE_MAX; if(bad!==MED.gBad){ MED.gBad=bad; g.traverse(q=>{ if(q.isMesh) q.material=bad?FREE_GHOST_BAD:FREE_GHOST; }); } } }
+  if(!FREE.hl){ FREE.hl=new THREE.Box3Helper(new THREE.Box3(),0xff5a5a); FREE.hl.userData.noBatch=true; FREE.g.add(FREE.hl); }
+  const m=MED.mark; if(m && (FREE.objs.includes(m)||FREE.dyn.includes(m))){ FREE.hl.visible=true; FREE.hl.material.color.set(MED.tool==='move'?0x4fb3ff:0xff5a5a); if(m.dyn){ const p=m.root.position, r=m.r; FREE.hl.box.min.set(p.x-r,p.y-r,p.z-r); FREE.hl.box.max.set(p.x+r,p.y+r,p.z+r); } else FREE.hl.box.copy(m.box); } else FREE.hl.visible=false; }
+function medHover(cx,cy){ if(MED.tool==='place'){ MED.hov=MED.sel?medPickSpot(cx,cy):null; } else MED.mark=medPickObj(cx,cy); }
+// ---- tocar ----
+function medTap(cx,cy,touch){
+  if(MED.tool==='del' || (MED.tool==='move' && !MED.moving)){ const o=medPickObj(cx,cy); if(!o){ MED.mark=null; medTip(MED.tool==='del'?'Toca la pieza que quieras quitar':'Toca la pieza que quieras mover'); return; }
+    if(touch && MED.mark!==o){ MED.mark=o; medTip(MED.tool==='del'?'Toca otra vez para quitarla':'Toca otra vez para agarrarla'); return; }
+    MED.mark=null; if(MED.tool==='del'){ medUndoPush({t:'del', e:medEntry(o)}); freeDrop(o); freeSaveSoon(); try{ audio.cam&&audio.cam(); }catch(e){} medTip('Quitada. ↶ Deshacer la regresa'); }
+    else { MED.moving=medEntry(o); MED.sel={...(o.dyn?{k:'p',a:o.id,b:0}:o.sel)}; MED.rot=o.dyn?0:o.r; freeDrop(o); MED.tool='place'; medTip('Toca dónde ponerla'); }
+    medRender(); return; }
+  if(!MED.sel){ medTip('Escoge una pieza a la derecha'); return; }
+  const h=medPickSpot(cx,cy); if(!h) return; if(touch && (!MED.hov || MED.hov.key!==h.key)){ MED.hov=h; medGhostTick(); medTip(h.ok?'Toca otra vez para ponerla aquí':'Ahí no se puede'); return; }
+  MED.hov=h; if(!h.ok){ medTip('Ahí no se puede: muy cerca de la orilla'); return; } medPlace(h); }
+function medPlace(h){ const s=MED.sel; if(s.k==='g' && s.a==='inicio'){ const old=FREE.objs.find(q=>q.game==='inicio'); if(old){ medUndoPush({t:'del', e:medEntry(old)}); freeDrop(old); } }
+  let o; if(s.k==='p' && !FREE_PHYS_BY[s.a].pad) o=freeAddDyn(s.a,h.x,h.y+.02,h.z); else o=freeAddStatic(s,h.x,h.y,h.z,MED.rot);
+  if(!o) return; medUndoPush({t:'add', id:o.id, dyn:!!o.dyn, mv:MED.moving}); if(MED.moving){ MED.moving=null; MED.sel=null; medTip('¡Listo, movida!'); } else medTip(freeSelName(s)+' · '+FREE.objs.length+'/'+FREE_MAX);
+  try{ audio.pop ? audio.pop() : audio.cam(); }catch(e){} freeSaveSoon(); medRender(); }
+// ---- deshacer ----
+function medEntry(o){ if(o.dyn){ const p=o.root.position; return {dyn:1, id:o.id, x:p.x, y:p.y-o.r, z:p.z}; } return {sel:{...o.sel}, x:o.x, y:o.y, z:o.z, r:o.r}; }
+function medRestore(e){ return e.dyn ? freeAddDyn(e.id,e.x,e.y,e.z,true) : freeAddStatic(e.sel,e.x,e.y,e.z,e.r,true); }
+function medUndoPush(a){ MED.undo.push(a); if(MED.undo.length>60) MED.undo.shift(); }
+function medUndo(){ const a=MED.undo.pop(); if(!a){ medTip('No hay nada que deshacer'); return; }
+  if(a.t==='add'){ const o=(a.dyn?FREE.dyn:FREE.objs).find(q=>q.id===a.id); if(o) freeDrop(o); if(a.mv) medRestore(a.mv); }
+  else if(a.t==='del'){ medRestore(a.e); }
+  freeSaveSoon(); medTip('Deshecho'); medRender(); }
+// ---- herramientas ----
+function medRotate(){ MED.rot=(MED.rot+1)%4; try{ audio.cam&&audio.cam(); }catch(e){} medTip('Girada'); }
+function medTool(t){ if(MED.moving && t!=='place'){ medRestore(MED.moving); MED.moving=null; MED.sel=null; } MED.tool=t; MED.mark=null; MED.hov=null; MED.toolsOpen=false;
+  medTip(t==='del'?'Quitar: toca una pieza':t==='move'?'Mover: toca la pieza que quieras cambiar de lugar':(MED.sel?'Toca el piso para poner '+freeSelName(MED.sel):'Escoge una pieza a la derecha')); medRender(); }
+function medHeight(d){ MED.h=Math.max(0,Math.min(12,MED.h+d)); MED.hov=null; medTip(MED.h?'Altura: <b>'+MED.h+' m</b> sobre el piso (para piezas flotando)':'Altura: en el piso'); }
+function medTip(t){ const el=MED.ui.tip; el.innerHTML=t; el.classList.remove('fade'); clearTimeout(MED.tipT); MED.tipT=setTimeout(()=>el.classList.add('fade'),4200); }
+function medSelect(sel){ if(MED.moving){ medRestore(MED.moving); MED.moving=null; } MED.sel=sel; MED.tool='place'; MED.rot=0; MED.hov=null; medTip('Toca el piso para poner <b>'+freeSelName(sel)+'</b> (dos toques)'); medRender(); }
+// ---- el panel de piezas ----
+function medItems(){ const tabs=mapTabs().map(t=>t[0]), out=[];
+  if(tabs.includes('juego')) FREE_GAME.forEach(G=>out.push({tab:'juego', sub:'', n:G.n, sel:{k:'g',a:G.id,b:0}}));
+  if(tabs.includes('bloques')) FREE_SHAPES.forEach((S,i)=>out.push({tab:'bloques', sub:'', n:S.n, sel:{k:'b',a:i,b:MED.col}}));
+  if(tabs.includes('fisica')) FREE_PHYS.forEach(P=>out.push({tab:'fisica', sub:'', n:P.n, sel:{k:'p',a:P.id,b:0}}));
+  for(const t of ['construir','casa','jardin']) if(tabs.includes(t)) HK.filter(K=>K.cat===t).forEach(K=>out.push({tab:t, sub:K.sub, n:K.n, sel:{k:'h',a:K.id,b:(K.mats||[0])[0]}}));
+  return out; }
+function medRender(){ if(!MED.on) return; const U=MED.ui, box=U.inv; box.textContent='';
+  U.bDel.classList.toggle('on',MED.tool==='del'); U.tools.hidden=!MED.toolsOpen; U.tools.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.t===MED.tool));
+  const M=mapById(FREE.ctx), h=document.createElement('h4'); h.textContent='🗺️ '+((M&&M.n)||'Mi mapa'); box.appendChild(h);
+  const TB=mapTabs(); if(!MED.tab || (MED.tab!=='fav' && !TB.some(t=>t[0]===MED.tab))) MED.tab=TB[0][0];
+  const tabs=document.createElement('div'); tabs.className='hed-tabs'; [['fav','★'],...TB].forEach(([id,n])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=id==='fav'?'★':n.split(' ')[0]; b.title=n; b.className=MED.tab===id?'on':''; b.onclick=()=>{ MED.tab=id; MED.sub=''; MED.q=''; medRender(); }; tabs.appendChild(b); });
+  box.appendChild(tabs); const tn=document.createElement('h4'); tn.textContent=MED.tab==='fav'?'Favoritas':(TB.find(t=>t[0]===MED.tab)||['',''])[1].replace(/^\S+ /,''); box.appendChild(tn);
+  const sr=document.createElement('div'); sr.className='hed-srch'; const inp=document.createElement('input'); inp.placeholder='Buscar pieza…'; inp.value=MED.q; inp.oninput=()=>{ MED.q=inp.value; medRenderGrid(); }; sr.appendChild(inp); box.appendChild(sr);
+  if(MED.tab==='bloques'){ const d=document.createElement('div'); d.className='hed-dots'; FREE_COLS.forEach((c,i)=>{ const b=document.createElement('button'); b.type='button'; b.style.background=c; b.className=MED.col===i?'on':''; b.onclick=()=>{ MED.col=i; if(MED.sel&&MED.sel.k==='b') MED.sel={...MED.sel,b:i}; medRender(); }; d.appendChild(b); }); box.appendChild(d); }
+  const SB=HSUBS[MED.tab]; if(SB){ if(!MED.sub) MED.sub=SB[0][0]; const d=document.createElement('div'); d.className='hed-subs'; SB.forEach(([id,n])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=n; b.className=MED.sub===id?'on':''; b.onclick=()=>{ MED.sub=id; medRender(); }; d.appendChild(b); }); box.appendChild(d); }
+  const grid=document.createElement('div'); grid.className='hed-grid'; grid.id='medGrid'; box.appendChild(grid); medRenderGrid(); }
+function medRenderGrid(){ const grid=document.getElementById('medGrid'); if(!grid) return; grid.textContent=''; const q=hNorm((MED.q||'').trim()), F=medFav();
+  let L=medItems(); if(q) L=L.filter(it=>hNorm(it.n).includes(q)); else if(MED.tab==='fav') L=L.filter(it=>F.includes(freeSelKey(it.sel))); else L=L.filter(it=>it.tab===MED.tab && (!HSUBS[MED.tab] || it.sub===MED.sub));
+  if(!L.length){ const p=document.createElement('p'); p.style.cssText='font:700 12px var(--body);color:#7a2b2b;margin:4px;grid-column:1/-1'; p.textContent=MED.tab==='fav'&&!q?'Toca la ☆ de una pieza para guardarla aquí':'No hay piezas con ese nombre'; grid.appendChild(p); return; }
+  for(const it of L.slice(0,160)){ const key=freeSelKey(it.sel), b=document.createElement('button'); b.type='button'; b.className='hed-card'+(MED.sel && freeSelKey(MED.sel)===key?' on':'');
+    (it.sel.k==='h'?hThumbEl(it.sel.a,it.sel.b):freeThumbEl(it.sel)).forEach(e=>b.appendChild(e)); const sp=document.createElement('span'); sp.textContent=it.n; b.appendChild(sp);
+    const fv=document.createElement('i'); fv.className='fv'+(F.includes(key)?' on':''); fv.textContent=F.includes(key)?'★':'☆'; fv.onclick=e=>{ e.stopPropagation(); medFavToggle(key); }; b.appendChild(fv);
+    b.onclick=()=>medSelect({...it.sel}); grid.appendChild(b); } }
+// ---- entrar, probar y salir ----
+function medEnter(){ if(MED.on || FREE.ctx==='libre') return; MED.on=true; MED.sel=null; MED.tool='place'; MED.hov=null; MED.mark=null; MED.moving=null; MED.toolsOpen=false; MED.h=0; MED.undo=[];
+  const ini=FREE.objs.find(o=>o.game==='inicio'); MED.cam={yaw:.6, pitch:.95, dist:24, tx:ini?ini.x-FREE.X:0, tz:ini?(ini.z-FREE.Z)-6:0};
+  if(!MED.grid){ MED.grid=new THREE.GridHelper(FREE.R*2,FREE.R,0xffffff,0xffffff); MED.grid.material.transparent=true; MED.grid.material.opacity=.16; MED.grid.material.depthWrite=false; MED.grid.position.set(FREE.X,FREE.Y+.02,FREE.Z); MED.grid.userData.noBatch=true; FREE.g.add(MED.grid); }
+  MED.grid.visible=true; const U=MED.ui; for(const e of [U.layer,U.inv,U.bar,U.tip,U.tog]) e.hidden=false; document.body.classList.add('in-med'); FREE.sel=null; FREE.del=false; freeGhostSet(); setActions(null,null);
+  medRender(); medTip('Mueve la vista con un dedo · acerca con dos · escoge una pieza y toca el piso'); }
+function medExit(){ if(!MED.on) return; if(MED.moving){ medRestore(MED.moving); MED.moving=null; } MED.on=false; const U=MED.ui; for(const e of [U.layer,U.inv,U.bar,U.tip,U.tog,U.tools]) e.hidden=true;
+  document.body.classList.remove('in-med'); MED.sel=null; medGhostSet(); if(MED.grid) MED.grid.visible=false; if(FREE.hl) FREE.hl.visible=false; freeSave(); try{ updateTouchMode(); }catch(e){} }
+function medPlay(){ medExit(); freePlayStart(); }
+function medDone(){ medExit(); ui('toMenuBtn').click(); try{ menuModes(true); openMaps(); }catch(e){} }
 
 // ---------------- v188: TUTORIAL con guía — Almohadita (casitas) y Llantita (carritos) ----------------
 // Sale la primera vez que abres el taller o el editor (si está vacío) y con el botón ❓ Ayuda. Una flecha señala qué tocar;
@@ -23918,6 +24060,7 @@ function update(dt,t){ myLabelUpdate();
     plush.visible=true;
   } else if(state==='play' && SP.on && spaceCamera(dt)){
   } else if(state==='play' && rocketCamera(dt)){
+  } else if(state==='play' && MED.on && medCamera(dt)){   // v210: editor de mapas desde arriba
   } else if(state==='play' && ED && ED.on && hedCamera(dt)){
   } else if(state==='play' && arenaCamera(dt)){
   } else if(player.mg && mgCamera(dt)){
@@ -24220,6 +24363,7 @@ window.mundoAtras=()=>{ const vis=id=>{ const e=ui(id); return !!e && !e.hidden;
   if(vis('saveOv')){ ui('saveClose').click(); return true; }
   if(vis('controls')){ ui('closeControls').click(); return true; }
   if(!shopEl.hidden){ closeShop(); return true; }
+  if(MED.on){ if(MED.toolsOpen){ MED.toolsOpen=false; medRender(); } else medDone(); return true; }   // v210
   if(vis('mapList')){ ui('mapList').hidden=true; return true; }   // v209
   if(vis('freeStart')){ ui('freeStart').hidden=true; return true; }   // v208
   if(!ui('freeBox').hidden){ ui('freeBox').hidden=true; return true; }
