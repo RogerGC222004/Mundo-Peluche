@@ -1467,7 +1467,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='216';
+const GAME_VERSION='217';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -6039,6 +6039,8 @@ const audio=(()=>{
       else { noise(t,.14,500,.32,1.2); tone('sine',120,60,t,.12,.22); } },
     bump(){ if(!ok())return; const n=performance.now(); if(n-(this._b||0)<250) return; this._b=n; const t=ctx.currentTime; noise(t,.2,600,.4,1); tone('sine',90,45,t,.18,.3); },
     sit(){ if(!ok())return; const t=ctx.currentTime; noise(t,.18,700,.18,1); tone('sine',160,90,t,.12,.12); },
+    // v217: clac de dominó o bolo (muchos seguidos no se enciman)
+    clack(p){ if(!ok())return; const n=performance.now(); if(n-(this._ck||0)<45) return; this._ck=n; const t=ctx.currentTime, v=Math.min(1,Math.max(.25,p||.5)); noise(t,.035,2800,.2*v,5); tone('triangle',1100,650,t,.045,.06*v); },
     horn(){ if(!ok())return; const t=ctx.currentTime; [[392,0],[494,0]].forEach(([f])=>{ tone('square',f,f,t,.42,.045); }); },
     // Motor: zumbido suave que sube con la velocidad
     engine(on,sp){ if(!ctx) return;
@@ -6270,7 +6272,7 @@ hold(ui('tDive'),()=>{ touchHold.down=true; startDive(); },()=>{ touchHold.down=
 
 function jump(){ if(player.pg && player.pg.k==='vine'){ jiVineRelease(); return; }   // v142: soltar la liana
   if(player.pg && (player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='veh' || player.pg.k==='vehp' || player.pg.k==='surf')) return;   // v144: en el tobogán y en la rueda no se salta
-  if(player.busy) return; if(player.mg || (typeof SP!=='undefined' && SP.on)) return; if(hook.mode>=2){ bowRelease(); return; } if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see')){ stopPlay(); return; } const now=performance.now()/1000, coyote=!player.grounded && player.vy<=1.5 && now-(player.lastGroundT||0)<.16;   // v195: saltar aunque te acabes de salir de la orilla
+  if(player.busy) return; if(player.mg || (typeof SP!=='undefined' && SP.on)) return; if(hook.mode>=2){ bowRelease(); return; } if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see'||player.pg.k==='fmv')){ stopPlay(); return; } const now=performance.now()/1000, coyote=!player.grounded && player.vy<=1.5 && now-(player.lastGroundT||0)<.16;   // v195: saltar aunque te acabes de salir de la orilla
   if((player.grounded||coyote) && !player.dive && !player.swim && !player.car && !player.ac && !player.pg){ player.vy=trOnMat(player.pos.x,player.pos.z,player.pos.y)?9.5:7.2; player.grounded=false; player.jumpBuf=0; player.lastGroundT=0; audio.jump(); }
   else if(!player.dive && !player.swim && !player.car && !player.ac && !player.pg) player.jumpBuf=now; }   // v195: si tocaste Saltar un poquito antes de caer, salta al llegar
 
@@ -6761,7 +6763,7 @@ function onPeers({peers}){
       if(e[1]>c.lightT){ c.lights=e[0]===1; c.lightT=e[1]; }
     });
     // aviones y helicópteros: quién pilota, dónde quedaron, escaleras y puertas, y quién va a bordo
-    { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<(PG_KINDS[pl[0]]==='bench'?BENCHES.length:PG_KINDS[pl[0]]==='cuco'?5:PG_KINDS[pl[0]]==='dwheel'?DI_WHEEL.N:PG_KINDS[pl[0]]==='dcar'?DI_CAR.N:PG_KINDS[pl[0]]==='vehp'?9:3) ? pl : null;
+    { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<(PG_KINDS[pl[0]]==='bench'?BENCHES.length:PG_KINDS[pl[0]]==='cuco'?5:PG_KINDS[pl[0]]==='dwheel'?DI_WHEEL.N:PG_KINDS[pl[0]]==='dcar'?DI_CAR.N:PG_KINDS[pl[0]]==='vehp'?9:PG_KINDS[pl[0]]==='fmv'?4:3) ? pl : null;
       if(pr.pu) pgCheckPush(r,pr.pu); }
     parseCuco(r,pr,cuDrv); parseShip(r,pr,cuDrv); wiParse(r,pr); parsePier(r,pr); trParse(r,pr); parsePet(r,pr); blParse(r,pr,p.peer,blSeen);   // Cuco: dónde está y si lo guía esta persona
     const ai=pr.ai;
@@ -8983,7 +8985,7 @@ function trRemotePose(r,t,dt){ if(r.tz && r.tz[2]) pgPoseLimbs(r.obj,{climb:(per
 let myPush={i:-1,t:0}; player.pushUntil=0;
 function pgOccupied(k,i){ if(player.pg && player.pg.k===k && player.pg.i===i) return 'me';
   for(const r of mp.remotes.values()) if(r.pl && r.pl[0]===PG_KINDS.indexOf(k) && r.pl[1]===i) return r; return null; }
-const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled','zip','vine','icsl','dwheel','dcar','veh','vehp','surf'];   // v182: + carrusel de dulces
+const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled','zip','vine','icsl','dwheel','dcar','veh','vehp','surf','fmv'];   // v182: + carrusel de dulces
 function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars' && k!=='cart' && k!=='veh' && k!=='vehp' && k!=='surf') return;   // v182: cada quien tiene su vehículo
   holding=false; applyHeld(); renderHotbar();
   player.pg={k,i,t0:performance.now()/1000, from:[player.pos.x,player.pos.y,player.pos.z]};
@@ -8999,9 +9001,10 @@ function stopPlay(){ const P=player.pg; if(!P) return; const pose=player.pgPose;
   else if(P.k==='see'){ const e=PG_EQ.seesaw; out=eqToWorld(e,.9,0,(P.i?1:-1)*e.half); }
   else if(P.k==='bench'){ const b=BENCHES[P.i]; out=[b.x+Math.sin(b.yaw)*.95,0,b.z+Math.cos(b.yaw)*.95]; }
   else if(P.k==='helm'){ const [x,z]=shipW(.95,HELM_Z-.9); out=[x,SH.DECK,z]; }   // v138: al soltar el timón te quedas en la cubierta
+  else if(P.k==='fmv') out=pqExit(P);   // v217
   else if(P.k==='cart'){ const q=MC.at(P.s||0); out=[q.x+Math.cos(q.yaw)*1.3, q.y, q.z-Math.sin(q.yaw)*1.3]; MC.s=P.s||0; }   // v137: te bajas a un lado del carrito
   else out=pose?pose.pos:[player.pos.x,player.pos.y,player.pos.z];
-  player.pos.set(out[0], groundAt(out[0],out[2],(P.k==='bench'?BENCHES[P.i].y:P.k==='cart'||P.k==='helm'?out[1]:0)+.3), out[2]); if(pose) player.facing=pose.yaw;
+  player.pos.set(out[0], groundAt(out[0],out[2],(P.k==='bench'?BENCHES[P.i].y:P.k==='cart'||P.k==='helm'||P.k==='fmv'?out[1]:0)+.3), out[2]); if(pose) player.facing=pose.yaw;
   player.pg=null; player.grounded=true; player.vy=0; audio.getup(); updateTouchMode(); try{ sendPresence(true); }catch(e){} }
 const pgIn=()=>{ let f=0; if(keys.KeyW||keys.ArrowUp) f+=1; if(keys.KeyS||keys.ArrowDown) f-=1; f-=stick.y; return Math.min(1,Math.abs(f)+Math.hypot(stick.x,0)*.5); };
 // Pose de un peluche en cada juego (la misma para mí y para los demás). Devuelve pos en el mundo, giro y postura.
@@ -9036,6 +9039,7 @@ function playPose(k,i,v,dt){
 function pgDuration(k){ return k==='slide'?3.85 : k==='bars'?(1.65+PG_EQ.bars.len/.46*.42) : 0; }
 function updateMyPlay(dt){
   const P=player.pg, el=performance.now()/1000-P.t0, inp=pgIn();
+  if(P.k==='fmv') return pqRidePose(P);   // v217
   if(P.k==='cuco') return cucoRide(P,el);
   if(P.k==='cart') return mcRide(P,dt);   // v137
   if(P.k==='helm'){ P.v=0; return helmPose(); }
@@ -9096,7 +9100,7 @@ function pgActions(){
   if(!player.pg && !player.car && !player.ac && !player.dive && cucoNear()){ const s=cucoFreeSeat(); return [s<0 ? {label:'Cuco está lleno', disabled:true, run:()=>{}} : {label:'Subirse a Cuco', run:cucoBoard}, null]; }
   if(!player.pg && !player.car && !player.ac && !player.dive && !player.swim && !player.mg && mcNear()) return [{label:'Subir al carrito', run:mcBoard}, null];   // v137
   if(player.pg){ const k=player.pg.k; if(k==='slide'||k==='bars') return [null,null];
-    return [{label: k==='sled'?'Bajarse del trineo': k==='helm'?'Soltar el timón': k==='cart'?'Bajar del carrito': k==='swing'?'Bajarse del columpio': k==='ride'?'Bajarse': k==='bench'?'Levantarse':'Bajarse del sube y baja', run:stopPlay}, null]; }
+    return [{label: k==='sled'?'Bajarse del trineo': k==='helm'?'Soltar el timón': k==='cart'?'Bajar del carrito': k==='swing'?'Bajarse del columpio': k==='ride'?'Bajarse': k==='bench'?'Levantarse':k==='fmv'?'Bajarse':'Bajarse del sube y baja', run:stopPlay}, null]; }
   if(player.car || player.ac || player.swim || player.dive) return [null,null];
   for(let i=0;i<BENCHES.length;i++){ const b=BENCHES[i]; if(Math.hypot(player.pos.x-b.x,player.pos.z-b.z)<1.5 && Math.abs(player.pos.y-(b.y-.5))<1 && !pgOccupied('bench',i)) return [{label:'Sentarse', run:()=>startPlay('bench',i)}, null]; }
   const px=player.pos.x, pz=player.pos.z; if(Math.hypot(px-PG.x,pz-PG.z)>PG.R+2) return [null,null];
@@ -9113,6 +9117,7 @@ function pgActions(){
 }
 function updateRemoteInPlay(r,dt,t){
   const d=r.pl, k=PG_KINDS[d[0]]; if(!k) return false;
+  if(k==='fmv'){ const o=FREE.on?pqByNid(r.fm):null, pose=o?pqSeatPose(o,d[1]):null; if(!pose) return false; placePlay(r.obj,pose); r.pos.set(...pose.pos); r.target.set(...pose.pos); pgPoseLimbs(r.obj,pose,t,dt,r.walk); r.label.position.set(0,2.42,0); r.blob.visible=false; return true; }   // v217: en un juego del Modo libre
   let v=0;
   if(k==='sled') return wiRemoteSled(r,dt,t);   // v140: en su trineo
   if(k==='surf') return tblRemoteRide(r,dt,t);   /* v196 */
@@ -22628,13 +22633,15 @@ function freeMake(sel){ const root=new THREE.Group();
   else if(sel.k==='g'){ if(!FREE_GAME_BY[sel.a]) return null; fgMake(sel.a,root); }   // v209: piezas de juego (Crear mapa)
   else if(sel.k==='c'){ const C=crGet(sel.a); if(!C) return null; root.add(crBuild(C)); root.userData.solid=false; }   // v211: tus criaturas
   else if(sel.k==='o'){ const O=obById(sel.a); if(!O) return null; const m=obBuild(O), U=m.userData.ob; if(U.glow){ m.remove(U.glow); U.glow=null; } if(U.mat) U.mat.emissiveIntensity=.3; m.rotation.set(0,.45,-.3); const sp=new THREE.Group(); sp.position.y=.75; sp.add(m); root.add(sp); root.userData.spinO=sp; root.userData.solid=false; }   // v212: tus objetos (v213: flotan girando, como premio)
+  else if(sel.k==='v'){ if(!pqMakeV(sel,root)) return null; }   // v217: piezas que se mueven
+  else if(sel.k==='t'){ if(!pqMakeT(sel,root)) return null; }   // v217: juguetes
   else if(sel.k==='m'){ const M=mgiOk(sel.a); if(!M) return null; const L=mgiLayout(M); for(const [k,a,b,x,y,z,r] of L.s){ const q=freeMake({k,a,b}); if(!q) continue; q.position.set(x-L.cx,y,z-L.cz); q.rotation.y=r*Math.PI/2; root.add(q); } root.userData.solid=false; }   // v213: un minijuego completo (para su fotito)
   if(sel.k!=='c') root.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); return root; }   // (las criaturas ya traen su sombra: solo el cuerpo)
 // ---- dónde estoy mirando ----
 function freeFwd(){ return [Math.sin(player.facing), Math.cos(player.facing)]; }
 function freeInside(x,z,m){ return Math.abs(x-FREE.X)<=FREE.R-(m||0) && Math.abs(z-FREE.Z)<=FREE.R-(m||0); }
 function freeGround(x,z,y){ if(!freeInside(x,z,-.4)) return null; let g=FREE.Y; const lim=(y===undefined?1e9:y)+.6;
-  for(const o of fgQuery(x,z,x,z)){ if(!o.solid) continue; const b=o.box; if(x<b.min.x||x>b.max.x||z<b.min.z||z>b.max.z) continue; if(b.max.y<=lim && b.max.y>g) g=b.max.y; }
+  for(const o of fgQuery(x,z,x,z)){ if(!o.solid) continue; const b=o.box; if(x<b.min.x||x>b.max.x||z<b.min.z||z>b.max.z) continue; if(o.cyl && (x-o.x)*(x-o.x)+(z-o.z)*(z-o.z)>o.cyl*o.cyl) continue; if(b.max.y<=lim && b.max.y>g) g=b.max.y; }
   return g; }
 function freeCollide(p){ if(!FREE.on) return; const lim=FREE.R-.5; p.x=Math.max(FREE.X-lim,Math.min(FREE.X+lim,p.x)); p.z=Math.max(FREE.Z-lim,Math.min(FREE.Z+lim,p.z));
   const r=.42; for(const o of fgQuery(p.x-r,p.z-r,p.x+r,p.z+r)){ if(!o.solid) continue; const b=o.box; if(p.y>=b.max.y-.45 || p.y+PLAYER_H<=b.min.y+.05) continue;
@@ -22646,7 +22653,7 @@ const FREE_GHOST=new THREE.MeshBasicMaterial({color:0x5ee36a, transparent:true, 
 function freeSelKey(s){ return s ? s.k+':'+s.a+':'+s.b : ''; }
 function freeGhostSet(){ const key=freeSelKey(FREE.sel); if(key===FREE.ghostKey) return; FREE.ghostKey=key; if(FREE.ghost){ FREE.g.remove(FREE.ghost); FREE.ghost=null; }
   if(!FREE.sel) return; const o=freeMake(FREE.sel); if(!o) return; o.traverse(q=>{ if(q.isMesh){ q.material=FREE_GHOST; q.castShadow=false; q.receiveShadow=false; } }); o.userData.noBatch=true; o.traverse(q=>q.userData.noBatch=true); FREE.ghost=o; FREE.g.add(o); }
-function freeAim(){ const s=FREE.sel, [fx,fz]=freeFwd(); let d=2.4; if(s && s.k==='h') d=3.2; if(s && s.k==='b' && (FREE_SHAPES[s.a].id==='losa'||FREE_SHAPES[s.a].id==='arco')) d=3;
+function freeAim(){ const s=FREE.sel, [fx,fz]=freeFwd(); let d=2.4; if(s && s.k==='h') d=3.2; if(s && (s.k==='v' || s.a==='torre')) d=3.2; if(s && s.k==='t' && (s.a==='fila'||s.a==='bolos')) d=s.a==='fila'?3.6:3.1; if(s && s.k==='b' && (FREE_SHAPES[s.a].id==='losa'||FREE_SHAPES[s.a].id==='arco')) d=3;
   let x=player.pos.x+fx*d, z=player.pos.z+fz*d; const snap=s && s.k==='p' && !FREE_PHYS_BY[s.a].pad ? 0 : 1; if(snap){ x=Math.floor(x-FREE.X)+.5+FREE.X; z=Math.floor(z-FREE.Z)+.5+FREE.Z; }
   const y=freeGround(x,z,player.pos.y+2.4); return {x, y:y===null?FREE.Y:y, z, ok:y!==null && freeInside(x,z,.5)}; }
 function freeTarget(){ const [fx,fz]=freeFwd(), px=player.pos.x+fx*1.6, pz=player.pos.z+fz*1.6, P=new THREE.Vector3(px,player.pos.y+.8,pz); let best=null, bd=1.8;
@@ -22658,18 +22665,19 @@ function freeAddStatic(sel,x,y,z,r,quiet,par){ if(sel.k==='m') return mgiAdd(sel
   if(!par && freeOwn()>=FREE_MAX){ if(!quiet) flashNote('Ya hay '+FREE_MAX+' cosas: quita alguna para poner más'); return null; }
   if(sel.k==='c' && FREE.objs.filter(o=>o.sel.k==='c').length>=CR_LIVE){ if(!quiet) flashNote('Ya hay '+CR_LIVE+' criaturas en este mundo: quita alguna para poner otra'); return null; }
   const root=freeMake(sel); if(!root) return null; root.position.set(x,y,z); root.rotation.y=r*Math.PI/2; FREE.og.add(root); root.updateMatrixWorld(true);
-  const box=new THREE.Box3().setFromObject(root), P=sel.k==='p'?FREE_PHYS_BY[sel.a]:null;
-  const o={sel:{...sel}, x, y, z, r, root, box, solid:P?false:root.userData.solid!==false, pad:!!(P&&P.pad), game:sel.k==='g'?sel.a:null, id:++FREE.seq}; if(par) o.par=par; FREE.objs.push(o); fgAdd(o); return o; }
+  const box=new THREE.Box3().setFromObject(root), P=sel.k==='p'?FREE_PHYS_BY[sel.a]:null; if(root.userData.col) box.copy(root.userData.col).applyMatrix4(root.matrixWorld);   // v217: el carrusel y el elevador chocan solo con su piso
+  const o={sel:{...sel}, x, y, z, r, root, box, solid:P?false:root.userData.solid!==false, pad:!!(P&&P.pad), game:sel.k==='g'?sel.a:null, id:++FREE.seq}; if(par) o.par=par; pqInit(o); FREE.objs.push(o); fgAdd(o); return o; }
 function freeAddDyn(id,x,y,z,quiet,par){ const P=FREE_PHYS_BY[id]; if(!P || P.pad) return null; if(FREE.dyn.length>=FREE_DYN){ if(!quiet) flashNote('Ya hay '+FREE_DYN+' cosas con física: quita alguna'); return null; }
   const root=freeMake({k:'p',a:id}); root.position.set(x,y+P.r,z); root.traverse(q=>q.userData.noBatch=true); FREE.og.add(root);
   const o={id, P, r:P.r, root, spin:root.userData.spin, v:new THREE.Vector3(), kick:0, dyn:true, p0:[x,y,z]}; if(par) o.par=par; FREE.dyn.push(o); return o; }
 function freePlace(){ const s=FREE.sel; if(!s) return; const a=freeAim(); if(!a.ok){ flashNote('Ahí no se puede: está muy cerca de la orilla'); return; }
   if(s.k==='g' && s.a==='inicio'){ const old=FREE.objs.find(q=>q.game==='inicio' && !q.par); if(old) freeDrop(old); }   // v209: solo hay un Inicio
+  if(s.k==='t' && PQ_T_BY[s.a] && PQ_T_BY[s.a].multi){ const L=pqPlaceMulti(s,a.x,a.y,a.z,FREE.rot); L.forEach(fnLocalAdd); if(L.length){ try{ audio.pop ? audio.pop() : audio.cam(); }catch(e){} freeSaveSoon(); } return; }   // v217: fila de dominós y bolos
   let o; if(s.k==='p' && !FREE_PHYS_BY[s.a].pad) o=freeAddDyn(s.a,a.x,a.y+.05,a.z); else o=freeAddStatic(s,a.x,a.y,a.z,FREE.rot);
   if(o){ fnLocalAdd(o); try{ audio.pop ? audio.pop() : audio.cam(); }catch(e){} freeSaveSoon(); } }
 function freeRotate(){ FREE.rot=(FREE.rot+1)%4; try{ audio.cam&&audio.cam(); }catch(e){} }
 function freeRemove(){ const o=FREE.tgt; if(!o) { flashNote('Ponte enfrente de lo que quieras quitar'); return; } if(!fnCanRemove(o)) return; fnLocalDel(o); freeDrop(o); try{ audio.cam&&audio.cam(); }catch(e){} freeSaveSoon(); }
-function freeDrop(o){ if(o.inst) mgiDrop(o); if(FNET.on && FNET.host && o.nid && !o.par) FNET.dirty.add(o.bk); if(!o.dyn) fgDel(o); o.root.traverse(m=>{ const r=BATCH.recs.get(m); if(r && r.batch) dissolve(r.batch); }); FREE.og.remove(o.root);
+function freeDrop(o){ if(o.inst) mgiDrop(o); if(o.pq) pqDrop(o); if(FNET.on && FNET.host && o.nid && !o.par) FNET.dirty.add(o.bk); if(!o.dyn) fgDel(o); o.root.traverse(m=>{ const r=BATCH.recs.get(m); if(r && r.batch) dissolve(r.batch); }); FREE.og.remove(o.root);
   if(o.dyn) FREE.dyn.splice(FREE.dyn.indexOf(o),1); else FREE.objs.splice(FREE.objs.indexOf(o),1); if(FREE.tgt===o) FREE.tgt=null; }
 // ---- física sencilla: pelotas, cajas y barriles ----
 const _fN=new THREE.Vector3(), _fA=new THREE.Vector3();
@@ -22679,7 +22687,7 @@ function freePhys(dt){ const D=FREE.dyn; if(!D.length || (FNET.on && !FNET.host)
     // v216: dormida (quieta): solo despierta si algo la empuja o un peluche se le acerca
     if(d.sleep){ if(v.lengthSq()>.0004) freeWake(d); else { let near=false; for(const w of who){ if(Math.abs(p.x-w.x)<r+.7 && Math.abs(p.z-w.z)<r+.7 && p.y<w.y+PLAYER_H+r+.3 && p.y+r>w.y-.3){ near=true; break; } } if(near) freeWake(d); else continue; } }
     v.y-=G*dt; p.addScaledVector(v,dt); d.kick=Math.max(0,d.kick-dt);
-    for(const o of fgQuery(p.x-r,p.z-r,p.x+r,p.z+r)){ const b=o.box; if(o.pad){ if(Math.abs(p.x-o.x)<.8 && Math.abs(p.z-o.z)<.8 && p.y-r<b.max.y+.05 && p.y-r>b.min.y-.1 && v.y<=.5){ v.y=11; } continue; }
+    for(const o of fgQuery(p.x-r,p.z-r,p.x+r,p.z+r)){ const b=o.box; if(o.toy){ pqBallHit(o,d); continue; } if(o.cyl){ const ex=p.x-o.x, ez=p.z-o.z; if(ex*ex+ez*ez>(o.cyl+r)*(o.cyl+r)) continue; } if(o.pad){ if(Math.abs(p.x-o.x)<.8 && Math.abs(p.z-o.z)<.8 && p.y-r<b.max.y+.05 && p.y-r>b.min.y-.1 && v.y<=.5){ v.y=11; } continue; }
       if(!o.solid || p.y-r>=b.max.y-.03 || p.y+r<=b.min.y) continue;
       const cx=Math.max(b.min.x,Math.min(b.max.x,p.x)), cz=Math.max(b.min.z,Math.min(b.max.z,p.z)), dx=p.x-cx, dz=p.z-cz, dd=Math.hypot(dx,dz);
       if(dd<r && dd>1e-4){ const nx=dx/dd, nz=dz/dd; p.x+=nx*(r-dd); p.z+=nz*(r-dd); const vn=v.x*nx+v.z*nz; if(vn<0){ v.x-=(1+d.P.b)*vn*nx; v.z-=(1+d.P.b)*vn*nz; } } }
@@ -22701,7 +22709,7 @@ function freePhys(dt){ const D=FREE.dyn; if(!D.length || (FNET.on && !FNET.host)
     if(d.P.roll===2){ d.root.rotation.y=Math.atan2(v.x,v.z); d.spin.rotation.x+=sp*dt/d.r; }
     else { _fA.set(v.z,0,-v.x).normalize(); d.spin.rotateOnWorldAxis(_fA,sp*dt/d.r); } } }
 // ---- cada cuadro ----
-function freeTick(dt){ if(!FREE.on) return; try{ fnetTick(dt); }catch(e){ console.warn('fnet',e); } freePhys(Math.min(dt,.033)); if(!ui('freeBox').hidden){ hThumbPump(); freeThumbPump(); }
+function freeTick(dt){ if(!FREE.on) return; try{ fnetTick(dt); }catch(e){ console.warn('fnet',e); } freePhys(Math.min(dt,.033)); try{ pqTick(dt); }catch(e){ console.warn('parque',e); } if(!ui('freeBox').hidden){ hThumbPump(); freeThumbPump(); }
   for(const o of FREE.objs){ const u=o.root.userData; if(o.game==='estrella' && u.spin) u.spin.rotation.y+=dt*2.2; else if(u.spinO){ u.spinO.rotation.y+=dt*1.6; u.spinO.position.y=.75+Math.sin(clock.elapsedTime*2+o.id)*.08; } }   // v209 (v213: premios)
   crTick(dt);   // v211: las criaturas caminan solas
   if(FREE.play){ freePlayTick(dt); if(FREE.hl) FREE.hl.visible=false; }
@@ -22718,11 +22726,11 @@ function freeTick(dt){ if(!FREE.on) return; try{ fnetTick(dt); }catch(e){ consol
   if(!FREE.hl){ FREE.hl=new THREE.Box3Helper(new THREE.Box3(),0xff5a5a); FREE.hl.userData.noBatch=true; FREE.g.add(FREE.hl); }
   if(FREE.tgt){ FREE.hl.visible=true; FREE.hl.material.color.set(FREE.paint?0x4fb3ff:0xff5a5a); if(FREE.tgt.dyn){ const p=FREE.tgt.root.position, r=FREE.tgt.r; FREE.hl.box.min.set(p.x-r,p.y-r,p.z-r); FREE.hl.box.max.set(p.x+r,p.y+r,p.z+r); } else FREE.hl.box.copy(FREE.tgt.box); } else FREE.hl.visible=false;
   if(FREE.saveT>0){ FREE.saveT-=dt; if(FREE.saveT<=0) freeSave(); } }
-function freeActions(){ if(!FREE.on || FREE.play) return null;
+function freeActions(){ if(!FREE.on) return null; if(FREE.play || (player.pg && player.pg.k==='fmv')) return pqActions();   // v217: subirse, empujar, volver a pararlos
   if(FREE.del) return [{label:'Quitar', run:freeRemove}, {label:'Listo', run:()=>freeSetDel(false)}];
   if(FREE.paint) return [{label:'Pintar', run:freePaintDo}, {label:'Listo', run:()=>freePaintSet(false)}];   // v216
   if(FREE.sel) return [{label:'Poner', run:freePlace}, FREE.sel.k==='p'?{label:'Soltar', run:()=>freeSelect(null)}:{label:'Girar', run:freeRotate}];
-  return null; }
+  return pqActions(); }
 // ---- guardar ----
 function freeSaveSoon(){ FREE.saveT=1.2; }
 function freeSave(){ if(FREE.ctx==='net') return; try{ const au=(e,o)=>{ if(o.au && o.au!==MY_PID) e.push(o.au); return e; }, s=FREE.objs.filter(o=>!o.par).map(o=>au([o.sel.k,o.sel.a,o.sel.b|0,+(o.x-FREE.X).toFixed(2),+(o.y-FREE.Y).toFixed(2),+(o.z-FREE.Z).toFixed(2),o.r],o)),
@@ -22736,8 +22744,8 @@ function freeLoad(){ const ctx=FREE.ctx; if(FREE.loaded===ctx) return; freeClear
   FREE.env=freeEnvClean(o.env); freeEnvApply();   // v216: piso, hora y clima
   if(o.n && typeof o.n==='object') for(const k in o.n) if(/^[a-z0-9]{8}$/.test(k)){ const nm=cleanName(o.n[k]); if(nm) FNET.names[k]=nm; }   // v215: quién puso cada cosa
   const okAu=v=>typeof v==='string' && /^[a-z0-9]{8}$/.test(v);
-  for(const q of (o.s||[]).slice(0,FREE_MAX)){ if(!Array.isArray(q)) continue; const [k,a,b,x,y,z,r,qa]=q; if(!['b','h','p','g','c','m','o'].includes(k) || !freeInside(FREE.X+(+x||0),FREE.Z+(+z||0),.4)) continue;
-    if(k==='b' && !(FREE_SHAPES[a] && FREE_COLS[b])) continue; if(k==='h' && !HK_BY[a]) continue; if(k==='p' && !(FREE_PHYS_BY[a]&&FREE_PHYS_BY[a].pad)) continue; if(k==='g' && !FREE_GAME_BY[a]) continue; if(k==='c' && !crGet(a)) continue; if(k==='m' && (ctx==='libre' || !mgiOk(a))) continue; if(k==='o' && !obById(a)) continue;
+  for(const q of (o.s||[]).slice(0,FREE_MAX)){ if(!Array.isArray(q)) continue; const [k,a,b,x,y,z,r,qa]=q; if(!['b','h','p','g','c','m','o','v','t'].includes(k) || !freeInside(FREE.X+(+x||0),FREE.Z+(+z||0),.4)) continue;
+    if(k==='b' && !(FREE_SHAPES[a] && FREE_COLS[b])) continue; if(k==='h' && !HK_BY[a]) continue; if(k==='p' && !(FREE_PHYS_BY[a]&&FREE_PHYS_BY[a].pad)) continue; if(k==='g' && !FREE_GAME_BY[a]) continue; if(k==='c' && !crGet(a)) continue; if(k==='m' && (ctx==='libre' || !mgiOk(a))) continue; if(k==='o' && !obById(a)) continue; if((k==='v'||k==='t') && !pqValid(k,a,b)) continue;
     const ob=freeAddStatic({k,a,b:b|0},FREE.X+(+x),FREE.Y+(+y||0),FREE.Z+(+z),(r|0)&3,true); if(ob && okAu(qa)) ob.au=qa; }
   for(const q of (o.d||[]).slice(0,FREE_DYN)){ if(!Array.isArray(q)) continue; const [id,x,y,z,qa]=q; if(FREE_PHYS_BY[id] && !FREE_PHYS_BY[id].pad && freeInside(FREE.X+(+x||0),FREE.Z+(+z||0),.4)){ const ob=freeAddDyn(id,FREE.X+(+x),FREE.Y+Math.max(0,+y||0),FREE.Z+(+z),true); if(ob && okAu(qa)) ob.au=qa; } } }
 // ---- entrar y salir ----
@@ -22747,7 +22755,7 @@ function freeEnter(ctx,playNow){ ctx=typeof ctx==='string'?ctx:'libre'; if(ctx!=
   ui('freeHud').hidden=false; document.body.classList.add('in-free'); freeRenderHud(); if(playNow) freePlayStart();
   else if(ctx!=='libre' && ctx!=='net') medEnter();   // v210: los mapas se editan desde arriba
   else if(ctx==='libre' && !FNET.on) setTimeout(()=>flashNote('Modo libre: toca «Objetos» y escoge algo para ponerlo enfrente de ti'),600); }
-function freeExit(){ if(!FREE.on) return; if(MED.on) medExit(); freePlayStop(); freeSave(); fnReset(); FREE.paint=false; try{ freePaintBar(); const ev=document.getElementById('freeEnv'); if(ev) ev.hidden=true; }catch(e){} FREE.on=false; document.body.classList.remove('in-free'); FREE.sel=null; FREE.del=false; freeGhostSet(); if(FREE.g) FREE.g.visible=false; ui('freeHud').hidden=true; ui('freeBox').hidden=true; }
+function freeExit(){ if(!FREE.on) return; if(MED.on) medExit(); if(player.pg && player.pg.k==='fmv'){ player.pg=null; player.grounded=true; } freePlayStop(); freeSave(); fnReset(); FREE.paint=false; try{ freePaintBar(); const ev=document.getElementById('freeEnv'); if(ev) ev.hidden=true; }catch(e){} FREE.on=false; document.body.classList.remove('in-free'); FREE.sel=null; FREE.del=false; freeGhostSet(); if(FREE.g) FREE.g.visible=false; ui('freeHud').hidden=true; ui('freeBox').hidden=true; }
 // ---- botones y el menú de objetos ----
 function freeSelect(sel){ FREE.sel=sel; FREE.del=false; FREE.paint=false; freePaintBar(); FREE.rot=0; FREE.gBad=null; ui('freeBox').hidden=true; freeRenderHud(); }
 function freeSetDel(on){ FREE.del=!!on; if(on){ FREE.sel=null; FREE.paint=false; freePaintBar(); } FREE.tgtLast=undefined; freeRenderHud(); }
@@ -22756,7 +22764,7 @@ function freeRenderHud(){ const map=FREE.ctx!=='libre' && FREE.ctx!=='net', pl=F
   const M=map?mapById(FREE.ctx):null;
   const t=FREE.paint?'Escoge un color y ponte enfrente de un bloque':FREE.del?'Quitar: ponte enfrente de algo y toca «Quitar»':FREE.sel?freeSelName(FREE.sel)+' · '+freeOwn()+'/'+FREE_MAX:(M?'«'+(M.n||'Mi mapa')+'» · toca «Objetos»':'Toca «Objetos» para escoger qué poner');
   ui('freeTxt').textContent=FNET.on ? '👥 '+FNET.code+' · '+Math.min(FN_MAX,mp.remotes.size+1)+'/'+FN_MAX+' · '+(FNET.host?'tu sala':(fnSynced()?'sala de '+(FNET.hostName||'tu amigo'):'cargando la sala de '+(FNET.hostName||'tu amigo')+'…'))+(FREE.sel||FREE.del||FREE.paint?' · '+t:'') : t; }
-function freeSelName(s){ if(s.k==='b') return FREE_SHAPES[s.a].n; if(s.k==='m') return (mapById(s.a)||{}).n||'Minijuego'; if(s.k==='o') return (obById(s.a)||{}).n||'Objeto'; if(s.k==='h') return (HK_BY[s.a]||{}).n||'Pieza'; if(s.k==='g') return (FREE_GAME_BY[s.a]||{}).n||'Pieza'; if(s.k==='c') return (crGet(s.a)||{}).n||'Criatura'; return (FREE_PHYS_BY[s.a]||{}).n||'Objeto'; }
+function freeSelName(s){ if(s.k==='b') return FREE_SHAPES[s.a].n; if(s.k==='v'||s.k==='t') return pqName(s); if(s.k==='m') return (mapById(s.a)||{}).n||'Minijuego'; if(s.k==='o') return (obById(s.a)||{}).n||'Objeto'; if(s.k==='h') return (HK_BY[s.a]||{}).n||'Pieza'; if(s.k==='g') return (FREE_GAME_BY[s.a]||{}).n||'Pieza'; if(s.k==='c') return (crGet(s.a)||{}).n||'Criatura'; return (FREE_PHYS_BY[s.a]||{}).n||'Objeto'; }
 // v208: dibujito sin fondo de cada bloque y cosa con física (como las piezas del Taller), hecho una vez y guardado
 const FTH={c:{}, q:[], rig:null};
 function freeThumbRender(key){ const [k,a,b]=key.split(':'), sel={k,a:k==='b'?+a:a,b:+b||0};
@@ -22774,7 +22782,7 @@ function freeThumbEl(sel){ const key=sel.k+':'+sel.a+':'+(sel.b|0), im=document.
   if(FTH.c[key] && FTH.c[key]!=='x'){ im.src=FTH.c[key]; return [im]; } if(!FTH.q.includes(key)) FTH.q.push(key); const ph=document.createElement('div'); ph.className='ph'; im.hidden=true; return [ph,im]; }
 function freeThumbPump(){ if(!FTH.q.length) return; const key=FTH.q.shift(); if(FTH.c[key]) return; const url=FTH.c[key]=freeThumbRender(key);
   if(url!=='x') document.querySelectorAll('img[data-ft="'+key+'"]').forEach(im=>{ im.src=url; im.hidden=false; const ph=im.previousElementSibling; if(ph && ph.classList.contains('ph')) ph.remove(); }); }
-const FREE_TABS=[['bloques','🧱 Bloques'],['fisica','⚽ Física'],['criaturas','🐾 Criaturas'],['construir','🏠 Construir'],['casa','🛋️ Casa'],['jardin','🌳 Jardín']];
+const FREE_TABS=[['bloques','🧱 Bloques'],['fisica','⚽ Física'],['parque','🎡 Parque'],['criaturas','🐾 Criaturas'],['construir','🏠 Construir'],['casa','🛋️ Casa'],['jardin','🌳 Jardín']];
 function freeOpenBox(){ const box=ui('freeBox'); if(!box.hidden){ box.hidden=true; return; } if(document.pointerLockElement) document.exitPointerLock(); box.hidden=false; freeRenderBox(); }
 function freeRenderBox(){ const tabs=ui('freeTabs'), grid=ui('freeGrid'), subs=ui('freeSubs'); tabs.textContent=''; subs.textContent=''; grid.textContent='';
   { const TB=mapTabs(); if(!TB.some(([id])=>id===FREE.tab)) FREE.tab=TB[0][0]; } mapTabs().forEach(([id,n])=>{ const b=document.createElement('button'); b.type='button'; b.className='fchip'+(FREE.tab===id?' on':''); b.textContent=n; b.onclick=()=>{ FREE.tab=id; FREE.sub=''; freeRenderBox(); }; tabs.appendChild(b); });
@@ -22785,6 +22793,10 @@ function freeRenderBox(){ const tabs=ui('freeTabs'), grid=ui('freeGrid'), subs=u
     L.forEach(C=>item(C.n,freeThumbEl({k:'c',a:C.id,b:0}),()=>freeSelect({k:'c',a:C.id,b:0}))); return; }   // v211
   if(FREE.tab==='juego'){ FREE_GAME.forEach(G=>{ item(G.n,freeThumbEl({k:'g',a:G.id,b:0}),()=>freeSelect({k:'g',a:G.id,b:0})); }); return; }   // v209
   if(FREE.tab==='fisica'){ FREE_PHYS.forEach(P=>{ item(P.n,freeThumbEl({k:'p',a:P.id,b:0}),()=>freeSelect({k:'p',a:P.id,b:0})); }); return; }
+  if(FREE.tab==='parque'){ if(!PQ_SUBS.some(x=>x[0]===FREE.sub)) FREE.sub=PQ_SUBS[0][0];   // v217
+    PQ_SUBS.forEach(([id,n])=>{ const b=document.createElement('button'); b.type='button'; b.className='fchip'+(FREE.sub===id?' on':''); b.textContent=n; b.onclick=()=>{ FREE.sub=id; freeRenderBox(); }; subs.appendChild(b); });
+    if(FREE.sub==='mueven') PQ_V.forEach(V=>{ const sel={k:'v',a:V.id,b:V.c}; item(V.n,freeThumbEl(sel),()=>freeSelect(sel)); });
+    else PQ_T.forEach(T=>{ const sel={k:'t',a:T.id,b:T.c|0}; item(T.n,freeThumbEl(sel),()=>freeSelect(sel)); }); return; }
   const SB=HSUBS[FREE.tab]||[]; if(!FREE.sub && SB.length) FREE.sub=SB[0][0];
   SB.forEach(([id,n])=>{ const b=document.createElement('button'); b.type='button'; b.className='fchip'+(FREE.sub===id?' on':''); b.textContent=n; b.onclick=()=>{ FREE.sub=id; freeRenderBox(); }; subs.appendChild(b); });
   HK.filter(K=>K.cat===FREE.tab && K.sub===FREE.sub).forEach(K=>{ const m=(K.mats||[0])[0]; item(K.n,hThumbEl(K.id,m),()=>freeSelect({k:'h',a:K.id,b:m})); }); }
@@ -22800,8 +22812,8 @@ const FREE_GAME_BY={}; FREE_GAME.forEach(G=>FREE_GAME_BY[G.id]=G);
 const FREE_GAME_SOLID={lava:1, mover:1, cae:1};
 const MAPS_MAX=10;
 // v209: qué vas a hacer → solo salen las piezas que sirven para eso
-const MAP_TYPES=[{id:'juego',n:'🎯 Minijuego',tabs:['juego','bloques','fisica'],d:'Pistas de obstáculos: inicio, meta, lava, estrellas, plataformas, bloques y cosas con física'},
-  {id:'mundo',n:'🏝️ Mundo completo',tabs:['juego','bloques','fisica','creaciones','construir','casa','jardin'],d:'Todo: piezas de juego, bloques, física, 📦 tus creaciones (minijuegos, criaturas y objetos) y todas las piezas del Taller'},
+const MAP_TYPES=[{id:'juego',n:'🎯 Minijuego',tabs:['juego','bloques','fisica','parque'],d:'Pistas de obstáculos: inicio, meta, lava, estrellas, plataformas, bloques y cosas con física'},
+  {id:'mundo',n:'🏝️ Mundo completo',tabs:['juego','bloques','fisica','parque','creaciones','construir','casa','jardin'],d:'Todo: piezas de juego, bloques, física, 📦 tus creaciones (minijuegos, criaturas y objetos) y todas las piezas del Taller'},
   {id:'criatura',n:'🐾 Criatura'},{id:'objeto',n:'🎒 Objeto para tu inventario'}];
 let mapType='juego';
 function renderCrList(){ const L=crLoad(), ul=ui('mapItems'); ul.textContent=''; ui('mapName').placeholder='Nombre de la criatura nueva';
@@ -22815,7 +22827,7 @@ function renderCrList(){ const L=crLoad(), ul=ui('mapItems'); ul.textContent='';
     ul.appendChild(li); });
   ui('mapNew').disabled=L.length>=CR_MAX; ui('mapNote').textContent='Arma un animalito y escoge cómo se porta. Luego ponlo en el Modo libre o en un Mundo completo · hasta '+CR_MAX;
   clearInterval(renderCrList.t); renderCrList.t=setInterval(()=>{ if(ui('mapList').hidden || mapType!=='criatura'){ clearInterval(renderCrList.t); return; } for(let i=0;i<2;i++) freeThumbPump(); },60); }
-function mapTabs(){ if(FREE.ctx==='libre' || FREE.ctx==='net') return FREE_TABS; const M=mapById(FREE.ctx), T=MAP_TYPES.find(t=>t.id===(M&&M.t)||'')||MAP_TYPES[1]; const all=[['juego','🎮 Juego'],...FREE_TABS.slice(0,2),['creaciones','📦 Mis creaciones'],...FREE_TABS.slice(2)]; return all.filter(([id])=>T.tabs.includes(id)); }
+function mapTabs(){ if(FREE.ctx==='libre' || FREE.ctx==='net') return FREE_TABS; const M=mapById(FREE.ctx), T=MAP_TYPES.find(t=>t.id===(M&&M.t)||'')||MAP_TYPES[1]; const all=[['juego','🎮 Juego'],...FREE_TABS.slice(0,3),['creaciones','📦 Mis creaciones'],...FREE_TABS.slice(3)]; return all.filter(([id])=>T.tabs.includes(id)); }
 function renderMapTypes(){ const box=ui('mapTypes'); box.textContent=''; MAP_TYPES.forEach(T=>{ const b=document.createElement('button'); b.type='button'; b.className='fchip'+(mapType===T.id?' on':''); b.setAttribute('role','radio'); b.setAttribute('aria-checked',String(mapType===T.id));
   b.textContent=T.n; if(T.soon){ const i=document.createElement('i'); i.className='soon'; i.textContent='Pronto'; b.appendChild(i); }
   b.onclick=()=>{ if(T.soon){ flashNote(T.n.replace(/^\S+ /,'')+': lo hacemos en la siguiente ronda'); return; } mapType=T.id; renderMapTypes(); renderMaps(); }; box.appendChild(b); });
@@ -22846,7 +22858,7 @@ function mapById(id){ return mapsLoad().find(m=>m.id===id)||null; }
 function fmtRun(ms){ ms=Math.max(0,ms|0); const s=Math.floor(ms/1000), m=Math.floor(s/60); return m+':'+String(s%60).padStart(2,'0')+'.'+Math.floor(ms%1000/100); }
 function freeSpawnPos(){ const cp=FREE.run && FREE.run.cp; const o=cp || FREE.objs.find(q=>q.game==='inicio' && !q.par); return o ? [o.x, o.box.min.y+.06, o.z] : [FREE.X, FREE.Y+.05, FREE.Z+8]; }
 function freeRespawn(why){ const [x,y,z]=freeSpawnPos(); player.pos.set(x,y,z); player.vel.set(0,0,0); player.vy=0; player.grounded=true; player.swim=false; if(why){ flashNote(why); try{ audio.splash&&audio.splash(.4); }catch(e){} } }
-function freeResetPieces(){ for(const o of FREE.objs){ if(o.inst) o.run=null; if(o.sel.k==='o'){ o.root.visible=true; o.got=false; } if(!o.game) continue; o.root.visible=true; if(o.game==='cae'){ o.solid=true; o.cae=0; o.root.position.set(o.x,o.y,o.z); }
+function freeResetPieces(){ try{ pqResetAll(); }catch(e){} for(const o of FREE.objs){ if(o.inst) o.run=null; if(o.sel.k==='o'){ o.root.visible=true; o.got=false; } if(!o.game) continue; o.root.visible=true; if(o.game==='cae'){ o.solid=true; o.cae=0; o.root.position.set(o.x,o.y,o.z); }
     if(o.game==='mover'){ o.root.position.set(o.x,o.y,o.z); } if(o.game==='bandera' && o.root.userData.flag) o.root.userData.flag.material=FM('#3f6fc6');
     o.root.updateMatrixWorld(true); o.box.setFromObject(o.root); } }
 function freePlayStart(){ if(FREE.ctx==='libre' || FREE.ctx==='net') return; freeSave(); FREE.play=true; FREE.sel=null; FREE.del=false; FREE.paint=false; freePaintBar(); freeGhostSet(); ui('freeBox').hidden=true; freeResetPieces();
@@ -22987,6 +22999,7 @@ function medTap(cx,cy,touch){
   if(MED.sel.k==='m' && !mgiFits(MED.sel.a,h,MED.rot)){ medTip(mgiList().length>=MGI_MAX?'Ya hay '+MGI_MAX+' minijuegos en este mundo':'No cabe ahí: se encima con otras piezas o se sale (busca un lugar verde)'); return; }
   medPlace(h); }
 function medPlace(h){ const s=MED.sel; if(s.k==='g' && s.a==='inicio'){ const old=FREE.objs.find(q=>q.game==='inicio' && !q.par); if(old){ medUndoPush({t:'del', e:medEntry(old)}); freeDrop(old); } }
+  if(s.k==='t' && PQ_T_BY[s.a] && PQ_T_BY[s.a].multi){ const L=pqPlaceMulti(s,h.x,h.y,h.z,MED.rot); if(!L.length) return; medUndoPush({t:'addm', ids:L.map(o=>o.id)}); medTip(freeSelName(s)+' · '+freeOwn()+'/'+FREE_MAX); try{ audio.pop ? audio.pop() : audio.cam(); }catch(e){} freeSaveSoon(); medRender(); return; }   // v217: fila de dominós y bolos
   let o; if(s.k==='p' && !FREE_PHYS_BY[s.a].pad) o=freeAddDyn(s.a,h.x,h.y+.02,h.z); else o=freeAddStatic(s,h.x,h.y,h.z,MED.rot);
   if(!o) return; medUndoPush({t:'add', id:o.id, dyn:!!o.dyn, mv:MED.moving}); if(MED.moving){ MED.moving=null; MED.sel=null; medTip('¡Listo, movida!'); } else medTip(s.k==='m' ? '🎯 '+freeSelName(s)+' · piezas de minijuegos '+mgiPieces()+'/'+MGI_PIECES : freeSelName(s)+' · '+freeOwn()+'/'+FREE_MAX);
   try{ audio.pop ? audio.pop() : audio.cam(); }catch(e){} freeSaveSoon(); medRender(); }
@@ -22996,6 +23009,7 @@ function medRestore(e){ return e.dyn ? freeAddDyn(e.id,e.x,e.y,e.z,true) : freeA
 function medUndoPush(a){ MED.undo.push(a); if(MED.undo.length>60) MED.undo.shift(); }
 function medUndo(){ const a=MED.undo.pop(); if(!a){ medTip('No hay nada que deshacer'); return; }
   if(a.t==='add'){ const o=(a.dyn?FREE.dyn:FREE.objs).find(q=>q.id===a.id); if(o) freeDrop(o); if(a.mv) medRestore(a.mv); }
+  else if(a.t==='addm'){ for(const id of a.ids){ const o=FREE.objs.find(q=>q.id===id); if(o) freeDrop(o); } }
   else if(a.t==='del'){ medRestore(a.e); }
   freeSaveSoon(); medTip('Deshecho'); medRender(); }
 // ---- herramientas ----
@@ -23008,11 +23022,12 @@ function medSelect(sel){ if(MED.moving){ medRestore(MED.moving); MED.moving=null
   if(sel.k==='m'){ const M=mgiOk(sel.a), L=M&&mgiLayout(M); medTip(L?'🎯 <b>'+freeSelName(sel)+'</b> mide '+Math.round(L.w)+' × '+Math.round(L.d)+' m · '+L.n+' piezas. Toca el piso: verde = cabe':'Ese minijuego ya no existe'); }
   else medTip('Toca el piso para poner <b>'+freeSelName(sel)+'</b> (dos toques)'); medRender(); }
 // ---- el panel de piezas ----
-function medSubs(tab){ return tab==='creaciones' ? MGI_SUBS : HSUBS[tab]; }   // v213
+function medSubs(tab){ return tab==='creaciones' ? MGI_SUBS : tab==='parque' ? PQ_SUBS : HSUBS[tab]; }   // v213
 function medItems(){ const tabs=mapTabs().map(t=>t[0]), out=[];
   if(tabs.includes('juego')) FREE_GAME.forEach(G=>out.push({tab:'juego', sub:'', n:G.n, sel:{k:'g',a:G.id,b:0}}));
   if(tabs.includes('bloques')) FREE_SHAPES.forEach((S,i)=>out.push({tab:'bloques', sub:'', n:S.n, sel:{k:'b',a:i,b:MED.col}}));
   if(tabs.includes('fisica')) FREE_PHYS.forEach(P=>out.push({tab:'fisica', sub:'', n:P.n, sel:{k:'p',a:P.id,b:0}}));
+  if(tabs.includes('parque')){ PQ_V.forEach(V=>out.push({tab:'parque', sub:'mueven', n:V.n, sel:{k:'v',a:V.id,b:V.c}})); PQ_T.forEach(T=>out.push({tab:'parque', sub:'juguetes', n:T.n, sel:{k:'t',a:T.id,b:T.c|0}})); }   // v217
   if(tabs.includes('criaturas')) crLoad().forEach(C=>out.push({tab:'criaturas', sub:'', n:C.n, sel:{k:'c',a:C.id,b:0}}));
   if(tabs.includes('creaciones')){ mapsLoad().filter(M=>M.t==='juego').forEach(M=>out.push({tab:'creaciones', sub:'mg', n:M.n||'Minijuego', sel:{k:'m',a:M.id,b:mgiSig(M)%997}}));   // v213
     crLoad().forEach(C=>out.push({tab:'creaciones', sub:'cr', n:C.n, sel:{k:'c',a:C.id,b:0}})); obLoad().forEach(O=>out.push({tab:'creaciones', sub:'ob', n:O.n, sel:{k:'o',a:O.id,b:0}})); }
@@ -23415,7 +23430,7 @@ function mgiOk(id){ const M=mapById(id); return M && M.t==='juego' ? M : null; }
 // ¿cuánto mide? (se arma una vez para medirlo; el centro del rectángulo queda en 0,0)
 function mgiLayout(M){ const sig=mgiSig(M), c=MGI_LAY[M.id]; if(c && c.sig===sig) return c;
   const box=new THREE.Box3(), tmp=new THREE.Box3(), s=[], dl=[]; let ini=null, meta=null;
-  for(const q of (M.s||[]).slice(0,FREE_MAX)){ if(!Array.isArray(q)) continue; const [k,a,b,x,y,z,r]=q; if(!['b','h','p','g'].includes(k)) continue;
+  for(const q of (M.s||[]).slice(0,FREE_MAX)){ if(!Array.isArray(q)) continue; const [k,a,b,x,y,z,r]=q; if(!['b','h','p','g','v','t'].includes(k)) continue; if((k==='v'||k==='t') && !pqValid(k,a,b)) continue;
     if(k==='b' && !(FREE_SHAPES[a] && FREE_COLS[b])) continue; if(k==='h' && !HK_BY[a]) continue; if(k==='p' && !(FREE_PHYS_BY[a]&&FREE_PHYS_BY[a].pad)) continue; if(k==='g' && !FREE_GAME_BY[a]) continue;
     const sel={k,a:k==='b'?+a:a,b:b|0}, root=freeMake(sel); if(!root) continue; const px=+x||0, py=+y||0, pz=+z||0, pr=(r|0)&3;
     root.position.set(px,py,pz); root.rotation.y=pr*Math.PI/2; root.updateMatrixWorld(true); tmp.setFromObject(root); if(!tmp.isEmpty()) box.union(tmp);
@@ -23523,7 +23538,7 @@ function fnBk(nid){ let h=7; for(let i=0;i<nid.length;i++) h=(Math.imul(h,31)+ni
 function fnNid(){ return MY_PID.slice(0,3)+((Date.now()%1e9)+(++FNET.nseq)).toString(36); }
 function fnName(pid){ return !pid || pid===MY_PID ? 'tú' : (FNET.names[pid]||'un amigo'); }
 function fnMine(o){ return !o.au || o.au===MY_PID; }
-function fnReset(){ Object.assign(FNET,{on:false, host:false, code:'', hostPid:'', hostName:'', hostSeen:0, ended:false, copied:false, ops:[], pend:new Map(), last:{}, bk:[], hot:[], bi:0, cur:0, gh:{}, fh:null, au:[], rx:null, rxB:{}, syncShown:false, curL:null, bT:0}); FNET.dirty=new Set(); try{ freeLimits(false); }catch(e){} }
+function fnReset(){ Object.assign(FNET,{on:false, host:false, code:'', hostPid:'', hostName:'', hostSeen:0, ended:false, copied:false, ops:[], pend:new Map(), last:{}, bk:[], hot:[], bi:0, cur:0, gh:{}, fh:null, au:[], rx:null, rxB:{}, syncShown:false, curL:null, bT:0, ck:0, ckOk:false}); FNET.dirty=new Set(); try{ freeLimits(false); }catch(e){} }
 // ---- tus criaturas viajan con su diseño (12 letras), porque los demás no las tienen guardadas ----
 const CR_PK=['cuerpo','ojos','orejas','cabeza','patas','cola','alas','tam','porta','vel'];
 function crPack(d){ d=crClean(d||{}); return CR_PK.map(k=>Math.max(0,CR_OPTS[k].findIndex(x=>x[0]===d[k])).toString(36)).join('')+(d.c1|0).toString(36)+(d.c2|0).toString(36); }
@@ -23531,11 +23546,12 @@ function crUnpack(s){ s=String(s||'').replace(/^P/,''); if(!/^[0-9a-z]{12}$/.tes
 function crGet(a){ return typeof a==='string' && a[0]==='P' ? crUnpack(a) : crById(a); }
 // ---- una pieza en letras: nid~tipo~cuál~color~x~y~z~giro~autor ----
 function fnA(o){ if(o.sel.k==='c'){ const a=o.sel.a; return a[0]==='P'?a:'P'+crPack(crById(a)); } return o.sel.k==='b' ? (o.sel.a|0).toString(36) : String(o.sel.a); }
-function fnEnc(o,ai){ return [o.nid,o.sel.k,fnA(o),(o.sel.b|0).toString(36),q36((o.x-FREE.X)*2),q36((o.y-FREE.Y)*100),q36((o.z-FREE.Z)*2),o.r|0,(ai|0).toString(36)].join('~'); }
+function fnEnc(o,ai){ const ts=o.toy && o.toy.st ? pqEncState(o) : ''; return [o.nid,o.sel.k,fnA(o),(o.sel.b|0).toString(36),q36((o.x-FREE.X)*2),q36((o.y-FREE.Y)*100),q36((o.z-FREE.Z)*2),o.r|0,(ai|0).toString(36)].join('~')+(ts?'~'+ts:''); }   // (v217: los juguetes caídos dicen cómo quedaron)
 function fnEncDyn(d,ai){ const p=d.p0||[d.root.position.x,d.root.position.y-d.r,d.root.position.z]; return [d.nid,'p',d.id,'0',q36((p[0]-FREE.X)*2),q36((p[1]-FREE.Y)*100),q36((p[2]-FREE.Z)*2),0,(ai|0).toString(36)].join('~'); }   // (v216: dónde la pusieron; dónde va ahora viaja aparte)
-function fnDec(s){ if(typeof s!=='string' || s.length>90) return null; const f=s.split('~'); if(f.length!==9) return null; const [nid,k,a,b,x,y,z,r,ai]=f;
-  if(!/^[a-z0-9]{2,16}$/.test(nid) || !['b','h','p','c'].includes(k)) return null;
-  const P={nid, k, a:k==='b'?p36(a):a, b:p36(b)|0, x:FREE.X+p36(x)/2, y:FREE.Y+p36(y)/100, z:FREE.Z+p36(z)/2, r:p36(r)&3, ai:p36(ai)|0};
+function fnDec(s){ if(typeof s!=='string' || s.length>90) return null; const f=s.split('~'); if(f.length!==9 && f.length!==10) return null; const [nid,k,a,b,x,y,z,r,ai,ts]=f;
+  if(!/^[a-z0-9]{2,16}$/.test(nid) || !['b','h','p','c','v','t'].includes(k)) return null;
+  const P={nid, k, a:k==='b'?p36(a):a, b:p36(b)|0, x:FREE.X+p36(x)/2, y:FREE.Y+p36(y)/100, z:FREE.Z+p36(z)/2, r:p36(r)&3, ai:p36(ai)|0, ts:typeof ts==='string' && /^[FT][0-9a-z.]{1,48}$/.test(ts) ? ts : ''};
+  if((k==='v'||k==='t') && !pqValid(k,P.a,P.b)) return null;   // v217
   if(![P.x,P.y,P.z].every(Number.isFinite) || !freeInside(P.x,P.z,.3) || P.y<FREE.Y-1 || P.y>FREE.Y+40) return null;
   if(k==='b' && !(FREE_SHAPES[P.a] && FREE_COLS[P.b])) return null; if(k==='h' && !HK_BY[P.a]) return null; if(k==='p' && !FREE_PHYS_BY[P.a]) return null; if(k==='c' && !crUnpack(P.a)) return null; return P; }
 // ---- dueño: el mundo en 8 partes ----
@@ -23554,14 +23570,15 @@ function fnOp(op){ FNET.opN=Math.max(FNET.opN+1,Date.now()); FNET.ops.push([FNET
 function fnCanRemove(o){ if(fnMine(o)){ FREE.delOk=null; return true; } const who=fnName(o.au);
   if(FNET.on){ flashNote('Esta la puso '+who+': solo '+who+' la puede quitar'); return false; } return true; }
 // ---- presencia ----
-function fnPresence(){ if(typeof FNET==='undefined' || !FNET.on || !FREE.on) return {}; const o={fz:FNET.host?1:2, pi:MY_PID};
+function fnPresence(){ if(typeof FNET==='undefined' || !FNET.on || !FREE.on) return {}; const o={fz:FNET.host?1:2, pi:MY_PID, fm:player.pg && player.pg.k==='fmv' && player.pg.o && player.pg.o.nid || null};   // v217: en qué juego vas sentado (null = en ninguno: la presencia solo cambia lo que mandas)
   if(FNET.host){ fnRebuild(); const now=performance.now();
     // dónde están las pelotas: las que se mueven siempre, y de las quietas unas cuantas cada vez (para quien acaba de llegar)
     const D=FREE.dyn.filter(d=>d.nid), aw=D.filter(d=>!d.sleep).slice(0,36), sl=D.filter(d=>d.sleep); const pick=[...aw];
     if(sl.length){ for(let i=0;i<Math.min(6,sl.length);i++) pick.push(sl[(FNET.dyI=((FNET.dyI|0)+1)%sl.length)]); }
     o.fd=pick.map(d=>{ const p=d.root.position; return [d.nid,q36((p.x-FREE.X)*20),q36((p.y-FREE.Y)*20),q36((p.z-FREE.Z)*20)].join('~'); });
+    o.fk=Math.round(clock.elapsedTime*10); { const fy=pqNetList(); o.fy=fy.length?fy:null; }   // v217: la hora del parque y los juguetes que se están cayendo
     // v216: cada 200 ms van 1 a 4 partes del mundo (primero las que cambiaron); las vacías no se mandan: el invitado las sabe por fh
-    if(now-FNET.bT>200 || !FNET.curL){ FNET.bT=now; const L=[], budget=Math.max(400,Math.min(1500,2000-o.fd.join(',').length)); let tot=0;
+    if(now-FNET.bT>200 || !FNET.curL){ FNET.bT=now; const L=[], budget=Math.max(400,Math.min(1500,2000-o.fd.join(',').length-(o.fy?o.fy.join(',').length:0))); let tot=0;
       for(let tries=0; L.length<4 && tries<FN_B; tries++){ const b=FNET.hot.length?FNET.hot.shift():(FNET.bi=(FNET.bi+1)%FN_B), B=FNET.bk[b];
         if(!B || !B.s || L.some(x=>x[0]===b)) continue;
         if(L.length && tot+B.s.length>budget){ FNET.hot.unshift(b); break; }
@@ -23572,12 +23589,12 @@ function fnPresence(){ if(typeof FNET==='undefined' || !FNET.on || !FREE.on) ret
     o.fe=freeEnvPack(FREE.env||FREE_ENV0); }
   else o.fo=FNET.ops.slice(-12);
   return o; }
-function fnetParse(r,pr){ if(typeof FNET==='undefined') return; r.fz=pr.fz===1?1:pr.fz===2?2:0; r.fpid=typeof pr.pi==='string' && /^[a-z0-9]{8}$/.test(pr.pi) ? pr.pi : null; const nm=cleanName(pr.n)||'Peluche';
+function fnetParse(r,pr){ if(typeof FNET==='undefined') return; r.fz=pr.fz===1?1:pr.fz===2?2:0; r.fpid=typeof pr.pi==='string' && /^[a-z0-9]{8}$/.test(pr.pi) ? pr.pi : null; r.fm=typeof pr.fm==='string' && /^[a-z0-9]{2,16}$/.test(pr.fm) ? pr.fm : null; const nm=cleanName(pr.n)||'Peluche';
   if(r.fpid) FNET.names[r.fpid]=nm;
   if(r.fz===2) r.fo=Array.isArray(pr.fo)?pr.fo.slice(-12):null;
   if(r.fz===1 && r.fpid){
     if(!FNET.on && mp.room && !FNET.joining){ setTimeout(()=>{ if(!FNET.on && mp.room) fnBecomeGuest(r.fpid,nm); },0); return; }   // entraste con su código desde Multijugador
-    if(FNET.on && !FNET.host){ FNET.hostSeen=performance.now(); FNET.hostPid=r.fpid; FNET.hostName=nm; FNET.rx={fh:pr.fh, fd:pr.fd, fa:pr.fa}; { const e=freeEnvUnpack(pr.fe); if(e && JSON.stringify(e)!==JSON.stringify(FREE.env)){ FREE.env=e; freeEnvApply(); try{ freeEnvRender(); }catch(err){} } } if(Array.isArray(pr.fb)) for(const B of (Array.isArray(pr.fb[0])?pr.fb:[pr.fb])) if(Array.isArray(B) && B.length===3 && Number.isInteger(B[0])) (FNET.rxB||(FNET.rxB={}))[B[0]]=B; } } }
+    if(FNET.on && !FNET.host){ FNET.hostSeen=performance.now(); FNET.hostPid=r.fpid; FNET.hostName=nm; FNET.rx={fh:pr.fh, fd:pr.fd, fa:pr.fa, fy:pr.fy, fk:pr.fk}; { const e=freeEnvUnpack(pr.fe); if(e && JSON.stringify(e)!==JSON.stringify(FREE.env)){ FREE.env=e; freeEnvApply(); try{ freeEnvRender(); }catch(err){} } } if(Array.isArray(pr.fb)) for(const B of (Array.isArray(pr.fb[0])?pr.fb:[pr.fb])) if(Array.isArray(B) && B.length===3 && Number.isInteger(B[0])) (FNET.rxB||(FNET.rxB={}))[B[0]]=B; } } }
 // ---- cada cuadro ----
 function fnetTick(dt){ if(!FNET.on) return; if(!mp.room){ if(FNET.host){ fnReset(); freeRenderHud(); } else if(!FNET.ended) fnEnded(); return; }
   if(FNET.host) fnHostTick(); else fnGuestTick(dt);
@@ -23590,13 +23607,16 @@ function fnApplyOp(pid,op){ const t=op[1];
     const o=P.k==='p' && !FREE_PHYS_BY[P.a].pad ? freeAddDyn(P.a,P.x,P.y,P.z,true) : freeAddStatic({k:P.k,a:P.a,b:P.b},P.x,P.y,P.z,P.r,true);
     if(!o) return; o.nid=P.nid; o.au=pid; o.bk=fnBk(P.nid); if(!o.dyn) FNET.dirty.add(o.bk); freeSaveSoon(); }
   else if(t==='d'){ const nid=String(op[2]), o=FREE.objs.find(q=>q.nid===nid && !q.par) || FREE.dyn.find(q=>q.nid===nid); if(!o || o.au!==pid) return; freeDrop(o); freeSaveSoon(); }
-  else if(t==='c'){ const o=FREE.objs.find(q=>q.nid===String(op[2]) && !q.par); const b=op[3]|0; if(!o || o.au!==pid || freePaintable(o)) return; if(o.sel.k==='b' && !FREE_COLS[b]) return; if(o.sel.k==='h' && !(HK_BY[o.sel.a].mats||[]).includes(b)) return; if(freeRepaint(o,b)){ FNET.dirty.add(o.bk); } }   // v216: pintar
+  else if(t==='c'){ const o=FREE.objs.find(q=>q.nid===String(op[2]) && !q.par); const b=op[3]|0; if(!o || o.au!==pid || freePaintable(o)) return; if((o.sel.k==='b'||o.sel.k==='v'||o.sel.k==='t') && !FREE_COLS[b]) return; if(o.sel.k==='h' && !(HK_BY[o.sel.a].mats||[]).includes(b)) return; if(freeRepaint(o,b)){ FNET.dirty.add(o.bk); } }   // v216: pintar
+  else if(t==='y'){ const o=(FREE.toys||[]).find(q=>q.nid===String(op[2])); const a=((+op[3]|0)&63)/64*Math.PI*2; if(o) pqKnock(o,Math.sin(a),Math.cos(a),2.4,o.pq==='torre'?1.1:null); }   // v217: empujó un juguete
+  else if(t==='z'){ const x=FREE.X+(+op[2]||0)/2, z=FREE.Z+(+op[3]||0)/2; if(Number.isFinite(x) && Number.isFinite(z)) pqResetNear(x,z,16); }   // v217: volver a pararlos
   else if(t==='k'){ const d=FREE.dyn.find(q=>q.nid===op[2]); if(!d) return; const c=v=>Math.max(-25,Math.min(25,+v||0)); d.v.x+=c(op[3]); d.v.y+=c(op[4]); d.v.z+=c(op[5]); d.kick=.2; } }
 function fnGuestTick(dt){ const X=FNET.rx; const now=performance.now();
   if(X){ FNET.rx=null; const A=Array.isArray(X.fa)?X.fa:[], auOf=i=>{ const e=A[i]; return Array.isArray(e) && typeof e[0]==='string' ? e[0] : FNET.hostPid; };
     const RB=FNET.rxB||{}; FNET.rxB={}; for(const k in RB){ const [b,h,s]=RB[k]; if(Number.isInteger(b) && b>=0 && b<FN_B && typeof s==='string' && s.length<9000 && FNET.gh[b]!==h){ fnApplyBucket(b,s,auOf); FNET.gh[b]=h; } }
     if(Array.isArray(X.fh) && X.fh.length===FN_B){ FNET.fh=X.fh; const E=fnHash(''); for(let b=0;b<FN_B;b++) if(X.fh[b]===E && FNET.gh[b]!==E){ fnApplyBucket(b,'',auOf); FNET.gh[b]=E; } }   // (las partes vacías ya se saben)
-    if(Array.isArray(X.fd)) fnApplyDyn(X.fd.slice(0,60)); }
+    if(Array.isArray(X.fd)) fnApplyDyn(X.fd.slice(0,60));
+    if(Number.isFinite(X.fk)) pqClockSync(X.fk); if(Array.isArray(X.fy)) pqApplyLive(X.fy.slice(0,40)); }   // v217
   // las pelotas se deslizan a donde dice el dueño (y ruedan)
   const k=1-Math.exp(-dt*12); for(const d of FREE.dyn){ if(!d.tgt) continue; const p=d.root.position, ox=p.x, oz=p.z; p.lerp(d.tgt,k); const mx=p.x-ox, mz=p.z-oz, sp=Math.hypot(mx,mz);
     if(sp>1e-4 && d.spin && d.P.roll){ if(d.P.roll===2){ d.root.rotation.y=Math.atan2(mx,mz); d.spin.rotation.x+=sp/d.r; } else { _fA.set(mz,0,-mx).normalize(); d.spin.rotateOnWorldAxis(_fA,sp/d.r); } } }
@@ -23604,14 +23624,14 @@ function fnGuestTick(dt){ const X=FNET.rx; const now=performance.now();
   if(!FNET.ended && now-FNET.hostSeen>9000) fnEnded(); }
 function fnApplyBucket(b,s,auOf){ const want=new Map(); for(const it of (s?s.split(','):[])){ const P=fnDec(it); if(P && fnBk(P.nid)===b){ P.enc=it; want.set(P.nid,P); } }
   for(const o of [...FREE.objs, ...FREE.dyn]){ if(o.par || o.bk!==b) continue; const W=want.get(o.nid), e=FNET.pend.get(o.nid);
-    if(W){ want.delete(o.nid); if(e && e.a) FNET.pend.delete(o.nid);
+    if(W){ want.delete(o.nid); if(e && e.a) FNET.pend.delete(o.nid); if(o.toy) pqApplyState(o,W.ts);   // v217: cómo quedó el juguete
       if(!o.dyn && o.sel && W.b!==o.sel.b){ if(e && e.c!==undefined && e.c!==W.b) continue; if(e && e.c!==undefined) FNET.pend.delete(o.nid); freeRepaint(o,W.b); }   // v216: la pintaron
       continue; }
     if(e && e.a) continue; freeDrop(o); }
   for(const [nid,P] of want){ const e=FNET.pend.get(nid); if(e && e.d) continue; let o;
     if(P.k==='p' && !FREE_PHYS_BY[P.a].pad){ if(FREE.dyn.length>=FREE_DYN) continue; o=freeAddDyn(P.a,P.x,P.y,P.z,true); if(o) o.tgt=o.root.position.clone(); }
     else o=freeAddStatic({k:P.k,a:P.a,b:P.b},P.x,P.y,P.z,P.r,true);
-    if(o){ o.nid=nid; o.au=auOf(P.ai); o.bk=b; } } }
+    if(o){ o.nid=nid; o.au=auOf(P.ai); o.bk=b; if(o.toy && P.ts) pqApplyState(o,P.ts); } } }
 function fnApplyDyn(list){ for(const s of list){ if(typeof s!=='string') continue; const f=s.split('~'); if(f.length!==4) continue; const d=FREE.dyn.find(q=>q.nid===f[0]); if(!d) continue;
     const x=FREE.X+p36(f[1])/20, y=FREE.Y+p36(f[2])/20, z=FREE.Z+p36(f[3])/20; if(![x,y,z].every(Number.isFinite)) continue; (d.tgt||(d.tgt=new THREE.Vector3())).set(x,y,z); } }
 function fnSynced(){ if(!FNET.on || FNET.host) return true; if(!FNET.fh) return false; for(let b=0;b<FN_B;b++) if(FNET.gh[b]!==FNET.fh[b]) return false; return true; }
@@ -23680,7 +23700,7 @@ function freeLimits(net){ [FREE_MAX,FREE_DYN]=net?FREE_NET:FREE_SOLO; }
 const FG=4, _fgQ=[];
 function fgKey(ix,iz){ return (ix+512)*1024+(iz+512); }
 function fgAdd(o){ if(o.inst || o.dyn) return; if(!FREE.grid) FREE.grid=new Map(); if(!FREE.mov) FREE.mov=[];
-  if(o.game==='mover'){ FREE.mov.push(o); return; }   // (las que se mueven se revisan siempre)
+  if(o.game==='mover' || o.mv){ FREE.mov.push(o); return; }   // (las que se mueven se revisan siempre)
   const b=o.box, x0=Math.floor((b.min.x-FREE.X)/FG), x1=Math.floor((b.max.x-FREE.X)/FG), z0=Math.floor((b.min.z-FREE.Z)/FG), z1=Math.floor((b.max.z-FREE.Z)/FG);
   if(!(x1>=x0 && z1>=z0) || (x1-x0+1)*(z1-z0+1)>100){ FREE.mov.push(o); return; }
   o.cells=[]; for(let ix=x0;ix<=x1;ix++) for(let iz=z0;iz<=z1;iz++){ const k=fgKey(ix,iz); let s=FREE.grid.get(k); if(!s) FREE.grid.set(k,s=[]); s.push(o); o.cells.push(k); } }
@@ -23700,12 +23720,12 @@ function freePaintSet(on){ FREE.paint=!!on; if(on){ FREE.del=false; FREE.sel=nul
 function freePaintBar(){ let el=document.getElementById('freePaint'); if(!el){ el=document.createElement('div'); el.id='freePaint'; el.className='free-paint'; document.body.appendChild(el);
     FREE_COLS.forEach((c,i)=>{ const b=document.createElement('button'); b.type='button'; b.style.background=c; b.setAttribute('aria-label','Color '+(i+1)); b.onclick=e=>{ e.stopPropagation(); FREE.pcol=i; freePaintBar(); }; el.appendChild(b); }); }
   el.hidden=!(FREE.on && FREE.paint && !FREE.play); [...el.children].forEach((b,i)=>b.classList.toggle('on',i===(FREE.pcol|0))); }
-function freePaintable(o){ if(!o || o.dyn || o.inst || o.par) return 'Eso no se puede pintar'; const k=o.sel.k; if(k==='b') return ''; if(k==='h'){ const K=HK_BY[o.sel.a]; return K && (K.mats||[]).length>1 ? '' : 'Esa pieza solo viene en un color'; } return 'Eso no se puede pintar'; }
+function freePaintable(o){ if(!o || o.dyn || o.inst || o.par) return 'Eso no se puede pintar'; const k=o.sel.k; if(k==='b' || pqPaintable(o)) return ''; if(k==='h'){ const K=HK_BY[o.sel.a]; return K && (K.mats||[]).length>1 ? '' : 'Esa pieza solo viene en un color'; } return 'Eso no se puede pintar'; }
 function freeRepaint(o,b){ if(o.sel.b===b) return false; const root=freeMake({...o.sel,b}); if(!root) return false; root.position.copy(o.root.position); root.rotation.y=o.root.rotation.y;
-  o.root.traverse(m=>{ const r=BATCH.recs.get(m); if(r && r.batch) dissolve(r.batch); }); FREE.og.remove(o.root); FREE.og.add(root); root.visible=o.root.visible; o.root=root; o.sel={...o.sel,b}; return true; }
+  o.root.traverse(m=>{ const r=BATCH.recs.get(m); if(r && r.batch) dissolve(r.batch); }); FREE.og.remove(o.root); FREE.og.add(root); root.visible=o.root.visible; o.root=root; o.sel={...o.sel,b}; if(o.toy) pqTipApply(o); return true; }
 function freePaintDo(){ const o=FREE.tgt; if(!o){ flashNote('Ponte enfrente de lo que quieras pintar'); return; } const why=freePaintable(o); if(why){ flashNote(why); return; }
   if(FNET.on && !fnMine(o)){ const who=fnName(o.au); flashNote('Esta la puso '+who+': solo '+who+' la puede pintar'); return; }
-  let b; if(o.sel.k==='b') b=FREE.pcol|0; else { const M=HK_BY[o.sel.a].mats, i=M.indexOf(o.sel.b); b=M[(i+1)%M.length]; }
+  let b; if(o.sel.k==='b' || o.sel.k==='v' || o.sel.k==='t') b=FREE.pcol|0; else { const M=HK_BY[o.sel.a].mats, i=M.indexOf(o.sel.b); b=M[(i+1)%M.length]; }
   if(!freeRepaint(o,b)){ flashNote('Ya es de ese color'); return; } try{ audio.splash?audio.splash(.25):audio.cam(); }catch(e){}
   if(FNET.on){ if(FNET.host){ if(o.nid) FNET.dirty.add(o.bk); } else if(o.nid){ FNET.pend.set(o.nid,{t:performance.now(),c:b}); fnOp(['c',o.nid,b]); } }
   freeSaveSoon(); }
@@ -23748,6 +23768,250 @@ function freeEnvRender(){ const el=document.getElementById('freeEnv'); if(!el ||
     const d=document.createElement('div'); d.className='env-row'; L.forEach(([id,ic,n])=>{ const b=document.createElement('button'); b.type='button'; b.className='fchip'+(e[k]===id?' on':''); b.textContent=ic+' '+n; b.disabled=guest||off;
       b.onclick=()=>{ FREE.env={...FREE.env,[k]:id}; freeEnvApply(); freeSaveSoon(); try{ sendPresence(true); audio.cam&&audio.cam(); }catch(err){} freeEnvRender(); }; d.appendChild(b); }); rows.appendChild(d); } }
 ui('freePaintB').onclick=()=>freePaintSet(!FREE.paint); ui('freeEnvB').onclick=()=>freeEnvOpen();
+
+// ======================================================================================
+// ---------------- v217: 🎡 PARQUE en el Modo libre — piezas que se mueven y juguetes con física ----------------
+// Se mueven: columpio, sube y baja y carrusel (te subes con el botón), puerta (se abre sola cuando llegas) y elevador
+// (te sube y te baja; también te lleva parado el carrusel). Juguetes: dominó (suelto o en fila de 8: se caen en cadena
+// y dan vuelta en las esquinas), bolos (10, para la bola de boliche) y torre de bloques que se derrumba.
+// «Volver a pararlos» acomoda los que se cayeron. En una sala: todos ven lo mismo (la hora la manda el dueño y los
+// juguetes los mueve el dueño; cuando se quedan quietos su posición viaja con la pieza).
+// ======================================================================================
+const PQ_SUBS=[['mueven','🎢 Se mueven'],['juguetes','🎳 Juguetes']];
+const PQ_V=[{id:'columpio',n:'Columpio',c:5,seats:1,ride:'Columpiarse'},{id:'subebaja',n:'Sube y baja',c:2,seats:2,ride:'Subirse al sube y baja'},{id:'carrusel',n:'Carrusel',c:0,seats:4,ride:'Subirse al carrusel'},
+  {id:'puerta',n:'Puerta',c:6},{id:'elevador',n:'Elevador',c:7}];
+const PQ_T=[{id:'domino',n:'Dominó',c:11},{id:'fila',n:'Fila de 8 dominós',c:11,multi:8},{id:'bolos',n:'Bolos (10)',multi:10},{id:'torre',n:'Torre de bloques'}];
+const PQ_V_BY={}, PQ_T_BY={}; PQ_V.forEach(v=>PQ_V_BY[v.id]=v); PQ_T.forEach(t=>PQ_T_BY[t.id]=t); PQ_T_BY.bolo={id:'bolo',n:'Bolo'};
+const PQ_T_SAVE={domino:1, bolo:1, torre:1};   // (la fila y los bolos se guardan pieza por pieza)
+const PQ_DOM={h:1, w:.5, t:.16, gap:.55}, PQ_PIN={h:.76, r:.12, gap:.42};
+const _pqV=new THREE.Vector3(), _pqQ=new THREE.Quaternion(), _pqQ2=new THREE.Quaternion(), _pqAx=new THREE.Vector3(), _pqY=new THREE.Vector3(0,1,0), _pqM=new THREE.Matrix4();
+function pqValid(k,a,b){ if(k==='v') return !!PQ_V_BY[a] && !!FREE_COLS[b|0]; if(k==='t') return !!PQ_T_SAVE[a] && (a!=='domino' || !!FREE_COLS[b|0]); return false; }
+function pqPaintable(o){ return o.sel.k==='v' || (o.sel.k==='t' && o.sel.a==='domino'); }
+function pqName(s){ return s.k==='v' ? (PQ_V_BY[s.a]||{}).n||'Pieza' : (PQ_T_BY[s.a]||{}).n||'Juguete'; }
+function pqPh(x,z){ let h=Math.imul(Math.round(x*10)|0,73856093)^Math.imul(Math.round(z*10)|0,19349663); h=Math.imul(h^(h>>>13),1274126177); return ((h>>>0)%1000)/1000; }
+function pqRnd(seed){ let s=(seed|0)||1; return ()=>{ s=Math.imul(s^(s>>>15),1|s)+0x6D2B79F5|0; let t=Math.imul(s^(s>>>7),61|s)^s; return ((t^(t>>>14))>>>0)/4294967296; }; }
+function pqDirQ(dx,dz){ return ((Math.round(Math.atan2(dx,dz)/(Math.PI*2)*64)%64)+64)%64; }
+// ---- cómo se ven ----
+const _pqDomMat={}; let _pqPinG=null;
+function pqDomMats(ci){ if(_pqDomMat[ci]) return _pqDomMat[ci]; const col=FREE_COLS[ci]||FREE_COLS[11], c=document.createElement('canvas'); c.width=64; c.height=128; const q=c.getContext('2d');
+  const C=new THREE.Color(col), lum=.3*C.r+.59*C.g+.11*C.b, pip=lum>.62?'#3a2a1a':'#ffffff'; q.fillStyle=col; q.fillRect(0,0,64,128); q.fillStyle=pip; q.fillRect(6,62,52,4);
+  const dot=(x,y)=>{ q.beginPath(); q.arc(x,y,6.5,0,7); q.fill(); }; dot(16,16); dot(32,32); dot(48,48); [[16,80],[48,80],[32,96],[16,112],[48,112]].forEach(([x,y])=>dot(x,y));
+  const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; const face=new THREE.MeshStandardMaterial({map:t,roughness:.38}), side=FM(col,'shiny');
+  return _pqDomMat[ci]=[side,side,side,side,face,face]; }
+function pqPinGeo(){ if(_pqPinG) return _pqPinG; const P=[[0,0],[.07,0],[.1,.08],[.12,.22],[.105,.36],[.062,.5],[.055,.56],[.074,.64],[.068,.72],[.04,.755],[0,.765]].map(([x,y])=>new THREE.Vector2(x,y));
+  return _pqPinG=new THREE.LatheGeometry(P,14); }
+function pqDomino(par,ci){ const tip=new THREE.Group(); par.add(tip); const m=new THREE.Mesh(_freeBox,pqDomMats(ci)); m.scale.set(PQ_DOM.w,PQ_DOM.h,PQ_DOM.t); m.position.y=PQ_DOM.h/2; tip.add(m); tip.userData.m=m; return tip; }
+function pqPin(par){ const tip=new THREE.Group(); par.add(tip); tip.add(new THREE.Mesh(pqPinGeo(),FM('#fbf6ec','shiny')));
+  const st=new THREE.Mesh(_freeCyl,FM('#e5534b','shiny')); st.scale.set(.06/.35,.022,.06/.35); st.position.y=.535; tip.add(st); return tip; }
+function pqPinSpots(){ const out=[]; for(let k=0;k<4;k++) for(let j=0;j<=k;j++) out.push([(j-k/2)*PQ_PIN.gap, -.55+k*PQ_PIN.gap*.866]); return out; }
+function pqTower(root){ const B=[], cols=[0,1,2,3,5,7]; for(let L=0;L<6;L++) for(const s of [-1,1]){ const al=L%2===0, m=new THREE.Mesh(_freeBox,FM(FREE_COLS[cols[L]]));
+    m.scale.set(1,.3,.45); m.position.set(al?0:s*.24, L*.3+.15, al?s*.24:0); m.rotation.y=al?0:Math.PI/2; root.add(m); B.push({m, lp:m.position.clone(), lr:m.rotation.y, L}); } return B; }
+function pqMakeT(sel,root){ const a=sel.a, U={id:a}, ci=sel.b|0;
+  if(a==='domino') U.tip=pqDomino(root,ci);
+  else if(a==='fila'){ for(let i=0;i<8;i++){ const g=new THREE.Group(); g.position.z=(i-3.5)*PQ_DOM.gap; root.add(g); pqDomino(g,ci); } }
+  else if(a==='bolo') U.tip=pqPin(root);
+  else if(a==='bolos'){ for(const [x,z] of pqPinSpots()){ const g=new THREE.Group(); g.position.set(x,0,z); root.add(g); pqPin(g); } }
+  else if(a==='torre') U.blocks=pqTower(root);
+  else return false;
+  root.userData.solid=false; root.userData.pq=U; return true; }
+function pqMakeV(sel,root){ const V=PQ_V_BY[sel.a]; if(!V) return false; const col=FM(FREE_COLS[sel.b|0]||FREE_COLS[V.c]), wood=FM('#c79a6a'), dark=FM('#5b5b66'), cream=FM('#fff6e3'), U={id:V.id, seats:[], bobs:[]};
+  const add=(par,geo,mat,x,y,z,sx,sy,sz)=>{ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.scale.set(sx,sy,sz); par.add(m); return m; };
+  const rod=(par,mat,a,b,r)=>{ const A=_pqV.set(...a).clone(), B=new THREE.Vector3(...b), d=B.clone().sub(A), L=d.length(), m=new THREE.Mesh(_freeCyl,mat); m.scale.set(r/.35,L/2,r/.35);
+    m.position.copy(A).add(B).multiplyScalar(.5); m.quaternion.setFromUnitVectors(_pqY,d.normalize()); par.add(m); return m; };
+  const seat=(par,x,y,z,ry)=>{ const s=new THREE.Object3D(); s.position.set(x,y,z); s.rotation.y=ry||0; par.add(s); U.seats.push(s); return s; };
+  const mov=new THREE.Group(); mov.userData.noBatch=true; U.mov=mov;
+  if(V.id==='columpio'){ const H=2.45; rod(root,col,[-1.18,H,0],[1.18,H,0],.075);
+    for(const sx of [-1,1]) for(const sz of [-1,1]) rod(root,col,[sx*1.12,H+.02,0],[sx*1.32,0,sz*.82],.065);
+    mov.position.set(0,H,0); root.add(mov); for(const sx of [-.3,.3]) rod(mov,dark,[sx,0,0],[sx,-1.86,0],.02);
+    add(mov,_freeBox,wood,0,-1.88,0,.74,.07,.38); seat(mov,0,-1.845-.415,-.06); root.userData.solid=false; }
+  else if(V.id==='subebaja'){ add(root,_freeBox,dark,0,.22,0,.3,.44,.46); rod(root,dark,[0,.5,-.26],[0,.5,.26],.07);
+    mov.position.set(0,.5,0); root.add(mov); add(mov,_freeBox,col,0,.05,0,3.2,.1,.38);
+    for(const sx of [-1,1]){ add(mov,_freeBox,wood,sx*1.4,.13,0,.42,.06,.36); rod(mov,dark,[sx*1.12,.1,-.15],[sx*1.12,.5,-.15],.025); rod(mov,dark,[sx*1.12,.1,.15],[sx*1.12,.5,.15],.025); rod(mov,dark,[sx*1.12,.5,-.17],[sx*1.12,.5,.17],.03);
+      seat(mov,sx*1.4,.16-.415,0,sx>0?-Math.PI/2:Math.PI/2).userData.sd=sx; }
+    root.userData.solid=false; }
+  else if(V.id==='carrusel'){ add(root,_freeCyl,dark,0,.06,0,1.75/.35,.06,1.75/.35); root.add(mov);
+    add(mov,_freeCyl,col,0,.2,0,1.62/.35,.08,1.62/.35); add(mov,_freeCyl,cream,0,.285,0,1.15/.35,.006,1.15/.35); rod(mov,cream,[0,.28,0],[0,2.72,0],.1);
+    const cone=new THREE.Mesh(new THREE.ConeGeometry(1.9,.9,8),col); cone.position.set(0,3.1,0); mov.add(cone); add(mov,_freeCyl,cream,0,2.66,0,1.9/.35,.06,1.9/.35); add(mov,_freeSph,FM('#f5cd4a'),0,3.62,0,.14,.14,.14);
+    const cs=[0,2,5,7].map(i=>FM(FREE_COLS[i]));
+    for(let i=0;i<4;i++){ const a=i*Math.PI/2, x=Math.cos(a)*1.15, z=-Math.sin(a)*1.15; rod(mov,FM('#d9dde3'),[x,.28,z],[x,2.66,z],.035);
+      const bob=new THREE.Group(); bob.position.set(x,0,z); bob.rotation.y=a; mov.add(bob); U.bobs.push(bob);
+      add(bob,_freeBox,cs[i],0,.78,0,.26,.2,.62); add(bob,_freeBox,cs[i],0,1.0,-.27,.22,.3,.16); add(bob,_freeBox,cream,0,.89,.04,.24,.02,.3); seat(bob,0,.88-.415,0,Math.PI); }
+    root.userData.solid=true; root.userData.col=new THREE.Box3(new THREE.Vector3(-1.65,0,-1.65),new THREE.Vector3(1.65,.28,1.65)); }
+  else if(V.id==='puerta'){ for(const sx of [-1,1]) add(root,_freeBox,wood,sx*1.02,1.35,0,.2,2.7,.3); add(root,_freeBox,wood,0,2.8,0,2.44,.22,.34);
+    mov.position.set(-.91,0,0); root.add(mov); add(mov,_freeBox,col,.91,1.26,0,1.8,2.48,.12);
+    for(const sz of [-1,1]){ add(mov,_freeBox,col,.91,1.8,sz*.07,1.25,.75,.02); add(mov,_freeBox,col,.91,.75,sz*.07,1.25,.75,.02); add(mov,_freeSph,FM('#f5cd4a','shiny'),1.55,1.18,sz*.1,.07,.07,.07); }
+    root.userData.solid=true; }
+  else if(V.id==='elevador'){ const H=4; U.H=H; for(const sx of [-1,1]) for(const sz of [-1,1]) rod(root,FM('#d9dde3'),[sx*1.08,0,sz*1.08],[sx*1.08,H+.6,sz*1.08],.05);
+    for(const sz of [-1,1]) rod(root,FM('#d9dde3'),[-1.08,H+.6,sz*1.08],[1.08,H+.6,sz*1.08],.05);
+    root.add(mov); add(mov,_freeBox,col,0,.12,0,2,.24,2); for(const s of [-1,1]){ add(mov,_freeBox,FM('#f5cd4a'),0,.245,s*.93,1.86,.012,.08); add(mov,_freeBox,FM('#f5cd4a'),s*.93,.245,0,.08,.012,1.86); }
+    root.userData.solid=true; root.userData.col=new THREE.Box3(new THREE.Vector3(-1,0,-1),new THREE.Vector3(1,.24,1)); }
+  mergeStatic(mov); U.bobs.forEach(b=>mergeStatic(b)); mergeStatic(root);   // (menos dibujos: lo que se mueve va junto por tela)
+  root.userData.pq=U; return true; }
+// ---- al ponerla y al quitarla ----
+function pqInit(o){ const k=o.sel.k; if(k!=='v' && k!=='t') return; o.pq=o.sel.a; o.ph=pqPh(o.x,o.z);
+  if(k==='v'){ if(o.pq==='carrusel') o.cyl=1.65; if(o.pq==='elevador') o.mv=true; o.ride={amp:0, see:.24, door:0, op:0, a0:null}; (FREE.pqv||(FREE.pqv=[])).push(o); }
+  else { o.toy={st:0, th:0, w:0, s:1, dx:0, dz:1, ox:0, oz:0, vx:0, vz:0, rest:Math.PI/2, hit:0}; (FREE.toys||(FREE.toys=[])).push(o); } }
+function pqDrop(o){ const L=o.toy?FREE.toys:FREE.pqv; if(L){ const i=L.indexOf(o); if(i>=0) L.splice(i,1); }
+  const U=o.root.userData.pq; if(U && U.blocks) for(const B of U.blocks) if(B.loose && B.m.parent) B.m.parent.remove(B.m);
+  if(player.pg && player.pg.k==='fmv' && player.pg.o===o){ player.pg=null; player.grounded=true; try{ updateTouchMode(); }catch(e){} } }
+function pqDirty(o){ if(FNET.on && FNET.host && o.nid && !o.par) FNET.dirty.add(o.bk); }
+// juntar/separar con BATCH: lo que se va a mover se separa ya; lo que se quedó quieto puede volver a juntarse
+function pqUnbatch(o){ const f=m=>{ const r=BATCH.recs.get(m); if(r){ if(r.batch) dissolve(r.batch); BATCH.recs.delete(m); } }; o.root.traverse(f); const U=o.root.userData.pq; if(U && U.blocks) U.blocks.forEach(B=>B.m.traverse(f)); }
+const pqRebatch=pqUnbatch;
+// ---- la hora compartida (en una sala manda la del dueño) ----
+function pqClock(){ return clock.elapsedTime+(FNET.on && !FNET.host ? (FNET.ck||0) : 0); }
+function pqClockSync(fk){ const off=fk/10+.06-clock.elapsedTime; if(!FNET.ckOk || Math.abs(off-FNET.ck)>1.5){ FNET.ck=off; FNET.ckOk=true; } else FNET.ck+=(off-FNET.ck)*.1; }
+function pqElevY(o,T){ const u=(((T+o.ph*12)%12)+12)%12/12, sm=x=>x*x*(3-2*x); return 4*(u<.25?0:u<.5?sm((u-.25)/.25):u<.75?1:1-sm((u-.75)/.25)); }
+// cómo está cada parte ahora (la misma cuenta para todos)
+function pqSetV(o,T){ const U=o.root.userData.pq; if(!U) return; const id=o.pq;
+  if(id==='columpio') U.mov.rotation.x=o.ride.amp*Math.sin(T*2.3+o.ph*6.283);
+  else if(id==='subebaja') U.mov.rotation.z=o.ride.see;
+  else if(id==='carrusel'){ U.mov.rotation.y=T*.6+o.ph*6.283; U.bobs.forEach((b,i)=>b.position.y=.1*Math.sin(T*2.2+i*1.7)); }
+  else if(id==='puerta') U.mov.rotation.y=-o.ride.door*1.65;
+  else if(id==='elevador') U.mov.position.y=pqElevY(o,T); }
+// ¿quién va sentado ahí?
+function pqOcc(o,i){ const P=player.pg; if(P && P.k==='fmv' && P.o===o && P.i===i) return 'me'; if(!o.nid) return null;
+  for(const r of mp.remotes.values()) if(r.pl && PG_KINDS[r.pl[0]]==='fmv' && r.pl[1]===i && r.fm===o.nid) return r; return null; }
+function pqAnyOcc(o){ const n=(PQ_V_BY[o.pq]||{}).seats||0; for(let i=0;i<n;i++) if(pqOcc(o,i)) return true; return false; }
+function pqNearPlayers(o,R){ const near=p=>p && Math.abs(p.x-o.x)<R && Math.abs(p.z-o.z)<R && Math.hypot(p.x-o.x,p.z-o.z)<R && p.y>o.y-2 && p.y<o.y+3;
+  if(near(player.pos)) return true; for(const r of mp.remotes.values()) if(near(r.pos)) return true; return false; }
+function pqByNid(nid){ return nid && FREE.pqv ? FREE.pqv.find(o=>o.nid===nid)||null : null; }
+// ---- subirse ----
+function pqSeatPose(o,i){ const U=o.root.userData.pq, s=U && U.seats[i]; if(!s) return null; pqSetV(o,pqClock()); o.root.updateMatrixWorld(true);
+  s.getWorldPosition(_pqV); s.getWorldQuaternion(_pqQ); _pqAx.set(0,0,1).applyQuaternion(_pqQ); const yaw=Math.atan2(_pqAx.x,_pqAx.z);
+  const tilt=o.pq==='columpio'?U.mov.rotation.x : o.pq==='subebaja'?(s.userData.sd||1)*U.mov.rotation.z : 0;
+  return {pos:[_pqV.x,_pqV.y,_pqV.z], yaw, tilt, sit:1, holdUp:o.pq==='columpio'?1:0, grip:o.pq!=='columpio'?1:0}; }
+function pqRide(o,i){ if(player.pg || pqOcc(o,i)) return; try{ holding=false; applyHeld(); renderHotbar(); }catch(e){}
+  player.pg={k:'fmv', i, o, t0:performance.now()/1000, from:[player.pos.x,player.pos.y,player.pos.z]}; player.vel.set(0,0,0); player.vy=0; player.dive=null; player.diveAngle=0;
+  try{ audio.sit(); }catch(e){} flashNote(o.pq==='columpio'?'¡A columpiarse! (Saltar o «Bajarse» para bajar)':o.pq==='subebaja'?'¡Sube y baja! (Saltar o «Bajarse» para bajar)':'¡Vueltas y vueltas! (Saltar o «Bajarse» para bajar)');
+  setActions(null,null); try{ updateTouchMode(); sendPresence(true); }catch(e){} }
+function pqRidePose(P){ const o=P.o; const pose=o && FREE.on && FREE.objs.includes(o) ? pqSeatPose(o,P.i) : null;
+  if(!pose){ player.pg=null; player.grounded=true; try{ updateTouchMode(); }catch(e){} return null; } return pose; }
+function pqExit(P){ const o=P.o, U=o && o.root.userData.pq, s=U && U.seats[P.i]; if(!s) return [player.pos.x,player.pos.y,player.pos.z];
+  s.getWorldPosition(_pqV); const a=o.r*Math.PI/2, fx=Math.sin(a), fz=Math.cos(a);
+  if(o.pq==='columpio') return [o.x+fx*1.3, o.y, o.z+fz*1.3];
+  if(o.pq==='subebaja') return [_pqV.x+fx*.95, o.y, _pqV.z+fz*.95];
+  const dx=_pqV.x-o.x, dz=_pqV.z-o.z, d=Math.hypot(dx,dz)||1; return [o.x+dx/d*2.3, o.y, o.z+dz/d*2.3]; }
+// ---- cada cuadro: lo que se mueve ----
+function pqTick(dt){ const T=pqClock();
+  if(FREE.pqv) for(const o of FREE.pqv){ const U=o.root.userData.pq; if(!U) continue; const id=o.pq;
+    if(id==='columpio'){ const occ=pqAnyOcc(o); o.ride.amp+=((occ?.8:0)-o.ride.amp)*Math.min(1,dt*(occ?.7:.5)); }
+    else if(id==='subebaja'){ const occ=pqAnyOcc(o), want=occ?.27*Math.sin(T*1.9+o.ph*6.283):.24; o.ride.see+=(want-o.ride.see)*Math.min(1,dt*(occ?5:2)); }
+    else if(id==='puerta'){ const near=pqNearPlayers(o,2.8); o.ride.door=Math.max(0,Math.min(1,o.ride.door+(near?2.6:-1.4)*dt)); o.solid=o.ride.door<.15;
+      if(near && !o.ride.op){ o.ride.op=1; try{ audio.door(true); }catch(e){} } else if(!near && o.ride.op && o.ride.door<=0){ o.ride.op=0; try{ audio.door(false); }catch(e){} } }
+    else if(id==='elevador'){ const yN=o.y+pqElevY(o,T), top0=o.box.max.y, top1=yN+.24;
+      if(Math.abs(top1-top0)>1e-5){ const p=player.pos; if(!player.pg && Math.abs(p.x-o.x)<1.05 && Math.abs(p.z-o.z)<1.05 && Math.abs(p.y-top0)<.25 && player.vy<=.5){ p.y=top1; player.vy=0; player.grounded=true; }
+        o.box.min.y=yN; o.box.max.y=top1; } }
+    else if(id==='carrusel'){ const a=T*.6+o.ph*6.283, da=o.ride.a0===null?0:a-o.ride.a0; o.ride.a0=a; const p=player.pos, dx=p.x-o.x, dz=p.z-o.z;
+      if(!player.pg && da && Math.abs(da)<.5 && dx*dx+dz*dz<1.62*1.62 && Math.abs(p.y-o.box.max.y)<.2){ const c=Math.cos(da), s=Math.sin(da); p.x=o.x+dx*c+dz*s; p.z=o.z-dx*s+dz*c; player.facing+=da; } }
+    pqSetV(o,T); }
+  if(FREE.toys && FREE.toys.length) pqToyTick(dt); }
+// ---- juguetes ----
+function pqKnock(o,ux,uz,pw,hy,seed){ const Y=o.toy; if(!Y || Y.st!==0) return false; const L=Math.hypot(ux,uz); if(L<1e-4) return false; ux/=L; uz/=L; pw=Math.max(.5,Math.min(8,pw||2));
+  pqUnbatch(o);
+  if(o.pq==='torre'){ pqTowerKnock(o,ux,uz,pw,hy==null?1.2:hy,seed||((Math.random()*1e6)|0)+1); pqDirty(o); try{ audio.bump(); }catch(e){} return true; }
+  if(o.pq==='domino'){ const a=o.r*Math.PI/2, ax=Math.sin(a), az=Math.cos(a), dp=ux*ax+uz*az; Y.s=Math.abs(dp)<.3 ? pqDomSide(o,ax,az) : dp>=0?1:-1; Y.dx=ax*Y.s; Y.dz=az*Y.s; }
+  else { Y.dx=ux; Y.dz=uz; const sl=Math.min(2.6,pw*.45); Y.vx=ux*sl; Y.vz=uz*sl; }
+  Y.st=1; Y.th=Math.max(Y.th,.05); Y.w=Math.max(Y.w,Math.min(4,1+pw*.45)); Y.rest=Math.PI/2; Y.hit=0;
+  try{ audio.clack(.5); }catch(e){} return true; }
+// en una esquina (le pegan de lado) se cae hacia donde siguen los demás dominós
+function pqDomSide(o,ax,az){ for(const q of fgQuery(o.x-1.5,o.z-1.5,o.x+1.5,o.z+1.5)){ if(q===o || !q.toy || q.toy.st || q.pq==='torre') continue; const rx=q.x-o.x, rz=q.z-o.z, al=rx*ax+rz*az, lat=Math.abs(rx*az-rz*ax);
+    if(lat<.45 && Math.abs(al)>.2 && Math.abs(al)<1.4 && Math.abs(q.y-o.y)<1) return al>0?1:-1; } return 1; }
+function pqTipApply(o){ const Y=o.toy, U=o.root.userData.pq; if(!U || !U.tip) return; const tip=U.tip;
+  if(o.pq==='domino'){ const m=tip.userData.m; if(!Y.st){ tip.position.z=0; m.position.z=0; tip.rotation.x=0; return; } tip.position.z=Y.s*PQ_DOM.t/2; m.position.z=-Y.s*PQ_DOM.t/2; tip.rotation.x=Y.s*Y.th; return; }
+  if(!Y.st){ tip.position.set(0,0,0); tip.quaternion.identity(); return; }
+  const a=o.r*Math.PI/2, c=Math.cos(a), s=Math.sin(a), lx=Y.dx*c-Y.dz*s, lz=Y.dx*s+Y.dz*c;
+  tip.position.set(Y.ox*c-Y.oz*s, .1*Math.sin(Y.th), Y.ox*s+Y.oz*c); tip.quaternion.setFromAxisAngle(_pqAx.set(lz,0,-lx).normalize(),Y.th); }
+function pqTipStep(o,dt){ const Y=o.toy, dom=o.pq==='domino', H=dom?PQ_DOM.h:PQ_PIN.h;
+  Y.w+=(19/H)*Math.sin(Math.max(Y.th,.03))*dt; Y.th+=Y.w*dt; if(Y.th<.02){ Y.th=.02; Y.w=Math.abs(Y.w)*.3+.2; }
+  if(!dom){ Y.ox+=Y.vx*dt; Y.oz+=Y.vz*dt; const f=Math.max(0,1-(Y.th>1.4?3.2:1.2)*dt); Y.vx*=f; Y.vz*=f; if(!freeInside(o.x+Y.ox,o.z+Y.oz,.3)){ Y.vx=Y.vz=0; } }
+  // ¿ya alcanzó al de enfrente? (dominós, bolos y torres)
+  const bx=o.x+Y.ox, bz=o.z+Y.oz, reach=H*Math.sin(Math.min(Y.th,Math.PI/2))+(dom?0:.12);
+  for(const q of fgQuery(bx-H-.7,bz-H-.7,bx+H+.7,bz+H+.7)){ const Q=q.toy; if(q===o || !Q || Q.st!==0) continue; const rx=q.x-bx, rz=q.z-bz, al=rx*Y.dx+rz*Y.dz, lat=Math.abs(rx*Y.dz-rz*Y.dx);
+    if(al<=.02 || Math.abs(q.y-o.y)>1) continue;
+    if(q.pq==='torre'){ if(lat<.62 && al-.55<=reach) pqKnock(q,Y.dx,Y.dz,1.6+Y.w*.5,Math.max(.3,H*Math.cos(Math.min(Y.th,1.5)))); continue; }
+    const ht=q.pq==='domino'?PQ_DOM.t/2:PQ_PIN.r, wl=(q.pq==='domino'?PQ_DOM.w/2:PQ_PIN.r+.05)+(dom?PQ_DOM.w*.3:.08);
+    if(lat>wl || al-ht>reach) continue;
+    let ux=Y.dx, uz=Y.dz; if(q.pq==='bolo'){ const d=Math.hypot(rx,rz)||1; ux=rx/d*.6+Y.dx*.4; uz=rz/d*.6+Y.dz*.4; }
+    if(pqKnock(q,ux,uz,.8+Y.w*.7) && dom && q.pq==='domino' && !Y.hit){ Y.hit=1; Y.rest=Math.min(Y.rest,Math.asin(Math.min(.97,Math.max(.1,(al-ht)/H)))+.06); } }
+  if(Y.th>=Y.rest){ Y.th=Y.rest; if(Y.w>1.4 && Y.rest>1.4){ Y.w=-Y.w*.16; try{ audio.clack(.35); }catch(e){} } else { Y.w=0; if(dom || Math.hypot(Y.vx,Y.vz)<.05){ Y.st=2; Y.vx=Y.vz=0; pqDirty(o); pqRebatch(o); } } }
+  pqTipApply(o); }
+// la torre: los bloques de arriba de donde le pegaste salen volando
+function pqTowerKnock(o,ux,uz,pw,hy,seed){ const Y=o.toy, U=o.root.userData.pq; if(!U || !U.blocks) return; Y.st=1; Y.seed=seed; Y.kn=[ux,uz,pw,hy]; const R=pqRnd(seed);
+  const L0=Math.max(0,Math.min(5,Math.floor((hy-.05)/.3))); Y.L0=L0; o.root.updateMatrixWorld(true);
+  for(const B of U.blocks){ if(B.L<L0) continue; B.loose=true; B.m.userData.noBatch=true; FREE.og.attach(B.m); const up=B.L-L0, k=pw*(.32+.1*up)+R()*.7;
+    B.v=new THREE.Vector3(ux*k+(R()-.5)*.9, .8+R()*1.4+up*.12, uz*k+(R()-.5)*.9); B.w=new THREE.Vector3((R()-.5)*5+uz*3.5,(R()-.5)*3,(R()-.5)*5-ux*3.5); B.still=0; B.sleep=false; } }
+function pqTowerStep(o,dt){ const Y=o.toy, U=o.root.userData.pq; if(!U || !U.blocks) return; const L=U.blocks.filter(B=>B.loose && !B.sleep); if(!L.length){ if(Y.st===1){ Y.st=2; pqRebatch(o); } return; }
+  const top=o.y+Y.L0*.3;
+  for(const B of L){ const m=B.m, p=m.position, v=B.v; v.y-=16*dt; p.addScaledVector(v,dt);
+    const wl=B.w.length(); if(wl>1e-3){ _pqAx.copy(B.w).divideScalar(wl); _pqQ.setFromAxisAngle(_pqAx,wl*dt); m.quaternion.premultiply(_pqQ); }
+    _pqM.makeRotationFromQuaternion(m.quaternion); const e=_pqM.elements, ext=.5*Math.abs(e[1])+.15*Math.abs(e[5])+.225*Math.abs(e[9]);
+    let g=freeGround(p.x,p.z,p.y); if(g===null){ if(p.y<FREE.Y-20){ B.v.set(0,0,0); B.sleep=true; } continue; }
+    if(Y.L0>0 && Math.abs(p.x-o.x)<.5 && Math.abs(p.z-o.z)<.5 && p.y>top-.1) g=Math.max(g,top);
+    if(p.y-ext<=g+.005){ p.y=g+ext; if(v.y<0) v.y=v.y<-2?-v.y*.22:0; const f=Math.max(0,1-5*dt); v.x*=f; v.z*=f; B.w.multiplyScalar(Math.max(0,1-6*dt));
+      // se acuesta sobre su lado más plano
+      let bi=1, bv=Math.abs(e[5]); if(Math.abs(e[1])>bv){ bi=0; bv=Math.abs(e[1]); } if(Math.abs(e[9])>bv){ bi=2; } const ax=_pqAx.set(e[bi*4],e[bi*4+1],e[bi*4+2]); const sg=ax.y>=0?1:-1;
+      _pqQ2.setFromUnitVectors(ax.normalize(),_pqV.set(0,sg,0)); _pqQ.copy(_pqQ2).multiply(m.quaternion); m.quaternion.slerp(_pqQ,Math.min(1,dt*5));
+      if(v.lengthSq()<.01 && B.w.lengthSq()<.05){ B.still+=dt; if(B.still>.5){ B.sleep=true; v.set(0,0,0); B.w.set(0,0,0); } } else B.still=0; } }
+  // que no se encimen
+  for(let i=0;i<L.length;i++) for(let j=i+1;j<L.length;j++){ const a=L[i].m.position, b=L[j].m.position; _pqV.subVectors(b,a); const d=_pqV.length(); if(d>=.4 || d<1e-4) continue; _pqV.divideScalar(d); const k=(.4-d)/2; a.addScaledVector(_pqV,-k); b.addScaledVector(_pqV,k); } }
+function pqTowerReset(o){ const U=o.root.userData.pq; if(!U || !U.blocks) return; for(const B of U.blocks){ if(!B.loose) continue; B.loose=false; B.sleep=false; o.root.add(B.m); B.m.position.copy(B.lp); B.m.rotation.set(0,B.lr,0); B.m.userData.noBatch=false; } }
+function pqReset(o){ const Y=o.toy; if(!Y) return; pqUnbatch(o); if(o.pq==='torre') pqTowerReset(o); Object.assign(Y,{st:0, th:0, w:0, ox:0, oz:0, vx:0, vz:0, rest:Math.PI/2, hit:0, seed:0, kn:null, net:null}); pqTipApply(o); }
+function pqResetNear(x,z,R){ let n=0; for(const o of FREE.toys||[]){ if(!o.toy.st || Math.hypot(o.x-x,o.z-z)>R) continue; pqReset(o); pqDirty(o); n++; } return n; }
+function pqResetAll(){ if(player.pg && player.pg.k==='fmv'){ player.pg=null; player.grounded=true; try{ updateTouchMode(); }catch(e){} } for(const o of FREE.toys||[]) if(o.toy.st) pqReset(o); for(const o of FREE.pqv||[]){ o.ride.amp=0; o.ride.door=0; o.ride.a0=null; } }
+// ¿quién los toca? (tu peluche, los de tus amigos y las pelotas)
+function pqToyTick(dt){ const guest=FNET.on && !FNET.host; dt=Math.min(dt,.033);
+  if(!guest){ const who=[[player.pos,player.vel.x,player.vel.z,true]]; if(FNET.on) for(const r of mp.remotes.values()) if(r.pos && (r.moving||0)>.15) who.push([r.pos,0,0,false]);
+    for(const [p,vx,vz,me] of who){ const sp=me?Math.hypot(vx,vz):2.4; if(me && (sp<.7 || player.pg)) continue;
+      for(const o of fgQuery(p.x-1.3,p.z-1.3,p.x+1.3,p.z+1.3)){ const Y=o.toy; if(!Y || Y.st) continue; const b=o.box; if(p.x<b.min.x-.36||p.x>b.max.x+.36||p.z<b.min.z-.36||p.z>b.max.z+.36) continue; if(p.y>b.max.y-.1 || p.y+PLAYER_H<b.min.y) continue;
+        pqKnock(o,me?vx:o.x-p.x,me?vz:o.z-p.z,me?sp:2.4,o.pq==='torre'?Math.min(1.7,Math.max(.3,p.y-o.y+.9)):null); } } }
+  for(const o of FREE.toys){ const Y=o.toy; if(o.pq==='torre'){ if(Y.st===1) pqTowerStep(o,dt); continue; } if(guest){ if(Y.net) pqTipNet(o,dt); } else if(Y.st===1) pqTipStep(o,dt); } }
+function pqBallHit(o,d){ const Y=o.toy; if(!Y || Y.st) return; const p=d.root.position, r=d.r, b=o.box; if(p.x<b.min.x-r||p.x>b.max.x+r||p.z<b.min.z-r||p.z>b.max.z+r||p.y-r>b.max.y||p.y+r<b.min.y) return;
+  const v=d.v, sp=Math.hypot(v.x,v.z); if(sp<.7) return; if(pqKnock(o,v.x,v.z,sp*Math.sqrt(d.P.mass),o.pq==='torre'?p.y-o.y:null)){ const k=o.pq==='torre'?.6:.88; v.x*=k; v.z*=k; } }
+// ---- botones ----
+function pqActions(){ if(player.pg) return player.pg.k==='fmv' ? [{label:'Bajarse', run:stopPlay}, null] : null;
+  if(player.car || player.ac || player.swim || player.dive || MED.on) return null;
+  const p=player.pos; let best=null, bd=1.5;
+  for(const o of FREE.pqv||[]){ const V=PQ_V_BY[o.pq], U=o.root.userData.pq; if(!V.seats || !U || Math.abs(o.x-p.x)>4 || Math.abs(o.z-p.z)>4) continue;
+    U.seats.forEach((s,i)=>{ if(pqOcc(o,i)) return; s.getWorldPosition(_pqV); const d=Math.hypot(_pqV.x-p.x,_pqV.z-p.z); if(d<bd && Math.abs(_pqV.y+.3-p.y)<1.6){ bd=d; best=[o,i]; } }); }
+  const ride=best?{label:PQ_V_BY[best[0].pq].ride, run:()=>pqRide(best[0],best[1])}:null;
+  let toy=null, td=1.9, fallen=false; const [fx,fz]=freeFwd();
+  for(const o of FREE.toys||[]){ const dx=o.x-p.x, dz=o.z-p.z; if(Math.abs(dx)>6 || Math.abs(dz)>6 || Math.abs(o.y-p.y)>2) continue; const d=Math.hypot(dx,dz);
+    if(o.toy.st){ if(d<5) fallen=true; continue; } if(d<td && dx*fx+dz*fz>.25*d){ td=d; toy=o; } }
+  const push=toy?{label:'Empujar', run:()=>pqPushDo(toy)}:null, up=fallen?{label:'Volver a pararlos', run:pqResetDo}:null;
+  if(!ride && !push && !up) return null; return ride ? [ride, push||up] : [push||up, push?up:null]; }
+function pqPushDo(o){ const [fx,fz]=freeFwd(); if(!o.toy || o.toy.st) return;
+  if(FNET.on && !FNET.host){ if(o.nid) fnOp(['y',o.nid,pqDirQ(fx,fz)]); return; }
+  pqKnock(o,fx,fz,2.4,o.pq==='torre'?1.1:null); }
+function pqResetDo(){ const p=player.pos; try{ audio.cam&&audio.cam(); }catch(e){}
+  if(FNET.on && !FNET.host){ fnOp(['z',Math.round((p.x-FREE.X)*2),Math.round((p.z-FREE.Z)*2)]); flashNote('¡A pararlos otra vez!'); return; }
+  const n=pqResetNear(p.x,p.z,16); flashNote(n?'¡Listos otra vez! ('+n+')':'Ya están parados'); }
+// ---- poner varios de golpe (fila de dominós, bolos) ----
+function pqPlaceMulti(sel,x,y,z,r,quiet){ const out=[], a=r*Math.PI/2, c=Math.cos(a), s=Math.sin(a);
+  const spots=sel.a==='fila' ? [...Array(8)].map((_,i)=>[0,(i-3.5)*PQ_DOM.gap,'domino']) : pqPinSpots().map(([lx,lz])=>[lx,lz,'bolo']);
+  const room=FREE_MAX-freeOwn(); if(room<spots.length){ if(!quiet) flashNote(room>0?'Solo caben '+room+' piezas más (son '+spots.length+')':'Ya hay '+FREE_MAX+' cosas: quita alguna para poner más'); return out; }
+  for(const [lx,lz,id] of spots){ const wx=x+lx*c+lz*s, wz=z-lx*s+lz*c; if(!freeInside(wx,wz,.3)) continue; const g=freeGround(wx,wz,y+.6); const o=freeAddStatic({k:'t',a:id,b:sel.b|0},wx,g===null?y:g,wz,r,true); if(o) out.push(o); }
+  return out; }
+// ---- en una sala: lo que dicen las piezas (cuando se quedan quietos) y lo que se está cayendo ahora ----
+function pqEncState(o){ const Y=o.toy; if(!Y || !Y.st) return '';
+  if(o.pq==='torre') return Y.kn ? 'T'+[Y.seed,Math.round(Y.kn[0]*100)+100,Math.round(Y.kn[1]*100)+100,Math.round(Y.kn[2]*10),Math.round(Y.kn[3]*10)].map(n=>Math.max(0,n|0).toString(36)).join('.') : '';
+  if(Y.st!==2) return ''; return 'F'+[Math.round(Y.th*100),pqDirQ(Y.dx,Y.dz),Math.round(Y.ox*20)+500,Math.round(Y.oz*20)+500].map(n=>Math.max(0,n|0).toString(36)).join('.'); }
+function pqApplyState(o,s){ const Y=o.toy; if(!Y) return; s=typeof s==='string'?s:'';
+  if(!s){ if(Y.st && !(Y.net && performance.now()-Y.net.t<1500)) pqReset(o); return; }
+  const n=s.slice(1).split('.').map(x=>parseInt(x,36)); if(!n.every(Number.isFinite)) return;
+  if(s[0]==='T' && o.pq==='torre' && n.length===5){ if(Y.st && Y.seed===n[0]) return; if(Y.st) pqReset(o); pqUnbatch(o); pqTowerKnock(o,(n[1]-100)/100,(n[2]-100)/100,n[3]/10,n[4]/10,n[0]); return; }
+  if(s[0]==='F' && o.pq!=='torre' && n.length===4){ const a=n[1]/64*Math.PI*2; if(!Y.st){ pqUnbatch(o); try{ audio.clack(.3); }catch(e){} }
+    Y.st=2; Y.net=null; Y.th=Math.min(Math.PI/2,n[0]/100); Y.dx=Math.sin(a); Y.dz=Math.cos(a); Y.ox=(n[2]-500)/20; Y.oz=(n[3]-500)/20; Y.w=0;
+    if(o.pq==='domino'){ const r=o.r*Math.PI/2; Y.s=(Y.dx*Math.sin(r)+Y.dz*Math.cos(r))>=0?1:-1; } pqTipApply(o); pqRebatch(o); } }
+function pqNetList(){ const out=[]; for(const o of FREE.toys||[]){ const Y=o.toy; if(Y.st!==1 || !o.nid || o.pq==='torre') continue;
+    out.push([o.nid,Math.round(Y.th*100).toString(36),pqDirQ(Y.dx,Y.dz).toString(36),(Math.round(Y.ox*20)+500).toString(36),(Math.round(Y.oz*20)+500).toString(36)].join('~')); if(out.length>=24) break; } return out; }
+function pqApplyLive(list){ const now=performance.now();
+  for(const s of list){ if(typeof s!=='string' || s.length>40) continue; const f=s.split('~'); if(f.length!==5) continue; const o=(FREE.toys||[]).find(q=>q.nid===f[0]); if(!o || o.pq==='torre') continue;
+    const n=f.slice(1).map(x=>parseInt(x,36)); if(!n.every(Number.isFinite)) continue; const Y=o.toy, a=n[1]/64*Math.PI*2;
+    if(Y.st===0){ pqUnbatch(o); try{ audio.clack(.4); }catch(e){} } if(Y.st===2) continue;
+    Y.st=1; Y.net={th:Math.min(Math.PI/2,n[0]/100), ox:(n[2]-500)/20, oz:(n[3]-500)/20, t:now}; Y.dx=Math.sin(a); Y.dz=Math.cos(a);
+    if(o.pq==='domino'){ const r=o.r*Math.PI/2; Y.s=(Y.dx*Math.sin(r)+Y.dz*Math.cos(r))>=0?1:-1; } } }
+function pqTipNet(o,dt){ const Y=o.toy, N=Y.net, k=1-Math.exp(-dt*14); Y.th+=(N.th-Y.th)*k; Y.ox+=(N.ox-Y.ox)*k; Y.oz+=(N.oz-Y.oz)*k; pqTipApply(o); if(performance.now()-N.t>2500) Y.net=null; }
 
 // ---------------- v188: TUTORIAL con guía — Almohadita (casitas) y Llantita (carritos) ----------------
 // Sale la primera vez que abres el taller o el editor (si está vacío) y con el botón ❓ Ayuda. Una flecha señala qué tocar;
