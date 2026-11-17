@@ -58,7 +58,7 @@ async def m():
     except Exception as e: print('(sin foto)')
     # 8. guardar, salir y volver
     r=await ev("""(()=>{ const n=FREE.objs.length, d=FREE.dyn.length; ui('toMenuBtn').click(); const out=[FREE.on, FREE.g.visible, state, Math.round(player.pos.x)];
-      FREE.objs.slice().forEach(freeDrop); FREE.dyn.slice().forEach(freeDrop); FREE.ok=false; freeEnter(); return [...out, FREE.objs.length===n, FREE.dyn.length===d, n, d]; })()""")
+      FREE.loaded=null; freeEnter(); return [...out, FREE.objs.length===n, FREE.dyn.length===d, n, d]; })()""")
     ok(r[0] is False and r[1] is False and r[2]=='menu' and r[3]==0 and r[4] and r[5], 'al salir regresas a la isla; al volver está todo lo que pusiste (%s cosas y %s con física) %s'%(r[6],r[7],r[:4]))
     r=await ev("(()=>{ const g=groundAt(0,0,5); return +g.toFixed(2); })()"); 
     ok(not errs,'sin errores %s'%errs[:3]); await b.close()

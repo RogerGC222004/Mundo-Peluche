@@ -24,7 +24,7 @@ async def m():
     await pg.screenshot(path='/tmp/v205_modos.png')
     r=await pg.evaluate("(()=>{ const b=[...document.querySelectorAll('#menuModes .btn')].map(e=>e.getBoundingClientRect()); return Math.max(...b.map(x=>x.bottom))<=innerHeight && Math.max(...b.map(x=>x.right))<=innerWidth; })()")
     ok(r, 'los botones caben en la pantalla del teléfono acostado')
-    await tap('mapBtn'); ok('pronto' in (await pg.evaluate("document.body.innerText")), 'Crear mapa avisa que llega pronto')
+    await tap('mapBtn'); ok(await vis('mapItems'), 'Crear mapa abre «Mis mapas» (v209)'); await tap('mapBack')
     await tap('mgBtn'); await pg.wait_for_timeout(800); ok(await vis('mgqBack'), 'Minijuegos abre la lista (v206)'); await pg.screenshot(path='/tmp/v206_lista.png'); await tap('mgqBack')
     await tap('modesBack'); ok(await vis('playBtn') and await vis('shopBtn') and not await vis('soloBtn'), 'Volver regresa al menú principal')
     await tap('playBtn'); await tap('mpBtn'); ok(await pg.evaluate("s=>__T.ev(s)","(()=>{ const o=document.getElementById('mp'); return !!o && !o.hidden; })()"), 'Multijugador abre las salas')
