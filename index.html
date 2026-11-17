@@ -1629,7 +1629,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='221';
+const GAME_VERSION='222';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -1697,6 +1697,9 @@ const UMW={skip:false};
       if(c._mwF){ c._mwF=false; c.updateMatrixWorld(true); } else c.updateMatrixWorld(force); } };
   // si alguien pide la matriz a mano, se calcula siempre (y se olvida lo guardado)
   const um=OP.updateMatrix; OP.updateMatrix=function(){ um.call(this); this._mc=null; }; }
+// v222: Math.hypot (se usa ~600 veces, muchas en cada cuadro) en Chrome no se "pega" al código: cada llamada deja un número suelto que luego hay que
+// limpiar (en el Huawei esas limpiezas son tirones). Para 2 o 3 números da lo mismo con raíz cuadrada; con otros casos se usa la original.
+{ const H=Math.hypot; Math.hypot=function(a,b,c,d){ if(d===undefined){ if(c===undefined){ if(b!==undefined) return Math.sqrt(a*a+b*b); } else return Math.sqrt(a*a+b*b+c*c); } return H.apply(Math,arguments); }; }
 const scene = new THREE.Scene();
 const SKY = 0xcfe7f2;
 scene.background = new THREE.Color(SKY);
@@ -2558,13 +2561,14 @@ const TUBE={NU:36, NP:9, mesh:[], act:[], noteId:-1, wk:1};
 function swellTick(){ { const k=seaWeatherK(); SWELL.k=k[0]; TUBE.wk=k[1]; SWELL.ku.value=SWELL.k; }
   const S=SWELL, T=Date.now()/1000, C=S.C;
   // 1) cuáles olas existen ahora (se revisa cada segundo; las que ya estaban se guardan)
-  if(T-S.genT>1 || T<S.genT){ S.genT=T; const n1=Math.floor(T/S.P), nb=Math.ceil(S.LIFE*1.2/S.P)+1, keep=new Map();
-    for(const c of swCells()) for(let n=n1-nb;n<=n1;n++){ const key=c.id*1e7+(n%1e7); let L=S.map.get(key); if(!L) L=swMake(c,n); if(!L.length || L.some(w=>T-w.t0<w.life)) keep.set(key,L); }
-    S.map=keep; S.all=[]; for(const L of keep.values()) for(const w of L) S.all.push(w);
+  if((T-S.genT>1 || T<S.genT) && !(typeof FREE!=='undefined' && FREE.on)){ S.genT=T; const n1=Math.floor(T/S.P), nb=Math.ceil(S.LIFE*1.2/S.P)+1, keep=new Map(), tg=performance.now(); let again=false;   // (v222: en el Modo libre no hay olas de la isla cerca)
+    for(const c of swCells()) for(let n=n1-nb;n<=n1;n++){ const key=c.id*1e7+(n%1e7); let L=S.map.get(key); if(!L){ if(performance.now()-tg>(ULTRA?1:2.5)){ again=true; continue; } L=swMake(c,n); } /* v222: las olas nuevas se hacen de pocas en pocas (de golpe daba un tirón cada segundo) */ keep.set(key,L); }   // (v222: se guardan aunque sus olas ya se hayan acabado: antes se volvían a hacer cada segundo, unas 90 por segundo)
+    S.map=keep; if(again) S.genT=T-1.2; S.all=[]; for(const L of keep.values()) for(const w of L) if(T-w.t0<w.life) S.all.push(w);
     S.all.sort((a,b)=>a.t0-b.t0||a.id-b.id); for(const w of S.all) if(w.tube && w.tOff===undefined) w.tOff=swTubeClash(w); }
   // 2) dónde va cada una y qué tan alta (crece, se apaga, se acaba en tierra)
   const cx=camera.position.x, cz=camera.position.z, ppx=player.pos.x, ppz=player.pos.z, wk=TUBE.wk||1; S.near.length=0; TUBE.act=[];
-  for(const w of S.all){ const age=T-w.t0; w.age=age; if(age<0 || age>w.life){ w.amp=0; continue; }
+  const thin=ULTRA, fN=(S.fN=(S.fN|0)+1);   // v222: en ultra ligero, las olas lejanas (más de 600 m: detrás de la niebla) se revisan 1 de cada 16 cuadros
+  for(const w of S.all){ if(thin && w.dc>600 && ((fN+w.id)&15)!==0) continue; const age=T-w.t0; w.age=age; if(age<0 || age>w.life){ w.amp=0; continue; }
     w.px=w.x0+w.nx*C*age; w.pz=w.z0+w.nz*C*age;
     w.amp=w.str*smooth(0,15,age)*smooth(w.life,w.life-15,age)*(w.land<Infinity?smooth(w.land+12,w.land,age):1);
     const dc=swSegD(w,cx,cz), dp=swSegD(w,ppx,ppz); w.dc=dc; if(w.amp<.005 || Math.min(dc,dp)>1300) continue; S.near.push(w);
@@ -3226,9 +3230,10 @@ function icullTick(){ const L=ICULL.L; if(!L.length || SP.on) return; const cam=
   for(const r of L) if(r.n>=0 && r.m.geometry.boundingSphere!==r.bs) icullSph(r);   // (alguien le cambió la forma: que siga con su esfera)
   const fog=scene.fog, lim=Math.min(cam.far, fog && fog.far>0 ? fog.far : cam.far), tv=Math.tan(cam.fov*Math.PI/360), th=tv*cam.aspect, R0=lim*Math.sqrt(1+tv*tv+th*th)+6;   // hasta la esquina de la vista
   const dx=cp.x-ICULL.x, dy=cp.y-ICULL.y, dz=cp.z-ICULL.z;
-  if(dx*dx+dy*dy+dz*dz<9 && Math.abs(R0-ICULL.R)<2 && !ICULL.dirty) return;
-  ICULL.x=cp.x; ICULL.y=cp.y; ICULL.z=cp.z; ICULL.R=R0; ICULL.dirty=false;
-  for(const r of L) icullApply(r,cp.x,cp.y,cp.z,R0); }
+  if(!(dx*dx+dy*dy+dz*dz<9 && Math.abs(R0-ICULL.R)<2 && !ICULL.dirty)){ ICULL.x=cp.x; ICULL.y=cp.y; ICULL.z=cp.z; ICULL.R=R0; ICULL.dirty=false; ICULL.q=0; }
+  // v222: se acomodan de a poco (en ultra ligero, ~1 ms por cuadro); de golpe daba un tirón al caminar
+  if(ICULL.q===undefined) ICULL.q=L.length; const t0=performance.now();
+  while(ICULL.q<L.length){ icullApply(L[ICULL.q++],ICULL.x,ICULL.y,ICULL.z,ICULL.R); if(ULTRA && (ICULL.q&7)===0 && performance.now()-t0>1) break; } }
 
 // ---------- Pista de carreras ----------
 // Muestras densas de la línea central (cada ~2 m) para dibujarla, saber si un coche va sobre ella y contar vueltas
@@ -13694,7 +13699,7 @@ function caveRemotePose(r,t,dt){ const inC=inCave(r.pos.y), M=gearSet(r.obj, inC
   if(M.lamp.visible) lampAim(M,1-(sky.dayK??1)); else M.pool.visible=false;
   if(prev<.24 && r.miSwing>=.24 && r.pos.distanceTo(player.pos)<18) mineSound(false,false); }
 // en la cueva solo se dibuja la cueva (y los peluches): todo lo de arriba se apaga mientras se dibuja
-function caveCull(){ for(const c of scene.children){ if(!c.visible || c===CAVE || c.userData.caveKeep || c===plush || c.userData.isPlushRoot || c.isLight || c.isCamera) continue; c.visible=false; c._acOff=true; AREA.off.push(c); } }
+function caveCull(){ for(const c of scene.children){ if(!c.visible || c===CAVE || c.userData.caveKeep || c===plush || c.userData.isPlushRoot || c.isLight || c.isCamera) continue; c.visible=false; c._acOff=true; AREA.off[AREA.offN++]=c; } }
 const minePresence=()=>({mi: MS.inC ? [mine.pick, MS.swingSeq] : null});
 
 
@@ -15325,7 +15330,7 @@ function prBody(u,out){ const p=arPos(u); if(!p) return null; return out.set(p.x
     PR.clams.push({g, hinge, pearl, glow, x:w.x, y:w.y+.05, z:w.z, ang:.04}); });
   // boyas de colores en la superficie (marcan dónde se juega)
   const bm=[FM('#ff5d6c','shiny'),FM('#ffffff','shiny')]; for(let i=0;i<18;i++){ const a=i/18*Math.PI*2, w=arW(A,Math.cos(a)*(PRLG.R+1.6),Math.sin(a)*(PRLG.R+1.6),SEA_Y+.1);
-    const b=new THREE.Mesh(sphereLo,bm[i%2]); b.scale.set(.5,.42,.5); b.position.copy(w); b.userData.noCol=true; b.castShadow=true; scene.add(b); PR.buoys.push(b);
+    const b=new THREE.Mesh(sphereLo,bm[i%2]); b.scale.set(.5,.42,.5); b.position.copy(w); b.userData.noCol=true; b.userData.noBatch=true; b.castShadow=true; scene.add(b); PR.buoys.push(b);   /* v222: flotan siempre: juntarlas con lo de alrededor deshacía el grupo en cada vuelta */
     if(i%3===0){ const g=new THREE.Group(); const p=new THREE.Mesh(cylLo,FM('#fbf3e4')); p.scale.set(.05,2.4,.05); p.position.y=1.2; g.add(p);
       const f=new THREE.Mesh(new THREE.PlaneGeometry(.9,.55),new THREE.MeshStandardMaterial({color:['#ffd34d','#ff9ec4','#7fd6d0'][(i/3)%3], side:THREE.DoubleSide, roughness:.7})); f.position.set(.45,2.1,0); g.add(f);
       g.traverse(o=>{ if(o.isMesh) o.userData.noCol=true; }); b.add(g); g.scale.set(1/.5,1/.42,1/.5); } }
@@ -24938,8 +24943,11 @@ function mergeInto(list,local,colored,uvBake){ const g0=list[0].geometry, names=
     vo+=n; }
   const g=new THREE.BufferGeometry(); for(const k of names) g.setAttribute(k,new THREE.BufferAttribute(out[k],g0.attributes[k].itemSize)); if(col) g.setAttribute('color',new THREE.BufferAttribute(col,3)); if(fsp) g.setAttribute('feltSpk',new THREE.BufferAttribute(fsp,3)); g.setIndex(new THREE.BufferAttribute(idx,1)); g.computeBoundingSphere(); return g; }
 // v220: los grupos de copias que se quedan con 0 copias (frutas que no han salido, peces que no se ven…) no se mandan a dibujar
-const IZERO=new Set();
-function izeroTick(){ for(const m of IZERO){ if(!m.parent){ IZERO.delete(m); continue; } const L=m.layers; if(m.count>0){ if(!(L.mask&1)) L.enable(0); } else if(L.mask&1) L.disable(0); } }
+// (v222: una lista simple en vez de un Set: recorrer un Set en cada vuelta dejaba basura; y se revisa cada 4 cuadros)
+const IZERO={L:[], add(o){ if(!o._iz){ o._iz=true; this.L.push(o); } }};
+function izeroTick(){ if(((izeroTick.n=(izeroTick.n|0)+1)&3)!==0) return; const A=IZERO.L; let j=0;
+  for(let i=0;i<A.length;i++){ const m=A[i]; if(!m.parent){ m._iz=false; continue; } A[j++]=m; const L=m.layers; if(m.count>0){ if(!(L.mask&1)) L.enable(0); } else if(L.mask&1) L.disable(0); }
+  A.length=j; }
 // v221: al cargar, juntar de una vez todo lo quieto de la isla. Poco a poco (1 ms por cuadro) en un teléfono lento tardaba
 // minutos, y mientras tanto cada pieza era un dibujo aparte (en la feria más de 300). Se hace con la pantalla de carga puesta.
 function batchWarm(){ if(!BATCH.on || BATCH.warm) return 0; BATCH.warm=true; const P=performance, t0=P.now(); let t=t0, n=0;
@@ -24954,9 +24962,9 @@ function batchTick(){ try{ izeroTick(); }catch(e){} if(!BATCH.on) return;
   if(BATCH.grp){ batchGroupStep(); return; }
   // 1) revisar todo lo de la isla, repartido en varios cuadros (así no da un tirón cada medio segundo)
   if(!BATCH.cyc){ // v197: se recorre la isla poco a poco (máximo ~1 ms por cuadro); antes era todo de golpe cada medio segundo
-    if(!BATCH.col){ if(now-BATCH.last<.5) return; BATCH.last=now; BMAT.tick++; BATCH.col={L:[], V:[], D:[], st:[scene], sv:[true], sd:[false]}; }
+    if(!BATCH.col){ if(now-BATCH.last<(ULTRA?1.5:.5)) return; BATCH.last=now; BMAT.tick++; BATCH.col={L:[], V:[], D:[], st:[scene], sv:[true], sd:[false], dr:(()=>{ try{ return acDynRoots(); }catch(e){ return new Set(); } })()}; }   // (v222: coches, aviones, bichitos… no se juntan con lo de su alrededor)
     const K=BATCH.col, tc=performance.now(); let k=0;
-    while(K.st.length){ const o=K.st.pop(), pv=K.sv.pop(), dy=K.sd.pop(); if(batchSkip(o)){ if(o.isInstancedMesh && !o.userData.ic) IZERO.add(o); continue; } const vis=pv && o.visible, dyn=dy || o===plush || !!o.userData.isPlushRoot;
+    while(K.st.length){ const o=K.st.pop(), pv=K.sv.pop(), dy=K.sd.pop(); if(batchSkip(o)){ if(o.isInstancedMesh && !o.userData.ic) IZERO.add(o); continue; } const vis=pv && o.visible, dyn=dy || o===plush || !!o.userData.isPlushRoot || K.dr.has(o);
       if(o.isMesh){ if(o.isInstancedMesh && !o.userData.ic) IZERO.add(o); if(Array.isArray(o.material) && !o.userData.split && o.geometry && o.geometry.groups && o.geometry.groups.length) splitMulti(o); try{ if(!(ULTRA && dyn)) slimMesh(o); }catch(e){} K.L.push(o); K.V.push(vis); K.D.push(dyn); }
       const ch=o.children; for(let i=ch.length-1;i>=0;i--){ K.st.push(ch[i]); K.sv.push(vis); K.sd.push(dyn); } if((++k&127)===0 && performance.now()-tc>1) return; }
     BATCH.cyc={L:K.L, V:K.V, D:K.D, i:0, T:now}; BATCH.col=null; BATCH.pn=now; return; }
@@ -24974,9 +24982,9 @@ function batchTick(){ try{ izeroTick(); }catch(e){} if(!BATCH.on) return;
         if(r.lmoves>6){ r.bad=true; if(r.batch) dissolve(r.batch); } } }
   if(C.i<C.L.length) return;
   BATCH.cyc=null;
-  for(const [o,r] of BATCH.recs) if(r.st!==T){ if(r.batch) dissolve(r.batch); BATCH.recs.delete(o); }   // ya no está en la escena
+  BATCH.recs.forEach((r,o)=>{ if(r.st!==T){ if(r.batch) dissolve(r.batch); BATCH.recs.delete(o); } });   // ya no está en la escena (v222: sin crear pares nuevos)
   // 2) juntar los que llevan quietos un rato (máximo una vez por segundo)
-  if(T-BATCH.lastBuild<1) return; BATCH.lastBuild=T; BATCH.grp={it:BATCH.recs.entries(), groups:new Map(), T}; }
+  if(T-BATCH.lastBuild<1) return; BATCH.lastBuild=T; BATCH.grp={ks:Array.from(BATCH.recs.keys()), i:0, groups:new Map(), T}; }
 // v200: una bolita suelta usa la versión sencilla si es chiquita (se revisa en cada vuelta: si crece, regresa a la normal)
 function slimMesh(o){ if(o.userData.noSlim) return; const g=o.geometry; if(o.isInstancedMesh){ slimInst(o); return; }
   if(g!==sphereG && g!==SLIM.s1 && g!==SLIM.s2) return; const w=slimPick(g,o.matrixWorld.getMaxScaleOnAxis()); if(w!==g) o.geometry=w; }
@@ -24997,22 +25005,29 @@ function slimSet(o,S,base){ if(S.cur===base) return; S.cur=base; let g=S.orig;
   o.geometry=g; }
 // v197: agrupar también poco a poco (~1 ms por cuadro); antes revisaba las 11 mil piezas de golpe una vez por segundo
 function batchGroupStep(){ const GR=BATCH.grp, T=GR.T, groups=GR.groups, tg=performance.now();
-  for(let k=0;;k++){ if((k&63)===63 && performance.now()-tg>1.2) return; const nx=GR.it.next(); if(nx.done) break; const [o,r]=nx.value; if(r.bad || r.batch || !o.parent) continue; let key, local=false;
-    const MI=matInfo(o.material), colored=MI.key[0]==='C' && !o.geometry.attributes.color && !o.geometry.attributes.feltSpk, tex=MI.key[0]==='X' && !!o.geometry.attributes.uv;
-    const base=(colored||tex?MI.key:'M|'+o.material.uuid)+'|'+o.castShadow+'|'+o.receiveShadow+'|'+o.renderOrder+'|'+batchSig(o);
-    if(r.dyn){ if(T-r.ls>=3 && o.visible && o.parent && o.parent!==scene){ key='L|'+o.parent.uuid+'|'+base; local=true; } else continue; }   // partes de un peluche: solo dentro de su grupo
-    else if(r.moves<=3 && T-r.ws>=3 && r.vis){ const g=o.geometry; if(!g.boundingSphere) g.computeBoundingSphere(); const sc=o.matrixWorld.getMaxScaleOnAxis(); if(g.boundingSphere.radius*sc>25){ r.bad=true; r.why='big'; continue; }   // lo grande se queda solo (así se sigue saltando cuando no se ve)
-      const rad=g.boundingSphere.radius*sc, tiny=rad<BATCH.TINY;   // piezas diminutas van aparte: de lejos (menos de un par de píxeles) no se dibujan
-      _btvq.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld); key='W|'+base+'|'+Math.floor((_btvq.x+BATCH.CELL*.37)/BATCH.CELL)+','+Math.floor((_btvq.z+BATCH.CELL*.37)/BATCH.CELL)+(tiny?'|t':''); }   // la cuadrícula no corta justo en el centro de la isla (el castillo)
-    else if(r.moves>3 && T-r.ls>=3 && o.visible && o.parent && o.parent!==scene){ key='L|'+o.parent.uuid+'|'+base; local=true; }   // se mueve con su grupo: se junta dentro de él
+  for(let k=0;;k++){ if((k&63)===63 && performance.now()-tg>1.2) return; if(GR.i>=GR.ks.length) break; const o=GR.ks[GR.i++], r=BATCH.recs.get(o); if(!r || r.bad || r.batch || !o.parent) continue; let key, local=false, md=0;
+    /* v222: primero se ve si ya se puede juntar (sin armar textos): antes se armaba la clave de todo lo suelto en cada vuelta y eso dejaba basura */
+    if(r.dyn){ if(T-r.ls>=3 && o.visible && o.parent!==scene) md=2; else continue; }   // partes de un peluche: solo dentro de su grupo
+    else if(r.moves<=3 && T-r.ws>=3 && r.vis) md=1;
+    else if(r.moves>3 && T-r.ls>=3 && o.visible && o.parent!==scene) md=2;   // se mueve con su grupo: se junta dentro de él
     else continue;
+    let g=null, sc=0; if(md===1){ g=o.geometry; if(!g.boundingSphere) g.computeBoundingSphere(); sc=o.matrixWorld.getMaxScaleOnAxis(); if(g.boundingSphere.radius*sc>25){ r.bad=true; r.why='big'; continue; } }   // lo grande se queda solo (así se sigue saltando cuando no se ve)
+    const MI=matInfo(o.material), colored=MI.key[0]==='C' && !o.geometry.attributes.color && !o.geometry.attributes.feltSpk, tex=MI.key[0]==='X' && !!o.geometry.attributes.uv; local=md===2;
+    if(r.kc!==undefined && r.kw===r.ws && r.kl===r.ls && r.kd===md) key=r.kc;   /* v222: la clave se guarda mientras la pieza no cambie (las sueltas que no alcanzan grupo la armaban en cada vuelta) */
+    else { const base=(colored||tex?MI.key:'M|'+o.material.uuid)+'|'+o.castShadow+'|'+o.receiveShadow+'|'+o.renderOrder+'|'+batchSig(o);
+      if(md===2) key='L|'+o.parent.uuid+'|'+base;
+      else { const tiny=g.boundingSphere.radius*sc<BATCH.TINY;   // piezas diminutas van aparte: de lejos (menos de un par de píxeles) no se dibujan
+        _btvq.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld); key='W|'+base+'|'+Math.floor((_btvq.x+BATCH.CELL*.37)/BATCH.CELL)+','+Math.floor((_btvq.z+BATCH.CELL*.37)/BATCH.CELL)+(tiny?'|t':''); }   // la cuadrícula no corta justo en el centro de la isla (el castillo)
+      r.kc=key; r.kw=r.ws; r.kl=r.ls; r.kd=md; }
     let l=groups.get(key); if(!l) groups.set(key,l={list:[],local,par:o.parent,colored,tex,props:MI.props}); l.list.push(o); }
-  BATCH.grp=null; BATCH.bq={it:groups.entries()}; }
+  const bk=new Map(); BATCH.batches.forEach(b=>bk.set(b.key,b));   // v222: buscar el grupo viejo de cada clave sin recorrer todos los grupos cada vez
+  BATCH.grp=null; BATCH.bq={ks:Array.from(groups.keys()), i:0, G:groups, bk}; }
 // v197: armar los grupos también poco a poco (máximo ~2.5 ms por cuadro), en los cuadros siguientes
 function batchBuildStep(){ const tb2=performance.now(), Q=BATCH.bq;
-  for(;;){ if(performance.now()-tb2>2.5) return; const nx=Q.it.next(); if(nx.done){ BATCH.bq=null; return; } const [key,G]=nx.value;
+  for(;;){ if(performance.now()-tb2>2.5) return; if(Q.i>=Q.ks.length){ BATCH.bq=null; return; } const key=Q.ks[Q.i++], G=Q.G.get(key);
+    let old=Q.bk.get(key)||null; if(old && !BATCH.batches.has(old)) old=null;
+    if(!old && G.list.length<3) continue;   /* v222: las sueltas que no alcanzan para un grupo se saltan sin más (antes se filtraban y se buscaba su grupo entre todos) */
     G.list=G.list.filter(o=>{ const rr=o.parent && BATCH.recs.get(o); return rr && !rr.batch && !rr.bad; });
-    let old=null; for(const b of BATCH.batches) if(b.key===key){ old=b; break; }
     let all=old?[...old.src,...G.list]:G.list, bkey=key; if(all.length<3) continue;
     let verts=0; for(const o of all) verts+=o.geometry.attributes.position.count;
     if(verts>30000){ // v197: lo grande se junta en pedazos (cada pedazo en su propio cuadro); el resto en la próxima vuelta
@@ -25701,31 +25716,39 @@ function autoResolution(raw){
 }
 // Zonas enteras (feria, aeropuerto, coches, castillo…) que no se ven: se apagan solo mientras se dibuja.
 // Así three.js ni siquiera revisa sus cientos de piezas. Después del dibujo se vuelven a prender (la lógica del juego no lo nota).
-const AREA={list:[], t:-1e9, off:[], fr:new THREE.Frustum(), m:new THREE.Matrix4(), s:new THREE.Sphere(), b:new THREE.Box3(), v:new THREE.Vector3()};
+const AREA={list:[], t:-1e9, off:[], offN:0, fr:new THREE.Frustum(), m:new THREE.Matrix4(), s:new THREE.Sphere(), b:new THREE.Box3(), v:new THREE.Vector3()};
 function areaBounds(g){ const B=AREA.b.makeEmpty(), v=AREA.v; let n=0;
   g.traverse(o=>{ if(!(o.isMesh||o.isSprite||o.isPoints)) return; n++; const gs=o.geometry&&o.geometry.boundingSphere; if(o.isMesh && !gs && o.geometry) o.geometry.computeBoundingSphere(); const bs=o.geometry&&o.geometry.boundingSphere;
     if(bs && !o.isInstancedMesh){ v.copy(bs.center).applyMatrix4(o.matrixWorld); const r=bs.radius*o.matrixWorld.getMaxScaleOnAxis(); B.expandByPoint(v.set(v.x-r,v.y-r,v.z-r)); B.expandByPoint(v.set(v.x+2*r,v.y+2*r,v.z+2*r)); }
     else { v.setFromMatrixPosition(o.matrixWorld); B.expandByPoint(v.set(v.x-3,v.y-3,v.z-3)); B.expandByPoint(v.set(v.x+6,v.y+6,v.z+6)); } });
-  if(!n || B.isEmpty()) return null; const sp=new THREE.Sphere(); B.getBoundingSphere(sp); return sp; }
+  AREA.nb=n; if(!n || B.isEmpty()) return null; const sp=new THREE.Sphere(); B.getBoundingSphere(sp); return sp; }
 function areaCullBegin(){ const now=performance.now();
   if(now-AREA.t>600){ AREA.t=now; const have=new Map(AREA.list.map(it=>[it[0],it])), L=[];   // v197: solo se revisa quién está; las medidas se van haciendo poco a poco abajo
     for(const c of scene.children){ if(c===plush || c.userData.isPlushRoot || c.isMesh || c.isLight || c.isCamera || !c.children.length) continue; L.push(have.get(c)||[c,null]); }
     AREA.list=L; }
-  { const N=AREA.list.length, tm=performance.now(); for(let n=0; n<N && (n<2 || performance.now()-tm<.7); n++){ AREA.ri=((AREA.ri|0)+1)%N; const it=AREA.list[AREA.ri], c=it[0]; if(!c.visible || c.userData._areaDyn) continue;
-      const sp=areaBounds(c); if(!sp || sp.radius>=400){ it[1]=null; continue; } const pc=c.userData._areaC; if(pc && pc.distanceTo(sp.center)>1.5) c.userData._areaDyn=true; c.userData._areaC=sp.center.clone(); it[1]=sp; } }
+  { const N=AREA.list.length, tm=performance.now(), bud=ULTRA?.25:.7, mn=ULTRA?1:2; let done=0; for(let n=0; n<N && (done<mn || performance.now()-tm<bud); n++){ /* (v222: en ultra ligero más poquito por cuadro) */ AREA.ri=((AREA.ri|0)+1)%N; const it=AREA.list[AREA.ri], c=it[0]; if(!c.visible || c.userData._areaDyn) continue;
+      { const p=c.position, k=it[3]; if(it[1] && k && k[0]===p.x && k[1]===p.y && k[2]===p.z && now-k[3]<k[4]) continue; }   /* v222: si no se ha movido, no se vuelve a medir tan seguido (las zonas grandes, casi nunca: medirlas daba tirones) */
+      done++; const sp=areaBounds(c); it[3]=[c.position.x,c.position.y,c.position.z,now,6000*Math.max(1,(AREA.nb||1)/200)]; if(!sp || sp.radius>=400){ it[1]=null; continue; } const pc=c.userData._areaC; if(pc && pc.distanceTo(sp.center)>1.5) c.userData._areaDyn=true; c.userData._areaC=sp.center.clone(); it[1]=sp; } }
   const cam=camera, cp=cam.position, shadows=renderer.shadowMap.enabled && settings.shadows, far=cam.far;
   AREA.fr.setFromProjectionMatrix(AREA.m.multiplyMatrices(cam.projectionMatrix,cam.matrixWorldInverse));
-  for(const it of AREA.list){ const c=it[0]; if(!c.visible || c.parent!==scene) continue; if(c.userData._areaDyn){ const n=areaBounds(c); if(n && n.radius<400) it[1]=n; } if(!it[1]) continue;   // lo que se mueve (coches, aviones, otros jugadores): cada cuadro
+  for(const it of AREA.list){ const c=it[0]; if(!c.visible || c.parent!==scene) continue;
+    if(c.userData._areaDyn){ const d=it[2]||(it[2]={t:-1e9, x:0, y:0, z:0, sp:null}), p=c.position;   // lo que se mueve (coches, aviones, otros jugadores)
+      if(now-d.t>400 || !d.sp){ d.t=now-Math.random()*150; const n=areaBounds(c); d.sp=n && n.radius<400 ? n : null; d.x=p.x; d.y=p.y; d.z=p.z; if(d.sp) d.sp.radius+=1; }   // v222: se mide de nuevo cada 0.4 s…
+      if(d.sp){ const s=it[1]||(it[1]=new THREE.Sphere()); s.center.set(d.sp.center.x+p.x-d.x, d.sp.center.y+p.y-d.y, d.sp.center.z+p.z-d.z); s.radius=d.sp.radius; } else it[1]=null; }   // …y entre medio solo se recorre con su posición
+    if(!it[1]) continue;
     const sp=it[1], S=AREA.s; S.center.copy(sp.center); S.radius=sp.radius+20;   // margen: algunas cosas se mueven (coches, aviones)
     const d=cp.distanceTo(S.center)-S.radius; let out=d>far; if(!out && !shadows && d>8) out=!AREA.fr.intersectsSphere(S);
     if(out){ const p=c.position, q=c._aq||(c._aq=[NaN,NaN,NaN]); c._acQuiet=!c.userData._areaDyn && q[0]===p.x && q[1]===p.y && q[2]===p.z; q[0]=p.x; q[1]=p.y; q[2]=p.z;   // v221: quieta (ni se movió ni es de las que se mueven)
-      c.visible=false; c._acOff=true; AREA.off.push(c); } } }
-function areaCullEnd(){ for(const c of AREA.off){ c.visible=true; c._acOff=false; c._acQuiet=false; } AREA.off.length=0; for(const c of LEJOS.off) c.visible=true; LEJOS.off.length=0; }
+      c.visible=false; c._acOff=true; AREA.off[AREA.offN++]=c; } } }
+function areaCullEnd(){ const A=AREA.off; for(let i=0;i<AREA.offN;i++){ const c=A[i]; c.visible=true; c._acOff=false; c._acQuiet=false; A[i]=null; } AREA.offN=0; const B=LEJOS.off; for(let i=0;i<LEJOS.offN;i++){ B[i].visible=true; B[i]=null; } LEJOS.offN=0; }   // (v222: listas que se reusan, sin basura)
 // v221: las piezas sueltas (una sola malla, sin hijos) que quedan más allá de la niebla tampoco se revisan al dibujar.
 // three.js revisaba cada cuadro las ~1000 de toda la isla (y en el Modo libre, todas). Solo las quietas: si una se mueve, ya no se esconde.
-const LEJOS={L:[], hid:[], off:[], x:NaN, y:NaN, z:NaN, R:-1, ts:-1e9, tp:-1e9};
-function lejosScan(){ const L=[]; for(const c of scene.children){ if(c.children.length || !(c.isMesh||c.isPoints||c.isSprite) || !c.frustumCulled || c.userData.ic || c===plush || c.userData.isPlushRoot) continue;
-    if(!c._lj) c._lj={x:c.position.x, y:c.position.y, z:c.position.z, s:c.scale.x+c.scale.y+c.scale.z, mv:0}; if(c._lj.mv<2) L.push(c); } LEJOS.L=L; }
+const LEJOS={L:[], hid:[], off:[], offN:0, x:NaN, y:NaN, z:NaN, R:-1, ts:-1e9, tp:-1e9};
+// (v222: la lista se arma poco a poco, unas 600 piezas por cuadro, y solo cuando cambió lo que hay en la escena o cada 8 s: de golpe daba un tirón)
+function lejosScan(){ const S=LEJOS.sc||(LEJOS.sc={i:0, L:[], n:-1}), ch=scene.children, end=Math.min(ch.length, S.i+600);
+  for(; S.i<end; S.i++){ const c=ch[S.i]; if(c.children.length || !(c.isMesh||c.isPoints||c.isSprite) || !c.frustumCulled || c.userData.ic || c===plush || c.userData.isPlushRoot) continue;
+    if(!c._lj) c._lj={x:c.position.x, y:c.position.y, z:c.position.z, s:c.scale.x+c.scale.y+c.scale.z, mv:0}; if(c._lj.mv<2) S.L.push(c); }
+  if(S.i>=ch.length){ LEJOS.L=S.L; S.L=[]; S.i=0; S.n=ch.length; return true; } return false; }
 function lejosMoved(c){ const r=c._lj, p=c.position, s=c.scale.x+c.scale.y+c.scale.z; if(r.x===p.x && r.y===p.y && r.z===p.z && r.s===s) return false; r.x=p.x; r.y=p.y; r.z=p.z; r.s=s; r.mv++; return true; }
 function lejosPass(cp,R0){ const H=[];
   for(const c of LEJOS.L){ if(c.parent!==scene) continue; if(lejosMoved(c)) continue; if(c._lj.mv>1) continue; const p=c.position;   // se movió: no se esconde
@@ -25735,11 +25758,11 @@ function lejosPass(cp,R0){ const H=[];
     const dx=x-cp.x, dy=y-cp.y, dz=z-cp.z, L=R0+rad; if(dx*dx+dy*dy+dz*dz>L*L) H.push(c); }
   LEJOS.hid=H; }
 function lejosBegin(){ const now=performance.now(), cam=camera, cp=cam.position;
-  if(now-LEJOS.ts>2000){ LEJOS.ts=now; lejosScan(); LEJOS.tp=-1e9; }
+  if(LEJOS.scanning || now-LEJOS.ts>8000 || (LEJOS.sc && LEJOS.sc.n!==scene.children.length && now-LEJOS.ts>1000)){ LEJOS.scanning=!lejosScan(); if(!LEJOS.scanning){ LEJOS.ts=now; LEJOS.tp=-1e9; } }
   const fog=scene.fog, lim=Math.min(cam.far, fog && fog.far>0 ? fog.far : cam.far), tv=Math.tan(cam.fov*Math.PI/360), th=tv*cam.aspect, R0=lim*Math.sqrt(1+tv*tv+th*th)+8;   // (como las copias: hasta la esquina de la vista)
   const dx=cp.x-LEJOS.x, dy=cp.y-LEJOS.y, dz=cp.z-LEJOS.z;
   if(dx*dx+dy*dy+dz*dz>4 || Math.abs(R0-LEJOS.R)>1.5 || now-LEJOS.tp>1000){ LEJOS.x=cp.x; LEJOS.y=cp.y; LEJOS.z=cp.z; LEJOS.R=R0; LEJOS.tp=now; lejosPass(cp,R0); }
-  for(const c of LEJOS.hid) if(c.visible && c.parent===scene && !lejosMoved(c)){ c.visible=false; LEJOS.off.push(c); } }   // (si se movió en este cuadro, se dibuja)
+  for(const c of LEJOS.hid) if(c.visible && c.parent===scene && !lejosMoved(c)){ c.visible=false; LEJOS.off[LEJOS.offN++]=c; } }   // (si se movió en este cuadro, se dibuja)
 { const rr=renderer.render.bind(renderer); renderer.render=(sc,cam)=>{ if(sc===scene && cam===camera){ if(cam.position.y<CAVE_TOP) caveCull(); else { areaCullBegin(); try{ lejosBegin(); }catch(e){ LEJOS.hid=[]; } } UMW.skip=true; try{ rr(sc,cam); } finally{ UMW.skip=false; areaCullEnd(); } } else rr(sc,cam); }; }
 
 // ---------- Calidad Máxima ----------
@@ -25839,11 +25862,12 @@ function frame(){
   try{ acTick(); }catch(e){}
   renderer.info.reset();
   if(HAD.on) hadRender(dt); else if(VE.ed) vehRender(dt); else if(shopOpen() || CR.open) renderStudio(dt); else { const S=SP.on&&state!=='menu'?spaceScene:scene; if(FX.on) fxRender(S,camera); else renderer.render(S,camera); }
-  if(pf){ const p2=performance.now(); fpsLogic+=p1-p0; fpsDraw+=p2-p1; fpsCalls+=renderer.info.render.calls; fpsTris+=renderer.info.render.triangles; }
+  if(pf){ const p2=performance.now(); fpsLogic+=p1-p0; fpsDraw+=p2-p1; fpsCalls+=renderer.info.render.calls; fpsTris+=renderer.info.render.triangles;
+    if(raw*1000>(frame.wst||0)){ frame.wst=raw*1000; frame.wsl=p1-p0>p2-p1?'lógica':'dibujo'; } }   // v222: el peor cuadro (y qué lo frenó más)
   fpsFrames++; fpsTime+=raw;
   if(settings.coords && state==='play'){ frame.cT=(frame.cT||0)+raw; if(frame.cT>.25){ frame.cT=0; const t3=locText(); if(coordsEl.textContent!==t3) coordsEl.textContent=t3; } }   // v149
   // con "Mostrar FPS": cuánto tarda la lógica del juego y cuánto preparar el dibujo (para saber qué frena en cada equipo)
-  if(fpsTime>=.5){ if(settings.fps){ const n=fpsFrames, t2=Math.round(n/fpsTime)+' FPS'+(resScale<.99?` · ${Math.round(resScale*100)}%`:'')+` · lógica ${(fpsLogic/n).toFixed(0)} · dibujo ${(fpsDraw/n).toFixed(0)} ms · ${Math.round(fpsCalls/n)} dib · ${Math.round(fpsTris/n/1000)}k ▲`; if(fpsEl.textContent!==t2) fpsEl.textContent=t2; } fpsFrames=0; fpsTime=0; fpsLogic=fpsDraw=fpsCalls=fpsTris=0; }
+  if(fpsTime>=.5){ if(settings.fps){ const n=fpsFrames, t2=Math.round(n/fpsTime)+' FPS'+(resScale<.99?` · ${Math.round(resScale*100)}%`:'')+` · lógica ${(fpsLogic/n).toFixed(0)} · dibujo ${(fpsDraw/n).toFixed(0)} ms · ${Math.round(fpsCalls/n)} dib · ${Math.round(fpsTris/n/1000)}k ▲ · peor ${Math.round(frame.wst||0)} ms${frame.wst>50?' ('+frame.wsl+')':''}`; if(fpsEl.textContent!==t2) fpsEl.textContent=t2; } fpsFrames=0; fpsTime=0; fpsLogic=fpsDraw=fpsCalls=fpsTris=0; frame.wst=0; }
   if(state==='play') autoResolution(raw);
 }
 show('menu'); setCam(settings.startCam); applySettings(); applySettings.ready=true;
