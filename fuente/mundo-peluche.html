@@ -1468,7 +1468,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='220';
+const GAME_VERSION='221';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -1532,7 +1532,7 @@ const UMW={skip:false};
     if(this.matrixWorldNeedsUpdate || force){ if(this.parent===null) this.matrixWorld.copy(this.matrix); else this.matrixWorld.multiplyMatrices(this.parent.matrixWorld,this.matrix); this.matrixWorldNeedsUpdate=false; force=true; }
     const ch=this.children;
     for(let i=0,l=ch.length;i<l;i++){ const c=ch[i];
-      if(UMW.skip && !c.visible && !c._acOff){ if(force) c._mwF=true; continue; }   // v200: escondido (no se dibuja): se salta, y si su papá se movió queda anotado
+      if(UMW.skip && !c.visible && (!c._acOff || c._acQuiet)){ if(force) c._mwF=true; continue; }   // (v221: una zona apagada que no se ha movido tampoco recalcula sus piezas)   // v200: escondido (no se dibuja): se salta, y si su papá se movió queda anotado
       if(c._mwF){ c._mwF=false; c.updateMatrixWorld(true); } else c.updateMatrixWorld(force); } };
   // si alguien pide la matriz a mano, se calcula siempre (y se olvida lo guardado)
   const um=OP.updateMatrix; OP.updateMatrix=function(){ um.call(this); this._mc=null; }; }
@@ -14575,7 +14575,8 @@ const mzHedge=felt('#3f8a3c','rgba(10,50,10,.22)'), mzHedgeTop=felt('#5aa64e','r
 const MZ_MAX=(MZ.N+1)*MZ.N*2;
 MZ.mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), mzHedge, MZ_MAX); MZ.mesh.castShadow=true; MZ.mesh.receiveShadow=true; MZ.mesh.userData.noBatch=true; scene.add(MZ.mesh);
 MZ.tops=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), mzHedgeTop, MZ_MAX); MZ.tops.userData.noBatch=true; scene.add(MZ.tops);
-{ const r=MZ.N*MZ.S*.75+MZ.WH+4; for(const m of [MZ.mesh,MZ.tops]){ m.geometry.boundingSphere=new THREE.Sphere(new THREE.Vector3(MZ.x,MZ.h+MZ.WH/2,MZ.z),r); m.frustumCulled=true; } }   // v220: el laberinto solo se dibuja si se ve (antes siempre) MZ.mesh.userData.noCol=MZ.tops.userData.noCol=true;   // v179: el laberinto ya tiene sus propios choques
+{ const r=MZ.N*MZ.S*.75+MZ.WH+4; for(const m of [MZ.mesh,MZ.tops]){ m.geometry.boundingSphere=new THREE.Sphere(new THREE.Vector3(MZ.x,MZ.h+MZ.WH/2,MZ.z),r); m.frustumCulled=true; } }   // v220: el laberinto solo se dibuja si se ve (antes siempre)
+MZ.mesh.userData.noCol=MZ.tops.userData.noCol=true;   // v179: el laberinto ya tiene sus propios choques
 // la puerta de salida (arco con letrero) y el círculo de salida en el centro
 MZ.gate=(()=>{ const g=new THREE.Group(), post=FM('#fbf3e4'), red=FM('#e5534b');
   for(const s of [-1,1]){ const p=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,3.2,10),post); p.position.set(s*1.75,1.6,0); g.add(p); const b=new THREE.Mesh(sphereG,red); b.scale.setScalar(.2); b.position.set(s*1.75,3.25,0); g.add(b); }
@@ -24690,10 +24691,10 @@ function acTick(){ if(!AC.on || (typeof SP!=='undefined' && SP.on)) return; cons
   if(!AC.list){ // v197: se junta la lista de todo poco a poco (antes: recorrer y ordenar toda la isla en un solo cuadro, un tirón cada 4 s)
     if(!AC.col){ if(now-AC.t<4) return; AC.t=now; AC.dyn=acDynRoots(); AC.col={st:[scene], near:[], far:[], px:player.pos.x, pz:player.pos.z}; }
     const K=AC.col, tc=performance.now(); let k=0;
-    while(K.st.length){ const o=K.st.pop(); if(o.isMesh){ let d=0; if(!o.isInstancedMesh){ const e=o.matrixWorld.elements; d=(e[12]-K.px)**2+(e[14]-K.pz)**2; } (d<3600?K.near:K.far).push(o); }   // lo cercano (60 m) primero
+    while(K.st.length){ const o=K.st.pop(); if(o.isMesh){ let d=0; if(!o.isInstancedMesh){ const e=o.matrixWorld.elements; d=(e[12]-K.px)**2+(e[14]-K.pz)**2; } (d<(ULTRA?40000:3600)?K.near:K.far).push(o); }   // lo cercano (60 m) primero (v221: en ultra ligero, a 200 m)
       const ch=o.children; for(let i=ch.length-1;i>=0;i--) K.st.push(ch[i]); if((++k&127)===0 && performance.now()-tc>1) return; }
-    AC.list=K.near.concat(K.far); AC.li=0; AC.col=null; return; }
-  const t0=performance.now(), bud=state==='play'?1.5:9; while(AC.li<AC.list.length && performance.now()-t0<bud) acVisit(AC.list[AC.li++]);
+    AC.list=(ULTRA || (typeof FREE!=='undefined' && FREE.on)) ? K.near : K.near.concat(K.far); AC.li=0; AC.col=null; return; }   // v221: en ultra ligero (y en el Modo libre) solo lo de cerca: lo lejano se arma cuando te acercas
+  const t0=performance.now(), bud=state==='play'?(ULTRA?1:1.5):9; while(AC.li<AC.list.length && performance.now()-t0<bud) acVisit(AC.list[AC.li++]);
   if(AC.li>=AC.list.length) AC.list=null;
   if(AC.pend.length && (!AC.list || now-AC.fl>.8)){ AC.fl=now; for(const c of AC.pend) obstacles.push(c); AC.pend.length=0; }   /* v197: agregar al final no obliga a rehacer la rejilla */
   if(AC.dirty){ AC.dirty=false; obsGrid.n=-1; } }
@@ -24775,6 +24776,14 @@ function mergeInto(list,local,colored,uvBake){ const g0=list[0].geometry, names=
 // v220: los grupos de copias que se quedan con 0 copias (frutas que no han salido, peces que no se ven…) no se mandan a dibujar
 const IZERO=new Set();
 function izeroTick(){ for(const m of IZERO){ if(!m.parent){ IZERO.delete(m); continue; } const L=m.layers; if(m.count>0){ if(!(L.mask&1)) L.enable(0); } else if(L.mask&1) L.disable(0); } }
+// v221: al cargar, juntar de una vez todo lo quieto de la isla. Poco a poco (1 ms por cuadro) en un teléfono lento tardaba
+// minutos, y mientras tanto cada pieza era un dibujo aparte (en la feria más de 300). Se hace con la pantalla de carga puesta.
+function batchWarm(){ if(!BATCH.on || BATCH.warm) return 0; BATCH.warm=true; const P=performance, t0=P.now(); let t=t0, n=0;
+  const busy=()=>!!(BATCH.col||BATCH.cyc||BATCH.grp||BATCH.bq);
+  try{ P.now=()=>t;   // reloj detenido: así cada paso se hace completo (sin el límite de tiempo por cuadro) y "pasan" segundos a voluntad
+    for(let i=0;i<5000;i++){ const b=busy(); try{ scene.updateMatrixWorld(); }catch(e){} /* (las piezas recién separadas por material necesitan su posición antes de anotarlas) */ batchTick(); n++; if(!b && !busy()){ if(t-t0>=9000) break; t+=600; } } }
+  finally{ delete P.now; }
+  return n; }
 function batchTick(){ try{ izeroTick(); }catch(e){} if(!BATCH.on) return;
   if(SP.on){ if(BATCH.local>0){ for(const b of [...BATCH.batches]) if(b.local) dissolve(b); BATCH.local=0; BATCH.cyc=null; } BATCH.grp=null; BATCH.bq=null; return; } const now=BATCH.t=performance.now()/1000;
   if(BATCH.bq){ batchBuildStep(); return; }
@@ -25545,9 +25554,29 @@ function areaCullBegin(){ const now=performance.now();
   for(const it of AREA.list){ const c=it[0]; if(!c.visible || c.parent!==scene) continue; if(c.userData._areaDyn){ const n=areaBounds(c); if(n && n.radius<400) it[1]=n; } if(!it[1]) continue;   // lo que se mueve (coches, aviones, otros jugadores): cada cuadro
     const sp=it[1], S=AREA.s; S.center.copy(sp.center); S.radius=sp.radius+20;   // margen: algunas cosas se mueven (coches, aviones)
     const d=cp.distanceTo(S.center)-S.radius; let out=d>far; if(!out && !shadows && d>8) out=!AREA.fr.intersectsSphere(S);
-    if(out){ c.visible=false; c._acOff=true; AREA.off.push(c); } } }
-function areaCullEnd(){ for(const c of AREA.off){ c.visible=true; c._acOff=false; } AREA.off.length=0; }
-{ const rr=renderer.render.bind(renderer); renderer.render=(sc,cam)=>{ if(sc===scene && cam===camera){ if(cam.position.y<CAVE_TOP) caveCull(); else areaCullBegin(); UMW.skip=true; try{ rr(sc,cam); } finally{ UMW.skip=false; areaCullEnd(); } } else rr(sc,cam); }; }
+    if(out){ const p=c.position, q=c._aq||(c._aq=[NaN,NaN,NaN]); c._acQuiet=!c.userData._areaDyn && q[0]===p.x && q[1]===p.y && q[2]===p.z; q[0]=p.x; q[1]=p.y; q[2]=p.z;   // v221: quieta (ni se movió ni es de las que se mueven)
+      c.visible=false; c._acOff=true; AREA.off.push(c); } } }
+function areaCullEnd(){ for(const c of AREA.off){ c.visible=true; c._acOff=false; c._acQuiet=false; } AREA.off.length=0; for(const c of LEJOS.off) c.visible=true; LEJOS.off.length=0; }
+// v221: las piezas sueltas (una sola malla, sin hijos) que quedan más allá de la niebla tampoco se revisan al dibujar.
+// three.js revisaba cada cuadro las ~1000 de toda la isla (y en el Modo libre, todas). Solo las quietas: si una se mueve, ya no se esconde.
+const LEJOS={L:[], hid:[], off:[], x:NaN, y:NaN, z:NaN, R:-1, ts:-1e9, tp:-1e9};
+function lejosScan(){ const L=[]; for(const c of scene.children){ if(c.children.length || !(c.isMesh||c.isPoints||c.isSprite) || !c.frustumCulled || c.userData.ic || c===plush || c.userData.isPlushRoot) continue;
+    if(!c._lj) c._lj={x:c.position.x, y:c.position.y, z:c.position.z, s:c.scale.x+c.scale.y+c.scale.z, mv:0}; if(c._lj.mv<2) L.push(c); } LEJOS.L=L; }
+function lejosMoved(c){ const r=c._lj, p=c.position, s=c.scale.x+c.scale.y+c.scale.z; if(r.x===p.x && r.y===p.y && r.z===p.z && r.s===s) return false; r.x=p.x; r.y=p.y; r.z=p.z; r.s=s; r.mv++; return true; }
+function lejosPass(cp,R0){ const H=[];
+  for(const c of LEJOS.L){ if(c.parent!==scene) continue; if(lejosMoved(c)) continue; if(c._lj.mv>1) continue; const p=c.position;   // se movió: no se esconde
+    const g=c.geometry; if(!g) continue; if(!g.boundingSphere) g.computeBoundingSphere(); const bs=g.boundingSphere; if(!bs || !(bs.radius>=0)) continue;
+    const sc=c.scale, s=Math.max(Math.abs(sc.x),Math.abs(sc.y),Math.abs(sc.z)), q=c.quaternion; let x=p.x, y=p.y, z=p.z, rad=bs.radius*s;
+    if(Math.abs(q.w)>.99999){ x+=bs.center.x*sc.x; y+=bs.center.y*sc.y; z+=bs.center.z*sc.z; } else rad+=bs.center.length()*s;
+    const dx=x-cp.x, dy=y-cp.y, dz=z-cp.z, L=R0+rad; if(dx*dx+dy*dy+dz*dz>L*L) H.push(c); }
+  LEJOS.hid=H; }
+function lejosBegin(){ const now=performance.now(), cam=camera, cp=cam.position;
+  if(now-LEJOS.ts>2000){ LEJOS.ts=now; lejosScan(); LEJOS.tp=-1e9; }
+  const fog=scene.fog, lim=Math.min(cam.far, fog && fog.far>0 ? fog.far : cam.far), tv=Math.tan(cam.fov*Math.PI/360), th=tv*cam.aspect, R0=lim*Math.sqrt(1+tv*tv+th*th)+8;   // (como las copias: hasta la esquina de la vista)
+  const dx=cp.x-LEJOS.x, dy=cp.y-LEJOS.y, dz=cp.z-LEJOS.z;
+  if(dx*dx+dy*dy+dz*dz>4 || Math.abs(R0-LEJOS.R)>1.5 || now-LEJOS.tp>1000){ LEJOS.x=cp.x; LEJOS.y=cp.y; LEJOS.z=cp.z; LEJOS.R=R0; LEJOS.tp=now; lejosPass(cp,R0); }
+  for(const c of LEJOS.hid) if(c.visible && c.parent===scene && !lejosMoved(c)){ c.visible=false; LEJOS.off.push(c); } }   // (si se movió en este cuadro, se dibuja)
+{ const rr=renderer.render.bind(renderer); renderer.render=(sc,cam)=>{ if(sc===scene && cam===camera){ if(cam.position.y<CAVE_TOP) caveCull(); else { areaCullBegin(); try{ lejosBegin(); }catch(e){ LEJOS.hid=[]; } } UMW.skip=true; try{ rr(sc,cam); } finally{ UMW.skip=false; areaCullEnd(); } } else rr(sc,cam); }; }
 
 // ---------- Calidad Máxima ----------
 // El mundo se dibuja primero en una imagen aparte (con más rango de luz: puede pasar de blanco) y con bordes suavizados.
@@ -25742,6 +25771,8 @@ frame();
     L.step('Preparando los colores…',.66); await paint();
     // todos los materiales de la isla se preparan ahora (si no, se preparan la primera vez que los ves y el juego da un tironcito)
     try{ renderer.compile(scene,camera); }catch(e){}
+    L.step('Juntando las piezas…',.72); await paint();
+    { const tb=performance.now(); try{ batchWarm(); }catch(e){ console.warn('batchWarm',e); } window.__ldBatchMs=Math.round(performance.now()-tb); }   // v221
     L.step('Probando tu equipo…',.78); await paint();
     const t0=performance.now(); let n=0; await new Promise(r=>{ const f=()=>{ if(++n<12 && performance.now()-t0<1200) requestAnimationFrame(f); else r(); }; requestAnimationFrame(f); });   // máximo 1.2 s
     const per=(performance.now()-t0)/n; window.__ldFrameMs=Math.round(per);
