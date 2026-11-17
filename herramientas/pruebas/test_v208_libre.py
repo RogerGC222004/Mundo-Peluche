@@ -19,7 +19,7 @@ async def m():
     await ev("window.__run=(sec,fn)=>{ let t=clock.elapsedTime; const n=Math.round(sec/.05); for(let i=0;i<n;i++){ clock.elapsedTime=(t+=.05); if(fn) fn(i); update(.05,t); } }; 1")
     # 1. entrar
     await ev("menuModes(true); ui('freeBtn').click(); 1"); await pg.wait_for_timeout(300)
-    r=await ev("[!ui('freeStart').hidden, ui('freePub').textContent.includes('Pronto')]"); ok(r==[True,True], 'Modo libre muestra Empezar solo (y las salas «pronto») %s'%r)
+    r=await ev("[!ui('freeStart').hidden, ui('freePub').textContent.includes('Crear sala'), !!ui('freeCode')]"); ok(r==[True,True,True], 'Modo libre muestra Empezar solo y Construir con amigos (crear sala, código) %s'%r)
     await ev("ui('freeSolo').click(); 1"); await pg.wait_for_timeout(1500); await ev("(window.requestAnimationFrame=()=>0, __run(1), 1)")
     r=await ev("[FREE.on, state, +player.pos.y.toFixed(2), Math.round(player.pos.x), !ui('freeHud').hidden, player.swim]"); ok(r[0] and r[1]=='play' and abs(r[2]-.6)<.1 and r[3]==9000 and r[4] and not r[5], 'entras a la planicie parado en el pasto %s'%r)
     # 2. el menú de objetos
