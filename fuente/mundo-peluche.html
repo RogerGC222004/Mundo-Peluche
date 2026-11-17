@@ -1454,7 +1454,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='212';
+const GAME_VERSION='213';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -22613,7 +22613,8 @@ function freeMake(sel){ const root=new THREE.Group();
     else { const m=new THREE.Mesh(_freeSph,freeBallMat(P.id)); m.scale.setScalar(P.r); root.add(m); root.userData.spin=m; } }
   else if(sel.k==='g'){ if(!FREE_GAME_BY[sel.a]) return null; fgMake(sel.a,root); }   // v209: piezas de juego (Crear mapa)
   else if(sel.k==='c'){ const C=crById(sel.a); if(!C) return null; root.add(crBuild(C)); root.userData.solid=false; }   // v211: tus criaturas
-  else if(sel.k==='o'){ const O=obById(sel.a); if(!O) return null; const m=obBuild(O), U=m.userData.ob; if(U.glow){ m.remove(U.glow); U.glow=null; } if(U.mat) U.mat.emissiveIntensity=.3; m.rotation.set(0,.45,-.3); root.add(m); root.userData.solid=false; }   // v212: tus objetos
+  else if(sel.k==='o'){ const O=obById(sel.a); if(!O) return null; const m=obBuild(O), U=m.userData.ob; if(U.glow){ m.remove(U.glow); U.glow=null; } if(U.mat) U.mat.emissiveIntensity=.3; m.rotation.set(0,.45,-.3); const sp=new THREE.Group(); sp.position.y=.75; sp.add(m); root.add(sp); root.userData.spinO=sp; root.userData.solid=false; }   // v212: tus objetos (v213: flotan girando, como premio)
+  else if(sel.k==='m'){ const M=mgiOk(sel.a); if(!M) return null; const L=mgiLayout(M); for(const [k,a,b,x,y,z,r] of L.s){ const q=freeMake({k,a,b}); if(!q) continue; q.position.set(x-L.cx,y,z-L.cz); q.rotation.y=r*Math.PI/2; root.add(q); } root.userData.solid=false; }   // v213: un minijuego completo (para su fotito)
   if(sel.k!=='c') root.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); return root; }   // (las criaturas ya traen su sombra: solo el cuerpo)
 // ---- dónde estoy mirando ----
 function freeFwd(){ return [Math.sin(player.facing), Math.cos(player.facing)]; }
@@ -22638,21 +22639,23 @@ function freeTarget(){ const [fx,fz]=freeFwd(), px=player.pos.x+fx*1.6, pz=playe
   for(const o of FREE.objs){ const d=o.box.distanceToPoint(P); if(d<bd){ bd=d; best=o; } }
   for(const o of FREE.dyn){ const d=o.root.position.distanceTo(P)-o.r; if(d<bd){ bd=d; best=o; } } return best; }
 // ---- poner, girar, quitar ----
-function freeAddStatic(sel,x,y,z,r,quiet){ if(FREE.objs.length>=FREE_MAX){ if(!quiet) flashNote('Ya hay '+FREE_MAX+' cosas: quita alguna para poner más'); return null; }
+function freeOwn(){ let n=0; for(const o of FREE.objs) if(!o.par) n++; return n; }   // v213: las piezas de los minijuegos de adentro cuentan aparte
+function freeAddStatic(sel,x,y,z,r,quiet,par){ if(sel.k==='m') return mgiAdd(sel.a,x,y,z,r,quiet);
+  if(!par && freeOwn()>=FREE_MAX){ if(!quiet) flashNote('Ya hay '+FREE_MAX+' cosas: quita alguna para poner más'); return null; }
   if(sel.k==='c' && FREE.objs.filter(o=>o.sel.k==='c').length>=CR_LIVE){ if(!quiet) flashNote('Ya hay '+CR_LIVE+' criaturas en este mundo: quita alguna para poner otra'); return null; }
   const root=freeMake(sel); if(!root) return null; root.position.set(x,y,z); root.rotation.y=r*Math.PI/2; FREE.og.add(root); root.updateMatrixWorld(true);
   const box=new THREE.Box3().setFromObject(root), P=sel.k==='p'?FREE_PHYS_BY[sel.a]:null;
-  const o={sel:{...sel}, x, y, z, r, root, box, solid:P?false:root.userData.solid!==false, pad:!!(P&&P.pad), game:sel.k==='g'?sel.a:null, id:++FREE.seq}; FREE.objs.push(o); return o; }
-function freeAddDyn(id,x,y,z,quiet){ const P=FREE_PHYS_BY[id]; if(!P || P.pad) return null; if(FREE.dyn.length>=FREE_DYN){ if(!quiet) flashNote('Ya hay '+FREE_DYN+' cosas con física: quita alguna'); return null; }
+  const o={sel:{...sel}, x, y, z, r, root, box, solid:P?false:root.userData.solid!==false, pad:!!(P&&P.pad), game:sel.k==='g'?sel.a:null, id:++FREE.seq}; if(par) o.par=par; FREE.objs.push(o); return o; }
+function freeAddDyn(id,x,y,z,quiet,par){ const P=FREE_PHYS_BY[id]; if(!P || P.pad) return null; if(FREE.dyn.length>=FREE_DYN){ if(!quiet) flashNote('Ya hay '+FREE_DYN+' cosas con física: quita alguna'); return null; }
   const root=freeMake({k:'p',a:id}); root.position.set(x,y+P.r,z); root.traverse(q=>q.userData.noBatch=true); FREE.og.add(root);
-  const o={id, P, r:P.r, root, spin:root.userData.spin, v:new THREE.Vector3(), kick:0, dyn:true}; FREE.dyn.push(o); return o; }
+  const o={id, P, r:P.r, root, spin:root.userData.spin, v:new THREE.Vector3(), kick:0, dyn:true}; if(par) o.par=par; FREE.dyn.push(o); return o; }
 function freePlace(){ const s=FREE.sel; if(!s) return; const a=freeAim(); if(!a.ok){ flashNote('Ahí no se puede: está muy cerca de la orilla'); return; }
-  if(s.k==='g' && s.a==='inicio'){ const old=FREE.objs.find(q=>q.game==='inicio'); if(old) freeDrop(old); }   // v209: solo hay un Inicio
+  if(s.k==='g' && s.a==='inicio'){ const old=FREE.objs.find(q=>q.game==='inicio' && !q.par); if(old) freeDrop(old); }   // v209: solo hay un Inicio
   let o; if(s.k==='p' && !FREE_PHYS_BY[s.a].pad) o=freeAddDyn(s.a,a.x,a.y+.05,a.z); else o=freeAddStatic(s,a.x,a.y,a.z,FREE.rot);
   if(o){ try{ audio.pop ? audio.pop() : audio.cam(); }catch(e){} freeSaveSoon(); } }
 function freeRotate(){ FREE.rot=(FREE.rot+1)%4; try{ audio.cam&&audio.cam(); }catch(e){} }
 function freeRemove(){ const o=FREE.tgt; if(!o) { flashNote('Ponte enfrente de lo que quieras quitar'); return; } freeDrop(o); try{ audio.cam&&audio.cam(); }catch(e){} freeSaveSoon(); }
-function freeDrop(o){ o.root.traverse(m=>{ const r=BATCH.recs.get(m); if(r && r.batch) dissolve(r.batch); }); FREE.og.remove(o.root);
+function freeDrop(o){ if(o.inst) mgiDrop(o); o.root.traverse(m=>{ const r=BATCH.recs.get(m); if(r && r.batch) dissolve(r.batch); }); FREE.og.remove(o.root);
   if(o.dyn) FREE.dyn.splice(FREE.dyn.indexOf(o),1); else FREE.objs.splice(FREE.objs.indexOf(o),1); if(FREE.tgt===o) FREE.tgt=null; }
 // ---- física sencilla: pelotas, cajas y barriles ----
 const _fN=new THREE.Vector3(), _fA=new THREE.Vector3();
@@ -22679,14 +22682,14 @@ function freePhys(dt){ const D=FREE.dyn; if(!D.length) return; const G=16;
     else { _fA.set(v.z,0,-v.x).normalize(); d.spin.rotateOnWorldAxis(_fA,sp*dt/d.r); } } }
 // ---- cada cuadro ----
 function freeTick(dt){ if(!FREE.on) return; freePhys(Math.min(dt,.033)); if(!ui('freeBox').hidden){ hThumbPump(); freeThumbPump(); }
-  for(const o of FREE.objs) if(o.game==='estrella' && o.root.userData.spin) o.root.userData.spin.rotation.y+=dt*2.2;   // v209
+  for(const o of FREE.objs){ const u=o.root.userData; if(o.game==='estrella' && u.spin) u.spin.rotation.y+=dt*2.2; else if(u.spinO){ u.spinO.rotation.y+=dt*1.6; u.spinO.position.y=.75+Math.sin(clock.elapsedTime*2+o.id)*.08; } }   // v209 (v213: premios)
   crTick(dt);   // v211: las criaturas caminan solas
   if(FREE.play){ freePlayTick(dt); if(FREE.hl) FREE.hl.visible=false; }
   // el resorte: si lo pisas, ¡para arriba!
   if(player.vy<=.5) for(const o of FREE.objs){ if(o.pad && Math.abs(player.pos.x-o.x)<.85 && Math.abs(player.pos.z-o.z)<.85 && player.pos.y<=o.box.max.y+.1 && player.pos.y>=o.box.min.y-.15){ player.vy=13.5; player.grounded=false; try{ audio.jump(); }catch(e){} break; } }
   freeGhostSet(); const gh=FREE.ghost;
   if(gh && !FREE.play){ if(FREE.del){ gh.visible=false; } else { const a=freeAim(); gh.visible=true; gh.position.set(a.x,a.y+(FREE.sel.k==='p'&&!FREE_PHYS_BY[FREE.sel.a].pad?FREE_PHYS_BY[FREE.sel.a].r:0),a.z); gh.rotation.y=FREE.sel.k==='p'?0:FREE.rot*Math.PI/2;
-      const bad=!a.ok || FREE.objs.length>=FREE_MAX; if(bad!==FREE.gBad){ FREE.gBad=bad; gh.traverse(q=>{ if(q.isMesh) q.material=bad?FREE_GHOST_BAD:FREE_GHOST; }); } } }
+      const bad=!a.ok || freeOwn()>=FREE_MAX; if(bad!==FREE.gBad){ FREE.gBad=bad; gh.traverse(q=>{ if(q.isMesh) q.material=bad?FREE_GHOST_BAD:FREE_GHOST; }); } } }
   // lo que quitarías
   FREE.tgt=FREE.del && !FREE.play ? freeTarget() : null;
   if(!FREE.hl){ FREE.hl=new THREE.Box3Helper(new THREE.Box3(),0xff5a5a); FREE.hl.userData.noBatch=true; FREE.g.add(FREE.hl); }
@@ -22698,15 +22701,15 @@ function freeActions(){ if(!FREE.on || FREE.play) return null;
   return null; }
 // ---- guardar ----
 function freeSaveSoon(){ FREE.saveT=1.2; }
-function freeSave(){ try{ const s=FREE.objs.map(o=>[o.sel.k,o.sel.a,o.sel.b|0,+(o.x-FREE.X).toFixed(2),+(o.y-FREE.Y).toFixed(2),+(o.z-FREE.Z).toFixed(2),o.r]),
-    d=FREE.dyn.map(o=>{ const p=o.root.position; return [o.id,+(p.x-FREE.X).toFixed(2),+(p.y-o.r-FREE.Y).toFixed(2),+(p.z-FREE.Z).toFixed(2)]; });
+function freeSave(){ try{ const s=FREE.objs.filter(o=>!o.par).map(o=>[o.sel.k,o.sel.a,o.sel.b|0,+(o.x-FREE.X).toFixed(2),+(o.y-FREE.Y).toFixed(2),+(o.z-FREE.Z).toFixed(2),o.r]),
+    d=FREE.dyn.filter(o=>!o.par).map(o=>{ const p=o.root.position; return [o.id,+(p.x-FREE.X).toFixed(2),+(p.y-o.r-FREE.Y).toFixed(2),+(p.z-FREE.Z).toFixed(2)]; });
     if(FREE.ctx==='libre') localStorage.setItem('mundoPelucheLibre', JSON.stringify({v:1, s, d}));
     else { const L=mapsLoad(), M=L.find(m=>m.id===FREE.ctx); if(M){ M.s=s; M.d=d; mapsStore(L); } } }catch(e){} }
 function freeClearAll(){ FREE.objs.slice().forEach(freeDrop); FREE.dyn.slice().forEach(freeDrop); }
 function freeLoad(){ const ctx=FREE.ctx; if(FREE.loaded===ctx) return; freeClearAll(); FREE.loaded=ctx; let o=null;
   if(ctx==='libre'){ try{ o=JSON.parse(localStorage.getItem('mundoPelucheLibre')||'null'); }catch(e){} } else { const M=mapById(ctx); if(M) o={v:1, s:M.s, d:M.d}; } if(!o || o.v!==1) return;
-  for(const q of (o.s||[]).slice(0,FREE_MAX)){ if(!Array.isArray(q)) continue; const [k,a,b,x,y,z,r]=q; if(!['b','h','p','g','c'].includes(k) || !freeInside(FREE.X+(+x||0),FREE.Z+(+z||0),.4)) continue;
-    if(k==='b' && !(FREE_SHAPES[a] && FREE_COLS[b])) continue; if(k==='h' && !HK_BY[a]) continue; if(k==='p' && !(FREE_PHYS_BY[a]&&FREE_PHYS_BY[a].pad)) continue; if(k==='g' && !FREE_GAME_BY[a]) continue; if(k==='c' && !crById(a)) continue;
+  for(const q of (o.s||[]).slice(0,FREE_MAX)){ if(!Array.isArray(q)) continue; const [k,a,b,x,y,z,r]=q; if(!['b','h','p','g','c','m','o'].includes(k) || !freeInside(FREE.X+(+x||0),FREE.Z+(+z||0),.4)) continue;
+    if(k==='b' && !(FREE_SHAPES[a] && FREE_COLS[b])) continue; if(k==='h' && !HK_BY[a]) continue; if(k==='p' && !(FREE_PHYS_BY[a]&&FREE_PHYS_BY[a].pad)) continue; if(k==='g' && !FREE_GAME_BY[a]) continue; if(k==='c' && !crById(a)) continue; if(k==='m' && (ctx==='libre' || !mgiOk(a))) continue; if(k==='o' && !obById(a)) continue;
     freeAddStatic({k,a,b:b|0},FREE.X+(+x),FREE.Y+(+y||0),FREE.Z+(+z),(r|0)&3,true); }
   for(const q of (o.d||[]).slice(0,FREE_DYN)){ if(!Array.isArray(q)) continue; const [id,x,y,z]=q; if(FREE_PHYS_BY[id] && !FREE_PHYS_BY[id].pad && freeInside(FREE.X+(+x||0),FREE.Z+(+z||0),.4)) freeAddDyn(id,FREE.X+(+x),FREE.Y+Math.max(0,+y||0),FREE.Z+(+z),true); } }
 // ---- entrar y salir ----
@@ -22723,8 +22726,8 @@ function freeSetDel(on){ FREE.del=!!on; if(on) FREE.sel=null; freeRenderHud(); }
 function freeRenderHud(){ const map=FREE.ctx!=='libre', pl=FREE.play; ui('freeDel').classList.toggle('on',FREE.del); ui('freeDrop').hidden=!FREE.sel || pl;
   ui('freeObj').hidden=pl; ui('freeDel').hidden=pl; ui('freePlay').hidden=!map || pl; ui('freeEdit').hidden=!pl; ui('freeRestart').hidden=!pl; if(pl) return;
   const M=map?mapById(FREE.ctx):null;
-  const t=FREE.del?'Quitar: ponte enfrente de algo y toca «Quitar»':FREE.sel?freeSelName(FREE.sel)+' · '+FREE.objs.length+'/'+FREE_MAX:(M?'«'+(M.n||'Mi mapa')+'» · toca «Objetos»':'Toca «Objetos» para escoger qué poner'); ui('freeTxt').textContent=t; }
-function freeSelName(s){ if(s.k==='b') return FREE_SHAPES[s.a].n; if(s.k==='h') return (HK_BY[s.a]||{}).n||'Pieza'; if(s.k==='g') return (FREE_GAME_BY[s.a]||{}).n||'Pieza'; if(s.k==='c') return (crById(s.a)||{}).n||'Criatura'; return (FREE_PHYS_BY[s.a]||{}).n||'Objeto'; }
+  const t=FREE.del?'Quitar: ponte enfrente de algo y toca «Quitar»':FREE.sel?freeSelName(FREE.sel)+' · '+freeOwn()+'/'+FREE_MAX:(M?'«'+(M.n||'Mi mapa')+'» · toca «Objetos»':'Toca «Objetos» para escoger qué poner'); ui('freeTxt').textContent=t; }
+function freeSelName(s){ if(s.k==='b') return FREE_SHAPES[s.a].n; if(s.k==='m') return (mapById(s.a)||{}).n||'Minijuego'; if(s.k==='o') return (obById(s.a)||{}).n||'Objeto'; if(s.k==='h') return (HK_BY[s.a]||{}).n||'Pieza'; if(s.k==='g') return (FREE_GAME_BY[s.a]||{}).n||'Pieza'; if(s.k==='c') return (crById(s.a)||{}).n||'Criatura'; return (FREE_PHYS_BY[s.a]||{}).n||'Objeto'; }
 // v208: dibujito sin fondo de cada bloque y cosa con física (como las piezas del Taller), hecho una vez y guardado
 const FTH={c:{}, q:[], rig:null};
 function freeThumbRender(key){ const [k,a,b]=key.split(':'), sel={k,a:k==='b'?+a:a,b:+b||0};
@@ -22769,7 +22772,7 @@ const FREE_GAME_SOLID={lava:1, mover:1, cae:1};
 const MAPS_MAX=10;
 // v209: qué vas a hacer → solo salen las piezas que sirven para eso
 const MAP_TYPES=[{id:'juego',n:'🎯 Minijuego',tabs:['juego','bloques','fisica'],d:'Pistas de obstáculos: inicio, meta, lava, estrellas, plataformas, bloques y cosas con física'},
-  {id:'mundo',n:'🏝️ Mundo completo',tabs:['juego','bloques','fisica','criaturas','construir','casa','jardin'],d:'Todo: piezas de juego, bloques, física y todas las piezas del Taller (casas, muebles, jardín)'},
+  {id:'mundo',n:'🏝️ Mundo completo',tabs:['juego','bloques','fisica','creaciones','construir','casa','jardin'],d:'Todo: piezas de juego, bloques, física, 📦 tus creaciones (minijuegos, criaturas y objetos) y todas las piezas del Taller'},
   {id:'criatura',n:'🐾 Criatura'},{id:'objeto',n:'🎒 Objeto para tu inventario'}];
 let mapType='juego';
 function renderCrList(){ const L=crLoad(), ul=ui('mapItems'); ul.textContent=''; ui('mapName').placeholder='Nombre de la criatura nueva';
@@ -22783,7 +22786,7 @@ function renderCrList(){ const L=crLoad(), ul=ui('mapItems'); ul.textContent='';
     ul.appendChild(li); });
   ui('mapNew').disabled=L.length>=CR_MAX; ui('mapNote').textContent='Arma un animalito y escoge cómo se porta. Luego ponlo en el Modo libre o en un Mundo completo · hasta '+CR_MAX;
   clearInterval(renderCrList.t); renderCrList.t=setInterval(()=>{ if(ui('mapList').hidden || mapType!=='criatura'){ clearInterval(renderCrList.t); return; } for(let i=0;i<2;i++) freeThumbPump(); },60); }
-function mapTabs(){ if(FREE.ctx==='libre') return FREE_TABS; const M=mapById(FREE.ctx), T=MAP_TYPES.find(t=>t.id===(M&&M.t)||'')||MAP_TYPES[1]; const all=[['juego','🎮 Juego'],...FREE_TABS]; return all.filter(([id])=>T.tabs.includes(id)); }
+function mapTabs(){ if(FREE.ctx==='libre') return FREE_TABS; const M=mapById(FREE.ctx), T=MAP_TYPES.find(t=>t.id===(M&&M.t)||'')||MAP_TYPES[1]; const all=[['juego','🎮 Juego'],...FREE_TABS.slice(0,2),['creaciones','📦 Mis creaciones'],...FREE_TABS.slice(2)]; return all.filter(([id])=>T.tabs.includes(id)); }
 function renderMapTypes(){ const box=ui('mapTypes'); box.textContent=''; MAP_TYPES.forEach(T=>{ const b=document.createElement('button'); b.type='button'; b.className='fchip'+(mapType===T.id?' on':''); b.setAttribute('role','radio'); b.setAttribute('aria-checked',String(mapType===T.id));
   b.textContent=T.n; if(T.soon){ const i=document.createElement('i'); i.className='soon'; i.textContent='Pronto'; b.appendChild(i); }
   b.onclick=()=>{ if(T.soon){ flashNote(T.n.replace(/^\S+ /,'')+': lo hacemos en la siguiente ronda'); return; } mapType=T.id; renderMapTypes(); renderMaps(); }; box.appendChild(b); });
@@ -22812,34 +22815,41 @@ function mapsStore(L){ try{ localStorage.setItem('mundoPelucheMapas', JSON.strin
 function mapById(id){ return mapsLoad().find(m=>m.id===id)||null; }
 // ---- probar / editar ----
 function fmtRun(ms){ ms=Math.max(0,ms|0); const s=Math.floor(ms/1000), m=Math.floor(s/60); return m+':'+String(s%60).padStart(2,'0')+'.'+Math.floor(ms%1000/100); }
-function freeSpawnPos(){ const cp=FREE.run && FREE.run.cp; const o=cp || FREE.objs.find(q=>q.game==='inicio'); return o ? [o.x, o.box.min.y+.06, o.z] : [FREE.X, FREE.Y+.05, FREE.Z+8]; }
+function freeSpawnPos(){ const cp=FREE.run && FREE.run.cp; const o=cp || FREE.objs.find(q=>q.game==='inicio' && !q.par); return o ? [o.x, o.box.min.y+.06, o.z] : [FREE.X, FREE.Y+.05, FREE.Z+8]; }
 function freeRespawn(why){ const [x,y,z]=freeSpawnPos(); player.pos.set(x,y,z); player.vel.set(0,0,0); player.vy=0; player.grounded=true; player.swim=false; if(why){ flashNote(why); try{ audio.splash&&audio.splash(.4); }catch(e){} } }
-function freeResetPieces(){ for(const o of FREE.objs){ if(!o.game) continue; o.root.visible=true; if(o.game==='cae'){ o.solid=true; o.cae=0; o.root.position.set(o.x,o.y,o.z); }
+function freeResetPieces(){ for(const o of FREE.objs){ if(o.inst) o.run=null; if(o.sel.k==='o'){ o.root.visible=true; o.got=false; } if(!o.game) continue; o.root.visible=true; if(o.game==='cae'){ o.solid=true; o.cae=0; o.root.position.set(o.x,o.y,o.z); }
     if(o.game==='mover'){ o.root.position.set(o.x,o.y,o.z); } if(o.game==='bandera' && o.root.userData.flag) o.root.userData.flag.material=FM('#3f6fc6');
     o.root.updateMatrixWorld(true); o.box.setFromObject(o.root); } }
 function freePlayStart(){ if(FREE.ctx==='libre') return; freeSave(); FREE.play=true; FREE.sel=null; FREE.del=false; freeGhostSet(); ui('freeBox').hidden=true; freeResetPieces();
-  const stars=FREE.objs.filter(o=>o.game==='estrella').length; FREE.run={t0:clock.elapsedTime, got:new Set(), stars, cp:null, done:false, warn:0, dyn0:FREE.dyn.map(d=>[d,d.root.position.clone()])};
-  freeRespawn(); freeRenderHud(); flashNote(FREE.objs.some(o=>o.game==='meta') ? (stars?'¡A jugar! Junta las '+stars+' estrellas y llega a la meta':'¡A jugar! Llega a la meta') : '¡A jugar! (pon una Meta para que tenga final)'); }
+  const stars=FREE.objs.filter(o=>o.game==='estrella' && !o.par).length; FREE.run={t0:clock.elapsedTime, got:new Set(), stars, cp:null, done:false, warn:0, dyn0:FREE.dyn.map(d=>[d,d.root.position.clone()])};
+  freeRespawn(); freeRenderHud(); flashNote(FREE.objs.some(o=>o.game==='meta' && !o.par) ? (stars?'¡A jugar! Junta las '+stars+' estrellas y llega a la meta':'¡A jugar! Llega a la meta') : '¡A jugar! (pon una Meta para que tenga final)'); }
 function freePlayStop(){ if(!FREE.play) return; const R=FREE.run; if(R && R.dyn0) for(const [d,pos] of R.dyn0){ if(FREE.dyn.includes(d)){ d.root.position.copy(pos); d.v.set(0,0,0); } }   // (las pelotas regresan a donde estaban)
-  FREE.play=false; FREE.run=null; freeResetPieces(); try{ crResetLive(); }catch(e){} freeRenderHud(); }
+  FREE.play=false; FREE.run=null; freeResetPieces();   // (v213: también los minijuegos de adentro y los premios)
+  try{ crResetLive(); }catch(e){} freeRenderHud(); }
 // cada cuadro mientras juegas
 const _fgP=new THREE.Vector3();
-function freePlayTick(dt){ const R=FREE.run; if(!R) return; const T=clock.elapsedTime-R.t0, p=player.pos;
+function freePlayTick(dt){ const R=FREE.run; if(!R) return; const T=clock.elapsedTime-R.t0, p=player.pos, now=clock.elapsedTime;
   const on=(o,m)=>p.x>o.box.min.x-(m||0) && p.x<o.box.max.x+(m||0) && p.z>o.box.min.z-(m||0) && p.z<o.box.max.z+(m||0);
-  for(const o of FREE.objs){ const g=o.game; if(!g) continue;
+  for(const o of FREE.objs){
+    if(o.sel.k==='o'){ if(!o.got && Math.hypot(p.x-o.x,p.z-o.z)<1 && p.y>o.y-.6 && p.y<o.y+1.9) obPickup(o); continue; }   // v213: premios para recoger
+    const g=o.game; if(!g) continue; const I=o.par, IR=I?I.run:null, RR=I?IR:R;   // v213: las piezas de un minijuego de adentro son de ese minijuego
     if(g==='mover'){ const an=o.r*Math.PI/2, ph=Math.sin(T*Math.PI*2/5)*3, nx=o.x+Math.cos(an)*ph, nz=o.z-Math.sin(an)*ph, dx=nx-o.root.position.x, dz=nz-o.root.position.z;
       const riding=on(o,.1) && Math.abs(p.y-o.box.max.y)<.2; o.root.position.x=nx; o.root.position.z=nz; o.box.min.x+=dx; o.box.max.x+=dx; o.box.min.z+=dz; o.box.max.z+=dz; if(riding){ p.x+=dx; p.z+=dz; } }
     else if(g==='cae'){ if(!o.cae && o.solid && on(o) && Math.abs(p.y-o.box.max.y)<.2){ o.cae=T; }
       if(o.cae){ const k=T-o.cae; if(k<.6){ o.root.position.x=o.x+Math.sin(k*70)*.05; } else if(k<3.2){ if(o.solid){ o.solid=false; o.root.visible=false; } } else { o.solid=true; o.root.visible=true; o.root.position.x=o.x; o.cae=0; } } }
-    else if(g==='lava'){ if(on(o) && p.y<=o.box.max.y+.2 && p.y>=o.box.min.y-.3){ freeRespawn('¡Uy, lava! Vuelves a empezar'+(R.cp?' en tu bandera':'')); return; } }
-    else if(g==='estrella'){ if(o.root.visible){ o.root.getWorldPosition(_fgP); _fgP.y+=1; if(Math.abs(p.x-_fgP.x)<.9 && Math.abs(p.z-_fgP.z)<.9 && p.y<_fgP.y+.4 && p.y+PLAYER_H>_fgP.y-.4){ o.root.visible=false; R.got.add(o.id); try{ coinSound(1); }catch(e){} } } }
-    else if(g==='bandera'){ if(R.cp!==o && on(o,.2) && Math.abs(p.y-o.box.min.y)<1.2){ R.cp=o; if(o.root.userData.flag) o.root.userData.flag.material=FM('#7ccf5b'); flashNote('¡Bandera! Si te caes, regresas aquí'); try{ audio.cam&&audio.cam(); }catch(e){} } }
-    else if(g==='meta'){ if(!R.done && on(o) && p.y>=o.box.min.y-.3 && p.y<o.box.min.y+2.2){
+    else if(g==='lava'){ if(on(o) && p.y<=o.box.max.y+.2 && p.y>=o.box.min.y-.3){ if(I) mgiRespawn(I,'¡Uy, lava! Vuelves a '+(IR&&IR.cp?'tu bandera':'empezar')); else freeRespawn('¡Uy, lava! Vuelves a empezar'+(R.cp?' en tu bandera':'')); return; } }
+    else if(g==='estrella'){ if(!RR || RR.done) continue; if(o.root.visible){ o.root.getWorldPosition(_fgP); _fgP.y+=1; if(Math.abs(p.x-_fgP.x)<.9 && Math.abs(p.z-_fgP.z)<.9 && p.y<_fgP.y+.4 && p.y+PLAYER_H>_fgP.y-.4){ o.root.visible=false; RR.got.add(o.id); try{ coinSound(1); }catch(e){} } } }
+    else if(g==='bandera'){ if(!RR) continue; if(RR.cp!==o && on(o,.2) && Math.abs(p.y-o.box.min.y)<1.2){ RR.cp=o; if(o.root.userData.flag) o.root.userData.flag.material=FM('#7ccf5b'); flashNote('¡Bandera! Si te caes, regresas aquí'); try{ audio.cam&&audio.cam(); }catch(e){} } }
+    else if(g==='inicio'){ if(I && on(o,.1) && p.y>=o.box.min.y-.3 && p.y<o.box.max.y+.6) mgiStart(I); }
+    else if(g==='meta'){
+      if(I){ if(IR && !IR.done && on(o) && p.y>=o.box.min.y-.3 && p.y<o.box.min.y+2.2){ if(IR.got.size<IR.stars){ if(now-IR.warn>2.5){ IR.warn=now; flashNote('Te faltan '+(IR.stars-IR.got.size)+' estrellas'); } } else mgiFinish(I); } continue; }
+      if(!R.done && on(o) && p.y>=o.box.min.y-.3 && p.y<o.box.min.y+2.2){
         if(R.got.size<R.stars){ if(T-R.warn>2.5){ R.warn=T; flashNote('Te faltan '+(R.stars-R.got.size)+' estrellas'); } }
         else { R.done=true; R.ms=Math.round(T*1000); const L=mapsLoad(), M=L.find(m=>m.id===FREE.ctx); let rec=false; if(M && (!M.best || R.ms<M.best)){ M.best=R.ms; rec=true; mapsStore(L); }
           try{ bigText('¡Llegaste! '+fmtRun(R.ms)+(rec?' · ¡Récord!':''),3200); }catch(e){ flashNote('¡Llegaste! '+fmtRun(R.ms)); } try{ coinSound(3); }catch(e){} } } } }
   if(p.y<FREE.Y-4) freeRespawn('¡Te caíste!');
-  R.hudT=(R.hudT||0)-dt; if(R.hudT<=0){ R.hudT=.1; ui('freeTxt').textContent='⏱ '+fmtRun(R.done?R.ms:T*1000)+(R.stars?' · ⭐ '+R.got.size+'/'+R.stars:'')+(R.done?' · ¡Terminado!':''); } }
+  const hud=mgiTick();
+  R.hudT=(R.hudT||0)-dt; if(R.hudT<=0){ R.hudT=.1; ui('freeTxt').textContent=hud||('⏱ '+fmtRun(R.done?R.ms:T*1000)+(R.stars?' · ⭐ '+R.got.size+'/'+R.stars:'')+(R.done?' · ¡Terminado!':'')); } }
 // ---- la lista de mapas ----
 function openMaps(){ ui('mapList').hidden=false; renderMapTypes(); renderMaps(); }
 function renderMaps(){ if(mapType==='criatura'){ renderCrList(); return; } if(mapType==='objeto'){ renderObList(); return; } ui('mapName').placeholder='Nombre del mapa nuevo'; const L=mapsLoad().filter(m=>(m.t||'mundo')===mapType), ul=ui('mapItems'); ul.textContent='';
@@ -22919,7 +22929,7 @@ function medRay(cx,cy){ const r=canvas.getBoundingClientRect(); _mV.set((cx-r.le
 function medPickObj(cx,cy){ const ray=medRay(cx,cy); let best=null, bd=1e9; const bx=new THREE.Box3();
   for(const o of FREE.objs){ if(!o.root.visible) continue; if(ray.intersectBox(o.box,_mHit)){ const d=_mHit.distanceTo(ray.origin); if(d<bd){ bd=d; best=o; } } }
   for(const o of FREE.dyn){ const p=o.root.position; bx.min.set(p.x-o.r,p.y-o.r,p.z-o.r); bx.max.set(p.x+o.r,p.y+o.r,p.z+o.r); if(ray.intersectBox(bx,_mHit)){ const d=_mHit.distanceTo(ray.origin); if(d<bd){ bd=d; best=o; } } }
-  return best; }
+  return best && best.par ? best.par : best; }
 function medPickSpot(cx,cy){ const ray=medRay(cx,cy); let top=null, bd=1e9;   // primero: ¿le pegas a la tapa de algo? (para apilar)
   for(const o of FREE.objs){ if(!o.solid || !o.root.visible) continue; if(ray.intersectBox(o.box,_mHit) && _mHit.y>=o.box.max.y-.02){ const d=_mHit.distanceTo(ray.origin); if(d<bd){ bd=d; top=_mHit.clone(); } } }
   let x, z; if(top){ x=top.x; z=top.z; } else { _mPl.constant=-(FREE.Y+MED.h); if(!ray.intersectPlane(_mPl,_mP)) return null; x=_mP.x; z=_mP.z; }
@@ -22928,10 +22938,10 @@ function medPickSpot(cx,cy){ const ray=medRay(cx,cy); let top=null, bd=1e9;   //
   const y=Math.max(g, FREE.Y+MED.h); return {x, y, z, ok:freeInside(x,z,.5), key:Math.round(x*2)+','+Math.round(z*2)+','+Math.round(y*4)}; }
 // ---- el fantasma ----
 function medGhostSet(){ const key=freeSelKey(MED.sel)+(MED.tool==='place'?'':'x'); if(key===MED.ghostKey) return; MED.ghostKey=key; if(MED.ghost){ FREE.g.remove(MED.ghost); MED.ghost=null; }
-  if(!MED.sel || MED.tool!=='place') return; const o=freeMake(MED.sel); if(!o) return; o.traverse(q=>{ q.userData.noBatch=true; if(q.isMesh){ q.material=FREE_GHOST; q.castShadow=false; q.receiveShadow=false; } }); o.visible=false; MED.ghost=o; MED.gBad=null; FREE.g.add(o); }
+  if(!MED.sel || MED.tool!=='place') return; const o=MED.sel.k==='m'?mgiGhost(MED.sel.a):freeMake(MED.sel); if(!o) return; o.traverse(q=>{ q.userData.noBatch=true; if(q.isMesh){ q.material=FREE_GHOST; q.castShadow=false; q.receiveShadow=false; } }); o.visible=false; MED.ghost=o; MED.gBad=null; FREE.g.add(o); }
 function medGhostTick(){ medGhostSet(); const g=MED.ghost, h=MED.hov;
   if(g){ if(!h){ g.visible=false; } else { g.visible=true; const P=MED.sel.k==='p'&&!FREE_PHYS_BY[MED.sel.a].pad?FREE_PHYS_BY[MED.sel.a]:null; g.position.set(h.x,h.y+(P?P.r:0),h.z); g.rotation.y=P?0:MED.rot*Math.PI/2;
-      const bad=!h.ok || FREE.objs.length>=FREE_MAX; if(bad!==MED.gBad){ MED.gBad=bad; g.traverse(q=>{ if(q.isMesh) q.material=bad?FREE_GHOST_BAD:FREE_GHOST; }); } } }
+      const bad=!h.ok || (MED.sel.k==='m' ? !mgiFits(MED.sel.a,h,MED.rot) : freeOwn()>=FREE_MAX); if(bad!==MED.gBad){ MED.gBad=bad; g.traverse(q=>{ if(q.isMesh) q.material=bad?FREE_GHOST_BAD:FREE_GHOST; if(q.isLineSegments) q.material.color.set(bad?0xff5a5a:0x5ee36a); }); } } }
   if(!FREE.hl){ FREE.hl=new THREE.Box3Helper(new THREE.Box3(),0xff5a5a); FREE.hl.userData.noBatch=true; FREE.g.add(FREE.hl); }
   const m=MED.mark; if(m && (FREE.objs.includes(m)||FREE.dyn.includes(m))){ FREE.hl.visible=true; FREE.hl.material.color.set(MED.tool==='move'?0x4fb3ff:0xff5a5a); if(m.dyn){ const p=m.root.position, r=m.r; FREE.hl.box.min.set(p.x-r,p.y-r,p.z-r); FREE.hl.box.max.set(p.x+r,p.y+r,p.z+r); } else FREE.hl.box.copy(m.box); } else FREE.hl.visible=false; }
 function medHover(cx,cy){ if(MED.tool==='place'){ MED.hov=MED.sel?medPickSpot(cx,cy):null; } else MED.mark=medPickObj(cx,cy); }
@@ -22944,10 +22954,12 @@ function medTap(cx,cy,touch){
     medRender(); return; }
   if(!MED.sel){ medTip('Escoge una pieza a la derecha'); return; }
   const h=medPickSpot(cx,cy); if(!h) return; if(touch && (!MED.hov || MED.hov.key!==h.key)){ MED.hov=h; medGhostTick(); medTip(h.ok?'Toca otra vez para ponerla aquí':'Ahí no se puede'); return; }
-  MED.hov=h; if(!h.ok){ medTip('Ahí no se puede: muy cerca de la orilla'); return; } medPlace(h); }
-function medPlace(h){ const s=MED.sel; if(s.k==='g' && s.a==='inicio'){ const old=FREE.objs.find(q=>q.game==='inicio'); if(old){ medUndoPush({t:'del', e:medEntry(old)}); freeDrop(old); } }
+  MED.hov=h; if(!h.ok){ medTip('Ahí no se puede: muy cerca de la orilla'); return; }
+  if(MED.sel.k==='m' && !mgiFits(MED.sel.a,h,MED.rot)){ medTip(mgiList().length>=MGI_MAX?'Ya hay '+MGI_MAX+' minijuegos en este mundo':'No cabe ahí: se encima con otras piezas o se sale (busca un lugar verde)'); return; }
+  medPlace(h); }
+function medPlace(h){ const s=MED.sel; if(s.k==='g' && s.a==='inicio'){ const old=FREE.objs.find(q=>q.game==='inicio' && !q.par); if(old){ medUndoPush({t:'del', e:medEntry(old)}); freeDrop(old); } }
   let o; if(s.k==='p' && !FREE_PHYS_BY[s.a].pad) o=freeAddDyn(s.a,h.x,h.y+.02,h.z); else o=freeAddStatic(s,h.x,h.y,h.z,MED.rot);
-  if(!o) return; medUndoPush({t:'add', id:o.id, dyn:!!o.dyn, mv:MED.moving}); if(MED.moving){ MED.moving=null; MED.sel=null; medTip('¡Listo, movida!'); } else medTip(freeSelName(s)+' · '+FREE.objs.length+'/'+FREE_MAX);
+  if(!o) return; medUndoPush({t:'add', id:o.id, dyn:!!o.dyn, mv:MED.moving}); if(MED.moving){ MED.moving=null; MED.sel=null; medTip('¡Listo, movida!'); } else medTip(s.k==='m' ? '🎯 '+freeSelName(s)+' · piezas de minijuegos '+mgiPieces()+'/'+MGI_PIECES : freeSelName(s)+' · '+freeOwn()+'/'+FREE_MAX);
   try{ audio.pop ? audio.pop() : audio.cam(); }catch(e){} freeSaveSoon(); medRender(); }
 // ---- deshacer ----
 function medEntry(o){ if(o.dyn){ const p=o.root.position; return {dyn:1, id:o.id, x:p.x, y:p.y-o.r, z:p.z}; } return {sel:{...o.sel}, x:o.x, y:o.y, z:o.z, r:o.r}; }
@@ -22963,13 +22975,18 @@ function medTool(t){ if(MED.moving && t!=='place'){ medRestore(MED.moving); MED.
   medTip(t==='del'?'Quitar: toca una pieza':t==='move'?'Mover: toca la pieza que quieras cambiar de lugar':(MED.sel?'Toca el piso para poner '+freeSelName(MED.sel):'Escoge una pieza a la derecha')); medRender(); }
 function medHeight(d){ MED.h=Math.max(0,Math.min(12,MED.h+d)); MED.hov=null; medTip(MED.h?'Altura: <b>'+MED.h+' m</b> sobre el piso (para piezas flotando)':'Altura: en el piso'); }
 function medTip(t){ const el=MED.ui.tip; el.innerHTML=t; el.classList.remove('fade'); clearTimeout(MED.tipT); MED.tipT=setTimeout(()=>el.classList.add('fade'),4200); }
-function medSelect(sel){ if(MED.moving){ medRestore(MED.moving); MED.moving=null; } MED.sel=sel; MED.tool='place'; MED.rot=0; MED.hov=null; medTip('Toca el piso para poner <b>'+freeSelName(sel)+'</b> (dos toques)'); medRender(); }
+function medSelect(sel){ if(MED.moving){ medRestore(MED.moving); MED.moving=null; } MED.sel=sel; MED.tool='place'; MED.rot=0; MED.hov=null;
+  if(sel.k==='m'){ const M=mgiOk(sel.a), L=M&&mgiLayout(M); medTip(L?'🎯 <b>'+freeSelName(sel)+'</b> mide '+Math.round(L.w)+' × '+Math.round(L.d)+' m · '+L.n+' piezas. Toca el piso: verde = cabe':'Ese minijuego ya no existe'); }
+  else medTip('Toca el piso para poner <b>'+freeSelName(sel)+'</b> (dos toques)'); medRender(); }
 // ---- el panel de piezas ----
+function medSubs(tab){ return tab==='creaciones' ? MGI_SUBS : HSUBS[tab]; }   // v213
 function medItems(){ const tabs=mapTabs().map(t=>t[0]), out=[];
   if(tabs.includes('juego')) FREE_GAME.forEach(G=>out.push({tab:'juego', sub:'', n:G.n, sel:{k:'g',a:G.id,b:0}}));
   if(tabs.includes('bloques')) FREE_SHAPES.forEach((S,i)=>out.push({tab:'bloques', sub:'', n:S.n, sel:{k:'b',a:i,b:MED.col}}));
   if(tabs.includes('fisica')) FREE_PHYS.forEach(P=>out.push({tab:'fisica', sub:'', n:P.n, sel:{k:'p',a:P.id,b:0}}));
   if(tabs.includes('criaturas')) crLoad().forEach(C=>out.push({tab:'criaturas', sub:'', n:C.n, sel:{k:'c',a:C.id,b:0}}));
+  if(tabs.includes('creaciones')){ mapsLoad().filter(M=>M.t==='juego').forEach(M=>out.push({tab:'creaciones', sub:'mg', n:M.n||'Minijuego', sel:{k:'m',a:M.id,b:mgiSig(M)%997}}));   // v213
+    crLoad().forEach(C=>out.push({tab:'creaciones', sub:'cr', n:C.n, sel:{k:'c',a:C.id,b:0}})); obLoad().forEach(O=>out.push({tab:'creaciones', sub:'ob', n:O.n, sel:{k:'o',a:O.id,b:0}})); }
   for(const t of ['construir','casa','jardin']) if(tabs.includes(t)) HK.filter(K=>K.cat===t).forEach(K=>out.push({tab:t, sub:K.sub, n:K.n, sel:{k:'h',a:K.id,b:(K.mats||[0])[0]}}));
   return out; }
 function medRender(){ if(!MED.on) return; const U=MED.ui, box=U.inv; box.textContent='';
@@ -22980,18 +22997,18 @@ function medRender(){ if(!MED.on) return; const U=MED.ui, box=U.inv; box.textCon
   box.appendChild(tabs); const tn=document.createElement('h4'); tn.textContent=MED.tab==='fav'?'Favoritas':(TB.find(t=>t[0]===MED.tab)||['',''])[1].replace(/^\S+ /,''); box.appendChild(tn);
   const sr=document.createElement('div'); sr.className='hed-srch'; const inp=document.createElement('input'); inp.placeholder='Buscar pieza…'; inp.value=MED.q; inp.oninput=()=>{ MED.q=inp.value; medRenderGrid(); }; sr.appendChild(inp); box.appendChild(sr);
   if(MED.tab==='bloques'){ const d=document.createElement('div'); d.className='hed-dots'; FREE_COLS.forEach((c,i)=>{ const b=document.createElement('button'); b.type='button'; b.style.background=c; b.className=MED.col===i?'on':''; b.onclick=()=>{ MED.col=i; if(MED.sel&&MED.sel.k==='b') MED.sel={...MED.sel,b:i}; medRender(); }; d.appendChild(b); }); box.appendChild(d); }
-  const SB=HSUBS[MED.tab]; if(SB){ if(!MED.sub) MED.sub=SB[0][0]; const d=document.createElement('div'); d.className='hed-subs'; SB.forEach(([id,n])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=n; b.className=MED.sub===id?'on':''; b.onclick=()=>{ MED.sub=id; medRender(); }; d.appendChild(b); }); box.appendChild(d); }
+  const SB=medSubs(MED.tab); if(SB){ if(!MED.sub) MED.sub=SB[0][0]; const d=document.createElement('div'); d.className='hed-subs'; SB.forEach(([id,n])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=n; b.className=MED.sub===id?'on':''; b.onclick=()=>{ MED.sub=id; medRender(); }; d.appendChild(b); }); box.appendChild(d); }
   const grid=document.createElement('div'); grid.className='hed-grid'; grid.id='medGrid'; box.appendChild(grid); medRenderGrid(); }
 function medRenderGrid(){ const grid=document.getElementById('medGrid'); if(!grid) return; grid.textContent=''; const q=hNorm((MED.q||'').trim()), F=medFav();
-  let L=medItems(); if(q) L=L.filter(it=>hNorm(it.n).includes(q)); else if(MED.tab==='fav') L=L.filter(it=>F.includes(freeSelKey(it.sel))); else L=L.filter(it=>it.tab===MED.tab && (!HSUBS[MED.tab] || it.sub===MED.sub));
-  if(!L.length){ const p=document.createElement('p'); p.style.cssText='font:700 12px var(--body);color:#7a2b2b;margin:4px;grid-column:1/-1'; p.textContent=MED.tab==='fav'&&!q?'Toca la ☆ de una pieza para guardarla aquí':'No hay piezas con ese nombre'; grid.appendChild(p); return; }
+  let L=medItems(); if(q) L=L.filter(it=>hNorm(it.n).includes(q)); else if(MED.tab==='fav') L=L.filter(it=>F.includes(freeSelKey(it.sel))); else L=L.filter(it=>it.tab===MED.tab && (!medSubs(MED.tab) || it.sub===MED.sub));
+  if(!L.length){ const p=document.createElement('p'); p.style.cssText='font:700 12px var(--body);color:#7a2b2b;margin:4px;grid-column:1/-1'; p.textContent=MED.tab==='fav'&&!q?'Toca la ☆ de una pieza para guardarla aquí':MED.tab==='creaciones'&&!q?({mg:'Todavía no tienes minijuegos: hazlos en Mis creaciones → 🎯 Minijuego',cr:'Todavía no tienes criaturas: hazlas en Mis creaciones → 🐾 Criatura',ob:'Todavía no tienes objetos: hazlos en Mis creaciones → 🎒 Objeto'}[MED.sub]||''):'No hay piezas con ese nombre'; grid.appendChild(p); return; }
   for(const it of L.slice(0,160)){ const key=freeSelKey(it.sel), b=document.createElement('button'); b.type='button'; b.className='hed-card'+(MED.sel && freeSelKey(MED.sel)===key?' on':'');
     (it.sel.k==='h'?hThumbEl(it.sel.a,it.sel.b):freeThumbEl(it.sel)).forEach(e=>b.appendChild(e)); const sp=document.createElement('span'); sp.textContent=it.n; b.appendChild(sp);
     const fv=document.createElement('i'); fv.className='fv'+(F.includes(key)?' on':''); fv.textContent=F.includes(key)?'★':'☆'; fv.onclick=e=>{ e.stopPropagation(); medFavToggle(key); }; b.appendChild(fv);
     b.onclick=()=>medSelect({...it.sel}); grid.appendChild(b); } }
 // ---- entrar, probar y salir ----
 function medEnter(){ if(MED.on || FREE.ctx==='libre') return; MED.on=true; MED.sel=null; MED.tool='place'; MED.hov=null; MED.mark=null; MED.moving=null; MED.toolsOpen=false; MED.h=0; MED.undo=[];
-  const ini=FREE.objs.find(o=>o.game==='inicio'); MED.cam={yaw:.6, pitch:.95, dist:24, tx:ini?ini.x-FREE.X:0, tz:ini?(ini.z-FREE.Z)-6:0};
+  const ini=FREE.objs.find(o=>o.game==='inicio' && !o.par); MED.cam={yaw:.6, pitch:.95, dist:24, tx:ini?ini.x-FREE.X:0, tz:ini?(ini.z-FREE.Z)-6:0};
   if(!MED.grid){ MED.grid=new THREE.GridHelper(FREE.R*2,FREE.R,0xffffff,0xffffff); MED.grid.material.transparent=true; MED.grid.material.opacity=.16; MED.grid.material.depthWrite=false; MED.grid.position.set(FREE.X,FREE.Y+.02,FREE.Z); MED.grid.userData.noBatch=true; FREE.g.add(MED.grid); }
   MED.grid.visible=true; const U=MED.ui; for(const e of [U.layer,U.inv,U.bar,U.tip,U.tog]) e.hidden=false; document.body.classList.add('in-med'); FREE.sel=null; FREE.del=false; freeGhostSet(); setActions(null,null);
   medRender(); medTip('Mueve la vista con un dedo · acerca con dos · escoge una pieza y toca el piso'); }
@@ -23349,6 +23366,114 @@ function obRemotePose(r,t,dt){ const ok=r.held==='o' && !!r.obD && !r.swim && !r
   if(H.holder.visible){ obPose(r.obj,H,r.obA); obGlow(H,r.obL!==false,r.pos); } }
 // al empezar: tus objetos al inventario y la barra como la dejaste
 obSyncInv(); barLoad(); renderHotbar();
+
+// ======================================================================================
+// ---------------- v213: 📦 MIS CREACIONES dentro de tu Mundo completo ----------------
+// En el editor de un Mundo completo, la pestaña 📦 tiene tus minijuegos, criaturas y objetos.
+// · Minijuego: se construye completo encima del mundo (como los minijuegos de la isla). El editor calcula cuánto
+//   espacio ocupa y muestra un rectángulo fantasma (verde = cabe, rojo = se encima o se sale); se gira, se sube de
+//   altura, y lleva su letrero con el récord y su placa en el Inicio. Se agarra completo (mover, quitar, deshacer)
+//   y si cambias el minijuego original, aquí también cambia. Sus piezas cuentan aparte (máx. MGI_PIECES entre todos).
+//   Al jugar: pisas su Inicio y empieza su tiempo; su lava y su bandera son suyas; su Meta guarda el récord.
+// · Criaturas: caminan solas (v211).
+// · Objetos: flotan girando como premio; al jugar, si los tocas, te los llevas en la mano.
+// ======================================================================================
+const MGI_MAX=5, MGI_PIECES=300;
+const MGI_SUBS=[['mg','🎯 Minijuegos'],['cr','🐾 Criaturas'],['ob','🎒 Objetos']];
+const MGI_LAY={};
+function mgiSig(M){ const s=JSON.stringify([M.s||[],M.d||[]]); let h=7; for(let i=0;i<s.length;i++) h=(Math.imul(h,31)+s.charCodeAt(i))|0; return (h>>>0)%1e9; }
+function mgiOk(id){ const M=mapById(id); return M && M.t==='juego' ? M : null; }
+// ¿cuánto mide? (se arma una vez para medirlo; el centro del rectángulo queda en 0,0)
+function mgiLayout(M){ const sig=mgiSig(M), c=MGI_LAY[M.id]; if(c && c.sig===sig) return c;
+  const box=new THREE.Box3(), tmp=new THREE.Box3(), s=[], dl=[]; let ini=null, meta=null;
+  for(const q of (M.s||[]).slice(0,FREE_MAX)){ if(!Array.isArray(q)) continue; const [k,a,b,x,y,z,r]=q; if(!['b','h','p','g'].includes(k)) continue;
+    if(k==='b' && !(FREE_SHAPES[a] && FREE_COLS[b])) continue; if(k==='h' && !HK_BY[a]) continue; if(k==='p' && !(FREE_PHYS_BY[a]&&FREE_PHYS_BY[a].pad)) continue; if(k==='g' && !FREE_GAME_BY[a]) continue;
+    const sel={k,a:k==='b'?+a:a,b:b|0}, root=freeMake(sel); if(!root) continue; const px=+x||0, py=+y||0, pz=+z||0, pr=(r|0)&3;
+    root.position.set(px,py,pz); root.rotation.y=pr*Math.PI/2; root.updateMatrixWorld(true); tmp.setFromObject(root); if(!tmp.isEmpty()) box.union(tmp);
+    if(k==='g' && a==='inicio') ini=[px,pz]; if(k==='g' && a==='meta') meta=[px,pz]; s.push([k,sel.a,sel.b,px,py,pz,pr]); }
+  for(const q of (M.d||[]).slice(0,FREE_DYN)){ if(!Array.isArray(q)) continue; const [id,x,y,z]=q, P=FREE_PHYS_BY[id]; if(!P || P.pad) continue; const px=+x||0, py=Math.max(0,+y||0), pz=+z||0;
+    box.union(tmp.set(new THREE.Vector3(px-P.r,py,pz-P.r), new THREE.Vector3(px+P.r,py+2*P.r,pz+P.r))); dl.push([id,px,py,pz]); }
+  if(box.isEmpty()) box.set(new THREE.Vector3(-1,0,-1), new THREE.Vector3(1,1,1));
+  const cx=(box.min.x+box.max.x)/2, cz=(box.min.z+box.max.z)/2;
+  return MGI_LAY[M.id]={sig, cx, cz, w:box.max.x-box.min.x+.4, d:box.max.z-box.min.z+.4, y0:Math.min(0,box.min.y), y1:Math.max(1,box.max.y), s, dl, n:s.length+dl.length,
+    ini:ini?[ini[0]-cx,ini[1]-cz]:null, meta:meta?[meta[0]-cx,meta[1]-cz]:null}; }
+// de lo local (centrado) al mundo, girado r cuartos de vuelta
+function mgiTo(x,z,r,lx,lz){ const a=r*Math.PI/2, c=Math.cos(a), s=Math.sin(a); return [x+lx*c+lz*s, z-lx*s+lz*c]; }
+function mgiList(){ return FREE.objs.filter(o=>o.inst); }
+function mgiPieces(){ let n=0; for(const I of mgiList()) n+=I.kids.length+I.kdyn.length; return n; }
+// ---- ponerlo en el mundo ----
+function mgiAdd(id,x,y,z,r,quiet){ const M=mgiOk(id); if(!M) return null; const L=mgiLayout(M);
+  if(mgiList().length>=MGI_MAX){ if(!quiet) flashNote('Ya hay '+MGI_MAX+' minijuegos en este mundo'); return null; }
+  if(mgiPieces()+L.n>MGI_PIECES){ if(!quiet) flashNote('Ya no caben más piezas de minijuegos ('+mgiPieces()+'/'+MGI_PIECES+')'); return null; }
+  const root=new THREE.Group(); FREE.og.add(root);
+  const I={sel:{k:'m',a:id,b:0}, x, y, z, r, root, box:new THREE.Box3(), solid:false, pad:false, game:null, id:++FREE.seq, inst:true, kids:[], kdyn:[], name:M.n||'Minijuego', run:null};
+  FREE.objs.push(I);
+  for(const [k,a,b,px,py,pz,pr] of L.s){ const [wx,wz]=mgiTo(x,z,r,px-L.cx,pz-L.cz), o=freeAddStatic({k,a,b},wx,y+py,wz,(pr+r)&3,true,I); if(o){ I.kids.push(o); I.box.union(o.box); } }
+  for(const [pid,px,py,pz] of L.dl){ const [wx,wz]=mgiTo(x,z,r,px-L.cx,pz-L.cz), o=freeAddDyn(pid,wx,y+py,wz,true,I); if(o){ I.kdyn.push(o); const P=o.P; I.box.union(new THREE.Box3(new THREE.Vector3(wx-P.r,y+py,wz-P.r),new THREE.Vector3(wx+P.r,y+py+2*P.r,wz+P.r))); } }
+  if(I.box.isEmpty()) I.box.setFromCenterAndSize(new THREE.Vector3(x,y+.5,z),new THREE.Vector3(2,1,2));
+  mgiDecor(I); return I; }
+function mgiDrop(I){ for(const o of I.kids.slice()) if(FREE.objs.includes(o)) freeDrop(o); for(const o of I.kdyn.slice()) if(FREE.dyn.includes(o)) freeDrop(o); I.kids=[]; I.kdyn=[];
+  if(I.signTex){ I.signTex.dispose(); I.signTex=null; } }
+// ---- el letrero (nombre y récord) y la placa en el Inicio ----
+function mgiSignDraw(I){ const M=mapById(I.sel.a), best=M&&M.best, c=I.signCv||(I.signCv=document.createElement('canvas')); c.width=512; c.height=256; const q=c.getContext('2d');
+  q.fillStyle='#fff3d6'; q.fillRect(0,0,512,256); q.strokeStyle='#c79a6a'; q.lineWidth=14; q.strokeRect(7,7,498,242); q.setLineDash([12,9]); q.lineWidth=3; q.strokeStyle='#d9b98d'; q.strokeRect(24,24,464,208); q.setLineDash([]);
+  q.textAlign='center'; q.textBaseline='middle'; q.fillStyle='#3a2a1a'; let fs=52; const t='🎯 '+I.name; do{ q.font='800 '+fs+'px Sniglet, Nunito, sans-serif'; fs-=4; } while(q.measureText(t).width>450 && fs>22); q.fillText(t,256,82);
+  q.font='800 36px Sniglet, Nunito, sans-serif'; q.fillStyle=best?'#3d8a2c':'#8a6a3e'; q.fillText(best?'Récord: '+fmtRun(best):'¡Sin récord todavía!',256,148);
+  q.font='700 27px Nunito, sans-serif'; q.fillStyle='#6b5a44'; q.fillText('Pisa el INICIO para jugar',256,204);
+  if(I.signTex) I.signTex.needsUpdate=true; }
+function mgiSignAll(id){ for(const I of mgiList()) if(I.sel.a===id) mgiSignDraw(I); }
+function mgiDecor(I){ const ini=I.kids.find(o=>o.game==='inicio'), meta=I.kids.find(o=>o.game==='meta');
+  let ix=ini?ini.x:I.x, iz=ini?ini.z:I.box.max.z, iy=ini?ini.box.min.y:I.y, dx=0, dz=-1;
+  if(ini && meta){ dx=meta.x-ini.x; dz=meta.z-ini.z; } else if(ini){ dx=I.x-ini.x; dz=I.z-ini.z; } const dl=Math.hypot(dx,dz)||1; dx/=dl; dz/=dl;
+  mgiSignDraw(I); const tex=I.signTex=new THREE.CanvasTexture(I.signCv); tex.encoding=THREE.sRGBEncoding; tex.anisotropy=4;
+  const wood=FM('#b98b5e'), sg=new THREE.Group(), face=new THREE.MeshStandardMaterial({map:tex, roughness:.9});
+  const board=new THREE.Mesh(_freeBox,[wood,wood,wood,wood,face,wood]); board.scale.set(2.6,1.3,.12); board.position.y=1.85; sg.add(board);
+  for(const s of [-1,1]){ const p=new THREE.Mesh(_freeCyl,wood); p.scale.set(.22,.62,.22); p.position.set(s*1.05,.62,-.02); sg.add(p); }
+  const px=-dz, pz=dx;   // al ladito del Inicio, viendo hacia afuera (hacia quien llega)
+  sg.position.set(ix-dx*2.2+px*2.1, iy, iz-dz*2.2+pz*2.1); sg.rotation.y=Math.atan2(-dx,-dz); I.root.add(sg);
+  if(ini){ const c=document.createElement('canvas'); c.width=256; c.height=128; const q=c.getContext('2d'); q.fillStyle='#3f9e5a'; q.fillRect(0,0,256,128); q.strokeStyle='#ffffff'; q.lineWidth=8; q.strokeRect(6,6,244,116);
+    q.fillStyle='#ffffff'; q.textAlign='center'; q.textBaseline='middle'; q.font='800 46px Sniglet, Nunito, sans-serif'; q.fillText('▶ JUGAR',128,66);
+    const pt=new THREE.CanvasTexture(c); pt.encoding=THREE.sRGBEncoding; const pl=new THREE.Mesh(new THREE.PlaneGeometry(1.5,.75),new THREE.MeshStandardMaterial({map:pt, roughness:.8}));
+    pl.rotation.x=-Math.PI/2; const pg=new THREE.Group(); pg.add(pl); pg.position.set(ini.x-dx*.15,ini.y+.16,ini.z-dz*.15); pg.rotation.y=Math.atan2(-dx,-dz); I.root.add(pg); I.plate=pl; }
+  I.root.traverse(q=>{ if(q.isMesh){ q.castShadow=true; q.receiveShadow=true; } }); }
+// ---- el fantasma: el rectángulo que ocupa (y una marquita donde queda el Inicio) ----
+const _mgiEdge=new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1));
+function mgiGhost(id){ const M=mgiOk(id); if(!M) return null; const L=mgiLayout(M), g=new THREE.Group(), h=L.y1-L.y0;
+  const b=new THREE.Mesh(_freeBox,FREE_GHOST); b.scale.set(L.w,h,L.d); b.position.y=L.y0+h/2; b.userData.box=true; g.add(b);
+  const e=new THREE.LineSegments(_mgiEdge,new THREE.LineBasicMaterial({color:0x5ee36a})); e.scale.copy(b.scale); e.position.copy(b.position); g.add(e); g.userData.edge=e;
+  if(L.ini){ const m=new THREE.Mesh(_freeCyl,FREE_GHOST); m.scale.set(2.2,.06,2.2); m.position.set(L.ini[0],.08,L.ini[1]); g.add(m); }
+  g.userData.lay=L; return g; }
+// ¿cabe aquí? (adentro de la planicie y sin encimarse con otras piezas)
+function mgiBoxAt(L,x,y,z,r){ const sw=r&1, hw=(sw?L.d:L.w)/2, hd=(sw?L.w:L.d)/2; return new THREE.Box3(new THREE.Vector3(x-hw,y+L.y0,z-hd), new THREE.Vector3(x+hw,y+L.y1,z+hd)); }
+function mgiFits(id,h,r){ const M=mgiOk(id); if(!M || !h) return false; const L=mgiLayout(M), B=mgiBoxAt(L,h.x,h.y,h.z,r);
+  if(!freeInside(B.min.x,B.min.z,.3) || !freeInside(B.max.x,B.max.z,.3)) return false;
+  if(mgiList().length>=MGI_MAX || mgiPieces()+L.n>MGI_PIECES) return false;
+  B.expandByScalar(-.08); for(const o of FREE.objs){ if(o.sel.k==='c' || o.sel.k==='o' || o.inst) continue; if(o.box.intersectsBox(B)) return false; } return true; }
+// ---- jugar el minijuego que está dentro del mundo ----
+function mgiStart(I){ const now=clock.elapsedTime, R=I.run;
+  if(R && !R.done && !R.got.size && !R.cp){ R.t0=now; return; }   // (mientras estés en el Inicio, el tiempo no corre)
+  for(const J of mgiList()) if(J!==I) J.run=null;
+  I.run={t0:now, got:new Set(), stars:I.kids.filter(o=>o.game==='estrella').length, cp:null, done:false, warn:0};
+  for(const o of I.kids){ if(o.game==='estrella') o.root.visible=true; if(o.game==='bandera' && o.root.userData.flag) o.root.userData.flag.material=FM('#3f6fc6'); }
+  flashNote('🎯 «'+I.name+'»'+(I.run.stars?': junta las '+I.run.stars+' estrellas y llega a la meta':': ¡llega a la meta!')); try{ audio.cam&&audio.cam(); }catch(e){} }
+function mgiRespawn(I,why){ const cp=I.run && I.run.cp, o=cp || I.kids.find(q=>q.game==='inicio'); if(!o){ freeRespawn(why); return; }
+  player.pos.set(o.x,o.box.min.y+.06,o.z); player.vel.set(0,0,0); player.vy=0; player.grounded=true; player.swim=false; if(why){ flashNote(why); try{ audio.splash&&audio.splash(.4); }catch(e){} } }
+function mgiFinish(I){ const R=I.run, ms=Math.round((clock.elapsedTime-R.t0)*1000); R.done=true; R.ms=ms; const L=mapsLoad(), M=L.find(m=>m.id===I.sel.a); let rec=false;
+  if(M && (!M.best || ms<M.best)){ M.best=ms; rec=true; mapsStore(L); mgiSignAll(I.sel.a); }
+  try{ bigText('¡Llegaste! '+fmtRun(ms)+(rec?' · ¡Récord!':''),3200); }catch(e){ flashNote('¡Llegaste! '+fmtRun(ms)); } try{ coinSound(3); }catch(e){} }
+// cada cuadro (al jugar): salirse o caerse
+function mgiTick(){ const p=player.pos; let hud=null;
+  for(const I of mgiList()){ const R=I.run; if(!R) continue; const B=I.box, out=Math.max(B.min.x-p.x,p.x-B.max.x,B.min.z-p.z,p.z-B.max.z,0);
+    if(!R.done && out>7){ I.run=null; flashNote('Saliste de «'+I.name+'»'); continue; }
+    if(!R.done && p.y<B.min.y-1.2 && out<1){ mgiRespawn(I,'¡Te caíste! Vuelves a '+(R.cp?'tu bandera':'empezar')); }
+    if(out>7){ I.run=null; continue; }
+    hud='🎯 '+I.name+' · ⏱ '+fmtRun(R.done?R.ms:(clock.elapsedTime-R.t0)*1000)+(R.stars?' · ⭐ '+R.got.size+'/'+R.stars:'')+(R.done?' · ¡Terminado!':''); }
+  return hud; }
+// ---- los objetos que se recogen ----
+function obPickup(o){ o.got=true; o.root.visible=false; const id=o.sel.a, key='o:'+id, O=obById(id); if(!O || !ITEMS[key]){ return; }
+  let i=hotbar.indexOf(key); if(i<0){ i=hotbar.indexOf(null); if(i<0) i=selectedSlot; hotbar[i]=key; barSave(); }
+  selectedSlot=i; holding=true; try{ applyHeld(); renderHotbar(); coinSound(1); }catch(e){}
+  flashNote('¡Agarraste «'+O.n+'»! Ya lo traes en la mano (espacio '+(i+1)+')'); }
 
 // ---------------- v188: TUTORIAL con guía — Almohadita (casitas) y Llantita (carritos) ----------------
 // Sale la primera vez que abres el taller o el editor (si está vacío) y con el botón ❓ Ayuda. Una flecha señala qué tocar;

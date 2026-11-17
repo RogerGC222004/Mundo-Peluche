@@ -45,11 +45,11 @@ async def m():
     ok(r==[True,0], 'si la cambias, la que está en el mundo se actualiza %s'%r)
     # 5. guardar y volver; en un Mundo completo: quieta en el editor, camina al probar
     r=await ev("""(()=>{ ui('toMenuBtn').click(); freeEnter(); const n=FREE.objs.filter(o=>o.sel.k==='c').length; ui('toMenuBtn').click();
-      mapType='mundo'; ui('mapName').value='Zoo'; mapCreate(); const tabs=mapTabs().map(t=>t[0]); MED.tab='criaturas'; medRender(); const cards=MED.ui.inv.querySelectorAll('.hed-card').length;
+      mapType='mundo'; ui('mapName').value='Zoo'; mapCreate(); const tabs=mapTabs().map(t=>t[0]); MED.tab='creaciones'; MED.sub='cr'; medRender(); const cards=MED.ui.inv.querySelectorAll('.hed-card').length;
       const A=crLoad()[0]; const o=freeAddStatic({k:'c',a:A.id,b:0},FREE.X+3,FREE.Y,FREE.Z,0,true); __run(2); const still=Math.hypot(o.cr.x-o.x,o.cr.z-o.z);
       medPlay(); player.pos.set(FREE.X+15,FREE.Y+.05,FREE.Z); __run(3); const moved=Math.hypot(o.cr.x-o.x,o.cr.z-o.z); ui('freeEdit').click(); const back=Math.hypot(o.cr.x-o.x,o.cr.z-o.z);
-      return [n, tabs.includes('criaturas'), cards, +still.toFixed(2), +moved.toFixed(1), +back.toFixed(2)]; })()""")
-    ok(r[0]==2 and r[1] and r[2]==2 and r[3]==0 and r[4]>2 and r[5]==0, 'se guardan en el Modo libre; en el Mundo completo salen en 🐾, quietas al editar, caminan al probar y regresan al editar %s'%r)
+      return [n, tabs.includes('creaciones'), cards, +still.toFixed(2), +moved.toFixed(1), +back.toFixed(2)]; })()""")
+    ok(r[0]==2 and r[1] and r[2]==2 and r[3]==0 and r[4]>2 and r[5]==0, 'se guardan en el Modo libre; en el Mundo completo salen en 📦 → 🐾, quietas al editar, caminan al probar y regresan al editar %s'%r)
     # 6. borrar una criatura: lo puesto se ignora sin errores
     r=await ev("""(()=>{ medDone(); const B=crLoad()[1]; crStore(crLoad().filter(c=>c.id!==B.id)); FREE.loaded=null; freeEnter(); const n=FREE.objs.filter(o=>o.sel.k==='c').length; ui('toMenuBtn').click(); return n; })()""")
     ok(r==1, 'si borras una criatura, desaparece del mundo sin romper nada (queda %s)'%r)
