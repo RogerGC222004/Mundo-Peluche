@@ -44,7 +44,7 @@ async def m():
         const vis0=new Map(scene.children.map(c=>[c,c.visible])); const a=seen(), hid=LEJOS.hid.length; const changed=scene.children.filter(c=>vis0.get(c)!==c.visible).length; const L=LEJOS.L; LEJOS.L=[]; LEJOS.tp=-1e9; const b=seen(); LEJOS.L=L; LEJOS.tp=-1e9; seen();
         const lost=[...b].filter(o=>!a.has(o)).map(o=>{ const g=o.geometry; if(!g.boundingSphere) g.computeBoundingSphere(); return +(g.boundingSphere.center.clone().applyMatrix4(o.matrixWorld).distanceTo(camera.position)-g.boundingSphere.radius*o.matrixWorld.getMaxScaleOnAxis()).toFixed(0); });
         const leak=scene.children.filter(c=>c._lj && !c.visible && !LEJOS.L.includes(c) ).length;
-        return [hid, a.size, b.size, lost, LEJOS.off.length, changed===0]; })()""")
+        return [hid, a.size, b.size, lost, LEJOS.offN, changed===0]; })()""")
       ok(r[0]>300 and all(d>40 for d in r[3]) and r[4]==0 and r[5], '%s: %s piezas lejanas no se revisan; se dibuja lo mismo (%s/%s; las que faltan estaban a %s m, detrás de la niebla) y después del dibujo vuelven a estar como estaban %s'%(name,r[0],r[1],r[2],r[3],r[4:]))
     # 3. una pieza lejana que se mueve cerca de ti se ve en el siguiente dibujo
     r=await ev("""(()=>{ const c=LEJOS.hid.find(o=>o.isMesh && (o.layers.mask&1) && !o.material.transparent && o.geometry && o.geometry.boundingSphere && o.geometry.boundingSphere.radius<3 && Math.abs(o.quaternion.w)>.999); if(!c) return null;
