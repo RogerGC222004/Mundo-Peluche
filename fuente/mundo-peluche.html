@@ -1454,7 +1454,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='213';
+const GAME_VERSION='214';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -23694,12 +23694,13 @@ function tutTick(){ const T=TUT; if(!T.on) return; const E=T.el, S=T.steps&&T.st
   const [dir,ax,ay]=pick;
   E.arrow.hidden=false; E.arrow.className=dir; E.arrow.style.left=Math.max(2,Math.min(innerWidth-42,ax))+'px'; E.arrow.style.top=Math.max(2,Math.min(innerHeight-50,ay))+'px'; }
 
-const SAVE_KEYS=['Monedas','Ropa','Banderas','Especies','Planetas','Jugador','MejorVuelta','Opciones','Peces','Mascotas','Mina','Huerto','Casa','Islas','Baldes','Vehiculo','Tutorial','Surf'];   // v188: + tutoriales vistos   // v182: + islas y baldes   // v166: + tu casita   // v125: + mascotas, mina y huerto
+const SAVE_KEYS=['Monedas','Ropa','Banderas','Especies','Planetas','Jugador','MejorVuelta','Opciones','Peces','Mascotas','Mina','Huerto','Casa','Islas','Baldes','Vehiculo','Tutorial','Surf','Libre','Mapas','MapFav','Criaturas','Objetos','Barra'];   // v214: + tus creaciones (Modo libre, mapas, favoritas, criaturas, objetos y la barra)   // v188: + tutoriales vistos   // v182: + islas y baldes   // v166: + tu casita   // v125: + mascotas, mina y huerto
 function saveSnapshot(){ const o={v:1, e:124}; /* e: versión de la economía (v124: precios ×5) */ for(const k of SAVE_KEYS){ try{ const v=localStorage.getItem('mundoPeluche'+k); if(v!=null) o[k]=v; }catch(e){} } return o; }
 const jparse=(s,d)=>{ try{ const v=JSON.parse(s); return v==null?d:v; }catch(e){ return d; } };
 function saveSummary(o){ const own=(jparse(o.Ropa,{}).own||[]).length, pl=Object.keys(jparse(o.Planetas,{})).length, sp=(jparse(o.Especies,[])||[]).length, pe=(jparse(o.Mascotas,{}).own||[]).length;
-  return {coins:Math.max(0,econCoins(o)), own, pl, sp, pe}; }
-const plur=(n,w)=>n+' '+w+(n===1?'':(/[aeiou]$/.test(w)?'s':'es')); const sumText=s=>[plur(s.coins,'moneda'),plur(s.own,'prenda'),...(s.pe?[plur(s.pe,'mascota')]:[]),plur(s.pl,'planeta'),plur(s.sp,'especie')].join(' · ');
+  const cnt=(k,f)=>{ const x=jparse(o[k],null); return x&&Array.isArray(x[f])?x[f].length:0; }, cr=cnt('Mapas','maps')+cnt('Criaturas','list')+cnt('Objetos','list');   // v214
+  return {coins:Math.max(0,econCoins(o)), own, pl, sp, pe, cr}; }
+const plur=(n,w)=>n+' '+w+(n===1?'':(/[aeiou]$/.test(w)?'s':'es')); const sumText=s=>[plur(s.coins,'moneda'),plur(s.own,'prenda'),...(s.pe?[plur(s.pe,'mascota')]:[]),...(s.cr?[s.cr+(s.cr===1?' creación':' creaciones')]:[]),plur(s.pl,'planeta'),plur(s.sp,'especie')].join(' · ');
 // une dos guardados (a = el de este dispositivo, b = el que llega)
 const econCoins=o=>(parseInt(o.Monedas||'0',10)||0)*((+o.e||0)>=124?1:5);   // un guardado de antes de v124 vale ×5
 function mergeSaves(a,b){ const o={v:1, e:124};
@@ -23734,6 +23735,13 @@ function mergeSaves(a,b){ const o={v:1, e:124};
       o.Islas=JSON.stringify(m); } }
   if(a.Baldes||b.Baldes) o.Baldes=a.Baldes||b.Baldes;   // v182: los peces en los baldes
   if(a.Vehiculo||b.Vehiculo) o.Vehiculo=a.Vehiculo||b.Vehiculo;   // v182: tu vehículo
+  // v214: tus creaciones: se juntan las de los dos (sin repetir; si una está en los dos, se queda la de este dispositivo)
+  const joinL=(k,field,max)=>{ const A=jparse(a[k],null), B=jparse(b[k],null), la=A&&A.v===1&&Array.isArray(A[field])?A[field]:[], lb=B&&B.v===1&&Array.isArray(B[field])?B[field]:[];
+    if(!la.length && !lb.length){ if(a[k]||b[k]) o[k]=a[k]||b[k]; return; } const ids=new Set(la.map(x=>x&&x.id)), L=[...la, ...lb.filter(x=>x && !ids.has(x.id))].slice(0,max); o[k]=JSON.stringify({v:1, [field]:L}); };
+  joinL('Mapas','maps',MAPS_MAX); joinL('Criaturas','list',CR_MAX); joinL('Objetos','list',OB_MAX);
+  { const la=jparse(a.Libre,null), used=x=>x && ((x.s||[]).length || (x.d||[]).length); const L=used(la)?a.Libre:(used(jparse(b.Libre,null))?b.Libre:(a.Libre||b.Libre)); if(L) o.Libre=L; }
+  { const fa=jparse(a.MapFav,[]), fb=jparse(b.MapFav,[]); const F=[...new Set([...(Array.isArray(fb)?fb:[]),...(Array.isArray(fa)?fa:[])])].filter(x=>typeof x==='string').slice(-40); if(F.length) o.MapFav=JSON.stringify(F); }
+  if(a.Barra||b.Barra) o.Barra=a.Barra||b.Barra;
   return o; }
 function applySave(o){ for(const k of SAVE_KEYS){ try{ if(o[k]!=null) localStorage.setItem('mundoPeluche'+k,o[k]); }catch(e){} } }
 // código: comprimido y en letras seguras para copiar y pegar
