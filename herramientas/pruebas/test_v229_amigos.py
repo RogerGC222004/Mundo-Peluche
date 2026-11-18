@@ -37,7 +37,7 @@ async def m():
       const L=freeAddStatic({k:'p',a:'lanzadora',b:0},X+7,Y,Z-6,0,true); fnLocalAdd(L); player.pos.set(X,Y+.05,Z+14); return [FREE.dyn.length, FREE.objs.length]; })()""")
     await sync(4)
     code=await ev(A,"FNET.code"); await ev(B,"(async()=>{ ui('freeBtn').click(); await new Promise(r=>setTimeout(r,600)); return 1; })()")
-    await ev(B,"fnJoin(%s); 1"%json.dumps(code)); await B.wait_for_timeout(1500)
+    await ev(B,"fnJoin(%s); 1"%json.dumps(code)); await B.wait_for_timeout(1500); await ev(B,"player.pos.set(FREE.X,FREE.Y+.05,FREE.Z+14); 1")   # (lejos de las piezas: si llega encima, las empuja)
     for i in range(40):
       await sync(1)
       if await ev(B,"fnSynced() && FREE.dyn.length===%d && FREE.objs.filter(o=>o.gad==='lanzadora').length===1"%r[0]): break

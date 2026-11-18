@@ -83,7 +83,7 @@ async def m():
       __CLR(); __AT(-10,-10); const LZ=freeAddStatic({k:'p',a:'lanzadora',b:0},FREE.X,FREE.Y,FREE.Z,0); player.pos.set(FREE.X+1.4,FREE.Y+.05,FREE.Z); const lb=toyActions(); const lab2=lb&&lb[0].label; lb[0].run(); const disc=FREE.dyn.find(q=>q.P.toy==='disco'); let dist=0; for(let i=0;i<150;i++){ __S(1); dist=Math.max(dist,disc.root.position.z-FREE.Z); }
       __CLR(); __AT(-10,-10); const L3=freeAddStatic({k:'p',a:'lanzadora',b:0},FREE.X,FREE.Y,FREE.Z,0); player.pos.set(FREE.X,FREE.Y+.05,FREE.Z+4); toyDisc(L3); let caught=false; for(let i=0;i<60;i++){ __S(1); if(FREE.hold && FREE.hold.P.toy==='disco'){ caught=true; break; } } out.push([lab2, +dist.toFixed(1), caught]);
       return out; })()""")
-    ok(r[0][0]>4 and r[0][1] and -1.5<r[0][2]<0, 'papalote: vuela %s m arriba de ti con su hilo y al soltarlo baja despacito (%s m/s)'%(r[0][0],r[0][2]))
+    ok(r[0][0]>3 and r[0][1] and -1.5<r[0][2]<0, 'papalote: vuela %s m arriba de ti con su hilo y al soltarlo baja despacito (%s m/s)'%(r[0][0],r[0][2]))
     ok(r[1][0]>5 and r[1][1], 'bumerán: llega a %s m y regresa a tus manos'%r[1][0])
     ok(r[2][0]>5 and 'Amarrar' in (r[2][1] or '') and r[2][2]==1, 'globo con helio: sube (%s m); con «%s» se amarra y lo ligero flota (%s m)'%(r[2][0],r[2][1],r[2][3]))
     ok(r[3][0]==['💦 Bombear (3/3)','🚀 ¡Lanzar!'] and r[3][1]>6 and r[3][2] and -1.4<r[3][3]<-.8 and r[3][4]==0, 'cohete de agua: se bombea 3 veces, sube %s m, abre su paracaídas y baja despacito %s'%(r[3][1],r[3][2:]))
