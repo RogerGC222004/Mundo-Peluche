@@ -1490,7 +1490,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='231';
+const GAME_VERSION='232';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -8127,8 +8127,8 @@ tap(act2,()=>{ if(actB && !actB.disabled) actB.run(); });
 tap(act3,()=>{ if(actC && !actC.disabled) actC.run(); });
 // v224: botones que se cargan (mantener presionado = más fuerte): con el ratón se empieza al presionar y se lanza al soltar
 [[act1,()=>actA],[act2,()=>actB]].forEach(([el,get])=>{ el.addEventListener('pointerdown',e=>{ if(e.pointerType!=='mouse') return; const a=get(); if(a && a.charge && !a.disabled) a.run(); });
-  ['pointerup','pointercancel','pointerleave'].forEach(ev=>el.addEventListener(ev,()=>{ if(typeof FREE!=='undefined' && FREE.chg) freeThrowEnd(); })); });
-addEventListener('keyup',e=>{ if((e.code==='KeyE' || e.code==='KeyR') && typeof FREE!=='undefined' && FREE.chg) freeThrowEnd(); });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>el.addEventListener(ev,()=>{ if(typeof FREE!=='undefined' && FREE.chg) freeThrowEnd(); if(typeof SU!=='undefined' && SU.hold) suHoldEnd(); })); });   // (v232: también la cubeta)
+addEventListener('keyup',e=>{ if((e.code==='KeyE' || e.code==='KeyR') && typeof FREE!=='undefined' && FREE.chg) freeThrowEnd(); if(e.code==='KeyE' && typeof SU!=='undefined' && SU.hold) suHoldEnd(); });
 addEventListener('keydown',e=>{
   if(state!=='play' || e.repeat || e.target instanceof HTMLInputElement) return;
   if(e.code==='KeyE' && actA && !actA.disabled){ actA.run(); }
@@ -23023,7 +23023,7 @@ function freeMakeX(P,root){ const id=P.id, add=(g,m,x,y,z,sx,sy,sz,par)=>{ const
     add(_freeBox,FM('#c79a6a'),1.35,.25,.5,.7,.5,.5); add(_freeBox,FM('#a8743f'),1.35,.5,.5,.74,.06,.54); for(let i=0;i<4;i++){ const st=freeStickMesh(i); st.position.set(1.15+i*.13,.35,.5); st.rotation.set(-1.35,0,(i-1.5)*.12); root.add(st); }   // v224: la cajita con palos
     return true; }
   return false; }
-function freeMake(sel){ const root=new THREE.Group();
+function freeMake(sel){ const root=new THREE.Group(); if(sel.k==='s'){ if(!SU_T[+sel.a]) return null; suMakeBucket(root,+sel.a,+sel.b||0); return root; }   /* (en las fotitos llegan como texto) */   // v232
   if(sel.k==='b'){ const sh=FREE_SHAPES[sel.a].id, mat=FM(FREE_COLS[sel.b]); let m;
     if(sh==='cubo'){ m=new THREE.Mesh(_freeBox,mat); m.position.y=.5; }
     else if(sh==='medio'){ m=new THREE.Mesh(_freeBox,mat); m.scale.set(1,.5,1); m.position.y=.25; }
@@ -23084,11 +23084,11 @@ function freeRay(any){ _frC.y=camMode==='first'?0:.2; _frR.setFromCamera(_frC,ca
   if(any) for(const d of FREE.dyn){ _frS.center.copy(d.root.position); _frS.radius=d.r; if(!R.intersectSphere(_frS,_frP)) continue; const t=_frP.distanceTo(O); if(t<.3 || t>=bt) continue; bt=t; best={t, o:d, nx:0, ny:1, nz:0}; }
   if(!best) return null; best.x=O.x+D.x*best.t; best.y=O.y+D.y*best.t; best.z=O.z+D.z*best.t; return best; }
 function freeAimFwd(){ const s=FREE.sel, [fx,fz]=freeFwd(); let d=2.4; if(s && s.k==='h') d=3.2; if(s && (s.k==='v' || s.a==='torre')) d=3.2; if(s && ((s.k==='n' && s.a==='alberca') || s.a==='tobogan')) d=4.8; if(s && s.k==='t' && (s.a==='fila'||s.a==='bolos')) d=s.a==='fila'?3.6:3.1; if(s && s.k==='b' && (FREE_SHAPES[s.a].id==='losa'||FREE_SHAPES[s.a].id==='arco')) d=3;
-  let x=player.pos.x+fx*d, z=player.pos.z+fz*d; const snap=s && s.k==='p' && !FREE_PHYS_BY[s.a].st ? 0 : 1; if(snap){ const so=freeSnapOff(s); x=Math.floor(x-FREE.X+.5-so)+so+FREE.X; z=Math.floor(z-FREE.Z+.5-so)+so+FREE.Z; }
+  let x=player.pos.x+fx*d, z=player.pos.z+fz*d; const snap=s && ((s.k==='p' && !FREE_PHYS_BY[s.a].st) || s.k==='s') ? 0 : 1; if(snap){ const so=freeSnapOff(s); x=Math.floor(x-FREE.X+.5-so)+so+FREE.X; z=Math.floor(z-FREE.Z+.5-so)+so+FREE.Z; }
   const y=freeGround(x,z,player.pos.y+2.4); return {x, y:y===null?FREE.Y:y, z, ok:y!==null && freeInside(x,z,.5), why:y===null?'orilla':''}; }   // (como antes de la v224: enfrente de ti; solo lo usan las pruebas viejas)
 function freeSelSize(){ const k=(FREE.sel?JSON.stringify(FREE.sel):'')+'|'+(FREE.rot&3); if(FREE.selHk!==k){ let S=[1,1,1]; try{ const m=FREE.ghost; if(m){ FREE.selHk=k; const r=m.rotation.y; m.rotation.y=0; m.updateMatrixWorld(true); const B=new THREE.Box3().setFromObject(m); m.rotation.y=r; m.updateMatrixWorld(true); if(isFinite(B.max.y-B.min.y) && B.max.y-B.min.y>.05) S=(FREE.rot&1)?[B.max.z-B.min.z,B.max.y-B.min.y,B.max.x-B.min.x]:[B.max.x-B.min.x,B.max.y-B.min.y,B.max.z-B.min.z]; } }catch(e){} FREE.selS=S; } return FREE.selS; }   // v231: qué tan grande es lo que vas a poner (ya girado)
 function freeSelH(){ return freeSelSize()[1]; }   // v230: qué tan alto es
-function freeAim(){ if(FREE.legacyAim) return freeAimFwd(); const s=FREE.sel, snap=s && s.k==='p' && !FREE_PHYS_BY[s.a].st ? 0 : 1, px=player.pos.x, pz=player.pos.z; let x, z, yLim, why='';
+function freeAim(){ if(FREE.legacyAim) return freeAimFwd(); const s=FREE.sel, snap=s && ((s.k==='p' && !FREE_PHYS_BY[s.a].st) || s.k==='s') ? 0 : 1, px=player.pos.x, pz=player.pos.z; let x, z, yLim, why='';
   const h=freeRay(false); let air=null; if(h){ x=h.x; z=h.z; yLim=h.y+.05; if(h.o && h.ny<.5){ const S=snap?freeSelSize():null; x+=h.nx*(S?Math.max(.5,S[0]/2):.5); z+=h.nz*(S?Math.max(.5,S[2]/2):.5); yLim=h.ny<-.5?h.y-.1:h.y; const b=h.o.box;   /* v231: las piezas anchas (arco, losa) quedan pegadas, no metidas */   // en el piso o encima: ahí mismo; en un lado: junto
       if(b && snap) air=h.ny<-.5 ? b.min.y-freeSelH() : b.min.y+Math.max(0,Math.floor(h.y-b.min.y+1e-4)); } }   // v230: junto a un bloque en el aire se queda a su altura (y debajo, colgado de él)
   const dh=h?Math.hypot(x-px,z-pz):Infinity; if(!h || dh>FREE_REACH){ const D=_frR.ray.direction, L=Math.hypot(D.x,D.z)||1; x=px+D.x/L*FREE_REACH; z=pz+D.z/L*FREE_REACH;   /* (_frR ya trae la dirección del puntero) */ yLim=player.pos.y+2.4; why='lejos'; }   // muy lejos o al cielo: se queda en rojo a la distancia máxima
@@ -23109,21 +23109,22 @@ function freeAddStatic(sel,x,y,z,r,quiet,par){ if(sel.k==='m') return mgiAdd(sel
   const root=freeMake(sel); if(!root) return null; root.position.set(x,y,z); root.rotation.y=r*Math.PI/2; FREE.og.add(root); root.updateMatrixWorld(true);
   const box=new THREE.Box3().setFromObject(root), P=sel.k==='p'?FREE_PHYS_BY[sel.a]:null; if(root.userData.col) box.copy(root.userData.col).applyMatrix4(root.matrixWorld);   // v217: el carrusel y el elevador chocan solo con su piso
   const o={sel:{...sel}, x, y, z, r, root, box, solid:P?!!P.solid:root.userData.solid!==false, pad:!!(P&&P.pad), jelly:!!(P&&P.jelly), gad:P&&P.gad||null, game:sel.k==='g'?sel.a:null, id:++FREE.seq}; if(par) o.par=par;
-  { const U=root.userData; if(U.cols) o.cols=U.cols.map(c=>new THREE.Box3(new THREE.Vector3(c[0],c[1],c[2]),new THREE.Vector3(c[3],c[4],c[5])).applyMatrix4(root.matrixWorld)); if(U.soft) o.soft=U.soft; if(U.ring) o.ring={c:root.localToWorld(new THREE.Vector3(U.ring[0],U.ring[1],U.ring[2])), R:U.ring[3], t:U.ring[4]}; }   /* v229 */ pqInit(o); FREE.objs.push(o); fgAdd(o); return o; }
+  { const U=root.userData; if(U.cols) o.cols=U.cols.map(c=>new THREE.Box3(new THREE.Vector3(c[0],c[1],c[2]),new THREE.Vector3(c[3],c[4],c[5])).applyMatrix4(root.matrixWorld)); if(U.soft) o.soft=U.soft; if(U.ring) o.ring={c:root.localToWorld(new THREE.Vector3(U.ring[0],U.ring[1],U.ring[2])), R:U.ring[3], t:U.ring[4]}; }   /* v229 */ pqInit(o); FREE.objs.push(o); fgAdd(o); if(SU && SU.list.length) suInvalidate(o.box); return o; }
 function freeAddDyn(id,x,y,z,quiet,par){ const P=FREE_PHYS_BY[id]; if(!P || P.st || P.multi) return null; if(FREE.dyn.length>=FREE_DYN){ if(!quiet) flashNote('Ya hay '+FREE_DYN+' cosas con física: quita alguna'); return null; }
   const root=freeMake({k:'p',a:id}); root.position.set(x,y+P.r,z); root.traverse(q=>q.userData.noBatch=true); FREE.og.add(root);
   const o={id, P, r:P.r, root, spin:root.userData.spin, v:new THREE.Vector3(), kick:0, dyn:true, p0:[x,y,z]}; if(par) o.par=par; if(P.box) bxInit(o); if(P.toy) o.ts=0; FREE.dyn.push(o); return o; }
-function freePlace(){ const s=FREE.sel; if(!s) return; const a=freeAim(); if(!a.ok){ flashNote(a.why==='lejos'?'Muy lejos: apunta más cerca (hasta '+FREE_REACH+' m)':a.why==='encima'?'Ahí estás tú: apunta un poco más lejos':'Ahí no se puede: está muy cerca de la orilla'); return; }
+function freePlace(){ const s=FREE.sel; if(!s || s.k==='s') return; const a=freeAim(); if(!a.ok){ flashNote(a.why==='lejos'?'Muy lejos: apunta más cerca (hasta '+FREE_REACH+' m)':a.why==='encima'?'Ahí estás tú: apunta un poco más lejos':'Ahí no se puede: está muy cerca de la orilla'); return; }
   if(s.k==='g' && s.a==='inicio'){ const old=FREE.objs.find(q=>q.game==='inicio' && !q.par); if(old) freeDrop(old); }   // v209: solo hay un Inicio
   if(s.k==='t' && PQ_T_BY[s.a] && PQ_T_BY[s.a].multi){ const L=pqPlaceMulti(s,a.x,a.y,a.z,FREE.rot); L.forEach(fnLocalAdd); if(L.length){ try{ audio.pop ? audio.pop() : audio.cam(); }catch(e){} freeSaveSoon(); } return; }   // v217: fila de dominós y bolos
   if(s.k==='p' && FREE_PHYS_BY[s.a].multi){ const L=bxPlaceMulti(FREE_PHYS_BY[s.a].multi,a.x,a.y+.01,a.z,FREE.rot); L.forEach(fnLocalAdd); if(L.length){ try{ audio.pop ? audio.pop() : audio.cam(); }catch(e){} freeSaveSoon(); } return; }   // v229: fila de dominós, bolos y torre
   let o; if(s.k==='p' && !FREE_PHYS_BY[s.a].st){ o=freeAddDyn(s.a,a.x,a.y+(FREE_PHYS_BY[s.a].box?.01:.05),a.z); if(o && o.bx){ bxYaw(o,FREE.rot); o.sleep=true; } else if(o && o.P.toy && !o.P.roll && o.P.toy!=='slinky') bxYaw(o,FREE.rot); } else o=freeAddStatic(s,a.x,a.y,a.z,FREE.rot);
   if(o){ fnLocalAdd(o); try{ audio.pop ? audio.pop() : audio.cam(); }catch(e){} freeSaveSoon(); FREE.tipTx=null; try{ freeRenderHud(); }catch(e){} } }   /* v230: el letrero vuelve con la cuenta */
 function freeRotate(){ FREE.rot=(FREE.rot+1)%4; try{ audio.cam&&audio.cam(); }catch(e){} }
-function freeRemove(){ const o=FREE.tgt; if(!o) { flashNote('Apunta con el puntero a lo que quieras quitar'); return; } if(!fnCanRemove(o)) return; fnLocalDel(o); freeDrop(o); try{ audio.cam&&audio.cam(); }catch(e){} freeSaveSoon(); }
+function freeRemove(){ const o=FREE.tgt; if(!o){ const h=freeRay(false); if(h && suAt(h.x,h.z)){ suRemoveAt(h.x,h.z); if(FNET.on && !FNET.host) fnOp(['qx',+(h.x-FREE.X).toFixed(2),+(h.z-FREE.Z).toFixed(2)]); try{ audio.cam&&audio.cam(); }catch(e){} freeSaveSoon(); return; }   // v232: las sustancias
+    flashNote('Apunta con el puntero a lo que quieras quitar'); return; } if(!fnCanRemove(o)) return; fnLocalDel(o); freeDrop(o); try{ audio.cam&&audio.cam(); }catch(e){} freeSaveSoon(); }
 function freeUnbatch(root){ const bs=new Set(); root.traverse(m=>{ const r=BATCH.recs.get(m); if(r && r.batch) bs.add(r.batch); }); bs.forEach(dissolve); }   // v227: primero se juntan y luego se deshacen (deshacerlos mientras se recorre movía la lista y tronaba)
 function freeDrop(o){ if(o.inst) mgiDrop(o); if(o.pq) pqDrop(o); if(FNET.on && FNET.host && o.nid && !o.par) FNET.dirty.add(o.bk); if(!o.dyn) fgDel(o); freeUnbatch(o.root); FREE.og.remove(o.root);
-  if(o.dyn) FREE.dyn.splice(FREE.dyn.indexOf(o),1); else FREE.objs.splice(FREE.objs.indexOf(o),1); if(FREE.tgt===o) FREE.tgt=null; }
+  if(o.dyn) FREE.dyn.splice(FREE.dyn.indexOf(o),1); else { FREE.objs.splice(FREE.objs.indexOf(o),1); if(SU && SU.list.length) suInvalidate(o.box); } if(FREE.tgt===o) FREE.tgt=null; }   // (v232: donde estaba, la sustancia ya puede pasar)
 // ---- física sencilla: pelotas, cajas y barriles ----
 const _fN=new THREE.Vector3(), _fA=new THREE.Vector3();
 function freePhys(dt){ const D=FREE.dyn; if(!D.length || (FNET.on && !FNET.host)) return; const G=16;   // v215: en una sala las pelotas las mueve el dueño
@@ -23769,9 +23770,11 @@ function freeTick(dt){ if(!FREE.on) return; if((FREE.fitT=(FREE.fitT||0)-dt)<=0)
   freeGhostSet(); const gh=FREE.ghost;
   if(gh && !FREE.play){ if(FREE.del){ gh.visible=false; } else { const a=freeAim(); gh.visible=true; gh.position.set(a.x,a.y+(FREE.sel.k==='p'&&!FREE_PHYS_BY[FREE.sel.a].st?FREE_PHYS_BY[FREE.sel.a].r:0),a.z); gh.rotation.y=FREE.rot*Math.PI/2;
       const bad=!a.ok || freeOwn()>=FREE_MAX; if(bad!==FREE.gBad){ FREE.gBad=bad; gh.traverse(q=>{ if(q.isMesh) q.material=bad?FREE_GHOST_BAD:FREE_GHOST; }); } } }
+  try{ suTick(dt); }catch(e){ if(!SU.err){ SU.err=1; console.warn('sustancias',e); } }   // v232
   // lo que quitarías
   FREE.tgt=(FREE.del||FREE.paint) && !FREE.play ? freeTarget() : null;
   if(FREE.paint && FREE.tgt!==FREE.tgtLast){ FREE.tgtLast=FREE.tgt; const o=FREE.tgt, w=o?freePaintable(o):''; ui('freeTxt').textContent=o?(w?w:'Pintar '+freeSelName(o.sel)+(o.sel.k==='h'?' (cambia a su siguiente tela)':'')+(FNET.on && !fnMine(o)?' · la puso '+fnName(o.au):'')):'Escoge un color y apunta a un bloque con el puntero'; }   // v216
+  if(FREE.del && !FREE.tgt){ const h=freeRay(false), st=h?suAt(h.x,h.z):null, k=st?'su'+st[0]:null; if(k!==FREE.suDelK){ FREE.suDelK=k; FREE.tgtLast=undefined; } if(st){ FREE.tgtLast=null; ui('freeTxt').textContent='Quitar '+SU_T[st[0]].n.toLowerCase()+' (todo lo que está junto)'; } }   // v232
   if(FREE.del && FREE.tgt!==FREE.tgtLast){ FREE.tgtLast=FREE.tgt; const o=FREE.tgt; ui('freeTxt').textContent=o?'Quitar '+(o.dyn?(o.P.n||'esto'):freeSelName(o.sel))+' · '+(fnMine(o)?'es tuya':'la puso '+fnName(o.au)+(FNET.on?' (no la puedes quitar)':'')):'Quitar: apunta a algo con el puntero y toca «Quitar»'; }   // v215
   if(FNET.on && !FNET.host && !FNET.syncShown && fnSynced()){ FNET.syncShown=true; freeRenderHud(); }
   { const el=ui('freeTxt'), tx=el.textContent; if(tx!==FREE.tipTx){ FREE.tipTx=tx; FREE.tipT=0; el.classList.remove('fade'); } else if(!FREE.chg && (FREE.tipT+=dt)>3.5 && !el.classList.contains('fade')) el.classList.add('fade'); }   // v230: el letrero se va solo si no haces nada
@@ -23781,6 +23784,7 @@ function freeTick(dt){ if(!FREE.on) return; if((FREE.fitT=(FREE.fitT||0)-dt)<=0)
 function freeActions(){ if(!FREE.on) return null; if(FREE.play || (player.pg && player.pg.k==='fmv')) return pqActions();   // v217: subirse, empujar, volver a pararlos
   if(FREE.del) return [{label:'Quitar', run:freeRemove}, {label:'Listo', run:()=>freeSetDel(false)}];
   if(FREE.paint) return [{label:'Pintar', run:freePaintDo}, {label:'Listo', run:()=>freePaintSet(false)}];   // v216
+  if(FREE.sel && FREE.sel.k==='s') return suActions();   // v232: la cubeta (Echar · Chorro · Listo)
   if(FREE.sel) return [{label:'Poner', run:freePlace}, {label:'Girar', run:freeRotate}, {label:'Listo', run:()=>freeSelect(null)}];   // v230: siempre los tres
   if(FREE.ride) return [{label:'🫧 Reventar burbuja', run:freeBubbleExit}, null];   // v226: dentro de la burbuja gigante
   if(FREE.myStick && !FREE.sel && !FREE.play) return [{label:'💥 Golpear', run:freeSwing}, {label:'Dejar el palo', run:freeStickDrop}];   // v224: con el palo en la mano
@@ -23793,17 +23797,238 @@ function freeActions(){ if(!FREE.on) return null; if(FREE.play || (player.pg && 
   { const pn=freePinataNear(); if(pn) return [{label:'🪅 Tomar un palo', run:()=>freeStickTake()}, null]; }   // la cajita: un palo para pegarle
   { const bm=freeBubNear(); if(bm) return [{label:'⚙️ Configurar burbujas', run:()=>freeBubOpen(bm)}, null]; }   // v226
   return pqActions(); }
+// ================= v232: 🪣 SUSTANCIAS (agua, slime, lodo, miel, pintura y espuma) =================
+// El piso se parte en cuadritos de 20 cm (en trozos de 16×16 que solo existen donde hay algo). Cada cuadrito sabe qué sustancia
+// tiene y qué tan alta está; cada paso le pasa a sus vecinos más bajitos según qué tan espesa es (k = qué tan rápido corre,
+// Y = cuánto desnivel aguanta sin moverse —el lodo y la espuma se quedan amontonados—, minH = lo más delgadito que se extiende).
+// Los bloques son paredes (el piso de cada cuadrito es lo más alto que hay ahí); si la sustancia sube más que el bloque, se pasa.
+// Lo que pisa (tu peluche, tus amigos, pelotas y cajas) la empuja a los lados: así quedan las huellas; el agua se rellena luego,
+// el slime y la miel despacito y el lodo casi nada. Los trozos que ya no se mueven se duermen (no cuestan nada).
+const SU_T=[null,
+  {id:'agua',   n:'Agua',    col:'#3d97e6', op:.62, ro:.04, k:.2,   Y:0,    minH:.006, pr:0, slow:.9,  slip:1, drag:.5, burst:1},
+  {id:'slime',  n:'Slime',   col:'#74d94e', op:.86, ro:.2,  k:.035, Y:.0015, minH:.022, pr:1, slow:.74, drag:2.4, burst:.45},
+  {id:'lodo',   n:'Lodo',    col:'#7a5232', op:1,   ro:.95, k:.028, Y:.05,  minH:.03,  pr:90,  slow:.56, drag:4, burst:.15},
+  {id:'miel',   n:'Miel',    col:'#f0a12a', op:.9,  ro:.1,  k:.011, Y:0,    minH:.012, pr:3, slow:.42, drag:6, burst:0},
+  {id:'pintura',n:'Pintura', col:null,      op:1,   ro:.32, k:.11,  Y:.002, minH:.004, pr:0, slow:.92, drag:1, burst:.8, paint:1},
+  {id:'espuma', n:'Espuma',  col:'#f6f9ff', op:.96, ro:.92, k:.02,  Y:.045, minH:.05,  pr:25,  slow:.95, drag:.7, burst:.55, decay:.012}];
+const SU_BY={}; SU_T.forEach((T,i)=>{ if(T){ T.i=i; SU_BY[T.id]=T; } });
+const SU_SIZES=[['chico',.28,.014],['mediano',.5,.04],['grande',.8,.1]];   // radio del chorro (m) y cuánto sale (m³ por segundo)
+var SU={dm:{}, cs:.2, ch:new Map(), list:[], max:14, maxCh:140, vol:0, mode:0, hold:null, holdEnd:0, balls:[], drops:[], emit:[], slow:1, slip:false, feet:null, stain:new Set(), T:0, dk:0, rb:0, idx:null, mats:{}, netV:0, sent:new Map(), seen:new Set(), rxT:0};
+function suKey(ci,cj){ return ci*4096+cj; }
+function suChunk(ci,cj,make){ const k=suKey(ci,cj); let C=SU.ch.get(k); if(!C && make){ if(SU.list.length>=SU.maxCh) return null;
+    C={ci,cj,k, pr:new Float32Array(256), h:new Float32Array(256), t:new Uint8Array(256), c:new Uint8Array(256), b:new Float32Array(256).fill(NaN), d:new Float32Array(256), aw:2, dirty:true, ms:[], n:0, ver:1, idle:0}; SU.ch.set(k,C); SU.list.push(C); } return C; }
+function suCell(x,z,make){ const gx=Math.floor((x-FREE.X)/SU.cs), gz=Math.floor((z-FREE.Z)/SU.cs), ci=Math.floor(gx/16), cj=Math.floor(gz/16), C=suChunk(ci,cj,make); return C?[C,(gz-cj*16)*16+(gx-ci*16)]:null; }
+function suXZ(C,i){ return [FREE.X+((C.ci*16+(i&15))+.5)*SU.cs, FREE.Z+((C.cj*16+(i>>4))+.5)*SU.cs]; }
+// el piso de un cuadrito: lo más alto que hay (bloques, rampas…), o una pared si está fuera de la planicie
+function suB(C,i){ let b=C.b[i]; if(b===b) return b; const [x,z]=suXZ(C,i); if(!freeInside(x,z,.05)) b=1e3; else { const g=freeGround(x,z,FREE.Y+60); b=g===null?1e3:g; } C.b[i]=b; return b; }
+function suInvalidate(box){ if(!SU.list.length) return; const m=SU.cs; for(const C of SU.list){ const x0=FREE.X+C.ci*16*m, z0=FREE.Z+C.cj*16*m; if(box.max.x<x0-m || box.min.x>x0+16*m+m || box.max.z<z0-m || box.min.z>z0+16*m+m) continue;
+    for(let i=0;i<256;i++){ const [x,z]=suXZ(C,i); if(x>=box.min.x-m && x<=box.max.x+m && z>=box.min.z-m && z<=box.max.z+m) C.b[i]=NaN; } C.aw=2; C.dirty=true; } }
+// el vecino de (C,i) hacia dx,dz (puede estar en otro trozo; si no existe y hace falta, se crea)
+function suNb(C,i,dx,dz,make){ let lx=(i&15)+dx, lz=(i>>4)+dz, D=C; if(lx<0||lx>15||lz<0||lz>15){ const ci=C.ci+(lx<0?-1:lx>15?1:0), cj=C.cj+(lz<0?-1:lz>15?1:0); D=suChunk(ci,cj,make); if(!D) return null; lx=(lx+16)&15; lz=(lz+16)&15; } return [D,lz*16+lx]; }
+const _suN=[[-1,0],[1,0],[0,-1],[0,1]];
+// un paso: cada cuadrito le pasa a sus vecinos más bajitos
+function suStep(sub){ const L=SU.list; let moved=0;
+  for(const C of L){ if(C.aw<=0 || !C.n) continue; const H=C.h, Tt=C.t;
+    for(let i=0;i<256;i++){ const h=H[i]; if(h<=0) continue; const p=Tt[i], T=SU_T[p]; if(T.k*sub<=0) continue; const S=suB(C,i)+h; let F=0, nb=null, fl=null;
+      for(let q=0;q<4;q++){ const N=suNb(C,i,_suN[q][0],_suN[q][1],h>T.minH); if(!N) continue; const D=N[0], j=N[1], tj=D.t[j]; if(tj && tj!==p) continue;
+        const hj=D.h[j], Sj=suB(D,j)+hj, diff=S-Sj-T.Y-(D.pr[j]>0?.3:0); if(diff<=0) continue;   /* (la huella recién hecha no se rellena hasta que se le pasa) */ if(hj<=0 && h<T.minH) continue; const f=diff*T.k*sub; if(f<=1e-7) continue;
+        if(!nb){ nb=[]; fl=[]; } nb.push(D,j); fl.push(f); F+=f; }
+      if(!nb) continue; const lim=h*.9, s=F>lim?lim/F:1; C.d[i]-=F*s;
+      for(let q=0;q<fl.length;q++){ const D=nb[q*2], j=nb[q*2+1], f=fl[q]*s; D.d[j]+=f; if(!D.t[j]){ D.t[j]=p; D.c[j]=C.c[i]; } if(D!==C) D.aw=2; } } }
+  for(const C of L){ if(C.aw<=0 && !C.pend) continue; const H=C.h, Dd=C.d; let mx=0, n=0;
+    for(let i=0;i<256;i++){ const d=Dd[i]; if(d!==0){ H[i]+=d; Dd[i]=0; const a=d<0?-d:d; if(a>mx) mx=a; } if(H[i]<=1e-5){ if(H[i]!==0 || C.t[i]){ H[i]=0; C.t[i]=0; } } else n++; }
+    C.n=n; C.pend=false; if(mx>2e-5){ C.dirty=true; C.aw=2; moved++; } }
+  return moved; }
+// echar: reparte el volumen (m³) en los cuadritos de un círculo
+function suPour(x,z,p,col,vol,r){ if(vol<=0) return 0; if(SU.vol+vol>SU.max){ vol=SU.max-SU.vol; if(vol<=0) return 0; } const m=SU.cs, R=Math.max(m*.6,r), cells=[];
+  for(let dz=-R;dz<=R+1e-6;dz+=m) for(let dx=-R;dx<=R+1e-6;dx+=m){ if(dx*dx+dz*dz>R*R+1e-6) continue; const q=suCell(x+dx,z+dz,true); if(!q) continue; const [C,i]=q; if(suB(C,i)>=1e3) continue; if(C.t[i] && C.t[i]!==p && C.h[i]>.01) continue; cells.push(q); }
+  if(!cells.length){ const q=suCell(x,z,true); if(!q) return 0; cells.push(q); }
+  const dh=vol/(cells.length*m*m), now=performance.now(); for(const [C,i] of cells){ C.lp=now; if(C.t[i]!==p){ C.t[i]=p; } if(p===5) C.c[i]=col|0; C.h[i]+=dh; C.aw=2; C.dirty=true; C.n=Math.max(C.n,1); C.ver++; }
+  SU.vol+=vol; return vol; }
+// quitar: todo lo que está junto de la misma sustancia (lo que se ve como un solo charco)
+function suRemoveAt(x,z){ const q=suCell(x,z,false); if(!q) return 0; const [C0,i0]=q, p=C0.t[i0]; if(!p) return 0; const seen=new Set(), st=[[C0,i0]]; let n=0;
+  while(st.length && n<40000){ const [C,i]=st.pop(), key=C.k*256+i; if(seen.has(key)) continue; seen.add(key); if(C.t[i]!==p || C.h[i]<=0) continue; C.h[i]=0; C.t[i]=0; C.dirty=true; C.aw=2; C.ver++; n++;
+    for(const [dx,dz] of _suN){ const N=suNb(C,i,dx,dz,false); if(N) st.push(N); } }
+  suRecount(); return n; }
+function suClear(){ for(const C of SU.list) for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } SU.ch.clear(); SU.list.length=0; SU.vol=0; SU.balls.forEach(b=>b.m && b.m.parent && b.m.parent.remove(b.m)); SU.balls.length=0; SU.drops.length=0; SU.emit.length=0; SU.feet=null; suDropsDraw(); }
+function suRecount(){ let v=0; const a=SU.cs*SU.cs; for(const C of SU.list){ let n=0; for(let i=0;i<256;i++){ const h=C.h[i]; if(h>0){ v+=h*a; n++; } } C.n=n; } SU.vol=v; }
+// ---- dibujarlas: cada trozo, una malla por sustancia (una rejilla de 17×17 esquinas) ----
+function suIndex(){ if(SU.idx) return SU.idx; const I=[]; for(let z=0;z<16;z++) for(let x=0;x<16;x++){ const a=z*17+x, b=a+1, c=a+17, d=c+1; I.push(a,c,b,b,c,d); } return SU.idx=new THREE.BufferAttribute(new Uint16Array(I),1); }
+function suMat(p){ if(SU.mats[p]) return SU.mats[p]; const T=SU_T[p]; const m=new THREE.MeshStandardMaterial({color:T.col||'#ffffff', roughness:T.ro, metalness:0, transparent:T.op<1, opacity:T.op, depthWrite:T.op>=.95, vertexColors:!!T.paint, polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-1});
+  if(p===1){ m.emissive=new THREE.Color('#0b2a44'); } if(p===6){ m.emissive=new THREE.Color('#2a2e36'); } return SU.mats[p]=m; }
+const _suCol=new THREE.Color();
+function suHash(a,b){ let h=(a*374761393+b*668265263)|0; h=(h^(h>>>13))*1274126177|0; return ((h^(h>>>16))>>>0)/4294967296; }
+function suBuild(C){ C.dirty=false; const types=new Set(); for(let i=0;i<256;i++) if(C.t[i] && C.h[i]>0) types.add(C.t[i]);
+  for(let p=1;p<=6;p++){ const has=types.has(p); let M=C.ms[p]; if(!has){ if(M){ M.visible=false; } continue; }
+    if(!M){ const g=new THREE.BufferGeometry(); g.setIndex(new THREE.BufferAttribute(new Uint16Array(1536),1)); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(289*3),3)); g.setAttribute('normal',new THREE.BufferAttribute(new Float32Array(289*3),3)); if(SU_T[p].paint) g.setAttribute('color',new THREE.BufferAttribute(new Float32Array(289*3),3));
+      M=new THREE.Mesh(g,suMat(p)); M.frustumCulled=false; M.receiveShadow=SU_T[p].op>=.95; M.castShadow=false; M.userData.noBatch=true; M.renderOrder=p===1?3:2; C.ms[p]=M; FREE.g.add(M); }
+    M.visible=true; { const I=M.geometry.index.array; let n=0; for(let i=0;i<256;i++){ if(!(C.t[i]===p && C.h[i]>0) && !(C.t[i]===0 && suNear(C,i,p))) continue; const x=i&15, z=i>>4, a=z*17+x, b=a+1, c=a+17, d=c+1; I[n++]=a; I[n++]=c; I[n++]=b; I[n++]=b; I[n++]=c; I[n++]=d; } M.geometry.index.needsUpdate=true; M.geometry.setDrawRange(0,n); }   // (solo los cuadritos que tienen esta sustancia)
+    const P=M.geometry.attributes.position.array, Cl=M.geometry.attributes.color?M.geometry.attributes.color.array:null, m=SU.cs, x0=FREE.X+C.ci*16*m, z0=FREE.Z+C.cj*16*m;
+    let dc=0; if(Cl){ const cnt={}; let bm=0; for(let i=0;i<256;i++) if(C.t[i]===5){ const v=(cnt[C.c[i]]=(cnt[C.c[i]]||0)+1); if(v>bm){ bm=v; dc=C.c[i]; } } }   // (el color de la orillita)
+    for(let vz=0;vz<=16;vz++) for(let vx=0;vx<=16;vx++){ let s=0, n=0, bmin=1e9, bc=-1, bh=0;
+      let f=0; for(let q=0;q<4;q++){ const N=suNb(C,0,vx-1+(q&1),vz-1+(q>>1),false); if(!N) continue; const D=N[0], j=N[1]; const b=suB(D,j); if(b>=1e3) continue; if(b<bmin) bmin=b; if(D.t[j]===p && D.h[j]>0){ s+=b+D.h[j]; n++; f++; if(D.h[j]>bh){ bh=D.h[j]; bc=D.c[j]; } } else if(!D.t[j] && b<=bmin+.05){ s+=b; n++; } }   // (junto a un cuadrito vacío la orilla baja: queda redondita)
+      const o=(vz*17+vx)*3; let y; if(f){ y=s/n+.004; if(p===6) y+=(suHash(C.ci*16+vx,C.cj*16+vz)-.5)*.05*Math.min(1,s/n-bmin>.02?1:0); } else y=(bmin<1e9?bmin:FREE.Y)-.012;
+      const gx=C.ci*16+vx, gz=C.cj*16+vz; P[o]=x0+vx*m+(suHash(gx,gz)-.5)*.09; P[o+1]=y; P[o+2]=z0+vz*m+(suHash(gz+7,gx+3)-.5)*.09;   /* (las esquinas un poquito movidas: las orillas no se ven de cuadritos) */ if(Cl){ _suCol.set(FREE_COLS[bc>=0?bc:dc]||'#ffffff').convertSRGBToLinear(); Cl[o]=_suCol.r; Cl[o+1]=_suCol.g; Cl[o+2]=_suCol.b; } }
+    M.geometry.attributes.position.needsUpdate=true; if(Cl) M.geometry.attributes.color.needsUpdate=true; M.geometry.computeVertexNormals(); } }
+// ¿algún vecino (también en diagonal) tiene esta sustancia? (la orillita que baja hasta el piso)
+function suNear(C,i,p){ for(let dz=-1;dz<=1;dz++) for(let dx=-1;dx<=1;dx++){ if(!dx && !dz) continue; const N=suNb(C,i,dx,dz,false); if(N && N[0].t[N[1]]===p && N[0].h[N[1]]>0) return true; } return false; }
+// ---- lo que pisa la sustancia la empuja (huellas) ----
+function suPush(x,z,yb,r,vx,vz,who){ const m=SU.cs, R=r+m*.5; let V=0, p=0, col=0, best=0; const out=[];
+  for(let dz=-R;dz<=R;dz+=m) for(let dx=-R;dx<=R;dx+=m){ const d2=dx*dx+dz*dz; if(d2>r*r) continue; const q=suCell(x+dx,z+dz,false); if(!q) continue; const [C,i]=q; const h=C.h[i]; if(h<=0) continue; const b=suB(C,i), S=b+h, cut=Math.max(b,yb);
+      if(S<=cut+.002) continue; const a=Math.min(h,S-cut), pt=C.t[i]; C.h[i]-=a; V+=a; if(a>best){ best=a; p=pt; col=C.c[i]; } if(cut<=b+.01) C.pr[i]=SU_T[pt].pr||0; if(C.h[i]<=1e-5){ C.h[i]=0; C.t[i]=0; } C.dirty=true; C.aw=2; C.ver++; }
+  if(V<=0) return null;
+  // lo que se quitó se va a la orillita (más hacia adelante si va caminando)
+  const sp=Math.hypot(vx,vz), ux=sp>.2?vx/sp:0, uz=sp>.2?vz/sp:0, R2=r+m*1.6; let W=0;
+  for(let dz=-R2;dz<=R2;dz+=m) for(let dx=-R2;dx<=R2;dx+=m){ const d=Math.hypot(dx,dz); if(d<=r || d>R2) continue; const q=suCell(x+dx,z+dz,true); if(!q) continue; const [C,i]=q; if(C.t[i] && C.t[i]!==p) continue; if(suB(C,i)>yb+.35) continue;
+      const cs=(dx*ux+dz*uz)/d, w=(sp>.2?Math.max(.03,.35+cs):1)*(1.6-(d-r)/(R2-r)); out.push(C,i,w); W+=w; }   /* (caminando: casi nada para atrás, así queda la huella) */
+  if(!W){ return null; } for(let k=0;k<out.length;k+=3){ const C=out[k], i=out[k+1], a=V*out[k+2]/W; if(!C.t[i]){ C.t[i]=p; C.c[i]=col; } C.h[i]+=a; C.n=Math.max(C.n,1); C.dirty=true; C.aw=2; C.ver++; }
+  return [p,V,col]; }
+// ¿qué hay bajo este punto? [sustancia, alto, superficie]
+function suAt(x,z){ const q=suCell(x,z,false); if(!q) return null; const [C,i]=q; if(!C.t[i] || C.h[i]<=0) return null; return [C.t[i], C.h[i], suB(C,i)+C.h[i], C.c[i]]; }
+// ---- la bola: crece mientras aprietas; al soltar sale volando; al chocar revienta según qué tan espesa es ----
+const _suSph=new THREE.SphereGeometry(1,18,12), _suDropG=new THREE.SphereGeometry(1,8,6);
+function suBallMat(p,col){ const k=p+':'+(p===5?col:0); if(SU.mats['b'+k]) return SU.mats['b'+k]; const T=SU_T[p];
+  const m=new THREE.MeshStandardMaterial({color:p===5?FREE_COLS[col]:T.col, roughness:T.ro*.8, transparent:T.op<1, opacity:Math.min(1,T.op+.08), emissive:new THREE.Color(p===5?FREE_COLS[col]:T.col).multiplyScalar(.25)}); return SU.mats['b'+k]=m; }
+function suVolOf(r){ return 4.18879*r*r*r; }
+function suSplat(p,col,vol,x,y,z,vx,vy,vz,nx,ny,nz,hit){ const T=SU_T[p], B=T.burst, sp=Math.hypot(vx,vy,vz);
+  try{ if(p===1||p===5) splashBurst(x,y,z,Math.min(1.4,.4+vol*4)); else dustBurst(x,y,z,10+Math.round(20*B),1.5+3*B,p===5?FREE_COLS[col]:T.col,.16); freeTone(p===4?140:p===3?120:260+B*300,.25,'sine',.12,90); }catch(e){}
+  if(p===6){ try{ for(let k=0;k<3;k++) dustBurst(x,y+.3,z,14,2,'#ffffff',.12); }catch(e){} }
+  if(p===5 && hit && hit.sel && hit.sel.k==='b' && (!FNET.on || FNET.host)) suStainObj(hit,col);
+  const fr=.25+.65*B, core=vol*(1-fr), N=Math.round(3+24*B);
+  // el centro: donde pegó (si fue en un lado de un bloque, queda al pie, por fuera)
+  const ox=x+nx*.18, oz=z+nz*.18; if(p===4) SU.emit.push({x:ox,z:oz,p,col,rate:core/1.6,left:core,r:.25}); else if(core>0) suPour(ox,oz,p,col,core,Math.max(.25,Math.cbrt(core)*(p===3?1.1:1.4)));
+  if(N>0 && fr>0){ const dv=vol*fr/N, rx=vx-2*(vx*nx+vy*ny+vz*nz)*nx, ry=vy-2*(vx*nx+vy*ny+vz*nz)*ny, rz=vz-2*(vx*nx+vy*ny+vz*nz)*nz, rl=Math.hypot(rx,ry,rz)||1;
+    for(let k=0;k<N;k++){ const a=Math.random()*6.283, u=Math.random(), s=(1.5+6*B)*(.35+.65*Math.random()), hx=Math.cos(a)*Math.sqrt(1-u*u), hz=Math.sin(a)*Math.sqrt(1-u*u);
+      let dx=hx+nx*.8+rx/rl*.5*B, dy=u*.9+ny*.8+.4, dz=hz+nz*.8+rz/rl*.5*B; const l=Math.hypot(dx,dy,dz)||1;
+      if(SU.drops.length<90) SU.drops.push({x:x+nx*.1,y:y+.05+ny*.1,z:z+nz*.1,vx:dx/l*s,vy:dy/l*s,vz:dz/l*s,p,col,v:dv,r:Math.min(.09,.03+Math.cbrt(dv)*.25),t:0}); } } }
+function suStainObj(o,col){ if(!o || !o.sel || o.sel.k!=='b' || o.sel.b===col) return; try{ if(freeRepaint(o,col)){ if(FNET.on && FNET.host && o.nid) FNET.dirty.add(o.bk); freeSaveSoon(); } }catch(e){} }
+// lo que hay en ese punto para una bola o gota: el piso/sustancia, una pieza sólida, una pelota o un peluche
+function suHit(x,y,z,r,skipMe){ const q=suCell(x,z,false); let g; if(q){ const [C,i]=q; g=suB(C,i)+C.h[i]; } else { g=freeGround(x,z,y+r); if(g===null) g=FREE.Y; }
+  if(y-r<=g) return {nx:0,ny:1,nz:0,y:g,o:null};
+  for(const o of fgQuery(x-r,z-r,x+r,z+r)){ const bs=o.cols || (o.solid?[o.box]:null); if(!bs) continue; for(const b of bs){ const cx=Math.max(b.min.x,Math.min(b.max.x,x)), cy=Math.max(b.min.y,Math.min(b.max.y,y)), cz=Math.max(b.min.z,Math.min(b.max.z,z)), dx=x-cx, dy=y-cy, dz=z-cz, d=Math.hypot(dx,dy,dz);
+      if(d<r){ let nx=dx, ny=dy, nz=dz; if(d<1e-4){ nx=0; ny=1; nz=0; } else { nx/=d; ny/=d; nz/=d; } return {nx,ny,nz,o}; } } }
+  for(const d of FREE.dyn){ const c=d.root.position, rr=d.r+r; if((c.x-x)**2+(c.y-y)**2+(c.z-z)**2<rr*rr){ const l=Math.hypot(x-c.x,y-c.y,z-c.z)||1; return {nx:(x-c.x)/l,ny:(y-c.y)/l,nz:(z-c.z)/l,o:d,dyn:true}; } }
+  const W=[]; if(!skipMe) W.push(player.pos); for(const rm of mp.remotes.values()) if(rm.pos) W.push(rm.pos);
+  for(const w of W){ if(y>w.y-.1 && y<w.y+PLAYER_H+.1 && Math.hypot(x-w.x,z-w.z)<.45+r){ const l=Math.hypot(x-w.x,z-w.z)||1; return {nx:(x-w.x)/l,ny:0,nz:(z-w.z)/l,o:null,pl:w}; } }
+  return null; }
+function suDropsDraw(){ if(!SU.dm) return; const L=SU.drops; for(let p=1;p<=6;p++){ const I=SU.dm[p]; if(I){ I.count=0; I.visible=false; } } const M=new THREE.Matrix4();
+  for(const d of L){ let I=SU.dm[d.p]; if(!I){ I=SU.dm[d.p]=new THREE.InstancedMesh(_suDropG,d.p===5?new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.3}):suBallMat(d.p,0),90); if(d.p===5) I.setColorAt(0,_suCol.set('#fff')); I.userData.noBatch=true; I.frustumCulled=false; I.count=0; FREE.g.add(I); } if(I.count>=90) continue;
+    M.makeScale(d.r,d.r,d.r).setPosition(d.x,d.y,d.z); I.setMatrixAt(I.count,M); if(d.p===5){ I.setColorAt(I.count,_suCol.set(FREE_COLS[d.col]||'#fff')); if(I.instanceColor) I.instanceColor.needsUpdate=true; } I.count++; I.visible=true; I.instanceMatrix.needsUpdate=true; } }
+// ---- la cubeta en la mano: Echar / Chorro / Listo ----
+function suSelT(){ return FREE.sel && FREE.sel.k==='s' ? SU_T[FREE.sel.a] : null; }
+function suActions(){ const T=suSelT(); if(!T) return null; const m=SU.mode;
+  return [m<3?{label:'🪣 Echar', run:suHoldStart, charge:true}:{label:'🔮 Cargar bola', run:suHoldStart, charge:true}, {label:m<3?'Chorro: '+SU_SIZES[m][0]:'Chorro: 🔮 bola', run:()=>{ if(SU.hold) suHoldEnd(); SU.mode=(SU.mode+1)%4; FREE.tipTx=null; freeRenderHud(); }}, {label:'Listo', run:()=>{ if(SU.hold) suHoldEnd(); freeSelect(null); }}]; }
+function suHoldStart(){ const T=suSelT(); if(!T || SU.hold || performance.now()-SU.holdEnd<350) return; if(SU.vol>=SU.max-.005){ flashNote('Ya hay mucha sustancia: quita un poco con el bote de basura o la escoba'); return; }
+  SU.hold={t:performance.now(), mode:SU.mode, p:T.i, col:(FREE.sel.b|0), done:0}; }
+function suHoldEnd(){ const H=SU.hold; if(!H) return; SU.hold=null; SU.holdEnd=performance.now(); const el=(performance.now()-H.t)/1000;
+  if(H.mode<3){ const need=SU_SIZES[H.mode][2]*.35-H.done; if(need>0){ const a=freeAim(); suNetPour(a.x,a.z,H.p,H.col,need,SU_SIZES[H.mode][1]); } }   // un toque: un chorrito
+  else { const r=suBallR(el); suLaunch(H.p,H.col,r); if(SU.hb){ SU.hb.visible=false; } } freeRenderHud(); }
+function suBallR(el){ return .12+.36*Math.min(1,el/2.2); }
+function suBallPos(r){ const f=player.facing; return [player.pos.x+Math.sin(f)*(.5+r)-Math.cos(f)*(.35+r*.5), player.pos.y+1.2+r*.4, player.pos.z+Math.cos(f)*(.5+r)+Math.sin(f)*(.35+r*.5)]; }   // (enfrente y un poco a un lado, para que se vea)
+function suLaunch(p,col,r,net){ let x, y, z, vx, vy, vz; if(net){ [x,y,z,vx,vy,vz]=net; } else { [x,y,z]=suBallPos(r); _frR.setFromCamera(_frC.set(0,camMode==='first'?0:.2),camera); const D=_frR.ray.direction, s=14-7*Math.min(1,(r-.12)/.36); vx=D.x*s; vy=D.y*s+2.2; vz=D.z*s;
+    if(FNET.on && !FNET.host) fnOp(['qb',p,col,+r.toFixed(3),...[x-FREE.X,y-FREE.Y,z-FREE.Z,vx,vy,vz].map(v=>+v.toFixed(2))]); }
+  const mm=new THREE.Mesh(_suSph,suBallMat(p,col)); mm.scale.setScalar(r); mm.position.set(x,y,z); mm.userData.noBatch=true; FREE.g.add(mm);
+  SU.balls.push({x,y,z,vx,vy,vz,r,p,col,v:suVolOf(r),m:mm,t:0,me:!net}); try{ freeTone(300+200*(1-r),.2,'triangle',.06,500); }catch(e){} }
+// en una sala: lo que echas lo manda el dueño (tú lo ves al momento, el dueño lo reparte a todos)
+function suNetPour(x,z,p,col,vol,r){ suPour(x,z,p,col,vol,r); if(FNET.on && !FNET.host) fnOp(['q',p,col,+(x-FREE.X).toFixed(2),+(z-FREE.Z).toFixed(2),+vol.toFixed(4),+r.toFixed(2)]); freeSaveSoon(); }
+// ---- cada cuadro ----
+function suTick(dt){ const T=suSelT(); SU.T+=dt;
+  // la cubeta: el chorro sale mientras aprietas; la bola crece
+  if(SU.hold && (!T || FREE.play || FREE.del || FREE.paint)){ SU.hold=null; }
+  if(SU.hold){ const H=SU.hold, el=(performance.now()-H.t)/1000;
+    if(H.mode<3){ const S=SU_SIZES[H.mode], a=freeAim(); if(a && a.ok){ const v=S[2]*dt; SU.acc=(SU.acc||0)+v; H.done+=v; if(SU.acc>S[2]*.12){ suNetPour(a.x,a.z,H.p,H.col,SU.acc,S[1]); SU.acc=0; } suStream(true,a,H.p,H.col,S[1]); } }
+    else { const r=suBallR(el); if(!SU.hb){ SU.hb=new THREE.Mesh(_suSph,suBallMat(H.p,H.col)); SU.hb.userData.noBatch=true; FREE.g.add(SU.hb); } SU.hb.material=suBallMat(H.p,H.col); SU.hb.visible=true; const [x,y,z]=suBallPos(r), w=1+Math.sin(SU.T*13)*.05;
+      SU.hb.position.set(x,y,z); SU.hb.scale.set(r*w,r/w,r*w); ui('freeTxt').textContent='Bola de '+SU_T[H.p].n.toLowerCase()+' '+'●'.repeat(1+Math.round(Math.min(1,el/2.2)*4))+' · suelta para lanzarla'; if(el>6) suHoldEnd(); suStream(false); } }
+  else { suStream(false); if(SU.hb) SU.hb.visible=false; }
+  { const gh=FREE.ghost; if(gh && T){ const ring=gh.getObjectByName('suRing'); if(ring){ ring.visible=SU.mode<3; const r=SU.mode<3?SU_SIZES[SU.mode][1]:.3; ring.scale.set(r,r,r); } const bk=gh.getObjectByName('suBucket'); if(bk) bk.visible=SU.mode<3; } }
+  if(!SU.list.length && !SU.balls.length && !SU.drops.length && !SU.emit.length){ SU.slow=1; SU.slip=false; return; }
+  // la miel que escurre despacito
+  for(let k=SU.emit.length-1;k>=0;k--){ const E=SU.emit[k], a=Math.min(E.left,E.rate*dt); suPour(E.x,E.z,E.p,E.col,a,E.r); E.left-=a; if(E.left<=1e-6) SU.emit.splice(k,1); }
+  // bolas
+  for(let k=SU.balls.length-1;k>=0;k--){ const B=SU.balls[k]; B.t+=dt; B.vy-=9.5*dt; const n=Math.max(1,Math.ceil(Math.hypot(B.vx,B.vy,B.vz)*dt/(B.r*.6)));
+    let hit=null; for(let s=0;s<n && !hit;s++){ B.x+=B.vx*dt/n; B.y+=B.vy*dt/n; B.z+=B.vz*dt/n; hit=suHit(B.x,B.y,B.z,B.r,B.t<.35); }
+    if(!freeInside(B.x,B.z,.1) || B.t>6) hit=hit||{nx:0,ny:1,nz:0};
+    if(hit){ if(hit.dyn && hit.o){ try{ freeWake(hit.o); hit.o.v.x+=B.vx*.25; hit.o.v.y+=2; hit.o.v.z+=B.vz*.25; }catch(e){} }
+      if(hit.pl===player.pos){ player.vel.x+=B.vx*.15; player.vel.z+=B.vz*.15; try{ flashNote('¡Te cayó '+SU_T[B.p].n.toLowerCase()+'!'); }catch(e){} }
+      suSplat(B.p,B.col,B.v,B.x,B.y,B.z,B.vx,B.vy,B.vz,hit.nx,hit.ny,hit.nz,hit.o); B.m.parent && B.m.parent.remove(B.m); SU.balls.splice(k,1); continue; }
+    B.m.position.set(B.x,B.y,B.z); const w=1+Math.sin(B.t*18)*.06; B.m.scale.set(B.r*w,B.r/w,B.r*w); }
+  // gotitas
+  if(SU.drops.length){ for(let k=SU.drops.length-1;k>=0;k--){ const d=SU.drops[k]; d.t+=dt; d.vy-=9.8*dt; d.x+=d.vx*dt; d.y+=d.vy*dt; d.z+=d.vz*dt; const h=d.t>.05?suHit(d.x,d.y,d.z,d.r,true):null;
+      if(h || d.t>4 || !freeInside(d.x,d.z,.1)){ if(h && h.o && d.p===5 && !h.dyn && (!FNET.on || FNET.host)) suStainObj(h.o,d.col); const ox=h&&h.ny<.5?d.x+h.nx*.15:d.x, oz=h&&h.ny<.5?d.z+h.nz*.15:d.z; if(freeInside(ox,oz,.1)) suPour(ox,oz,d.p,d.col,d.v,.12); SU.drops.splice(k,1); } }
+    suDropsDraw(); } else if(SU.dmOn){ suDropsDraw(); }
+  SU.dmOn=SU.drops.length>0;
+  // lo que pisa
+  let slowT=1; SU.slip=false; const me=player.pos;
+  if(FREE.on && !player.car && !FREE.ride){ let st=suAt(me.x,me.z); if(!st) for(const [ox,oz] of _suN){ const q=suAt(me.x+ox*.42,me.z+oz*.42); if(q && q[2]>me.y+.01 && (!st || q[2]>st[2])) st=q; }   // (parado en tu huella, lo de alrededor también te detiene)
+    if(st && st[2]>me.y-.05){ const Ty=SU_T[st[0]], cc=suCell(me.x,me.z,false), k=Math.min(1,(st[2]-Math.max(me.y,cc?suB(cc[0],cc[1]):FREE.Y))/.05); slowT=1-(1-Ty.slow)*Math.max(0,k); SU.slip=!!Ty.slip;
+      if(Ty.paint && st[1]>.003) SU.feet={c:st[3], amt:1, d:0, side:1, lx:me.x, lz:me.z}; }
+    const r=suPush(me.x,me.z,me.y,.3,player.vel.x,player.vel.z,'me'); if(r){ const Ty=SU_T[r[0]]; slowT=Math.min(slowT,1-(1-Ty.slow)*Math.min(1,r[1]/.04)); if(Ty.slip) SU.slip=true; if(Ty.paint) SU.feet={c:r[2], amt:1, d:0, side:1, lx:me.x, lz:me.z}; }   // (caminando la vas abriendo: lo que empujas también te frena)
+    if(r){ const sp=Math.hypot(player.vel.x,player.vel.z); if(sp>1 && (SU.fxT=(SU.fxT||0)-dt)<=0){ SU.fxT=.22; try{ if(r[0]===1) splashBurst(me.x,me.y+.05,me.z,.35); else if(r[0]===6) dustBurst(me.x,me.y+.4,me.z,8,1.2,'#ffffff',.1); else if(r[0]!==5) dustBurst(me.x,me.y+.05,me.z,4,.8,SU_T[r[0]].col,.07); }catch(e){} } }
+    // huellitas de pintura donde ya no hay
+    const F=SU.feet; if(F && F.amt>.15){ const dd=Math.hypot(me.x-F.lx,me.z-F.lz); F.d+=dd; F.lx=me.x; F.lz=me.z; if(F.d>.36 && player.grounded){ F.d=0; F.side=-F.side; const f=player.facing, ox=Math.cos(f)*.12*F.side, oz=-Math.sin(f)*.12*F.side, st2=suAt(me.x+ox,me.z+oz);
+        if(!st2){ suPour(me.x+ox,me.z+oz,5,F.c,.0035*SU.cs*SU.cs*F.amt*2.2,.05); F.amt*=.86; } } } else SU.feet=null; }
+  SU.slow+=(slowT-SU.slow)*Math.min(1,dt*(slowT<SU.slow?12:3));
+  for(const rm of mp.remotes.values()) if(rm.pos && rm.fz){ const q=rm._suP||(rm._suP=rm.pos.clone()); suPush(rm.pos.x,rm.pos.z,rm.pos.y,.3,(rm.pos.x-q.x)/Math.max(dt,1e-3),(rm.pos.z-q.z)/Math.max(dt,1e-3),'r'); q.copy(rm.pos); }
+  for(const d of FREE.dyn){ if(d.sleep || d.held || d.P.st) continue; const c=d.root.position, rr=d.bx?Math.min(.45,d.bx.rad*.75):d.r*.8, yb=d.bx?c.y-d.bx.rad*.6:c.y-d.r; if(!SU.list.length) break; const st=suAt(c.x,c.z);
+    const pu=suPush(c.x,c.z,yb,rr,d.v.x,d.v.z,'d'), tp=pu?pu[0]:(st && st[2]>yb?st[0]:0); if(!tp) continue; const Ty=SU_T[tp], k=Math.exp(-Ty.drag*dt*(pu?Math.min(1,.4+pu[1]/.03):Math.min(1,(st[2]-yb)/(d.r||.2)))); d.v.x*=k; d.v.z*=k; if(Ty.drag>3 && d.v.y>0) d.v.y*=.3; if(d.bx) d.bx.w.multiplyScalar(k); }
+  // que corran (el agua da 3 pasitos por cuadro; si nadie se mueve, se duermen)
+  { const W=Math.min(4.8,dt*90), n=Math.max(1,Math.ceil(W)), sb=Math.min(1.2,W/n); for(let s=0;s<n;s++) suStep(sb); }   // (lo mismo por segundo a 20 o a 120 cuadros)
+  for(const C of SU.list){ if(C.aw>0){ C.aw-=dt; } }
+  // la espuma se deshace y las huellitas de pintura se borran (cada ¼ s)
+  if((SU.dk+=dt)>.25){ const a=SU.dk; SU.dk=0; for(const C of SU.list){ let ch=false; for(let i=0;i<256;i++){ if(C.pr[i]>0){ C.pr[i]-=a; if(C.pr[i]<=0){ C.pr[i]=0; C.aw=Math.max(C.aw,1); } } const t=C.t[i]; if(!t) continue; if(t===6){ C.h[i]-=a*.012; ch=true; } else if(t===5 && C.h[i]<.006){ C.h[i]-=a*.00025; ch=true; } if(C.h[i]<=1e-5){ C.h[i]=0; C.t[i]=0; } } if(ch){ C.dirty=true; C.aw=Math.max(C.aw,.3); C.ver++; } }
+    // la pintura mancha los bloques que toca (solo el dueño de la sala; lo demás se reparte)
+    if(!FNET.on || FNET.host) for(const C of SU.list){ if(!C.n) continue; for(let i=0;i<256;i++){ if(C.t[i]!==5 || C.h[i]<.008) continue; const S=suB(C,i)+C.h[i]; for(const [dx,dz] of _suN){ const N=suNb(C,i,dx,dz,false); if(!N) continue; const bj=suB(N[0],N[1]); if(bj<S+.02 || bj>=1e3) continue; const [x,z]=suXZ(N[0],N[1]);
+          for(const o of fgQuery(x,z,x,z)){ if(o.sel && o.sel.k==='b' && o.box.min.y<S+.01 && o.box.max.y>S-.05 && x>=o.box.min.x && x<=o.box.max.x && z>=o.box.min.z && z<=o.box.max.z) suStainObj(o,C.c[i]); } } } } }
+  // y se quitan los trozos vacíos que ya no se mueven
+  if((SU.gc=(SU.gc||0)+dt)>2){ SU.gc=0; suRecount(); for(let k=SU.list.length-1;k>=0;k--){ const C=SU.list[k]; if(C.n || C.aw>0) continue; for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } SU.ch.delete(C.k); SU.list.splice(k,1); } }
+  // dibujar (los que cambiaron; en los teléfonos lentos, menos por cuadro)
+  let budget=settings.quality==='min'||settings.quality==='low'?6:12; const L=SU.list, N=L.length; for(let k=0;k<N && budget>0;k++){ const C=L[(SU.rb+k)%N]; if(C.dirty){ suBuild(C); budget--; } } SU.rb=(SU.rb+1)%Math.max(1,N); }
+// el chorro que cae de la cubeta
+function suStream(on,a,p,col,r){ if(!on){ if(SU.st) SU.st.visible=false; return; } if(!SU.st){ SU.st=new THREE.Mesh(new THREE.CylinderGeometry(1,1,1,10,1,true),suBallMat(1,0)); SU.st.userData.noBatch=true; FREE.g.add(SU.st); }
+  const s=SU.st, gy=a.y, top=gy+.85, w=.03+r*.12; s.material=suBallMat(p,col); s.visible=true; s.position.set(a.x,(gy+top)/2,a.z); s.scale.set(w*(1+Math.sin(SU.T*30)*.15),top-gy,w); }
+// la cubeta (fantasma y fotito)
+function suMakeBucket(root,p,col){ const T=SU_T[p], c=p===5?FREE_COLS[col|0]:T.col, g=new THREE.Group(); g.name='suBucket'; g.position.set(.25,.95,0); g.rotation.z=.85; root.add(g);
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(.24,.18,.34,16,1,true),FM('#c8ccd6')); body.material.side=THREE.DoubleSide; g.add(body); const bot=new THREE.Mesh(new THREE.CircleGeometry(.18,16),FM('#aeb3bf')); bot.rotation.x=Math.PI/2; bot.position.y=-.17; g.add(bot);
+  const inn=new THREE.Mesh(new THREE.CircleGeometry(.22,16),new THREE.MeshStandardMaterial({color:c,roughness:T.ro})); inn.rotation.x=-Math.PI/2; inn.position.y=.12; g.add(inn); const hd=new THREE.Mesh(new THREE.TorusGeometry(.22,.015,6,16,Math.PI),FM('#6b7080')); hd.position.y=.17; g.add(hd);
+  const blob=new THREE.Mesh(new THREE.SphereGeometry(.42,18,10,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:c,roughness:T.ro,emissive:new THREE.Color(c).multiplyScalar(.3)})); blob.scale.y=p===6?1:p===3?.55:p===1?.18:.35; root.add(blob);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(.93,1,32),new THREE.MeshBasicMaterial({color:'#ffffff',transparent:true,opacity:.6,side:THREE.DoubleSide})); ring.name='suRing'; ring.rotation.x=-Math.PI/2; ring.position.y=.03; ring.visible=false; ring.scale.setScalar(.01); root.add(ring); return true; }   // (el aro solo se ve en el piso al apuntar)
+// ---- guardar ----
+function suPack(){ suRecount(); if(!SU.list.length || SU.vol<1e-4) return undefined; const out=[]; for(const C of SU.list){ if(!C.n) continue; const s=suEnc(C); if(s) out.push([C.ci,C.cj,s]); } return out.length?out:undefined; }
+function suUnpack(L){ suClear(); if(!Array.isArray(L)) return; for(const e of L.slice(0,SU.maxCh)){ if(!Array.isArray(e) || e.length!==3 || !Number.isInteger(e[0]) || !Number.isInteger(e[1]) || typeof e[2]!=='string') continue; const C=suChunk(e[0],e[1],true); if(C) suDec(C,e[2]); } suRecount(); }
+// un trozo en texto: grupos «tipo,color,cuántos,alturas» (alturas de 3 en 3 mm, 2 letras); «0,n» = n vacíos
+function suEnc(C){ const parts=[]; let i=0; while(i<256){ const t=C.h[i]>.0015?C.t[i]:0, c=t===5?C.c[i]:0; let j=i; const hs=[];
+    while(j<256){ const tj=C.h[j]>.0015?C.t[j]:0, cj=tj===5?C.c[j]:0; if(tj!==t || cj!==c) break; if(t) hs.push(Math.min(1295,Math.round(C.h[j]/.003)).toString(36).padStart(2,'0')); j++; }
+    parts.push(t?t+','+c+','+(j-i)+','+hs.join(''):'0,'+(j-i)); i=j; } return parts.join(';'); }
+function suDec(C,s){ C.h.fill(0); C.t.fill(0); C.c.fill(0); let i=0; for(const g of s.split(';')){ const q=g.split(','), t=+q[0]|0; if(!t){ i+=Math.max(0,+q[1]|0); continue; } const c=+q[1]|0, n=+q[2]|0, H=q[3]||''; if(t<1||t>6) { i+=n; continue; }
+    for(let k=0;k<n && i<256;k++,i++){ const h=parseInt(H.substr(k*2,2),36)*.003; if(h>0){ C.h[i]=h; C.t[i]=t; C.c[i]=Math.max(0,Math.min(FREE_COLS.length-1,c)); } } if(i>=256) break; }
+  C.dirty=true; C.aw=1; C.n=1; C.ver++; }
+// ---- en una sala: el dueño manda cómo están (unos trozos cada vez, primero los que cambiaron) ----
+function suNetPack(budget){ if(!SU.list.length && !SU.balls.length) return {c:[], k:'', b:[]}; const out=[]; let used=0; const add=C=>{ const s=C.n?suEnc(C):''; if(used+s.length>budget && out.length) return false; out.push([C.ci,C.cj,s]); used+=s.length+12; SU.sent.set(C.k,C.ver); return true; };
+  for(const C of SU.list){ if(out.length>=3) break; if((SU.sent.get(C.k)||0)!==C.ver && (C.n || SU.sent.has(C.k))){ if(!add(C)) break; } }
+  if(out.length<3 && SU.list.length){ for(let k=0;k<SU.list.length;k++){ const C=SU.list[(SU.rr=((SU.rr|0)+1)%SU.list.length)]; if(C.n && !out.some(e=>e[0]===C.ci&&e[1]===C.cj)){ add(C); break; } } }   // (uno de los quietos, para quien acaba de llegar)
+  return {c:out, k:SU.list.filter(C=>C.n).map(C=>C.ci+'.'+C.cj).join(' '), b:SU.balls.filter(B=>B.me && B.t<1.5).map(B=>B.id||(B.id=MY_PID+(++SU.netV))).slice(0,4).map(id=>{ const B=SU.balls.find(q=>q.id===id); return [id,B.p,B.col,+B.r.toFixed(3),...[B.x-FREE.X,B.y-FREE.Y,B.z-FREE.Z,B.vx,B.vy,B.vz].map(v=>+v.toFixed(2))]; })}; }
+function suNetApply(q){ if(!q || typeof q!=='object') return; const now=performance.now();
+  if(Array.isArray(q.c)) for(const e of q.c.slice(0,4)){ if(!Array.isArray(e) || !Number.isInteger(e[0]) || !Number.isInteger(e[1]) || typeof e[2]!=='string' || e[2].length>3000) continue; const C=suChunk(e[0],e[1],true); if(!C || now-(C.lp||0)<1200) continue; if(e[2]) suDec(C,e[2]); else { C.h.fill(0); C.t.fill(0); C.n=0; C.dirty=true; } C.rx=now; }
+  if(typeof q.k==='string' && q.k.length<4000){ const keep=new Set(q.k.split(' ').filter(Boolean)); for(const C of SU.list){ if(C.n && !keep.has(C.ci+'.'+C.cj) && now-(C.rx||0)>2500 && now-(C.lp||0)>2500){ C.h.fill(0); C.t.fill(0); C.n=0; C.dirty=true; } } }
+  if(Array.isArray(q.b)) for(const e of q.b.slice(0,6)){ if(!Array.isArray(e) || e.length!==10 || typeof e[0]!=='string' || SU.seen.has(e[0])) continue; SU.seen.add(e[0]); if(SU.seen.size>200) SU.seen.clear(); const [id,p,col,r,...v]=e; if(!(p>=1&&p<=6) || !(r>.05&&r<.6) || !v.every(Number.isFinite)) continue;
+    suLaunch(p,col|0,r,[FREE.X+v[0],FREE.Y+v[1],FREE.Z+v[2],v[3],v[4],v[5]]); } }
+function suNetOp(pid,op){ const t=op[1], n=Number.isFinite;
+  if(t==='q'){ const [,,p,col,x,z,vol,r]=op; if(!(p>=1&&p<=6) || !n(x) || !n(z) || !(vol>0&&vol<.2) || !(r>0&&r<1.2)) return; suPour(FREE.X+x,FREE.Z+z,p|0,col|0,vol,r); }
+  else if(t==='qb'){ const [,,p,col,r,...v]=op; if(!(p>=1&&p<=6) || !(r>.05&&r<.6) || v.length!==6 || !v.every(n)) return; suLaunch(p|0,col|0,r,[FREE.X+v[0],FREE.Y+v[1],FREE.Z+v[2],v[3],v[4],v[5]]); }
+  else if(t==='qx'){ const [,,x,z]=op; if(n(x) && n(z)) suRemoveAt(FREE.X+x,FREE.Z+z); }
+  else if(t==='qc') suClear(); }
 // ---- guardar ----
 function freeSaveSoon(){ FREE.saveT=1.2; }
 function freeSave(){ if(FREE.ctx==='net') return; try{ const au=(e,o)=>{ if(o.au && o.au!==MY_PID) e.push(o.au); return e; }, s=FREE.objs.filter(o=>!o.par).map(o=>au([o.sel.k,o.sel.a,o.sel.b|0,+(o.x-FREE.X).toFixed(2),+(o.y-FREE.Y).toFixed(2),+(o.z-FREE.Z).toFixed(2),o.r],o)),
     d=FREE.dyn.filter(o=>!o.par && !o.tmp).map(o=>{ const p=o.root.position, e=au([o.id,+(p.x-FREE.X).toFixed(2),+(p.y-o.r-FREE.Y).toFixed(2),+(p.z-FREE.Z).toFixed(2)],o); if(o.bx){ const q=o.root.quaternion; if(e.length<5) e.push(0); e.push([q.x,q.y,q.z,q.w].map(v=>+v.toFixed(3))); } return e; }), n={};
     for(const o of [...FREE.objs,...FREE.dyn]) if(o.au && o.au!==MY_PID && FNET.names[o.au]) n[o.au]=FNET.names[o.au];
-    if(FREE.ctx==='libre') localStorage.setItem('mundoPelucheLibre', JSON.stringify({v:1, s, d, n, env:FREE.env||undefined}));
+    if(FREE.ctx==='libre') localStorage.setItem('mundoPelucheLibre', JSON.stringify({v:1, s, d, n, env:FREE.env||undefined, su:suPack()}));   // (v232: las sustancias)
     else { const L=mapsLoad(), M=L.find(m=>m.id===FREE.ctx); if(M){ M.s=s; M.d=d; if(FREE.env) M.env=FREE.env; mapsStore(L); } } }catch(e){} }
-function freeClearAll(){ FREE.objs.slice().forEach(freeDrop); FREE.dyn.slice().forEach(freeDrop); }
+function freeClearAll(){ FREE.objs.slice().forEach(freeDrop); FREE.dyn.slice().forEach(freeDrop); try{ suClear(); }catch(e){} }
 function freeLoad(){ const ctx=FREE.ctx; if(FREE.loaded===ctx) return; freeClearAll(); FREE.loaded=ctx; let o=null; FREE.env=freeEnvClean(null); freeEnvApply();
   if(ctx==='libre'){ try{ o=JSON.parse(localStorage.getItem('mundoPelucheLibre')||'null'); }catch(e){} } else { const M=mapById(ctx); if(M) o={v:1, s:M.s, d:M.d, env:M.env}; } if(!o || o.v!==1) return;
   FREE.env=freeEnvClean(o.env); freeEnvApply();   // v216: piso, hora y clima
+  if(ctx==='libre') try{ suUnpack(o.su); }catch(e){}   // v232: las sustancias
   if(o.n && typeof o.n==='object') for(const k in o.n) if(/^[a-z0-9]{8}$/.test(k)){ const nm=cleanName(o.n[k]); if(nm) FNET.names[k]=nm; }   // v215: quién puso cada cosa
   const okAu=v=>typeof v==='string' && /^[a-z0-9]{8}$/.test(v);
   for(const q of (o.s||[]).slice(0,FREE_MAX)){ if(!Array.isArray(q)) continue; const [k,a,b,x,y,z,r,qa]=q;
@@ -23835,7 +24060,7 @@ function freeRenderHud(){ const map=FREE.ctx!=='libre' && FREE.ctx!=='net', pl=F
   const M=map?mapById(FREE.ctx):null;
   const t=FREE.paint?'Escoge un color y apunta a un bloque con el puntero':FREE.del?'Quitar: apunta a algo con el puntero y toca «Quitar»':FREE.sel?freeSelName(FREE.sel)+' · '+freeOwn()+'/'+FREE_MAX:(M?'«'+(M.n||'Mi mapa')+'» · toca la cajita de bloques':'Toca la cajita de bloques (arriba) para escoger qué poner');
   ui('freeTxt').textContent=FNET.on ? '👥 '+FNET.code+' · '+Math.min(FN_MAX,mp.remotes.size+1)+'/'+FN_MAX+' · '+(FNET.host?'tu sala':(fnSynced()?'sala de '+(FNET.hostName||'tu amigo'):'cargando la sala de '+(FNET.hostName||'tu amigo')+'…'))+(FREE.sel||FREE.del||FREE.paint?' · '+t:'') : t;  try{ freeHudFit(); }catch(e){} }
-function freeSelName(s){ if(s.k==='b') return FREE_SHAPES[s.a].n; if(s.k==='v'||s.k==='t'||s.k==='n') return pqName(s); if(s.k==='m') return (mapById(s.a)||{}).n||'Minijuego'; if(s.k==='o') return (obById(s.a)||{}).n||'Objeto'; if(s.k==='h') return (HK_BY[s.a]||{}).n||'Pieza'; if(s.k==='g') return (FREE_GAME_BY[s.a]||{}).n||'Pieza'; if(s.k==='c') return (crGet(s.a)||{}).n||'Criatura'; return (FREE_PHYS_BY[s.a]||{}).n||'Objeto'; }
+function freeSelName(s){ if(s.k==='s') return 'Cubeta de '+((SU_T[s.a]||{}).n||'sustancia').toLowerCase(); if(s.k==='b') return FREE_SHAPES[s.a].n; if(s.k==='v'||s.k==='t'||s.k==='n') return pqName(s); if(s.k==='m') return (mapById(s.a)||{}).n||'Minijuego'; if(s.k==='o') return (obById(s.a)||{}).n||'Objeto'; if(s.k==='h') return (HK_BY[s.a]||{}).n||'Pieza'; if(s.k==='g') return (FREE_GAME_BY[s.a]||{}).n||'Pieza'; if(s.k==='c') return (crGet(s.a)||{}).n||'Criatura'; return (FREE_PHYS_BY[s.a]||{}).n||'Objeto'; }
 // v208: dibujito sin fondo de cada bloque y cosa con física (como las piezas del Taller), hecho una vez y guardado
 const FTH={c:{}, q:[], rig:null};
 function freeThumbRender(key){ const [k,a,b]=key.split(':'), sel={k,a:k==='b'?+a:a,b:+b||0};
@@ -23853,7 +24078,7 @@ function freeThumbEl(sel){ const key=sel.k+':'+sel.a+':'+(sel.b|0), im=document.
   if(FTH.c[key] && FTH.c[key]!=='x'){ im.src=FTH.c[key]; return [im]; } if(!FTH.q.includes(key)) FTH.q.push(key); const ph=document.createElement('div'); ph.className='ph'; im.hidden=true; return [ph,im]; }
 function freeThumbPump(){ if(!FTH.q.length) return; const key=FTH.q.shift(); if(FTH.c[key]) return; const url=FTH.c[key]=freeThumbRender(key);
   if(url!=='x') document.querySelectorAll('img[data-ft="'+key+'"]').forEach(im=>{ im.src=url; im.hidden=false; const ph=im.previousElementSibling; if(ph && ph.classList.contains('ph')) ph.remove(); }); }
-const FREE_TABS=[['bloques','🧱 Bloques'],['fisica','⚽ Física'],['parque','🎡 Parque'],['natura','🌳 Naturaleza'],['criaturas','🐾 Criaturas'],['construir','🏠 Construir'],['casa','🛋️ Casa'],['jardin','🌳 Jardín']];
+const FREE_TABS=[['bloques','🧱 Bloques'],['fisica','⚽ Física'],['parque','🎡 Parque'],['natura','🌳 Naturaleza'],['criaturas','🐾 Criaturas'],['construir','🏠 Construir'],['casa','🛋️ Casa'],['jardin','🌳 Jardín'],['sustancias','🪣 Sustancias']];   // (v232: las sustancias al final; los mapas no las usan)
 function freeOpenBox(){ const box=ui('freeBox'); if(!box.hidden){ box.hidden=true; return; } if(document.pointerLockElement) document.exitPointerLock(); box.hidden=false; freeRenderBox(); }
 function freeRenderBox(){ const tabs=ui('freeTabs'), grid=ui('freeGrid'), subs=ui('freeSubs'); tabs.textContent=''; subs.textContent=''; grid.textContent='';
   { const TB=mapTabs(); if(!TB.some(([id])=>id===FREE.tab)) FREE.tab=TB[0][0]; } mapTabs().forEach(([id,n])=>{ const b=document.createElement('button'); b.type='button'; b.className='fchip'+(FREE.tab===id?' on':''); b.textContent=n; b.onclick=()=>{ FREE.tab=id; FREE.sub=''; freeRenderBox(); }; tabs.appendChild(b); });
@@ -23863,6 +24088,8 @@ function freeRenderBox(){ const tabs=ui('freeTabs'), grid=ui('freeGrid'), subs=u
   if(FREE.tab==='criaturas'){ const L=crLoad(); if(!L.length){ const p=document.createElement('p'); p.className='cr-empty'; p.textContent='Todavía no tienes criaturas: hazlas en Jugar → Crear mapa → 🐾 Criatura'; grid.appendChild(p); }
     L.forEach(C=>item(C.n,freeThumbEl({k:'c',a:C.id,b:0}),()=>freeSelect({k:'c',a:C.id,b:0}))); return; }   // v211
   if(FREE.tab==='juego'){ FREE_GAME.forEach(G=>{ item(G.n,freeThumbEl({k:'g',a:G.id,b:0}),()=>freeSelect({k:'g',a:G.id,b:0})); }); return; }   // v209
+  if(FREE.tab==='sustancias'){ FREE_COLS.forEach((c,i)=>{ const b=document.createElement('button'); b.type='button'; b.className='free-col'+(FREE.col===i?' on':''); b.style.background=c; b.setAttribute('aria-label','Color de la pintura '+(i+1)); b.onclick=()=>{ FREE.col=i; if(FREE.sel && FREE.sel.k==='s' && FREE.sel.a===5) freeSelect({k:'s',a:5,b:i}); freeRenderBox(); }; subs.appendChild(b); });   // v232 (el color es para la pintura)
+    SU_T.forEach((T,i)=>{ if(!T) return; const b=T.paint?FREE.col:0; item(T.n,freeThumbEl({k:'s',a:i,b}),()=>freeSelect({k:'s',a:i,b})); }); return; }
   if(FREE.tab==='fisica'){ FREE_PHYS.forEach(P=>{ if(P.hid || P.toy) return; item(P.n,freeThumbEl({k:'p',a:P.id,b:0}),()=>freeSelect({k:'p',a:P.id,b:0})); }); return; }
   if(FREE.tab==='parque'){ if(!PQ_SUBS.some(x=>x[0]===FREE.sub)) FREE.sub=PQ_SUBS[0][0];   // v217
     PQ_SUBS.forEach(([id,n])=>{ const b=document.createElement('button'); b.type='button'; b.className='fchip'+(FREE.sub===id?' on':''); b.textContent=n; b.onclick=()=>{ FREE.sub=id; freeRenderBox(); }; subs.appendChild(b); });
@@ -24113,7 +24340,7 @@ function medItems(){ const tabs=mapTabs().map(t=>t[0]), out=[];
 function medRender(){ if(!MED.on) return; const U=MED.ui, box=U.inv; box.textContent='';
   U.bDel.classList.toggle('on',MED.tool==='del'); U.tools.hidden=!MED.toolsOpen; U.tools.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.t===MED.tool));
   const M=mapById(FREE.ctx), h=document.createElement('h4'); h.textContent='🗺️ '+((M&&M.n)||'Mi mapa'); box.appendChild(h);
-  const TB=mapTabs(); if(!MED.tab || (MED.tab!=='fav' && !TB.some(t=>t[0]===MED.tab))) MED.tab=TB[0][0];
+  const TB=mapTabs().filter(t=>t[0]!=='sustancias'); if(!MED.tab || (MED.tab!=='fav' && !TB.some(t=>t[0]===MED.tab))) MED.tab=TB[0][0];
   const tabs=document.createElement('div'); tabs.className='hed-tabs'; [['fav','★'],...TB].forEach(([id,n])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=id==='fav'?'★':n.split(' ')[0]; b.title=n; b.className=MED.tab===id?'on':''; b.onclick=()=>{ MED.tab=id; MED.sub=''; MED.q=''; medRender(); }; tabs.appendChild(b); });
   box.appendChild(tabs); const tn=document.createElement('h4'); tn.textContent=MED.tab==='fav'?'Favoritas':(TB.find(t=>t[0]===MED.tab)||['',''])[1].replace(/^\S+ /,''); box.appendChild(tn);
   const sr=document.createElement('div'); sr.className='hed-srch'; const inp=document.createElement('input'); inp.placeholder='Buscar pieza…'; inp.value=MED.q; inp.oninput=()=>{ MED.q=inp.value; medRenderGrid(); }; sr.appendChild(inp); box.appendChild(sr);
@@ -24664,7 +24891,8 @@ function fnPresence(){ if(typeof FNET==='undefined' || !FNET.on || !FREE.on) ret
       FNET.curL=L; }
     o.fb=FNET.curL; o.fh=FNET.bk.map(x=>x?x.h:fnHash(''));
     o.fa=FNET.au.slice(0,20).map(pid=>[pid, pid===MY_PID?(cleanName(profile.name)||'Peluche'):(FNET.names[pid]||'')]);
-    o.fe=freeEnvPack(FREE.env||FREE_ENV0); }
+    o.fe=freeEnvPack(FREE.env||FREE_ENV0);
+    if(SU.list.length || SU.balls.length || performance.now()-(SU.fqT||0)<7000){ if(SU.list.length || SU.balls.length) SU.fqT=performance.now(); const used=JSON.stringify(o).length; if(used<2900){ const q=suNetPack(Math.min(1100,3100-used)); if(q) o.fq=q; } } }   // (al quedar vacío se sigue avisando un rato, para que a los invitados también se les quite)   // v232: las sustancias (unos trozos cada vez)
   else o.fo=FNET.ops.slice(-12);
   return o; }
 function fnetParse(r,pr){ if(typeof FNET==='undefined') return; r.fs=pr.fs===1||pr.fs===2?pr.fs:0; r.fw=Number.isInteger(pr.fw)&&pr.fw>=0&&pr.fw<=24?pr.fw:0;   /* (v229: la burbuja va en fw; fb es la lista de bloques del dueño) */ r.fz=pr.fz===1?1:pr.fz===2?2:0; r.fpid=typeof pr.pi==='string' && /^[a-z0-9]{8}$/.test(pr.pi) ? pr.pi : null; r.fm=typeof pr.fm==='string' && /^[a-z0-9]{2,16}$/.test(pr.fm) ? pr.fm : null; const nm=cleanName(pr.n)||'Peluche';
@@ -24672,7 +24900,7 @@ function fnetParse(r,pr){ if(typeof FNET==='undefined') return; r.fs=pr.fs===1||
   if(r.fz===2) r.fo=Array.isArray(pr.fo)?pr.fo.slice(-12):null;
   if(r.fz===1 && r.fpid){
     if(!FNET.on && mp.room && !FNET.joining){ setTimeout(()=>{ if(!FNET.on && mp.room) fnBecomeGuest(r.fpid,nm); },0); return; }   // entraste con su código desde Multijugador
-    if(FNET.on && !FNET.host){ FNET.hostSeen=performance.now(); FNET.hostPid=r.fpid; FNET.hostName=nm; FNET.rx={fh:pr.fh, fd:pr.fd, fa:pr.fa, fy:pr.fy, fk:pr.fk}; { const e=freeEnvUnpack(pr.fe); if(e && JSON.stringify(e)!==JSON.stringify(FREE.env)){ FREE.env=e; freeEnvApply(); try{ freeEnvRender(); }catch(err){} } } if(Array.isArray(pr.fb)) for(const B of (Array.isArray(pr.fb[0])?pr.fb:[pr.fb])) if(Array.isArray(B) && B.length===3 && Number.isInteger(B[0])) (FNET.rxB||(FNET.rxB={}))[B[0]]=B; } } }
+    if(FNET.on && !FNET.host){ FNET.hostSeen=performance.now(); FNET.hostPid=r.fpid; FNET.hostName=nm; FNET.rx={fh:pr.fh, fd:pr.fd, fa:pr.fa, fy:pr.fy, fk:pr.fk}; if(pr.fq && typeof pr.fq==='object') try{ suNetApply(pr.fq); }catch(e){} { const e=freeEnvUnpack(pr.fe); if(e && JSON.stringify(e)!==JSON.stringify(FREE.env)){ FREE.env=e; freeEnvApply(); try{ freeEnvRender(); }catch(err){} } } if(Array.isArray(pr.fb)) for(const B of (Array.isArray(pr.fb[0])?pr.fb:[pr.fb])) if(Array.isArray(B) && B.length===3 && Number.isInteger(B[0])) (FNET.rxB||(FNET.rxB={}))[B[0]]=B; } } }
 // ---- cada cuadro ----
 function fnetTick(dt){ if(!FNET.on) return; if(!mp.room){ if(FNET.host){ fnReset(); freeRenderHud(); } else if(!FNET.ended) fnEnded(); return; }
   if(FNET.host) fnHostTick(); else fnGuestTick(dt);
@@ -24681,6 +24909,7 @@ function fnHostTick(){ for(const r of mp.remotes.values()){ if(r.fz!==2 || !r.fp
     const ops=r.fo.filter(op=>Array.isArray(op) && Number.isFinite(op[0]) && op[0]>last).sort((a,b)=>a[0]-b[0]);
     for(const op of ops){ last=op[0]; try{ fnApplyOp(pid,op); }catch(e){} } FNET.last[pid]=last; } }
 function fnApplyOp(pid,op){ const t=op[1];
+  if(t==='q'||t==='qb'||t==='qx'||t==='qc'){ suNetOp(pid,op); return; }   // v232: las sustancias de los invitados
   if(t==='a'){ const P=fnDec(op[2]); if(!P || FREE.objs.some(o=>o.nid===P.nid) || FREE.dyn.some(d=>d.nid===P.nid)) return;
     const o=P.k==='p' && !FREE_PHYS_BY[P.a].st ? freeAddDyn(P.a,P.x,P.y,P.z,true) : freeAddStatic({k:P.k,a:P.a,b:P.b},P.x,P.y,P.z,P.r,true);
     if(!o) return; if(o.bx){ bxYaw(o,P.r); o.sleep=true; } else if(o.P && o.P.toy && !o.P.roll && o.P.toy!=='slinky' && P.r) bxYaw(o,P.r); o.nid=P.nid; o.au=pid; o.bk=fnBk(P.nid); if(!o.dyn) FNET.dirty.add(o.bk); freeSaveSoon(); }
@@ -24865,7 +25094,7 @@ function freeClearMine(o){ return !FNET.on || fnMine(o); }
 function freeClearAsk(){ if(!FREE.on || FREE.play) return; const n=FREE.objs.filter(o=>!o.par && freeClearMine(o)).length+FREE.dyn.filter(d=>!d.par && freeClearMine(d)).length;
   if(!n){ flashNote(FNET.on?'No hay nada tuyo que borrar':'No hay nada que borrar'); return; }
   ui('freeClearP').textContent=(FNET.on?'Se quita todo lo que pusiste tú ('+n+(n===1?' cosa':' cosas')+'). Lo de tus amigos se queda.':'Se quita todo lo que hay en tu mundo ('+n+(n===1?' cosa':' cosas')+').')+' No se puede deshacer.'; ui('freeClearOv').hidden=false; }
-function freeWipeMine(){ ui('freeClearOv').hidden=true; if(!FREE.on) return; if(FREE.hold) freeRelease(0); if(FREE.myStick) freeStickDrop(); freeSelect(null); if(FREE.del) freeSetDel(false); if(FREE.paint) freePaintSet(false);
+function freeWipeMine(){ ui('freeClearOv').hidden=true; if(!FREE.on) return; if(SU.list.length){ suClear(); if(FNET.on && !FNET.host) fnOp(['qc']); }   // v232: también las sustancias if(FREE.hold) freeRelease(0); if(FREE.myStick) freeStickDrop(); freeSelect(null); if(FREE.del) freeSetDel(false); if(FREE.paint) freePaintSet(false);
   let n=0; for(const o of [...FREE.objs]){ if(o.par || !FREE.objs.includes(o) || !freeClearMine(o)) continue; fnLocalDel(o); freeDrop(o); n++; }
   for(const d of [...FREE.dyn]){ if(d.par || !FREE.dyn.includes(d) || !freeClearMine(d)) continue; fnLocalDel(d); freeDrop(d); n++; }
   for(const q of (FREE.sticks||[])) if(q.g.parent) q.g.parent.remove(q.g); FREE.sticks=[]; FREE.myStick=null; freeBubClear();
@@ -26279,9 +26508,9 @@ function update(dt,t){ myLabelUpdate();
     } else if(!dv){
       // cuesta arriba por lo muy empinado (montañas, paredes del cañón) se avanza más despacio (v119)
       let slopeK=1; if(dl>.01 && player.grounded){ const px=player.pos.x, pz=player.pos.z, t0=terrainH(px,pz); if(Math.abs(player.pos.y-t0)<.6){ const gr=(terrainH(px+dx/dl*1.5,pz+dz/dl*1.5)-t0)/1.5; slopeK=1/(1+Math.max(0,gr-.35)*1.1); } }
-      const speed = (run?7.5:4.2)*mag*(player.inWater?.55:1)*slopeK;
+      const speed = (run?7.5:4.2)*mag*(player.inWater?.55:1)*slopeK*(FREE.on && typeof SU!=='undefined'?SU.slow:1);   // v232: el lodo y la miel te frenan
       const target=tmp.set(0,0,0); if(dl>0.01){ target.set(dx/dl*speed,0,dz/dl*speed); }
-      { const ice=WI.done && wiOnIce(player.pos.x,player.pos.z,player.pos.y); if(ice) target.multiplyScalar(1.3); player.vel.lerp(target, 1-Math.exp(-dt*(ice?1.5:player.grounded?12:4))); }   // v140: en el hielo se patina
+      { const ice=WI.done && wiOnIce(player.pos.x,player.pos.z,player.pos.y); if(ice) target.multiplyScalar(1.3); const slip=FREE.on && typeof SU!=='undefined' && SU.slip; player.vel.lerp(target, 1-Math.exp(-dt*(ice?1.5:slip?4.5:player.grounded?12:4))); }   // v140: en el hielo se patina
       moving = Math.min(1, player.vel.length()/4.2);
     } else {
       // Tirarse al suelo: caer de panza, rebotar, deslizarse y levantarse
