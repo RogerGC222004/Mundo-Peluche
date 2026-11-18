@@ -1490,7 +1490,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='230';
+const GAME_VERSION='231';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -22749,8 +22749,12 @@ function freeBuildWorld(){ if(FREE.g) return; const g=FREE.g=new THREE.Group(); 
 let _freeRamp=null, _freeArch=null;
 function freeRampGeo(){ if(_freeRamp) return _freeRamp; const s=new THREE.Shape(); s.moveTo(-.5,0); s.lineTo(.5,0); s.lineTo(.5,1); s.closePath();
   const g=new THREE.ExtrudeGeometry(s,{depth:1,bevelEnabled:false}); g.translate(0,0,-.5); g.rotateY(-Math.PI/2); return _freeRamp=g; }
-function freeArchGeo(){ if(_freeArch) return _freeArch; const s=new THREE.Shape(); s.moveTo(-1,0); s.lineTo(-1,1.6); s.lineTo(1,1.6); s.lineTo(1,0); s.lineTo(.6,0); s.absarc(0,.9,.6,0,Math.PI,false); s.lineTo(-.6,0); s.closePath();
-  const g=new THREE.ExtrudeGeometry(s,{depth:.5,bevelEnabled:false,curveSegments:10}); g.translate(0,0,-.25); return _freeArch=g; }
+// v231: el arco más grande (3 de ancho, 3 de alto y 1 de grueso: ocupa justo 3 cuadritos) y con su hueco de verdad: tu peluche pasa caminando
+function freeArchGeo(){ if(_freeArch) return _freeArch; const s=new THREE.Shape(); s.moveTo(-1.5,0); s.lineTo(-1.5,3); s.lineTo(1.5,3); s.lineTo(1.5,0); s.lineTo(.9,0); s.lineTo(.9,1.6); s.absarc(0,1.6,.9,0,Math.PI,false); s.lineTo(-.9,0); s.closePath();
+  const g=new THREE.ExtrudeGeometry(s,{depth:1,bevelEnabled:false,curveSegments:12}); g.translate(0,0,-.5); return _freeArch=g; }
+const FREE_ARCH_COLS=[[-1.5,0,-.5,-.9,3,.5],[.9,0,-.5,1.5,3,.5],[-.9,2.5,-.5,.9,3,.5],[-.9,1.95,-.5,-.62,2.5,.5],[.62,1.95,-.5,.9,2.5,.5],[-.62,2.3,-.5,-.36,2.5,.5],[.36,2.3,-.5,.62,2.5,.5]];   // patas, arriba y las esquinitas de la curva
+// v231: las piezas de 2 de ancho (la losa) se centran en una raya de la cuadrícula, no en medio de un cuadrito (si no, quedan medio metidas en el de al lado)
+function freeSnapOff(s){ return s && s.k==='b' && FREE_SHAPES[s.a] && FREE_SHAPES[s.a].id==='losa' ? 0 : .5; }
 const _freeBox=new THREE.BoxGeometry(1,1,1), _freeCyl=new THREE.CylinderGeometry(.35,.35,2,16), _freeSph=new THREE.SphereGeometry(1,20,14);
 let _freeBallTex={};
 function freeBallMat(id){ if(_freeBallTex[id]) return _freeBallTex[id]; let m;
@@ -23026,7 +23030,7 @@ function freeMake(sel){ const root=new THREE.Group();
     else if(sh==='losa'){ m=new THREE.Mesh(_freeBox,mat); m.scale.set(2,.2,2); m.position.y=.1; }
     else if(sh==='rampa'){ m=new THREE.Mesh(freeRampGeo(),mat); }
     else if(sh==='columna'){ m=new THREE.Mesh(_freeCyl,mat); m.position.y=1; }
-    else { m=new THREE.Mesh(freeArchGeo(),mat); }
+    else { m=new THREE.Mesh(freeArchGeo(),mat); root.userData.cols=FREE_ARCH_COLS; }
     root.add(m); }
   else if(sel.k==='h'){ const K=HK_BY[sel.a]; if(!K) return null; let p={t:K.t, i:10, j:10, lv:0, r:0, m:sel.b, k:K.k||0}; if(sel.a==='remate') p={t:HT.HAST_A,i:10,j:10,lv:0,r:0,m:sel.b,k:1};
     let b; try{ b=hpBuild({x:0,y:0,z:0,yaw:0,c:1,s:0,id:-1},[p],{}); }catch(e){ return null; } scene.remove(b.g);
@@ -23080,14 +23084,15 @@ function freeRay(any){ _frC.y=camMode==='first'?0:.2; _frR.setFromCamera(_frC,ca
   if(any) for(const d of FREE.dyn){ _frS.center.copy(d.root.position); _frS.radius=d.r; if(!R.intersectSphere(_frS,_frP)) continue; const t=_frP.distanceTo(O); if(t<.3 || t>=bt) continue; bt=t; best={t, o:d, nx:0, ny:1, nz:0}; }
   if(!best) return null; best.x=O.x+D.x*best.t; best.y=O.y+D.y*best.t; best.z=O.z+D.z*best.t; return best; }
 function freeAimFwd(){ const s=FREE.sel, [fx,fz]=freeFwd(); let d=2.4; if(s && s.k==='h') d=3.2; if(s && (s.k==='v' || s.a==='torre')) d=3.2; if(s && ((s.k==='n' && s.a==='alberca') || s.a==='tobogan')) d=4.8; if(s && s.k==='t' && (s.a==='fila'||s.a==='bolos')) d=s.a==='fila'?3.6:3.1; if(s && s.k==='b' && (FREE_SHAPES[s.a].id==='losa'||FREE_SHAPES[s.a].id==='arco')) d=3;
-  let x=player.pos.x+fx*d, z=player.pos.z+fz*d; const snap=s && s.k==='p' && !FREE_PHYS_BY[s.a].st ? 0 : 1; if(snap){ x=Math.floor(x-FREE.X)+.5+FREE.X; z=Math.floor(z-FREE.Z)+.5+FREE.Z; }
+  let x=player.pos.x+fx*d, z=player.pos.z+fz*d; const snap=s && s.k==='p' && !FREE_PHYS_BY[s.a].st ? 0 : 1; if(snap){ const so=freeSnapOff(s); x=Math.floor(x-FREE.X+.5-so)+so+FREE.X; z=Math.floor(z-FREE.Z+.5-so)+so+FREE.Z; }
   const y=freeGround(x,z,player.pos.y+2.4); return {x, y:y===null?FREE.Y:y, z, ok:y!==null && freeInside(x,z,.5), why:y===null?'orilla':''}; }   // (como antes de la v224: enfrente de ti; solo lo usan las pruebas viejas)
-function freeSelH(){ const k=FREE.sel?JSON.stringify(FREE.sel):''; if(FREE.selHk!==k){ let H=1; try{ const m=FREE.ghost; if(m){ FREE.selHk=k; const r=m.rotation.y; m.rotation.y=0; m.updateMatrixWorld(true); const B=new THREE.Box3().setFromObject(m); m.rotation.y=r; m.updateMatrixWorld(true); if(isFinite(B.max.y-B.min.y) && B.max.y-B.min.y>.05) H=B.max.y-B.min.y; } }catch(e){} FREE.selH=H; } return FREE.selH; }   // v230: qué tan alto es lo que vas a poner
+function freeSelSize(){ const k=(FREE.sel?JSON.stringify(FREE.sel):'')+'|'+(FREE.rot&3); if(FREE.selHk!==k){ let S=[1,1,1]; try{ const m=FREE.ghost; if(m){ FREE.selHk=k; const r=m.rotation.y; m.rotation.y=0; m.updateMatrixWorld(true); const B=new THREE.Box3().setFromObject(m); m.rotation.y=r; m.updateMatrixWorld(true); if(isFinite(B.max.y-B.min.y) && B.max.y-B.min.y>.05) S=(FREE.rot&1)?[B.max.z-B.min.z,B.max.y-B.min.y,B.max.x-B.min.x]:[B.max.x-B.min.x,B.max.y-B.min.y,B.max.z-B.min.z]; } }catch(e){} FREE.selS=S; } return FREE.selS; }   // v231: qué tan grande es lo que vas a poner (ya girado)
+function freeSelH(){ return freeSelSize()[1]; }   // v230: qué tan alto es
 function freeAim(){ if(FREE.legacyAim) return freeAimFwd(); const s=FREE.sel, snap=s && s.k==='p' && !FREE_PHYS_BY[s.a].st ? 0 : 1, px=player.pos.x, pz=player.pos.z; let x, z, yLim, why='';
-  const h=freeRay(false); let air=null; if(h){ x=h.x; z=h.z; yLim=h.y+.05; if(h.o && h.ny<.5){ x+=h.nx*.5; z+=h.nz*.5; yLim=h.ny<-.5?h.y-.1:h.y; const b=h.o.box;   // en el piso o encima: ahí mismo; en un lado: junto
+  const h=freeRay(false); let air=null; if(h){ x=h.x; z=h.z; yLim=h.y+.05; if(h.o && h.ny<.5){ const S=snap?freeSelSize():null; x+=h.nx*(S?Math.max(.5,S[0]/2):.5); z+=h.nz*(S?Math.max(.5,S[2]/2):.5); yLim=h.ny<-.5?h.y-.1:h.y; const b=h.o.box;   /* v231: las piezas anchas (arco, losa) quedan pegadas, no metidas */   // en el piso o encima: ahí mismo; en un lado: junto
       if(b && snap) air=h.ny<-.5 ? b.min.y-freeSelH() : b.min.y+Math.max(0,Math.floor(h.y-b.min.y+1e-4)); } }   // v230: junto a un bloque en el aire se queda a su altura (y debajo, colgado de él)
   const dh=h?Math.hypot(x-px,z-pz):Infinity; if(!h || dh>FREE_REACH){ const D=_frR.ray.direction, L=Math.hypot(D.x,D.z)||1; x=px+D.x/L*FREE_REACH; z=pz+D.z/L*FREE_REACH;   /* (_frR ya trae la dirección del puntero) */ yLim=player.pos.y+2.4; why='lejos'; }   // muy lejos o al cielo: se queda en rojo a la distancia máxima
-  if(snap){ x=Math.floor(x-FREE.X)+.5+FREE.X; z=Math.floor(z-FREE.Z)+.5+FREE.Z; }
+  if(snap){ const so=freeSnapOff(s); x=Math.floor(x-FREE.X+.5-so)+so+FREE.X; z=Math.floor(z-FREE.Z+.5-so)+so+FREE.Z; }
   let y=freeGround(x,z,yLim); if(!why && air!==null && air>FREE.Y+.01 && (y===null || y<air-.01) && freeInside(x,z,.5)) y=air;
   let ok=!why && y!==null && freeInside(x,z,.5); if(!why && !ok) why='orilla';
   if(ok && snap && s && s.k!=='g' && Math.abs(x-px)<.92 && Math.abs(z-pz)<.92 && (y===null?FREE.Y:y)<player.pos.y+PLAYER_H-.1 && (y===null?FREE.Y:y)+1>player.pos.y+.05){ ok=false; why='encima'; }   // no encima de ti
@@ -23163,7 +23168,7 @@ function freePhys(dt){ const D=FREE.dyn; if(!D.length || (FNET.on && !FNET.host)
 // empujar por todo el mapa. Choques: puntos en la superficie de cada caja contra el piso, las piezas sólidas, las otras cajas,
 // las pelotas y los peluches (tu peluche y los de tus amigos). Se duermen cuando se quedan quietas.
 // ======================================================================================
-const BX={sub:6, G:16, mus:.7, muk:.5, cnt:0};
+const BX={sub:6, G:16, mus:.7, muk:.5, cnt:0, deep:.02};
 const _bxA=new THREE.Vector3(), _bxB=new THREE.Vector3(), _bxQ=new THREE.Quaternion();
 function bxPts(P){ if(P._pts) return P._pts; const he=P.box, n=he.map(h=>Math.max(1,Math.round(2*h/.3))), out=[];
   for(let i=0;i<=n[0];i++) for(let j=0;j<=n[1];j++) for(let k=0;k<=n[2];k++){ if(i>0&&i<n[0]&&j>0&&j<n[1]&&k>0&&k<n[2]) continue; out.push(-he[0]+2*he[0]*i/n[0], -he[1]+2*he[1]*j/n[1], -he[2]+2*he[2]*k/n[2]); }
@@ -23218,18 +23223,16 @@ function bxPhys(dt,D){ const L=[]; for(const d of D) if(d.bx && !d.held) L.push(
         const ex=wx-FREE.X, ez=wz-FREE.Z; if(ex>lim) bxSolve(A,null,wx,wy,wz,-1,0,0,ex-lim,fx,fy,fz,null); else if(ex<-lim) bxSolve(A,null,wx,wy,wz,1,0,0,-lim-ex,fx,fy,fz,null);
         if(ez>lim) bxSolve(A,null,wx,wy,wz,0,0,-1,ez-lim,fx,fy,fz,null); else if(ez<-lim) bxSolve(A,null,wx,wy,wz,0,0,1,-lim-ez,fx,fy,fz,null);
         // las piezas sólidas (y las partes duras de la portería y la canasta)
-        for(const o of qs){ if(o.hf){ const [qx,qz]=pqLocal(o,wx,wz), hh=pqHf(o,qx,qz); if(hh!==null && wy<o.y+hh && wy>o.y+hh-.6) bxSolve(A,null,wx,wy,wz,0,1,0,o.y+hh-wy,fx,fy,fz,C); continue; }
-          const bs=o.cols || (o.solid ? [o.box] : null); if(!bs) continue;
-          for(const bb of bs){ if(wx<=bb.min.x||wx>=bb.max.x||wz<=bb.min.z||wz>=bb.max.z||wy<=bb.min.y||wy>=bb.max.y) continue;
-            const d0=wx-bb.min.x, d1=bb.max.x-wx, d2=wz-bb.min.z, d3=bb.max.z-wz, d4=bb.max.y-wy, d5=wy-bb.min.y, m=Math.min(d0,d1,d2,d3,d4,d5);
-            if(m===d4) bxSolve(A,null,wx,wy,wz,0,1,0,d4,fx,fy,fz,C); else if(m===d0) bxSolve(A,null,wx,wy,wz,-1,0,0,d0,fx,fy,fz,C); else if(m===d1) bxSolve(A,null,wx,wy,wz,1,0,0,d1,fx,fy,fz,C);
-            else if(m===d2) bxSolve(A,null,wx,wy,wz,0,0,-1,d2,fx,fy,fz,C); else if(m===d3) bxSolve(A,null,wx,wy,wz,0,0,1,d3,fx,fy,fz,C); else bxSolve(A,null,wx,wy,wz,0,-1,0,d5,fx,fy,fz,C); break; } }
+        for(const o of qs){ if(o.hf){ const [qx,qz]=pqLocal(o,wx,wz), hh=pqHf(o,qx,qz); if(hh!==null && wy<o.y+hh && wy>o.y+hh-.6) bxSolve(A,null,wx,wy,wz,0,1,0,o.y+hh-wy,fx,fy,fz,C); } }   // (las cajas fijas van abajo, completas)
         // los peluches empujan (la posición va de donde estaba a donde está, poco a poco)
         for(const w of who){ const px=w[0]+(w[3]-w[0])*f, py=w[1]+(w[4]-w[1])*f, pz=w[2]+(w[5]-w[2])*f; if(wy<py+.05 || wy>py+PLAYER_H) continue;
           const dx=wx-px, dz=wz-pz, dd=dx*dx+dz*dz; if(dd>=.1764 || dd<1e-8) continue; const l=Math.sqrt(dd); bxSolve(A,null,wx,wy,wz,dx/l,0,dz/l,.42-l,fx,fy,fz,null); } }
-      // contra las otras cajas: sus puntos adentro de la otra caja
+      // v231: contra las piezas fijas y las otras cajas: choque completo (bxBoxBox), así no se quedan metidas cruzadas
+      for(const o of qs){ if(o.hf) continue; const bs=o.cols || (o.solid ? [o.box] : null); if(!bs) continue; const rd=a.rad;
+        for(const bb of bs){ if(x.x+rd<=bb.min.x||x.x-rd>=bb.max.x||x.z+rd<=bb.min.z||x.z-rd>=bb.max.z||x.y+rd<=bb.min.y||x.y-rd>=bb.max.y) continue;
+          const S=_bxS; S.cx=(bb.min.x+bb.max.x)*.5; S.cy=(bb.min.y+bb.max.y)*.5; S.cz=(bb.min.z+bb.max.z)*.5; S.he[0]=(bb.max.x-bb.min.x)*.5; S.he[1]=(bb.max.y-bb.min.y)*.5; S.he[2]=(bb.max.z-bb.min.z)*.5; bxStatic(A,S,bb,C); } }
       for(let k=0;k<L.length;k++){ if(k===i) continue; const B=L[k], b=B.bx, dx=b.x.x-x.x, dy=b.x.y-x.y, dz=b.x.z-x.z, rr=a.rad+b.rad; if(dx*dx+dy*dy+dz*dz>=rr*rr) continue;
-        if(B.sleep){ bxPair(A,B,C); if(B.sleep) bxPairRev(A,B,C); } else if(k>i){ bxPair(A,B,C); bxPair(B,A,C); } }   // (cada pareja despierta se revisa una vez, de los dos lados)
+        if(B.sleep || k>i) bxPairAll(A,B,C); }   // (cada pareja despierta se revisa una vez)
       // contra las pelotas
       for(const sd of S){ const c=sd.root.position, r=sd.r, dx=c.x-x.x, dy=c.y-x.y, dz=c.z-x.z; if(dx*dx+dy*dy+dz*dz>(a.rad+r)*(a.rad+r)) continue;
         const lx=R[0]*dx+R[3]*dy+R[6]*dz, ly=R[1]*dx+R[4]*dy+R[7]*dz, lz=R[2]*dx+R[5]*dy+R[8]*dz, he=a.he;
@@ -23283,6 +23286,94 @@ function bxPairRev(A,B,C){ const a=A.bx, b=B.bx, P=b.pts, Q=b.R, y=b.x, R=a.R, R
     if(d>.004 && B.sleep){ bxWake(B); b.xp.copy(b.x); b.qp.copy(b.q); b.Rp.set(b.R); }
     const fx=wx-(xp.x+Rp[0]*ux+Rp[1]*uy+Rp[2]*uz), fy=wy-(xp.y+Rp[3]*ux+Rp[4]*uy+Rp[5]*uz), fz=wz-(xp.z+Rp[6]*ux+Rp[7]*uy+Rp[8]*uz);
     bxSolve(A,null,wx,wy,wz,-nx,-ny,-nz,d,fx,fy,fz,C); } }
+// v231: choque completo caja contra caja (ejes separadores): se busca por dónde se metieron menos de las 15 direcciones posibles
+// (3 caras de cada una y 9 cruces de orillas). Si es por una cara, se recorta la cara de la otra contra esa cara y salen hasta
+// 8 puntos de contacto; si es orilla contra orilla, un punto. Así ya no se quedan metidas cruzadas (antes solo se revisaban
+// algunos puntos de la superficie y una orilla se podía colar entre ellos).
+const _bxK=new Float64Array(8*9), _bxPa=new Float64Array(48), _bxPb=new Float64Array(48), _bxAx=new Float64Array(9), _bxBx=new Float64Array(9), _bxCm=new Float64Array(9), _bxCa=new Float64Array(9);
+const _bxT=new Float64Array(3), _bxS={cx:0,cy:0,cz:0,he:[0,0,0]};
+const BX_ID=new Float64Array([1,0,0,0,1,0,0,0,1]);
+// ¿qué tanto se metieron A y B? deja los contactos en _bxK (cada uno: punto en A, punto en B, dirección de A hacia B) y dice cuántos
+function bxCollide(ax,ay,az,Ra,ha,bx,by,bz,Rb,hb){
+  const A=_bxAx, B=_bxBx, C=_bxCm, Cb=_bxCa;
+  for(let i=0;i<3;i++){ A[i*3]=Ra[i]; A[i*3+1]=Ra[3+i]; A[i*3+2]=Ra[6+i]; B[i*3]=Rb[i]; B[i*3+1]=Rb[3+i]; B[i*3+2]=Rb[6+i]; }
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++){ const c=A[i*3]*B[j*3]+A[i*3+1]*B[j*3+1]+A[i*3+2]*B[j*3+2]; C[i*3+j]=c; Cb[i*3+j]=Math.abs(c)+1e-6; }
+  const dx=bx-ax, dy=by-ay, dz=bz-az, t=_bxT; t[0]=dx*A[0]+dy*A[1]+dz*A[2]; t[1]=dx*A[3]+dy*A[4]+dz*A[5]; t[2]=dx*A[6]+dy*A[7]+dz*A[8];
+  let best=1e9, kind=-1, bi=0, bj=0;
+  for(let i=0;i<3;i++){ const pen=ha[i]+hb[0]*Cb[i*3]+hb[1]*Cb[i*3+1]+hb[2]*Cb[i*3+2]-Math.abs(t[i]); if(pen<0) return 0; if(pen<best){ best=pen; kind=0; bi=i; } }
+  for(let j=0;j<3;j++){ const tb=dx*B[j*3]+dy*B[j*3+1]+dz*B[j*3+2], pen=ha[0]*Cb[j]+ha[1]*Cb[3+j]+ha[2]*Cb[6+j]+hb[j]-Math.abs(tb); if(pen<0) return 0; if(pen<best){ best=pen; kind=1; bj=j; } }
+  const face=best; let ex=0, ey=0, ez=0;
+  for(let i=0;i<3;i++){ const i1=(i+1)%3, i2=(i+2)%3; for(let j=0;j<3;j++){ const j1=(j+1)%3, j2=(j+2)%3, len=Math.sqrt(Math.max(0,1-C[i*3+j]*C[i*3+j])); if(len<1e-3) continue;
+    const ra=ha[i1]*Cb[i2*3+j]+ha[i2]*Cb[i1*3+j], rb=hb[j1]*Cb[i*3+j2]+hb[j2]*Cb[i*3+j1], dist=Math.abs(t[i2]*C[i1*3+j]-t[i1]*C[i2*3+j]), pen=(ra+rb-dist)/len;
+    if(pen<0) return 0; if(pen<face*.95-.003 && pen<best){ best=pen; kind=2; bi=i; bj=j;
+      const ux=A[i*3+1]*B[j*3+2]-A[i*3+2]*B[j*3+1], uy=A[i*3+2]*B[j*3]-A[i*3]*B[j*3+2], uz=A[i*3]*B[j*3+1]-A[i*3+1]*B[j*3]; ex=ux/len; ey=uy/len; ez=uz/len; } } }
+  const K=_bxK; BX.kind=kind; BX.pen=best;
+  if(kind===2){ if(ex*dx+ey*dy+ez*dz<0){ ex=-ex; ey=-ey; ez=-ez; }
+    // la orilla de A que más se asoma hacia B, y la de B hacia A
+    let px=ax, py=ay, pz=az, qx=bx, qy=by, qz=bz;
+    for(let k=0;k<3;k++){ if(k!==bi){ const s=(A[k*3]*ex+A[k*3+1]*ey+A[k*3+2]*ez)>0?ha[k]:-ha[k]; px+=A[k*3]*s; py+=A[k*3+1]*s; pz+=A[k*3+2]*s; }
+      if(k!==bj){ const s=(B[k*3]*ex+B[k*3+1]*ey+B[k*3+2]*ez)>0?-hb[k]:hb[k]; qx+=B[k*3]*s; qy+=B[k*3+1]*s; qz+=B[k*3+2]*s; } }
+    const ux=A[bi*3], uy=A[bi*3+1], uz=A[bi*3+2], vx=B[bj*3], vy=B[bj*3+1], vz=B[bj*3+2], rx=px-qx, ry=py-qy, rz=pz-qz, b=ux*vx+uy*vy+uz*vz, dd=ux*rx+uy*ry+uz*rz, e=vx*rx+vy*ry+vz*rz, den=1-b*b;
+    let s=den>1e-6?(b*e-dd)/den:0, u=den>1e-6?(e-b*dd)/den:0; s=Math.max(-ha[bi],Math.min(ha[bi],s)); u=Math.max(-hb[bj],Math.min(hb[bj],u));
+    K[0]=px+ux*s; K[1]=py+uy*s; K[2]=pz+uz*s; K[3]=qx+vx*u; K[4]=qy+vy*u; K[5]=qz+vz*u; K[6]=ex; K[7]=ey; K[8]=ez; return 1; }
+  // por una cara: R = la caja de la cara, I = la otra (sus puntos se recortan contra la cara)
+  const refA=kind===0, k=refA?bi:bj, RA=refA?A:B, RH=refA?ha:hb, IA=refA?B:A, IH=refA?hb:ha, rcx=refA?ax:bx, rcy=refA?ay:by, rcz=refA?az:bz, icx=refA?bx:ax, icy=refA?by:ay, icz=refA?bz:az;
+  let nx=RA[k*3], ny=RA[k*3+1], nz=RA[k*3+2]; if(nx*(icx-rcx)+ny*(icy-rcy)+nz*(icz-rcz)<0){ nx=-nx; ny=-ny; nz=-nz; }
+  let ji=0, bd=-1; for(let j=0;j<3;j++){ const v=Math.abs(IA[j*3]*nx+IA[j*3+1]*ny+IA[j*3+2]*nz); if(v>bd){ bd=v; ji=j; } }
+  const sg=(IA[ji*3]*nx+IA[ji*3+1]*ny+IA[ji*3+2]*nz)>0?-1:1, fcx=icx+IA[ji*3]*IH[ji]*sg, fcy=icy+IA[ji*3+1]*IH[ji]*sg, fcz=icz+IA[ji*3+2]*IH[ji]*sg;
+  const j1=(ji+1)%3, j2=(ji+2)%3, ux=IA[j1*3]*IH[j1], uy=IA[j1*3+1]*IH[j1], uz=IA[j1*3+2]*IH[j1], vx=IA[j2*3]*IH[j2], vy=IA[j2*3+1]*IH[j2], vz=IA[j2*3+2]*IH[j2];
+  let P=_bxPa, Q=_bxPb, n=4; P[0]=fcx+ux+vx; P[1]=fcy+uy+vy; P[2]=fcz+uz+vz; P[3]=fcx-ux+vx; P[4]=fcy-uy+vy; P[5]=fcz-uz+vz; P[6]=fcx-ux-vx; P[7]=fcy-uy-vy; P[8]=fcz-uz-vz; P[9]=fcx+ux-vx; P[10]=fcy+uy-vy; P[11]=fcz+uz-vz;
+  const k1=(k+1)%3, k2=(k+2)%3;
+  for(let q4=0;q4<4;q4++){ const kk=q4<2?k1:k2, sgn=q4&1?-1:1, px=RA[kk*3]*sgn, py=RA[kk*3+1]*sgn, pz=RA[kk*3+2]*sgn, off=px*rcx+py*rcy+pz*rcz+RH[kk]; let m=0;
+    for(let a=0;a<n;a++){ const b=(a+1)%n, ax2=P[a*3], ay2=P[a*3+1], az2=P[a*3+2], bx2=P[b*3], by2=P[b*3+1], bz2=P[b*3+2], da=px*ax2+py*ay2+pz*az2-off, db=px*bx2+py*by2+pz*bz2-off;
+      if(da<=0){ Q[m*3]=ax2; Q[m*3+1]=ay2; Q[m*3+2]=az2; m++; }
+      if((da<=0)!==(db<=0) && m<16){ const f=da/(da-db); Q[m*3]=ax2+(bx2-ax2)*f; Q[m*3+1]=ay2+(by2-ay2)*f; Q[m*3+2]=az2+(bz2-az2)*f; m++; } }
+    n=m; const T=P; P=Q; Q=T; if(!n) return 0; }
+  const plane=nx*rcx+ny*rcy+nz*rcz+RH[k]; let c=0;
+  for(let a=0;a<n && c<8;a++){ const px=P[a*3], py=P[a*3+1], pz=P[a*3+2], dep=plane-(nx*px+ny*py+nz*pz); if(dep<=0) continue; const o=c*9, sx=px+nx*dep, sy=py+ny*dep, sz=pz+nz*dep;
+    if(refA){ K[o]=sx; K[o+1]=sy; K[o+2]=sz; K[o+3]=px; K[o+4]=py; K[o+5]=pz; K[o+6]=nx; K[o+7]=ny; K[o+8]=nz; }
+    else { K[o]=px; K[o+1]=py; K[o+2]=pz; K[o+3]=sx; K[o+4]=sy; K[o+5]=sz; K[o+6]=-nx; K[o+7]=-ny; K[o+8]=-nz; }
+    c++; }
+  return c; }
+// resolver el choque de A contra B (B puede ser otra caja, dormida o despierta, o una caja fija: S={c,he})
+const _bxL=new Float64Array(8*9);
+function bxBoxBox(A,B,S,C){ const a=A.bx, b=B?B.bx:null; let n;
+  if(b) n=bxCollide(a.x.x,a.x.y,a.x.z,a.R,a.he,b.x.x,b.x.y,b.x.z,b.R,b.he); else n=bxCollide(a.x.x,a.x.y,a.x.z,a.R,a.he,S.cx,S.cy,S.cz,BX_ID,S.he);
+  if(!n) return false; const K=_bxK, L=_bxL, R=a.R, x=a.x;
+  // cada contacto se guarda pegado a cada caja (así se vuelve a medir después de cada empujón y no se empuja de más)
+  for(let c=0;c<n;c++){ const o=c*9, rx=K[o]-x.x, ry=K[o+1]-x.y, rz=K[o+2]-x.z; L[o]=R[0]*rx+R[3]*ry+R[6]*rz; L[o+1]=R[1]*rx+R[4]*ry+R[7]*rz; L[o+2]=R[2]*rx+R[5]*ry+R[8]*rz;
+    if(b){ const Q=b.R, sx=K[o+3]-b.x.x, sy=K[o+4]-b.x.y, sz=K[o+5]-b.x.z; L[o+3]=Q[0]*sx+Q[3]*sy+Q[6]*sz; L[o+4]=Q[1]*sx+Q[4]*sy+Q[7]*sz; L[o+5]=Q[2]*sx+Q[5]*sy+Q[8]*sz; }
+    else { L[o+3]=K[o+3]; L[o+4]=K[o+4]; L[o+5]=K[o+5]; } L[o+6]=K[o+6]; L[o+7]=K[o+7]; L[o+8]=K[o+8]; }
+  let hit=false;
+  for(let c=0;c<n;c++){ const o=c*9, lx=L[o], ly=L[o+1], lz=L[o+2], nx=L[o+6], ny=L[o+7], nz=L[o+8];
+    const pax=x.x+R[0]*lx+R[1]*ly+R[2]*lz, pay=x.y+R[3]*lx+R[4]*ly+R[5]*lz, paz=x.z+R[6]*lx+R[7]*ly+R[8]*lz; let pbx, pby, pbz;
+    if(b){ const Q=b.R, y=b.x, mx=L[o+3], my=L[o+4], mz=L[o+5]; pbx=y.x+Q[0]*mx+Q[1]*my+Q[2]*mz; pby=y.y+Q[3]*mx+Q[4]*my+Q[5]*mz; pbz=y.z+Q[6]*mx+Q[7]*my+Q[8]*mz; } else { pbx=L[o+3]; pby=L[o+4]; pbz=L[o+5]; }
+    const d=(pax-pbx)*nx+(pay-pby)*ny+(paz-pbz)*nz; if(d<=1e-5) continue;
+    if(b && B.sleep && d>.004){ bxWake(B); b.xp.copy(b.x); b.qp.copy(b.q); b.Rp.set(b.R); }
+    const Rp=a.Rp, xp=a.xp; let fx=pax-(xp.x+Rp[0]*lx+Rp[1]*ly+Rp[2]*lz), fy=pay-(xp.y+Rp[3]*lx+Rp[4]*ly+Rp[5]*lz), fz=paz-(xp.z+Rp[6]*lx+Rp[7]*ly+Rp[8]*lz);
+    const live=b && !B.sleep;
+    if(live){ const Qp=b.Rp, yp=b.xp, mx=L[o+3], my=L[o+4], mz=L[o+5]; fx-=pbx-(yp.x+Qp[0]*mx+Qp[1]*my+Qp[2]*mz); fy-=pby-(yp.y+Qp[3]*mx+Qp[4]*my+Qp[5]*mz); fz-=pbz-(yp.z+Qp[6]*mx+Qp[7]*my+Qp[8]*mz); }
+    // lo que se metió por moverse ahorita se corrige todo; lo que ya estaba metido de antes, poquito a poquito (si no, sale disparada)
+    const dd=Math.min(d,Math.max(0,fx*nx+fy*ny+fz*nz)+.004);
+    bxSolve(A,live?B:null,(pax+pbx)*.5,(pay+pby)*.5,(paz+pbz)*.5,-nx,-ny,-nz,dd,fx,fy,fz,C); hit=true; }
+  return hit; }
+// v231: ¿cómo chocan? Si apenas se tocan de cara (lo normal al apilar) se usan los puntos de la superficie, que dejan las torres
+// quietecitas; si se cruzan por las orillas o se metieron mucho, el choque completo (si no, se quedan metidas).
+function bxPairAll(A,B,C){ const a=A.bx, b=B.bx; if(!bxCollide(a.x.x,a.x.y,a.x.z,a.R,a.he,b.x.x,b.x.y,b.x.z,b.R,b.he)) return;
+  if(BX.kind!==2 && BX.pen<=BX.deep){ let h; if(B.sleep){ h=bxPair(A,B,C); if(B.sleep){ bxPairRev(A,B,C); h=true; } } else { h=bxPair(A,B,C); h=bxPair(B,A,C)||h; } if(h) return; }
+  bxBoxBox(A,B,null,C); }
+function bxStatic(A,S,bb,C){ const a=A.bx; if(!bxCollide(a.x.x,a.x.y,a.x.z,a.R,a.he,S.cx,S.cy,S.cz,BX_ID,S.he)) return;
+  if(BX.kind===2 || BX.pen>BX.deep){ bxBoxBox(A,null,S,C); return; }
+  const P=a.pts, R=a.R, Rp=a.Rp, x=a.x, xp=a.xp; let hit=false;
+  for(let j=0;j<P.length;j+=3){ const lx=P[j], ly=P[j+1], lz=P[j+2], wx=x.x+R[0]*lx+R[1]*ly+R[2]*lz, wy=x.y+R[3]*lx+R[4]*ly+R[5]*lz, wz=x.z+R[6]*lx+R[7]*ly+R[8]*lz;
+    if(wx<=bb.min.x||wx>=bb.max.x||wz<=bb.min.z||wz>=bb.max.z||wy<=bb.min.y||wy>=bb.max.y) continue;
+    const fx=wx-(xp.x+Rp[0]*lx+Rp[1]*ly+Rp[2]*lz), fy=wy-(xp.y+Rp[3]*lx+Rp[4]*ly+Rp[5]*lz), fz=wz-(xp.z+Rp[6]*lx+Rp[7]*ly+Rp[8]*lz);
+    const d0=wx-bb.min.x, d1=bb.max.x-wx, d2=wz-bb.min.z, d3=bb.max.z-wz, d4=bb.max.y-wy, d5=wy-bb.min.y, m=Math.min(d0,d1,d2,d3,d4,d5); hit=true;
+    if(m===d4) bxSolve(A,null,wx,wy,wz,0,1,0,d4,fx,fy,fz,C); else if(m===d0) bxSolve(A,null,wx,wy,wz,-1,0,0,d0,fx,fy,fz,C); else if(m===d1) bxSolve(A,null,wx,wy,wz,1,0,0,d1,fx,fy,fz,C);
+    else if(m===d2) bxSolve(A,null,wx,wy,wz,0,0,-1,d2,fx,fy,fz,C); else if(m===d3) bxSolve(A,null,wx,wy,wz,0,0,1,d3,fx,fy,fz,C); else bxSolve(A,null,wx,wy,wz,0,-1,0,d5,fx,fy,fz,C); }
+  if(!hit) bxBoxBox(A,null,S,C); }   // (se cruzan sin que ningún punto quede adentro)
+// ¿qué tanto están metidas dos cajas? (para las pruebas)
+function bxDepth(A,B){ const a=A.bx, b=B.bx, n=bxCollide(a.x.x,a.x.y,a.x.z,a.R,a.he,b.x.x,b.x.y,b.x.z,b.R,b.he); let m=0; for(let c=0;c<n;c++){ const o=c*9, K=_bxK; m=Math.max(m,(K[o]-K[o+3])*K[o+6]+(K[o+1]-K[o+4])*K[o+7]+(K[o+2]-K[o+5])*K[o+8]); } return m; }
 // ---- poner varias de golpe: fila de dominós, bolos y la torre ----
 const BX_TORRE=[0,1,2,3,5,7];
 function bxSpots(kind){ if(kind==='fila') return [...Array(8)].map((_,i)=>['domino',0,0,(i-3.5)*.55,0]);
@@ -23958,7 +24049,7 @@ function medPickObj(cx,cy){ const ray=medRay(cx,cy); let best=null, bd=1e9; cons
 function medPickSpot(cx,cy){ const ray=medRay(cx,cy); let top=null, bd=1e9;   // primero: ¿le pegas a la tapa de algo? (para apilar)
   for(const o of FREE.objs){ if(!o.solid || !o.root.visible) continue; if(ray.intersectBox(o.box,_mHit) && _mHit.y>=o.box.max.y-.02){ const d=_mHit.distanceTo(ray.origin); if(d<bd){ bd=d; top=_mHit.clone(); } } }
   let x, z; if(top){ x=top.x; z=top.z; } else { _mPl.constant=-(FREE.Y+MED.h); if(!ray.intersectPlane(_mPl,_mP)) return null; x=_mP.x; z=_mP.z; }
-  const s=MED.sel, snap=!(s && s.k==='p' && !FREE_PHYS_BY[s.a].st); if(snap){ x=Math.floor(x-FREE.X)+.5+FREE.X; z=Math.floor(z-FREE.Z)+.5+FREE.Z; }
+  const s=MED.sel, snap=!(s && s.k==='p' && !FREE_PHYS_BY[s.a].st); if(snap){ const so=freeSnapOff(s); x=Math.floor(x-FREE.X+.5-so)+so+FREE.X; z=Math.floor(z-FREE.Z+.5-so)+so+FREE.Z; }
   const g=freeGround(x,z,(top?top.y:FREE.Y+MED.h)+.05); if(g===null) return {x,z,y:FREE.Y,ok:false};
   const y=Math.max(g, FREE.Y+MED.h); return {x, y, z, ok:freeInside(x,z,.5), key:Math.round(x*2)+','+Math.round(z*2)+','+Math.round(y*4)}; }
 // ---- el fantasma ----
