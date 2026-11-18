@@ -1486,7 +1486,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='227';
+const GAME_VERSION='228';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -3514,7 +3514,7 @@ const onCakeSurface=(x,z,y)=>{ const d=Math.hypot(x,z); return d<CAKE.R && !(d<S
       if(am<.16 && r>r1) continue; const x=Math.cos(a)*r, z=Math.sin(a)*r; if(Math.abs(Math.abs(x)-CAKE.towerR*Math.SQRT1_2)<2.4*CS && Math.abs(Math.abs(z)-CAKE.towerR*Math.SQRT1_2)<2.4*CS) continue; return [x,z,a]; } return null; };
   const gy=(x,z)=>terrainH(x,z)+.08;
   for(let i=0;i<34;i++){ freeSpot(r1+1.2,CAKE.R-1); rnd(.8,1.3); }   // (aquí estaban los ositos de goma de adorno; se gastan los mismos números para que lo demás quede en su lugar)
-  for(let i=0;i<26;i++){ const p=freeSpot(1.5,CAKE.R-.8); if(!p) continue; const [x,z]=p; if(Math.hypot(x,z)>r0-.6 && Math.hypot(x,z)<r1+.8) continue; cherry(deco,x,gy(x,z),z,rnd(1,1.5)*CS); }
+  for(let i=0;i<26;i++){ const p=freeSpot(1.5,CAKE.R-.8); if(!p) continue; const [x,z]=p; if(Math.hypot(x,z)>r0-.6 && Math.hypot(x,z)<r1+.8) continue; if(Math.hypot(x-START.x,z-START.z)<START.r+.8){ rnd(1,1.5); continue; } cherry(deco,x,gy(x,z),z,rnd(1,1.5)*CS); }   // (v228: ninguna cereza encima del botón de inicio; se gasta el mismo número para que lo demás quede igual)
   for(let i=0;i<26;i++){ const p=freeSpot(r1+1,CAKE.R-.8); if(!p) continue; const [x,z]=p; bonbon(deco,x,gy(x,z),z,rnd(.9,1.4)*CS,[chocoMat,milkChocoMat,pinkMat,whiteMat][i%4]); }
   for(let i=0;i<12;i++){ const p=freeSpot(r1+1.5,CAKE.R-1.5); if(!p) continue; const [x,z,a]=p, y=gy(x,z);   // barras de chocolate
     const rr=a+rnd(-.6,.6); add(deco,boxG,milkChocoMat,x,y+.09*CS,z,1.1*CS,.18*CS,.55*CS,rr);
@@ -14569,6 +14569,7 @@ function raceVisual(){ const yaw=RC.yaw;
   for(const m of RC.M){ const p=rcW(m.cs,m.cw,m.cy-.25,_rcp); m.o.position.copy(p); m.o.rotation.y=yaw; }
   for(const sw of RC.S){ sw.g.rotation.y=yaw+sw.a; }
   for(const r of RC.R){ const p=rcW(r.s,r.w,RC.Y+.7,_rcp); r.o.position.copy(p); r.o.rotation.y=yaw; } }
+try{ raceMove(0); raceVisual(); }catch(e){}   // v228: las plataformas y pistones de la carrera nacen en su lugar (antes se quedaban amontonados en el centro de la isla, justo donde apareces, hasta que ibas a la carrera)
 // cada cuadro: moverlo todo, llevarte encima de lo que se mueve, golpes de brazos y pistones
 const _rcv=new THREE.Vector3();
 function raceTick(dt){ const A=rcA(), d=Math.hypot(player.pos.x-A.center[0],player.pos.z-A.center[1]), dc=Math.hypot(camera.position.x-A.center[0],camera.position.z-A.center[1]);
@@ -16266,10 +16267,15 @@ const HOWTO=(()=>{ const F='Sniglet, Nunito, sans-serif', W=512, H=512;
     q.strokeStyle='#e5534b'; q.lineWidth=5; q.beginPath(); q.moveTo(-8,-20); q.lineTo(9,-28); q.lineTo(9,10); q.stroke(); q.restore();
     plush(q,120,250,1,'#4fc3f7'); plush(q,392,250,1,'#ff9ad5'); plush(q,256,190,.9,'#7ed957');
     label(q,'¡sigue la línea!',256,110,26,'#c62828'); label(q,'92%',400,170,30,'#e0a800'); };
+  // v228: el papel de fondo (crema con textura de fieltro), uno por tipo de cartel; se hace una vez y se copia
+  const PAPER={}; function paper(kind){ const k=kind+(ULTRA?'|u':''); if(PAPER[k]) return PAPER[k]; const c=document.createElement('canvas'); c.width=W; c.height=H; const q=c.getContext('2d'); q.fillStyle='#fff6e3'; q.fillRect(0,0,W,H);
+    if(!ULTRA) try{ TK.finish(c,{seed:W+kind.length, amp:.03, grain:.02, fuzzDiv:30, len:2}); }catch(e){}   // (v220: en ultra ligero sin la textura de fieltro: tardaba mucho en teléfonos lentos)
+    return PAPER[k]=c; }
+  function warm(){ paper('¿Cómo se juega?'); paper('Instrucciones'); }
   // un cartel: banda de color arriba, y abajo el dibujo o la lista de indicaciones
   function board(kind,col,draw){ const c=document.createElement('canvas'); c.width=W; c.height=H; const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4;
     { const q=c.getContext('2d'); q.fillStyle='#fff6e3'; q.fillRect(0,0,W,H); q.fillStyle=col; q.fillRect(0,0,W,70); }   // v200: de lejos, papel con su banda de color; el dibujo se pinta al acercarte
-    const paint=()=>{ const q=c.getContext('2d'); q.setTransform(1,0,0,1,0,0); q.fillStyle='#fff6e3'; q.fillRect(0,0,W,H); if(!ULTRA) try{ TK.finish(c,{seed:W+kind.length, amp:.03, grain:.02, fuzzDiv:30, len:2}); }catch(e){}   // (v220: en ultra ligero sin la textura de fieltro: tardaba mucho en teléfonos lentos)
+    const paint=()=>{ const q=c.getContext('2d'); q.setTransform(1,0,0,1,0,0); q.drawImage(paper(kind),0,0);   // v228: el papel de fieltro se pinta una sola vez y se copia (antes se volvía a pintar en cada cartel: 100+ ms de tirón al llegar a un minijuego)
       q.fillStyle=col; q.fillRect(0,0,W,70); label(q,kind,W/2,38,34,'#ffffff');
       try{ TK.stitch(q,[[12,12],[W-12,12],[W-12,H-12],[12,H-12],[12,12]],{dash:18,gap:12,lw:7,col,shadow:'rgba(0,0,0,.22)',hole:'rgba(0,0,0,.25)'}); }catch(e){}
       draw(q); t.needsUpdate=true; };
@@ -16318,7 +16324,7 @@ const HOWTO=(()=>{ const F='Sniglet, Nunito, sans-serif', W=512, H=512;
   // ponerlo en el mundo (x,z), mirando hacia (fx,fz); también es sólido
   function place(id,which,x,y,z,fx,fz,size){ const s=sign(id,which,size); s.position.set(x,y,z); SPOTS.push({t:get(id)[which], x, z}); s.rotation.y=Math.atan2(fx,fz); scene.add(s);
     const c=Math.cos(s.rotation.y), si=Math.sin(s.rotation.y); for(const k of [-1,1]){ const px=x+k*(size/2-.12)*c, pz=z-k*(size/2-.12)*si; obstacles.push({x:px,z:pz,r:.14,top:y+2.5,walk:false}); } return s; }
-  return {G, place, get, DRAW, tick}; })();
+  return {G, place, get, DRAW, tick, warm}; })();
 // minijuegos grandes: a los lados del letrero de cada placa (dibujo a la izquierda, instrucciones a la derecha, viendo hacia el letrero)
 ['plat','papa','bola','carrera','lab','carros','banda','frutas','pinta','perlas','cojines','escondidas','dibujar'].forEach((id,i)=>{ const A=AR_SPOTS[i]; if(!A) return; const [x,z]=A.plate;
   const V=[-A.u[1],A.u[0]];   // (a la izquierda de quien mira hacia el letrero va el dibujo)
@@ -26348,10 +26354,15 @@ frame();
   const wait=ms=>new Promise(r=>setTimeout(r,ms)), paint=()=>new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0)));
   try{
     L.step('Preparando los colores…',.66); await paint();
+    try{ if(!VE.built) vehBuildTaller(); }catch(e){ VE.built=true; console.warn('taller',e); }
+    try{ HOWTO.warm(); }catch(e){}   // v228: el papel de los carteles de los minijuegos, listo desde la carga   // v228: los talleres de vehículos se arman aquí (antes, en el primer cuadro del juego: ~140 ms de tirón al llegar)
     // todos los materiales de la isla se preparan ahora (si no, se preparan la primera vez que los ves y el juego da un tironcito)
     try{ renderer.compile(scene,camera); }catch(e){}
     L.step('Juntando las piezas…',.72); await paint();
     { const tb=performance.now(); try{ batchWarm(); }catch(e){ console.warn('batchWarm',e); } window.__ldBatchMs=Math.round(performance.now()-tb); }   // v221
+    // v228: una vuelta con la cámara alrededor del inicio (detrás de la pantalla de carga): las imágenes y piezas que ves al aparecer ya quedan en la tarjeta de video
+    try{ const cp=camera.position.clone(), cq=camera.quaternion.clone(); for(let k=0;k<4;k++){ const a=k*Math.PI/2; camera.position.set(START.x-Math.sin(a)*5, START.top+3, START.z-Math.cos(a)*5); camera.lookAt(START.x+Math.sin(a)*10, 1.5, START.z+Math.cos(a)*10); camera.updateMatrixWorld(); renderer.render(scene,camera); }
+      camera.position.copy(cp); camera.quaternion.copy(cq); camera.updateMatrixWorld(); }catch(e){}
     L.step('Probando tu equipo…',.78); await paint();
     const t0=performance.now(); let n=0; await new Promise(r=>{ const f=()=>{ if(++n<12 && performance.now()-t0<1200) requestAnimationFrame(f); else r(); }; requestAnimationFrame(f); });   // máximo 1.2 s
     const per=(performance.now()-t0)/n; window.__ldFrameMs=Math.round(per);
