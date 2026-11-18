@@ -4,7 +4,7 @@
 import asyncio, json
 from playwright.async_api import async_playwright
 REAL=open('threerepo/build/three.min.js').read()
-html='<!doctype html><meta charset=utf-8><style>[hidden]{display:none!important}</style>'+open('/home/claude/mundo-peluche.html').read().replace("function frame(){","window.__T={ev(s){return eval(s);}}; function frame(){",1)
+html='<!doctype html><meta charset=utf-8><style>[hidden]{display:none!important}</style>'+open('/home/claude/mundo-peluche.html').read().replace("function frame(){","window.__T={ev(s){return eval(s);}}; FREE.legacyAim=true; function frame(){",1)
 async def m():
   async with async_playwright() as p:
     b=await p.chromium.launch(args=["--use-gl=swiftshader","--enable-unsafe-swiftshader"])

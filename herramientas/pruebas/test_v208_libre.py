@@ -2,7 +2,7 @@
 import asyncio, json
 from playwright.async_api import async_playwright
 REAL=open('threerepo/build/three.min.js').read()
-html='<!doctype html><meta charset=utf-8><style>[hidden]{display:none!important}</style>'+open('/home/claude/mundo-peluche.html').read().replace("function frame(){","window.__T={ev(s){return eval(s);}}; function frame(){",1)
+html='<!doctype html><meta charset=utf-8><style>[hidden]{display:none!important}</style>'+open('/home/claude/mundo-peluche.html').read().replace("function frame(){","window.__T={ev(s){return eval(s);}}; FREE.legacyAim=true; function frame(){",1)
 async def m():
   async with async_playwright() as p:
     b=await p.chromium.launch(args=["--use-gl=swiftshader","--enable-unsafe-swiftshader"])
@@ -24,7 +24,7 @@ async def m():
     r=await ev("[FREE.on, state, +player.pos.y.toFixed(2), Math.round(player.pos.x), !ui('freeHud').hidden, player.swim]"); ok(r[0] and r[1]=='play' and abs(r[2]-.6)<.1 and r[3]==9000 and r[4] and not r[5], 'entras a la planicie parado en el pasto %s'%r)
     # 2. el menú de objetos
     r=await ev("(()=>{ ui('freeObj').click(); const a=ui('freeGrid').children.length; FREE.tab='jardin'; FREE.sub='plantas'; freeRenderBox(); const b=ui('freeGrid').children.length; FREE.tab='fisica'; freeRenderBox(); const c=ui('freeGrid').children.length; const n=HK.length; return [a,b,c,n]; })()")
-    ok(r[0]==6 and r[1]>=10 and r[2]==7 and r[3]>150, 'Objetos: 6 bloques, plantas del Taller (%d), 7 de física; en total %d piezas del Taller'%(r[1],r[3]))
+    ok(r[0]==6 and r[1]>=10 and r[2]==24 and r[3]>150, 'Objetos: 6 bloques, plantas del Taller (%d), 24 de física (v224: 17 nuevas); en total %d piezas del Taller'%(r[1],r[3]))
     await pg.screenshot(path='/tmp/v208_menu.png')
     # 3. poner un cubo enfrente, girar, otro encima
     r=await ev("""(()=>{ ui('freeBox').hidden=true; freeSelect({k:'b',a:0,b:3}); __run(.2); const a=freeAim(); freePlace(); const o=FREE.objs[0]; freePlace(); const o2=FREE.objs[1];

@@ -4,7 +4,7 @@
 import asyncio, json, re
 from playwright.async_api import async_playwright
 REAL=open('threerepo/build/three.min.js').read()
-html='<!doctype html><meta charset=utf-8><style>[hidden]{display:none!important}</style>'+open('/home/claude/mundo-peluche.html').read().replace("function frame(){","window.__T={ev(s){return eval(s);}}; function frame(){",1)
+html='<!doctype html><meta charset=utf-8><style>[hidden]{display:none!important}</style>'+open('/home/claude/mundo-peluche.html').read().replace("function frame(){","window.__T={ev(s){return eval(s);}}; FREE.legacyAim=true; function frame(){",1)
 BUS = """
 (()=>{
   const me='p'+Math.random().toString(36).slice(2,8), bc=new BroadcastChannel('vestibulo'); const peers=new Map(); const hs=new Set();
