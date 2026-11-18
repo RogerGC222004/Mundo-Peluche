@@ -1,6 +1,8 @@
 # v226 (Modo libre): 13 cosas nuevas — balón de básquet y canasta, portería, campana, globo de agua, banda transportadora,
 # teletransportador, catapulta, molino, piano de piso, caja sorpresa con pollito, saco de boxeo y máquina de burbujas
 # (tamaño, forma y color; la gigante te mete adentro y te eleva; sales con «Reventar burbuja» o «Tirarse»).
+# v227: los 13 rehechos con más detalle y menos piezas; la cuerda de la campana suena; columna de luz del teletransportador;
+# quitar cosas ya juntadas para dibujar no truena.
 import asyncio, json
 from playwright.async_api import async_playwright
 REAL=open('threerepo/build/three.min.js').read()
@@ -66,5 +68,17 @@ async def m():
     ok(r[3]=={'size':3,'shape':2,'col':5} and r[4] and r[12]==3|(2<<2)|(5<<4), 'burbujas: tamaño gigante, corazón y morado (se guarda) %s'%r[3])
     ok(r[5] and r[6]>1 and r[7]=='🫧 Reventar burbuja' and r[8] and r[9]>=-4.6, 'burbuja gigante: te metes, te eleva (%s m), «Reventar burbuja» te saca y caes suavecito (vel. %s)'%(r[6],r[9]))
     ok(r[10] and r[11], 'burbuja gigante: «Tirarse» también te saca %s'%r[10:12])
+    # v227: menos piezas que dibujar, la cuerda de la campana, la luz del teletransportador y quitar cosas ya juntadas
+    r=await ev("""(()=>{ __CLR(); const ids=['basket','agua','canasta','porteria','campana','banda','tele','catapulta','molino','piano','sorpresa','burbujas','saco']; let n=0; const per={};
+      for(const id of ids){ const m=freeMake({k:'p',a:id,b:0}); let k=0; m.traverse(o=>{ if(o.isMesh && o.visible!==false){ let v=true; for(let q=o;q&&q!==m;q=q.parent) if(!q.visible) v=false; if(v) k++; } }); per[id]=k; n+=k; } return [n, per]; })()""")
+    ok(r[0]<=72, 'v227: los 13 juntos son %s piezas que dibujar (antes 81) %s'%(r[0],r[1]))
+    r=await ev("""(()=>{ __CLR(); __AT(-10,-10); __TN.length=0; const bl=__ST('campana',0,0,0); const [bx,bz]=freeW(bl,0,.2); __S(2); const a=__TN.includes(1318); player.pos.set(bx,FREE.Y+.05,bz); __S(2); const b=__TN.includes(1318); __TN.length=0; __S(10); const c=__TN.includes(1318);
+      __CLR(); const t1=__ST('tele',0,0,0); __S(2); const lone=t1.root.userData.teleB.opacity; const t2=__ST('tele',6,0,0); __S(2); const U=t1.root.userData, same=U.teleB.color.getHexString()!=='b48cff', op=U.teleB.opacity, sh=(()=>{ let s=0; t1.root.traverse(o=>{ if(o.isMesh && o.material===U.teleB && o.castShadow) s++; }); return s; })();
+      return [a,b,c,lone,op,same,sh, +(t1.box.max.y-FREE.Y).toFixed(2)]; })()""")
+    ok(not r[0] and r[1] and not r[2], 'v227: la cuerda de la campana suena al pasar debajo (una vez) %s'%r[:3])
+    ok(r[3]<r[4] and r[5] and r[6]==0 and r[7]<=.25, 'v227: el teletransportador tiene su columna de luz (más fuerte con pareja, del color de la pareja, sin sombra) y se sigue pisando bajito %s'%r[3:])
+    r=await ev("""(async()=>{ __CLR(); const L=['canasta','porteria','campana','banda','tele','tele','catapulta','molino','piano','sorpresa','burbujas','saco']; L.forEach((id,i)=>__ST(id,(i%4-1.5)*4.5,5+Math.floor(i/4)*4.5,2)); player.pos.set(FREE.X,FREE.Y+.05,FREE.Z); __S(4);
+      let inB=0; for(let i=0;i<40 && !inB;i++){ capLast=-1e9; frame(); await new Promise(r=>setTimeout(r,400)); for(const o of FREE.objs) o.root.traverse(m=>{ const q=BATCH.recs.get(m); if(q && q.batch) inB++; }); } let err=''; try{ __CLR(); }catch(e){ err=String(e); } return [inB, err, FREE.objs.length]; })()""")
+    ok(r[0]>0 and not r[1] and r[2]==0, 'v227: quitar todo después de un rato (con piezas ya juntadas para dibujar) no truena %s'%r)
     ok(not errs,'sin errores %s'%errs[:3]); await ctx.close(); await b.close()
 asyncio.run(m())
