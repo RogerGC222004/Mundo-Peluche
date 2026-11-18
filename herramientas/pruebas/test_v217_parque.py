@@ -21,13 +21,13 @@ async def m():
     await pg.wait_for_function("(()=>{const l=document.getElementById('loader'); return !l || l.hidden || getComputedStyle(l).display==='none';})()", polling=250, timeout=120000)
     await ev("""window.__run=(sec,fn)=>{ let t=clock.elapsedTime; const n=Math.round(sec/.05); for(let i=0;i<n;i++){ clock.elapsedTime=(t+=.05); if(fn) fn(i); update(.05,t); updateSky(.05); scene.updateMatrixWorld(); } };
       window.__act=()=>{ const a=freeActions(); return a?a.map(x=>x&&x.label):null; }; window.__do=(lab)=>{ const a=freeActions()||[]; const x=a.find(q=>q&&q.label===lab); if(x) x.run(); return !!x; }; 1""")
-    # 1. el menú: pestaña 🎡 Parque con 5 que se mueven y 4 juguetes (con su fotito)
+    # 1. el menú: pestaña 🎡 Parque con 5 que se mueven y los juguetes (v229: los 10 nuevos; el dominó, los bolos y la torre ya están en «Física»)
     r=await ev("""(async()=>{ freeEnter(); window.requestAnimationFrame=()=>0; FREE.objs.slice().forEach(freeDrop); FREE.dyn.slice().forEach(freeDrop); freeOpenBox();
       const tab=[...ui('freeTabs').children].find(b=>b.textContent.includes('Parque')); tab.click(); const subs=[...ui('freeSubs').children].map(b=>b.textContent).join('|'); const a=[...ui('freeGrid').children].map(b=>b.textContent);
-      [...ui('freeSubs').children][1].click(); const t=[...ui('freeGrid').children].map(b=>b.textContent); for(let i=0;i<40;i++) freeThumbPump(); const bad=Object.keys(FTH.c).filter(k=>/^[vt]:/.test(k) && FTH.c[k]==='x');
+      [...ui('freeSubs').children][1].click(); const t=[...ui('freeGrid').children].map(b=>b.textContent); for(let i=0;i<40;i++) freeThumbPump(); const bad=Object.keys(FTH.c).filter(k=>/^[vtp]:/.test(k) && FTH.c[k]==='x');
       ui('freeBox').hidden=true; return [subs, a.join(','), t.join(','), bad.length]; })()""")
-    ok('Se mueven' in r[0] and 'Juguetes' in r[0] and r[1]=='Columpio,Sube y baja,Carrusel,Puerta,Elevador' and r[2]=='Dominó,Fila de 8 dominós,Bolos (10),Torre de bloques' and r[3]==0, 'Objetos → 🎡 Parque: «Se mueven» (5) y «Juguetes» (4), todos con su fotito %s'%r)
-    # 2. ponerlos caminando (la fila son 8 dominós y los bolos 10)
+    ok('Se mueven' in r[0] and 'Juguetes' in r[0] and r[1]=='Columpio,Sube y baja,Carrusel,Puerta,Elevador' and r[2]=='Trompo,Pelota saltarina,Resorte (baja escalones),Carrito de cuerda,Avioncito de papel,Papalote,Bumerán,Globo con helio,Cohete de agua,Lanzadora de discos' and r[3]==0, 'Objetos → 🎡 Parque: «Se mueven» (5) y «Juguetes» (10), todos con su fotito %s'%r)
+    # 2. ponerlos caminando (la fila son 8 dominós y los bolos 10) — v229: los juguetes de antes (siguen funcionando en mapas viejos)
     r=await ev("""(()=>{ const X=FREE.X,Y=FREE.Y,Z=FREE.Z; const put=(sel,x,z,f)=>{ player.pos.set(X+x,Y+.05,Z+z); player.facing=f||0; freeSelect(sel); freePlace(); freeSelect(null); };
       put({k:'v',a:'columpio',b:5},-20,-20); put({k:'v',a:'subebaja',b:2},-12,-20); put({k:'v',a:'carrusel',b:0},-4,-20); put({k:'v',a:'puerta',b:6},4,-20); put({k:'v',a:'elevador',b:7},12,-20);
       const n0=freeOwn(); put({k:'t',a:'fila',b:11},-20,10); const n1=freeOwn(); put({k:'t',a:'bolos',b:0},-10,10); const n2=freeOwn(); put({k:'t',a:'torre',b:0},0,10);
@@ -83,13 +83,13 @@ async def m():
     ok(r[0]==3 and r[1]==8 and 'no se puede pintar' in r[2] and r[3] and r[4], '🎨 se pintan el carrusel y los dominós (aunque estén caídos siguen caídos); los bolos no %s'%r)
     # 12. se guarda y vuelve
     r=await ev("""(()=>{ freeSave(); const o=JSON.parse(localStorage.getItem('mundoPelucheLibre')); const ks=o.s.map(e=>e[0]+':'+e[1]); ui('toMenuBtn').click(); __run(.2); FREE.loaded=null; freeEnter(); __run(.3);
-      return [ks.filter(k=>k[0]==='v').length, ks.filter(k=>k==='t:domino').length, ks.filter(k=>k==='t:bolo').length, ks.filter(k=>k==='t:torre').length, FREE.pqv.length, FREE.toys.length, FREE.toys.every(q=>q.toy.st===0), FREE.pqv.find(q=>q.pq==='carrusel').sel.b]; })()""")
-    ok(r==[5,16,10,1,5,27,True,3], 'se guarda: al volver están los 5 juegos y los 27 juguetes (parados) con sus colores %s'%r)
+      return [ks.filter(k=>k[0]==='v').length, ks.filter(k=>k==='t:domino').length, ks.filter(k=>k==='t:bolo').length, ks.filter(k=>k==='t:torre').length, FREE.pqv.length, (FREE.toys||[]).length, FREE.dyn.filter(d=>d.bx).length, FREE.pqv.find(q=>q.pq==='carrusel').sel.b]; })()""")
+    ok(r==[5,16,10,1,5,0,38,3], 'se guarda: al volver están los 5 juegos con sus colores, y los 16 dominós, 10 bolos y la torre ahora son piezas con física (38) %s'%r)
     # 13. editor de mapas desde arriba: pestaña Parque; la fila se pone de un toque y ↶ la quita completa
     r=await ev("""(()=>{ ui('toMenuBtn').click(); menuModes(true); ui('mapBtn').click(); mapType='mundo'; ui('mapName').value='Parque'; mapCreate(); const tabs=mapTabs().map(t=>t[0]).join(',');
-      MED.tab='parque'; MED.sub='juguetes'; medRender(); const cards=[...document.querySelectorAll('#medGrid .hed-card')].map(c=>c.textContent).join('|'); medSelect({k:'t',a:'fila',b:11}); const n0=freeOwn();
-      medPlace({x:FREE.X+.5,y:FREE.Y,z:FREE.Z+.5,ok:true}); const n1=freeOwn(); medUndo(); const n2=freeOwn(); medDone(); return [tabs, cards.includes('Fila de 8'), n1-n0, n2-n0]; })()""")
-    ok(r[0].startswith('juego,bloques,fisica,parque') and r[1] and r[2]==8 and r[3]==0, 'editor de mapas: pestaña 🎡 Parque; la fila pone 8 dominós y ↶ Deshacer los quita todos %s'%r)
+      MED.tab='fisica'; MED.sub=null; medRender(); const cards=[...document.querySelectorAll('#medGrid .hed-card')].map(c=>c.textContent).join('|'); medSelect({k:'p',a:'filaD',b:0}); const n0=FREE.dyn.length;
+      medPlace({x:FREE.X+.5,y:FREE.Y,z:FREE.Z+.5,ok:true}); const n1=FREE.dyn.length; medUndo(); const n2=FREE.dyn.length; medDone(); return [tabs, cards.includes('Fila de 8'), n1-n0, n2-n0]; })()""")
+    ok(r[0].startswith('juego,bloques,fisica,parque') and r[1] and r[2]==8 and r[3]==0, 'editor de mapas: pestaña 🎡 Parque; en «Física» la fila pone 8 dominós y ↶ Deshacer los quita todos %s'%r)
     # 14. rendimiento: 300 dominós, 20 juegos que se mueven y 10 torres
     r=await ev("""(async()=>{ const W=ms=>new Promise(r=>setTimeout(r,ms)); ui('toMenuBtn').click(); __run(.2); localStorage.removeItem('mundoPelucheLibre'); freeEnter(); FREE.objs.slice().forEach(freeDrop); FREE.dyn.slice().forEach(freeDrop); const X=FREE.X,Y=FREE.Y,Z=FREE.Z;
       player.pos.set(X,Y+.05,Z+50); for(let i=0;i<8;i++){ __run(.5); renderer.render(scene,camera); await W(700); } renderer.info.reset(); renderer.render(scene,camera); const base=renderer.info.render.calls;
