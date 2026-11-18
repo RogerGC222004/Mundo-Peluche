@@ -74,12 +74,12 @@ async def m():
     r=await ev("""(()=>{ __CLR(); FREE.sticks=[]; FREE.myStick=null; __AT(-10,-10,0); const o=freeAddStatic({k:'p',a:'pinata',b:0},FREE.X,FREE.Y,FREE.Z,0); const [bx,bz]=freeStickBox(o); __AT(bx-FREE.X,bz-FREE.Z-1,0); __S(2);
       const A=freeActions(), lab=A&&A[0]&&A[0].label; A[0].run(); __S(2); const inHand=!!FREE.myStick && FREE.myStick.g.parent!==FREE.og, B=freeActions().map(x=>x&&x.label);
       const [cx,,cz]=freePinataC(o); __AT(cx-FREE.X,cz-FREE.Z-1.3,0); for(let i=0;i<3;i++){ freeSwing(); __S(12); } const candies=FREE.dyn.filter(d=>d.P.id==='dulce'); const hidden=!o.root.userData.pinB.visible;
-      __S(30); const c=candies[0], cp=c.root.position; freeStickDrop(); __AT(cp.x-FREE.X,cp.z-FREE.Z-.8,0); __S(1); const E=freeActions(), el=E&&E[0]&&E[0].label; E[0].run(); __S(25);
+      __S(30); const c=candies[0], cp=c.root.position; freeStickDrop(); c.v.set(0,0,0); c.sleep=true; cp.y=FREE.Y+c.r; __AT(cp.x-FREE.X,cp.z-FREE.Z-.8,0); c.v.set(0,0,0); c.sleep=true; __S(1); const E=freeActions(), el=E&&E[0]&&E[0].label; E[0].run(); __S(25);
       const left=FREE.dyn.filter(d=>d.P.id==='dulce').length;
       for(let i=0;i<11;i++){ freeStickTake(); freeStickDrop(); } const nS=FREE.sticks.length, inWorld=FREE.sticks.filter(q=>q.g.parent).length;
       return [lab, inHand, B, candies.length, hidden, el, left, FREE.eat, nS, inWorld]; })()""")
     ok(r[0]=='🪅 Tomar un palo' and r[1] and r[2]==['💥 Golpear','Dejar el palo'] and r[3]==6 and r[4], 'piñata: en su cajita tomas un palo, con 3 golpes suelta 6 dulces y se esconde un rato %s'%r[:5])
-    ok(r[5]=='🍬 Comer dulce' and r[6]==5 and r[7] is None, 'dulces: «Comer dulce» y tu peluche se lo come (quedan %s)'%r[6])
+    ok(r[5]=='🍬 Comer dulce' and r[6]==5 and r[7] is None, 'dulces: «%s» y tu peluche se lo come (quedan %s)'%(r[5],r[6]))
     ok(r[8]==10 and r[9]==10, 'palos: máximo 10 en el mundo; al tomar el 11º desaparece el primero (%s, %s a la vista)'%(r[8],r[9]))
     # 7. guardar: lo que disparan los cañones no se guarda
     r=await ev("""(()=>{ __CLR(); __AT(0,0,0); const c=freeAddStatic({k:'p',a:'canon',b:0},FREE.X,FREE.Y,FREE.Z+1.5,0); freeAddDyn('balon',FREE.X+3,FREE.Y,FREE.Z); freeFire(c,true); freeFire(c,true); __S(4); freeSave();
