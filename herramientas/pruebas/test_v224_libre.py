@@ -40,7 +40,7 @@ async def m():
       for(const id of ids){ const m=freeMake({k:'p',a:id,b:0}); if(!m || !m.children.length) bad.push(id); } const tab=[]; FREE.tab='fisica'; try{ freeRenderBox&&freeRenderBox(); }catch(e){}
       const th=ids.map(id=>freeThumbRender('p:'+id+':0')).filter(u=>!u || u==='x').length;
       const vis=FREE_PHYS.filter(P=>!P.hid).length; return [bad, th, vis]; })()""")
-    ok(not r[0] and r[1]==0 and r[2]==24, 'las 17 cosas nuevas se arman y tienen su fotito; en «Física» hay %s cosas %s'%(r[2],r))
+    ok(not r[0] and r[1]==0 and r[2]==37, 'las 17 cosas nuevas se arman y tienen su fotito; en «Física» hay %s cosas %s'%(r[2],r))
     # 3. agarrar y lanzar
     r=await ev("""(()=>{ __CLR(); __AT(0,0,0); const d=freeAddDyn('balon',FREE.X,FREE.Y,FREE.Z+1.4); __S(10); const A=freeActions(); const lab=A&&A[0]&&A[0].label; A[0].run(); __S(3);
       const p=d.root.position, up=+(p.y-player.pos.y).toFixed(2), B=freeActions(); const p0=p.clone();

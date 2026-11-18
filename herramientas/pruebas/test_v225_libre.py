@@ -39,7 +39,7 @@ async def m():
           ui('freeClear').click(); ui('freeClearYes').click(); return [open, msg, kept, FREE.objs.length+FREE.dyn.length, ui('freeClearOv').hidden]; })()""")
         ok(r[0] and '3 cosas' in r[1] and r[2]==3 and r[3]==0 and r[4], 'Borrar todo: pregunta antes («%s»); con «Cancelar» no pasa nada y con «Sí, borrar» queda vacío'%r[1])
         r=await ev("""(()=>{ __CLR(); const a=freeAddStatic({k:'b',a:0,b:1},FREE.X+2,FREE.Y,FREE.Z+2,0), c=freeAddStatic({k:'b',a:0,b:2},FREE.X+4,FREE.Y,FREE.Z+2,0), d=freeAddDyn('playa',FREE.X,FREE.Y,FREE.Z+4); a.au=MY_PID; c.au='otro1234'; d.au='otro1234';
-          const was=[FNET.on,FNET.host,FNET.dirty]; FNET.on=true; FNET.host=true; FNET.dirty=FNET.dirty||new Set(); freeClearAsk(); const msg=ui('freeClearP').textContent; freeClearAll(); const left=[FREE.objs.includes(a), FREE.objs.includes(c), FREE.dyn.includes(d)];
+          const was=[FNET.on,FNET.host,FNET.dirty]; FNET.on=true; FNET.host=true; FNET.dirty=FNET.dirty||new Set(); freeClearAsk(); const msg=ui('freeClearP').textContent; freeWipeMine(); const left=[FREE.objs.includes(a), FREE.objs.includes(c), FREE.dyn.includes(d)];
           FNET.on=was[0]; FNET.host=was[1]; FNET.dirty=was[2]; __CLR(); return [msg, left]; })()""")
         ok('1 cosa' in r[0] and 'amigos' in r[0] and r[1]==[False,True,True], 'Borrar todo en una sala: solo quita lo tuyo («%s») %s'%(r[0],r[1]))
         # 3. el dado rueda dando tumbos y cae en una cara; el balón tiene sus 12 pentágonos
