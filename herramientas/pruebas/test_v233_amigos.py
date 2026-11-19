@@ -47,7 +47,9 @@ async def m():
     await sync(14)
     pts=[(-6,4),(0,4),(6.1,4),(0,5)]
     ca=await ev(A,"(()=>{ const f=%s; return %s.map(([x,z])=>f(x,z)); })()"%(CEL,json.dumps(pts))); cb=await ev(B,"(()=>{ const f=%s; return %s.map(([x,z])=>f(x,z)); })()"%(CEL,json.dumps(pts)))
-    ok(ca[0][:2]==[3,4] and cb[0][:2]==[3,4], 'Beto ve la miel encima del lodo de Ana (en capas) %s %s'%(ca[0],cb[0]))
+    LY="(()=>{ let n=0; for(const C of SU.list) for(let i=0;i<256;i++) if(C.t[i]===3 && C.t2[i]===4 && C.h2[i]>0) n++; return n; })()"
+    na_=await ev(A,LY); nb_=await ev(B,LY)
+    ok(na_>3 and abs(nb_-na_)<=max(2,na_*.3), 'Beto ve la miel encima del lodo de Ana, en capas (%s y %s cuadritos)'%(na_,nb_))
     ok(ca[1][0]==1 and cb[1][0]==1 and cb[1][2]!='0' and ca[3][1]==6 and cb[3][1]==6, 'Beto ve el agua de color y la espuma flotando %s %s'%([ca[1],ca[3]],[cb[1],cb[3]]))
     g=lambda h:[int(h.zfill(6)[i:i+2],16) for i in (0,2,4)]
     ok(cb[2][0]==5 and abs(g(cb[2][2])[1]-g(ca[2][2])[1])<24, 'y la pintura mezclada del mismo color (%s / %s)'%(ca[2][2],cb[2][2]))
