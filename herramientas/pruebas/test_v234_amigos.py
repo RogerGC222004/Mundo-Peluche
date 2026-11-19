@@ -52,7 +52,7 @@ async def m():
     ok(2 in ka and 4 in ka and 2 in kb and 4 in kb, 'la máquina echa lo que escogió Beto y los dos lo ven %s %s'%(ka,kb))
     pa=await ev(B,"FU.pts.length"); ok(pa>0, 'Beto también ve las gotitas que salen (%s)'%pa)
     # Beto agarra la manguera y se la lleva
-    await ev(A,"(()=>{ const o=%s; const C=fuCfg(o); C[0].on=0; C[1].on=0; fuSet(o,C); suClear(); return 1; })()"%M); await sync(8)
+    await ev(A,"(()=>{ const o=%s; const C=fuCfg(o); C[0].on=0; C[1].on=0; fuSet(o,C); suClear(); FU.pts.length=0; return 1; })()"%M); await sync(8)
     await ev(B,"(()=>{ const o=%s; player.pos.set(o.x+2,FREE.Y+.05,o.z); __S(1); fuGrab(o); const C=fuCfg(o); C[3].on=1; fuSet(o,C); return 1; })()"%M)
     for i in range(16):
       await ev(B,"(()=>{ player.pos.x+=.6; player.facing=Math.PI/2; return 1; })()"); await sync(1)
@@ -80,7 +80,7 @@ async def m():
     bb=await ev(A,"FREE.objs.find(q=>q.gad==='burbujas').sel.b")
     ok((bb&3)==2, 'Beto cambia el tamaño de las burbujas de la máquina de Ana y sí le cambia (%s)'%bb)
     # y la cubeta de Beto le sigue llegando a Ana
-    await ev(A,"(()=>{ const o=%s; const C=fuCfg(o); C[3].on=0; fuSet(o,C); suClear(); return 1; })()"%M); await sync(6); await ev(A,"suClear(); 1"); await sync(4)
+    await ev(A,"(()=>{ const o=%s; const C=fuCfg(o); C[3].on=0; fuSet(o,C); suClear(); FU.pts.length=0; return 1; })()"%M); await sync(6); await ev(A,"suClear(); FU.pts.length=0; 1"); await sync(4)
     await ev(B,"(()=>{ suNetPour(FREE.X+4,FREE.Z+10,1,0,.2,.5); return 1; })()"); await sync(10)
     v=await ev(A,"(suRecount(), SU.vol)"); ok(abs(v-.2)<.03, 'lo que Beto echa con la cubeta le llega a Ana (%.3f m³)'%v)
     pb_=await ev(A,"__PB"); pbb=await ev(B,"__PB"); ok(pb_<=3700 and pbb<=3700, 'lo más que mandó cada uno pesa %s y %s bytes'%(pb_,pbb))

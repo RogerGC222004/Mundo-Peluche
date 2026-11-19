@@ -62,26 +62,26 @@ async def m():
     # 3. la máquina de sustancias: cada salida echa en su lugar
     r=await ev("""(()=>{ __CLR(); suClear(); __AT(-20,-20); const o=freeAddStatic({k:'p',a:'fuentes',b:FU_DEF},FREE.X,FREE.Y,FREE.Z,0,true); const C=fuCfg(o);
         return [!!o, o.solid, C.map(c=>c.on), C[1].p, FREE_PHYS_BY.fuentes.hid, fuNearActions()===null]; })()""")
-    ok(r[0] and r[1] and r[2]==[0,1,0,0] and r[3]==1, 'se pone la máquina (choca contigo) y de inicio solo la fuente echa agua %s'%r)
+    ok(r[0] and r[1] and r[2]==[0,0,0,0] and r[3]==1, 'se pone la máquina (choca contigo) y sale apagada (v235; la fuente trae agua) %s'%r)
     W=[]
     for k,(p,q,x) in enumerate([(3,2,0),(1,2,2),(5,2,2),(4,2,1)]):
-      W.append(await ev("""(()=>{ __CLR(); suClear(); __AT(-20,-20); const o=freeAddStatic({k:'p',a:'fuentes',b:0},FREE.X,FREE.Y,FREE.Z,1,true); const C=[0,1,2,3].map(i=>({on:i===%d?1:0,p:%d,q:%d,x:%d,col:6})); fuSet(o,C);
-          let hi=0; for(let i=0;i<45;i++){ __S(1); for(const P of FU.pts) hi=Math.max(hi,P.y-FREE.Y); } suRecount(); const S=fuSrc(o,%d,fuCfg(o)[%d]); let v=0, cx=0, cz=0, rmax=0; const quad=[0,0,0,0];
-          for(const Q of SU.list) for(let i=0;i<256;i++){ const h=Q.h[i]+Q.h2[i]; if(!(h>0)) continue; const gx=(Q.ci*16+(i&15)+.5)*SU.cs+FREE.X, gz=(Q.cj*16+(i>>4)+.5)*SU.cs+FREE.Z, w=h*.04; v+=w; cx+=gx*w; cz+=gz*w; const d=Math.hypot(gx-o.x,gz-o.z); if(d>rmax) rmax=d; if(d>1) quad[(gx>o.x?1:0)+(gz>o.z?2:0)]++; }
-          cx/=v; cz/=v; const R=fuReel(o); return [+v.toFixed(3), +Math.hypot(cx-S.x,cz-S.z).toFixed(2), +Math.hypot(cx-o.x,cz-o.z).toFixed(2), +rmax.toFixed(2), quad.filter(n=>n>0).length, +hi.toFixed(2), +Math.hypot(cx-R.x,cz-R.z).toFixed(2), [...new Set(SU.list.flatMap(Q=>[...Q.t].filter(Boolean)))], o.root.userData.fuJet.visible]; })()"""%(k,p,q,x,k,k)))
+      W.append(await ev("""(()=>{ __CLR(); suClear(); FU.pts.length=0; __AT(-20,-20); const o=freeAddStatic({k:'p',a:'fuentes',b:0},FREE.X,FREE.Y,FREE.Z,1,true); const C=[0,1,2,3].map(i=>({on:i===%d?1:0,p:%d,q:%d,x:%d,col:6})); fuSet(o,C);
+          let hi=0; for(let i=0;i<90;i++){ __S(1); for(const P of FU.pts) hi=Math.max(hi,P.y-FREE.Y); } suRecount(); const S=fuSrc(o,%d,fuCfg(o)[%d]); let v=FU.pts.reduce((a,P)=>a+(P.v||0),0)/.04, vv=v, cx=0, cz=0, rmax=0;   /* (v235: + lo que va volando) */ const quad=[0,0,0,0];
+          for(const Q of SU.list) for(let i=0;i<256;i++){ const h=Q.h[i]+Q.h2[i]; if(!(h>0)) continue; const gx=(Q.ci*16+(i&15)+.5)*SU.cs+FREE.X, gz=(Q.cj*16+(i>>4)+.5)*SU.cs+FREE.Z, w=h; v+=w; cx+=gx*w; cz+=gz*w; const d=Math.hypot(gx-o.x,gz-o.z); if(d>rmax) rmax=d; if(d>1) quad[(gx>o.x?1:0)+(gz>o.z?2:0)]++; }
+          cx/=(v-vv); cz/=(v-vv); const R=fuReel(o); return [+(v*.04).toFixed(3), +Math.hypot(cx-S.x,cz-S.z).toFixed(2), +Math.hypot(cx-o.x,cz-o.z).toFixed(2), +rmax.toFixed(2), quad.filter(n=>n>0).length, +hi.toFixed(2), +Math.hypot(cx-R.x,cz-R.z).toFixed(2), [...new Set(SU.list.flatMap(Q=>[...Q.t].filter(Boolean)))], FU.pts.length]; })()"""%(k,p,q,x,k,k)))
     print(W)
-    ok(W[0][7]==[3] and W[0][1]<.45 and abs(W[0][0]-.3)<.06, '🫗 el goteo echa lodo justo abajo de su grifo (%s m³, a %s m del grifo)'%(W[0][0],W[0][1]))
-    ok(W[1][7]==[1] and W[1][8] and W[1][5]>2.5 and W[1][4]==4, '⛲ la fuente avienta su chorro hacia arriba (%s m) y cae alrededor de la máquina (por los 4 lados)'%W[1][5])
+    ok(W[0][7]==[3] and W[0][1]<.45 and abs(W[0][0]-.18)<.04, '🫗 el goteo echa lodo justo abajo de su grifo (%s m³, a %s m del grifo)'%(W[0][0],W[0][1]))
+    ok(W[1][7]==[1] and W[1][8]>0 and W[1][5]>2.5 and W[1][4]==4, '⛲ la fuente avienta su chorro hacia arriba (%s m) y cae alrededor de la máquina (por los 4 lados)'%W[1][5])
     ok(W[2][7]==[5] and W[2][3]>3.4 and W[2][4]==4, '💧 la regadera reparte la pintura en un círculo grande (hasta %s m, por los 4 lados)'%W[2][3])
     ok(W[3][7]==[4] and 2.6<W[3][6]<6.5, '🚿 la manguera enrollada echa miel por su lado, como a %s m'%W[3][6])
-    ok(all(abs(w[0]-.3)<.06 for w in W[1:]), 'y cada una echa lo que dice «Mucho» %s'%[w[0] for w in W])
+    ok(all(abs(w[0]-.6)<.06 for w in W[1:]), 'y cada una echa lo que dice «Mucho» %s'%[w[0] for w in W])
     r=await ev("""(()=>{ __CLR(); suClear(); __AT(-20,-20); const o=freeAddStatic({k:'p',a:'fuentes',b:FU_DEF},FREE.X,FREE.Y,FREE.Z,0,true); const C=[{on:1,p:6,q:3,x:3,col:0},{on:1,p:2,q:0,x:3,col:0},{on:0,p:5,q:1,x:0,col:11},{on:1,p:5,q:2,x:3,col:9}]; fuSet(o,C);
-        const D=fuCfg(o), same=JSON.stringify(D)===JSON.stringify(C); const v0=SU.vol; __S(30); suRecount(); const v=SU.vol-v0;
+        const D=fuCfg(o), same=JSON.stringify(D)===JSON.stringify(C); FU.pts.length=0; suRecount(); const v0=SU.vol; __S(30); suRecount(); const v=SU.vol-v0+FU.pts.reduce((a,P)=>a+(P.v||0),0);
         fuOpen(o); const ov=ui('freeBubOv'); const rows=[...ov.querySelectorAll('.bub-row b')].map(b=>b.textContent); const tabs=ov.querySelector('.bub-row').querySelectorAll('button').length;
         [...ov.querySelectorAll('.bub-row')][2].querySelectorAll('button')[0].click(); const after=fuCfg(o)[FU.tab].p; ov.hidden=true;
         freeSave(); const J=JSON.parse(localStorage.getItem('mundoPelucheLibre')), e=J.s.find(q=>q[1]==='fuentes'); FREE.loaded=null; freeLoad(); const o2=FREE.objs.find(q=>q.gad==='fuentes');
         return [same, +v.toFixed(3), rows, tabs, after, e[2]===o.sel.b, !!o2 && o2.sel.b===o.sel.b, o.sel.b>2**32]; })()""")
-    ok(r[0] and abs(r[1]-(.8+.012+.2)*1)<.12, 'se puede prender más de una a la vez, cada una con su sustancia y lo que sale (%s m³ en 1 s)'%r[1])
+    ok(r[0] and abs(r[1]-(.8*.3+.012+.2)*1)<.06, 'se puede prender más de una a la vez, cada una con su sustancia y lo que sale (%s m³ en 1 s)'%r[1])
     ok(r[2][:3]==['Salida','Sustancia','Cuánto sale'] and r[3]==4 and r[4]==1, 'la ventanita de ⚙️ Configurar tiene una pestaña por salida y cambia la sustancia %s'%r[2])
     ok(r[5] and r[6] and r[7], 'toda la configuración se guarda con el mundo')
     # 4. la manguera: se estira 20 m, sigue echando donde la sueltas, se recoge
@@ -89,7 +89,7 @@ async def m():
         player.pos.set(o.x+2,FREE.Y+.05,o.z); __S(2); const na=(fuNearActions()||[]).filter(Boolean).map(a=>a.label); fuGrab(o); const mano=fuHoldActions().filter(Boolean).map(a=>a.label);
         for(let i=0;i<70;i++){ player.pos.x+=.5; __S(1); } const A=fuReel(o), d=Math.hypot(player.pos.x-A.x,player.pos.z-A.z); const rope=!!(o.fuR && o.fuR.mesh.parent);
         let L=0; { const P=o.fuR.P; for(let i=0;i<40;i++) L+=Math.hypot(P[i*3+3]-P[i*3],P[i*3+4]-P[i*3+1],P[i*3+5]-P[i*3+2]); }
-        player.facing=0; fuDrop(); const hx=o.hose.x, hz=o.hose.z; suClear(); __AT(-20,-20); __S(45); suRecount(); let n=0, far=0; for(const Q of SU.list) for(let i=0;i<256;i++) if(Q.t[i]===4){ const gx=(Q.ci*16+(i&15)+.5)*SU.cs+FREE.X, gz=(Q.cj*16+(i>>4)+.5)*SU.cs+FREE.Z; if(Math.hypot(gx-hx,gz-hz)<10) n++; else far++; }
+        player.facing=0; fuDrop(); const hx=o.hose.x, hz=o.hose.z; suClear(); FU.pts.length=0; __AT(-20,-20); __S(45); suRecount(); let n=0, far=0; for(const Q of SU.list) for(let i=0;i<256;i++) if(Q.t[i]===4){ const gx=(Q.ci*16+(i&15)+.5)*SU.cs+FREE.X, gz=(Q.cj*16+(i>>4)+.5)*SU.cs+FREE.Z; if(Math.hypot(gx-hx,gz-hz)<10) n++; else far++; }
         const tip=(()=>{ player.pos.set(hx,FREE.Y+.05,hz+.5); __S(2); return (fuNearActions()||[]).filter(Boolean).map(a=>a.label); })();
         fuGrab(o); const t2=FREE.hose===o; freeSelect({k:'b',a:0,b:1}); __S(2); const auto=!FREE.hose && !!o.hose && !o.hose.held; freeSelect(null);
         player.pos.set(o.x+2,FREE.Y+.05,o.z); __S(2); const nb=(fuNearActions()||[]).filter(Boolean).map(a=>a.label); fuRoll(o); __S(2);
