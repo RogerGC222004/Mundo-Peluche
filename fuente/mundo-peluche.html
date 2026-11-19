@@ -6248,6 +6248,7 @@ function applySettings(){
   sun.castShadow=settings.shadows && !minQ;          // en Mínima no hay sombras de verdad (quedan los circulitos bajo los peluches)
   DECOR.forEach(o=>o.visible=!minQ);                 // ni flores ni cosas del fondo del mar
   if(typeof waterMats!=='undefined') waterMats.forEach(m=>{ const want=minQ?0:RIP_N; if(m.defines.RIP_LOOP!==want){ m.defines.RIP_LOOP=want; m.defines.WATER_DETAIL=minQ?0:1; m.needsUpdate=true; } });
+  try{ if(typeof SU!=='undefined' && SU.mats && SU.matQ!==undefined && SU.matQ!==minQ) suMatsReset(); }catch(e){}   // v232b: las sustancias cambian a su versión sencilla (o de vuelta) al cambiar a Mínima
   if(minQ && settings.draw>100){ settings.draw=100; }
   FX.on=maxQ && fxSupported();
   if(maxQ){ fxAniso(); setTimeout(fxAniso,4000); }
@@ -23805,18 +23806,18 @@ function freeActions(){ if(!FREE.on) return null; if(FREE.play || (player.pg && 
 // Lo que pisa (tu peluche, tus amigos, pelotas y cajas) la empuja a los lados: así quedan las huellas; el agua se rellena luego,
 // el slime y la miel despacito y el lodo casi nada. Los trozos que ya no se mueven se duermen (no cuestan nada).
 const SU_T=[null,
-  {id:'agua',   n:'Agua',    col:'#3d97e6', op:.62, ro:.04, k:.2,   Y:0,    minH:.006, pr:0, slow:.9,  slip:1, drag:.5, burst:1},
-  {id:'slime',  n:'Slime',   col:'#74d94e', op:.86, ro:.2,  k:.035, Y:.0015, minH:.022, pr:1, slow:.74, drag:2.4, burst:.45},
-  {id:'lodo',   n:'Lodo',    col:'#7a5232', op:1,   ro:.95, k:.028, Y:.05,  minH:.03,  pr:90,  slow:.56, drag:4, burst:.15},
-  {id:'miel',   n:'Miel',    col:'#f0a12a', op:.9,  ro:.1,  k:.011, Y:0,    minH:.012, pr:3, slow:.42, drag:6, burst:0},
-  {id:'pintura',n:'Pintura', col:null,      op:1,   ro:.32, k:.11,  Y:.002, minH:.004, pr:0, slow:.92, drag:1, burst:.8, paint:1},
-  {id:'espuma', n:'Espuma',  col:'#f6f9ff', op:.96, ro:.92, k:.02,  Y:.045, minH:.05,  pr:25,  slow:.95, drag:.7, burst:.55, decay:.012}];
+  {id:'agua',   n:'Agua',    col:'#3d97e6', op:.88, ro:.04, k:.2,   Y:0,    minH:.016, pr:0, slow:.9,  slip:1, drag:.5, burst:1},
+  {id:'slime',  n:'Slime',   col:'#74d94e', op:.9,  ro:.2,  k:.035, Y:.0015, minH:.045, pr:1, slow:.74, drag:2.4, burst:.45},
+  {id:'lodo',   n:'Lodo',    col:'#7a5232', op:1,   ro:.95, k:.028, Y:.06,  minH:.06,  pr:90,  slow:.56, drag:4, burst:.15},
+  {id:'miel',   n:'Miel',    col:'#f0a12a', op:.9,  ro:.1,  k:.011, Y:0,    minH:.03,  pr:3, slow:.42, drag:6, burst:0},
+  {id:'pintura',n:'Pintura', col:null,      op:1,   ro:.32, k:.11,  Y:.002, minH:.007, pr:0, slow:.92, drag:1, burst:.8, paint:1},
+  {id:'espuma', n:'Espuma',  col:'#f6f9ff', op:.96, ro:.92, k:.02,  Y:.09,  minH:.12,  pr:25,  slow:.95, drag:.7, burst:.55, decay:.012}];
 const SU_BY={}; SU_T.forEach((T,i)=>{ if(T){ T.i=i; SU_BY[T.id]=T; } });
-const SU_SIZES=[['chico',.28,.014],['mediano',.5,.04],['grande',.8,.1]];   // radio del chorro (m) y cuánto sale (m³ por segundo)
-var SU={dm:{}, cs:.2, ch:new Map(), list:[], max:14, maxCh:140, vol:0, mode:0, hold:null, holdEnd:0, balls:[], drops:[], emit:[], slow:1, slip:false, feet:null, stain:new Set(), T:0, dk:0, rb:0, idx:null, mats:{}, netV:0, sent:new Map(), seen:new Set(), rxT:0};
+const SU_SIZES=[['chico',.3,.025],['mediano',.5,.07],['grande',.8,.16]];   // radio del chorro (m) y cuánto sale (m³ por segundo)
+var SU={dm:{}, cs:.2, ch:new Map(), list:[], max:25, maxCh:140, vol:0, mode:0, hold:null, holdEnd:0, balls:[], drops:[], emit:[], slow:1, slip:false, feet:null, stain:new Set(), T:0, dk:0, rb:0, idx:null, mats:{}, netV:0, sent:new Map(), seen:new Set(), rxT:0};
 function suKey(ci,cj){ return ci*4096+cj; }
 function suChunk(ci,cj,make){ const k=suKey(ci,cj); let C=SU.ch.get(k); if(!C && make){ if(SU.list.length>=SU.maxCh) return null;
-    C={ci,cj,k, pr:new Float32Array(256), h:new Float32Array(256), t:new Uint8Array(256), c:new Uint8Array(256), b:new Float32Array(256).fill(NaN), d:new Float32Array(256), aw:2, dirty:true, ms:[], n:0, ver:1, idle:0}; SU.ch.set(k,C); SU.list.push(C); } return C; }
+    C={ci,cj,k, wb:new Float32Array(256), pr:new Float32Array(256), h:new Float32Array(256), t:new Uint8Array(256), c:new Uint8Array(256), b:new Float32Array(256).fill(NaN), d:new Float32Array(256), aw:2, dirty:true, ms:[], n:0, ver:1, idle:0}; SU.ch.set(k,C); SU.list.push(C); } return C; }
 function suCell(x,z,make){ const gx=Math.floor((x-FREE.X)/SU.cs), gz=Math.floor((z-FREE.Z)/SU.cs), ci=Math.floor(gx/16), cj=Math.floor(gz/16), C=suChunk(ci,cj,make); return C?[C,(gz-cj*16)*16+(gx-ci*16)]:null; }
 function suXZ(C,i){ return [FREE.X+((C.ci*16+(i&15))+.5)*SU.cs, FREE.Z+((C.cj*16+(i>>4))+.5)*SU.cs]; }
 // el piso de un cuadrito: lo más alto que hay (bloques, rampas…), o una pared si está fuera de la planicie
@@ -23850,33 +23851,120 @@ function suRemoveAt(x,z){ const q=suCell(x,z,false); if(!q) return 0; const [C0,
   while(st.length && n<40000){ const [C,i]=st.pop(), key=C.k*256+i; if(seen.has(key)) continue; seen.add(key); if(C.t[i]!==p || C.h[i]<=0) continue; C.h[i]=0; C.t[i]=0; C.dirty=true; C.aw=2; C.ver++; n++;
     for(const [dx,dz] of _suN){ const N=suNb(C,i,dx,dz,false); if(N) st.push(N); } }
   suRecount(); return n; }
-function suClear(){ for(const C of SU.list) for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } SU.ch.clear(); SU.list.length=0; SU.vol=0; SU.balls.forEach(b=>b.m && b.m.parent && b.m.parent.remove(b.m)); SU.balls.length=0; SU.drops.length=0; SU.emit.length=0; SU.feet=null; suDropsDraw(); }
+function suClear(){ for(const C of SU.list) for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } SU.ch.clear(); SU.list.length=0; SU.vol=0; SU.balls.forEach(b=>b.m && b.m.parent && b.m.parent.remove(b.m)); SU.balls.length=0; SU.rip.length=0; SU.U.uRipN.value=0; SU.drops.length=0; SU.emit.length=0; SU.feet=null; suDropsDraw(); }
 function suRecount(){ let v=0; const a=SU.cs*SU.cs; for(const C of SU.list){ let n=0; for(let i=0;i<256;i++){ const h=C.h[i]; if(h>0){ v+=h*a; n++; } } C.n=n; } SU.vol=v; }
 // ---- dibujarlas: cada trozo, una malla por sustancia (una rejilla de 17×17 esquinas) ----
 function suIndex(){ if(SU.idx) return SU.idx; const I=[]; for(let z=0;z<16;z++) for(let x=0;x<16;x++){ const a=z*17+x, b=a+1, c=a+17, d=c+1; I.push(a,c,b,b,c,d); } return SU.idx=new THREE.BufferAttribute(new Uint16Array(I),1); }
-function suMat(p){ if(SU.mats[p]) return SU.mats[p]; const T=SU_T[p]; const m=new THREE.MeshStandardMaterial({color:T.col||'#ffffff', roughness:T.ro, metalness:0, transparent:T.op<1, opacity:T.op, depthWrite:T.op>=.95, vertexColors:!!T.paint, polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-1});
-  if(p===1){ m.emissive=new THREE.Color('#0b2a44'); } if(p===6){ m.emissive=new THREE.Color('#2a2e36'); } return SU.mats[p]=m; }
+// v232b: cómo se ven. En todas las calidades menos Mínima: brillos que se mueven (olitas), reflejo del cielo, ondas donde pisas o
+// caen gotas, espuma blanca en la orillita del agua, burbujitas en el slime, grumos con brillo de mojado en el lodo y bolitas en la
+// espuma. El color de cada esquina lo pone suBuild (el agua es más oscura donde está honda, como el mar). En Mínima: el color con su brillo.
+SU.U={uT:{value:0}, uSky:{value:new THREE.Color('#9fd3ff')}, uO:{value:new THREE.Vector2()}, uRip:{value:Array.from({length:8},()=>new THREE.Vector4(0,0,-99,0))}, uRipN:{value:0}, uSunD:{value:new THREE.Vector3(0,1,0)}, uSunC:{value:new THREE.Color(1,1,1)}, uDet:{value:null}};
+const SU_GLSL=`
+float suN(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); float a=fract(sin(dot(i,vec2(127.1,311.7)))*43758.5), b=fract(sin(dot(i+vec2(1,0),vec2(127.1,311.7)))*43758.5), c=fract(sin(dot(i+vec2(0,1),vec2(127.1,311.7)))*43758.5), d=fract(sin(dot(i+vec2(1,1),vec2(127.1,311.7)))*43758.5); return mix(mix(a,b,f.x),mix(c,d,f.x),f.y); }
+float suF(vec2 p, float t){
+#if SU_K==1
+  return .5*sin(p.x*3.1+t*1.7)*sin(p.y*2.7-t*1.3) + .3*sin(p.x*5.3-p.y*4.1+t*2.6) + .2*sin(p.y*7.9+p.x*1.3-t*3.1);
+#elif SU_K==2
+  return .6*sin(p.x*1.6+t*.9)*sin(p.y*1.9-t*.7) + .4*suN(p*3.0+t*.15);
+#elif SU_K==3
+  return suN(p*6.0)*.7 + suN(p*13.0)*.3;
+#elif SU_K==4
+  return .5*suN(p*3.5+vec2(t*.05,t*.03)) + .5*sin(p.x*3.1+p.y*1.9+t*.4);
+#elif SU_K==5
+  return .5*sin(p.x*1.3+p.y*.7+t*.05)+.5*suN(p*2.2);
+#else
+  float h=0.0; for(int L=0;L<2;L++){ float sc=L==0?24.0:41.0; vec2 q=p*sc+float(L)*17.3, c=floor(q), f=fract(q); float r1=fract(sin(dot(c,vec2(12.99,78.23)))*43758.5), r2=fract(sin(dot(c,vec2(39.35,11.13)))*24634.6);   // burbujitas (dos tamaños)
+    float rad=.3+.2*fract(r1*9.1), d=length(f-vec2(.3+.4*r1,.3+.4*r2))/rad; h=max(h,sqrt(max(0.0,1.0-d*d))*(L==0?1.0:.75)); }
+  return h;
+#endif
+}`;
+const SU_AMP=[0,.05,.05,.04,.045,.02,.0015], SU_E=[0,.06,.06,.03,.06,.06,.005], SU_REFL=[0,.55,.35,.12,.15,.22,.05], SU_LIP=[0,0,.3,.35,.3,0,.4], SU_GL=[0,[.6,200],[.5,120],[.06,60],[.45,160],[.5,160],[0,1]];   // (qué tan gordita queda la orilla)
+// la sombra se busca 6 cm más arriba: la capa delgadita queda a 1–2 cm del piso y si no, el piso le hace puntitos de sombra (moiré)
+const SU_SHV='#ifdef USE_SHADOWMAP\n  worldPosition.y+=.06;\n#endif\n#include <shadowmap_vertex>';
+function suMatsReset(){ const old=SU.mats; SU.mats={}; for(const C of SU.list) C.ms.forEach((M,p)=>{ if(M) M.material=suMat(p); }); for(const k in old) old[k].dispose(); }
+function suMat(p){ if(SU.mats[p]) return SU.mats[p]; const T=SU_T[p], simple=settings.quality==='min'; SU.matQ=simple;
+  const m=new THREE.MeshStandardMaterial({color:'#ffffff', roughness:T.ro, metalness:0, transparent:T.op<1, opacity:T.op, depthWrite:T.op>=.95, vertexColors:true, polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-1});
+  if(p===6) m.emissive=new THREE.Color('#2c3038'); if(p===2) m.emissive=new THREE.Color('#14300a');
+  if(!simple){ if(!SU.U.uDet.value){ try{ SU.U.uDet.value=seaTex; }catch(e){} if(!SU.U.uDet.value){ const t=new THREE.DataTexture(new Uint8Array([150,190,220,255]),1,1); t.needsUpdate=true; SU.U.uDet.value=t; } }
+    m.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,SU.U); sh.defines=Object.assign(sh.defines||{},{SU_K:p});
+      sh.vertexShader='attribute float aH; attribute float aW; uniform float uT; uniform vec2 uO; varying vec2 vL; varying float vSuH;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n  transformed.y+=sin(uT*9.0+position.x*5.0+position.z*4.0)*aW*.025;\n  vSuH=aH; vL=(modelMatrix*vec4(transformed,1.0)).xz-uO;').replace('#include <shadowmap_vertex>',SU_SHV);
+      sh.fragmentShader='uniform float uT; uniform vec3 uSky; uniform vec4 uRip[8]; uniform int uRipN; uniform vec3 uSunD; uniform vec3 uSunC; uniform sampler2D uDet; varying vec2 vL; varying float vSuH;\n'+SU_GLSL+'\n'+sh.fragmentShader
+        .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+  { float e=${SU_E[p].toFixed(3)}, a=${SU_AMP[p].toFixed(4)}, f0=suF(vL,uT); vec2 g=vec2(suF(vL+vec2(e,0.0),uT)-f0, suF(vL+vec2(0.0,e),uT)-f0)/e*a;
+    for(int k=0;k<8;k++){ if(k>=uRipN) break; vec4 R=uRip[k]; float age=uT-R.z; if(age<0.0 || age>2.5) continue; vec2 dv=vL-R.xy; float d=length(dv)+1e-3, x=d-age*1.3-.05, env=R.w*exp(-age*1.6)*exp(-x*x*30.0); g+=env*7.0*cos(x*22.0)*dv/d; }
+    float up=clamp(dot(normal,(viewMatrix*vec4(0.0,1.0,0.0,0.0)).xyz)*2.0,0.0,1.0); normal=normalize(normal+(viewMatrix*vec4(-g.x,0.0,-g.y,0.0)).xyz*up); }`)
+        .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+#if SU_K==3
+  roughnessFactor*=mix(1.0,.55,smoothstep(.55,.8,suN(vL*4.0)));
+#endif`)
+        .replace('#include <color_fragment>',`#include <color_fragment>
+#if SU_K==1
+  { vec3 det=pow(texture2D(uDet,vL/3.0+vec2(uT*.02,uT*.012)).rgb,vec3(2.2)); diffuseColor.rgb*=mix(vec3(1.0),det*1.3,.55);   // la misma tela del mar
+    diffuseColor.rgb=mix(diffuseColor.rgb,vec3(1.0),(1.0-smoothstep(.003,.014,vSuH))*.6*(.5+.5*smoothstep(.25,.7,det.g))); diffuseColor.a*=mix(.7,1.0,smoothstep(.0,.03,vSuH)); }
+#elif SU_K==2
+  { vec2 q=vL*6.0+vec2(0.0,uT*.04), c=floor(q), f=fract(q); float r1=fract(sin(dot(c,vec2(12.99,78.23)))*43758.5), r2=fract(sin(dot(c,vec2(39.35,11.13)))*24634.6);   // burbujitas redondas
+    vec2 ct=vec2(.25+.5*r2,.25+.5*fract(r1*7.13)); float rad=.07+.13*r2, on=step(.5,r1)*smoothstep(.008,.02,vSuH);
+    diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*1.3+vec3(.05),on*smoothstep(rad,rad*.7,length(f-ct)));
+    diffuseColor.rgb+=vec3(.55)*on*smoothstep(rad*.4,rad*.1,length(f-ct+vec2(rad*.35,-rad*.35))); }
+#elif SU_K==3
+  diffuseColor.rgb*=mix(1.0,.78,smoothstep(.55,.8,suN(vL*4.0)));   // donde está mojado se ve más oscurito
+#elif SU_K==6
+  diffuseColor.rgb*=mix(.84,1.0,suF(vL,uT));
+#endif`)
+        .replace('gl_FragColor = vec4( outgoingLight, diffuseColor.a );',`{ vec3 nV=normalize(normal), vV=normalize(vViewPosition); float fr=pow(1.0-clamp(dot(nV,vV),0.0,1.0),3.0); outgoingLight=mix(outgoingLight,uSky,fr*${SU_REFL[p].toFixed(2)});
+    vec3 kH=normalize((viewMatrix*vec4(0.0,1.0,0.0,0.0)).xyz+vec3(.14,0.0,.1)); float kn=max(dot(nV,kH),0.0), gm=1.0;   // brillo de "luz de arriba": siempre se ve que está mojado y brilla
+#if SU_K==3
+    gm=smoothstep(.55,.8,suN(vL*4.0));
+#endif
+    outgoingLight+=vec3(1.0,.98,.94)*pow(kn,${SU_GL[p][1].toFixed(1)})*${SU_GL[p][0].toFixed(2)}*gm;
+#if SU_K==1
+    diffuseColor.a=mix(diffuseColor.a,1.0,fr*.6);
+    { vec3 hv=normalize(normalize((viewMatrix*vec4(uSunD,0.0)).xyz)+vV); float nh=max(dot(nV,hv),0.0); outgoingLight+=uSunC*pow(nh,160.0)*1.4;   // el brillo del sol, como en el mar
+      vec2 q=vL*14.0+vec2(uT*.7,-uT*.45), c=floor(q); float rn=fract(sin(dot(c,vec2(12.9898,78.233)))*43758.5453), gl=step(.93,rn)*smoothstep(.17,.04,length(fract(q)-.5))*(.5+.5*sin(uT*6.0+rn*40.0))*(.35+pow(kn,8.0));
+      outgoingLight+=vec3(gl*1.2); diffuseColor.a=max(diffuseColor.a,gl); }   // (brillitos redondos que titilan)
+#endif
+  }
+  gl_FragColor = vec4( outgoingLight, diffuseColor.a );`); }; m.customProgramCacheKey=()=>'su'+p; }
+  else { m.onBeforeCompile=sh=>{ sh.vertexShader=sh.vertexShader.replace('#include <shadowmap_vertex>',SU_SHV); }; m.customProgramCacheKey=()=>'sus'+p; }
+  return SU.mats[p]=m; }
+SU.rip=[]; function suRipple(x,z,a){ if(SU.rip.length>=8) SU.rip.shift(); SU.rip.push([x-FREE.X,z-FREE.Z,SU.T,Math.min(.06,a)]); suRipUp(); }
+// (solo las ondas que siguen vivas van al dibujo: si nadie pisa, no cuestan nada)
+function suRipUp(){ const L=SU.rip; while(L.length && SU.T-L[0][2]>2.5) L.shift(); const V=SU.U.uRip.value; for(let k=0;k<L.length;k++) V[k].set(L[k][0],L[k][1],L[k][2],L[k][3]); SU.U.uRipN.value=L.length; }
 const _suCol=new THREE.Color();
 function suHash(a,b){ let h=(a*374761393+b*668265263)|0; h=(h^(h>>>13))*1274126177|0; return ((h^(h>>>16))>>>0)/4294967296; }
+const SU_COLS=[null,['#4aa3d8','#1d5ea8',.04],['#c8ff6a','#3fcf2c',.1],['#8f653d','#4f3119',.12],['#ffbc36','#cf6a06',.08],null,['#f4f7fc','#dfe5ef',.4]];   // (de bajito a hondo, como el mar)
+const _suCa=new THREE.Color(), _suCb=new THREE.Color();
 function suBuild(C){ C.dirty=false; const types=new Set(); for(let i=0;i<256;i++) if(C.t[i] && C.h[i]>0) types.add(C.t[i]);
   for(let p=1;p<=6;p++){ const has=types.has(p); let M=C.ms[p]; if(!has){ if(M){ M.visible=false; } continue; }
-    if(!M){ const g=new THREE.BufferGeometry(); g.setIndex(new THREE.BufferAttribute(new Uint16Array(1536),1)); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(289*3),3)); g.setAttribute('normal',new THREE.BufferAttribute(new Float32Array(289*3),3)); if(SU_T[p].paint) g.setAttribute('color',new THREE.BufferAttribute(new Float32Array(289*3),3));
+    if(!M){ const g=new THREE.BufferGeometry(); g.setIndex(new THREE.BufferAttribute(new Uint16Array(1536),1)); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(289*3),3)); g.setAttribute('normal',new THREE.BufferAttribute(new Float32Array(289*3),3));
+      g.setAttribute('color',new THREE.BufferAttribute(new Float32Array(289*3),3)); g.setAttribute('aH',new THREE.BufferAttribute(new Float32Array(289),1)); g.setAttribute('aW',new THREE.BufferAttribute(new Float32Array(289),1));
       M=new THREE.Mesh(g,suMat(p)); M.frustumCulled=false; M.receiveShadow=SU_T[p].op>=.95; M.castShadow=false; M.userData.noBatch=true; M.renderOrder=p===1?3:2; C.ms[p]=M; FREE.g.add(M); }
-    M.visible=true; { const I=M.geometry.index.array; let n=0; for(let i=0;i<256;i++){ if(!(C.t[i]===p && C.h[i]>0) && !(C.t[i]===0 && suNear(C,i,p))) continue; const x=i&15, z=i>>4, a=z*17+x, b=a+1, c=a+17, d=c+1; I[n++]=a; I[n++]=c; I[n++]=b; I[n++]=b; I[n++]=c; I[n++]=d; } M.geometry.index.needsUpdate=true; M.geometry.setDrawRange(0,n); }   // (solo los cuadritos que tienen esta sustancia)
-    const P=M.geometry.attributes.position.array, Cl=M.geometry.attributes.color?M.geometry.attributes.color.array:null, m=SU.cs, x0=FREE.X+C.ci*16*m, z0=FREE.Z+C.cj*16*m;
-    let dc=0; if(Cl){ const cnt={}; let bm=0; for(let i=0;i<256;i++) if(C.t[i]===5){ const v=(cnt[C.c[i]]=(cnt[C.c[i]]||0)+1); if(v>bm){ bm=v; dc=C.c[i]; } } }   // (el color de la orillita)
-    for(let vz=0;vz<=16;vz++) for(let vx=0;vx<=16;vx++){ let s=0, n=0, bmin=1e9, bc=-1, bh=0;
-      let f=0; for(let q=0;q<4;q++){ const N=suNb(C,0,vx-1+(q&1),vz-1+(q>>1),false); if(!N) continue; const D=N[0], j=N[1]; const b=suB(D,j); if(b>=1e3) continue; if(b<bmin) bmin=b; if(D.t[j]===p && D.h[j]>0){ s+=b+D.h[j]; n++; f++; if(D.h[j]>bh){ bh=D.h[j]; bc=D.c[j]; } } else if(!D.t[j] && b<=bmin+.05){ s+=b; n++; } }   // (junto a un cuadrito vacío la orilla baja: queda redondita)
-      const o=(vz*17+vx)*3; let y; if(f){ y=s/n+.004; if(p===6) y+=(suHash(C.ci*16+vx,C.cj*16+vz)-.5)*.05*Math.min(1,s/n-bmin>.02?1:0); } else y=(bmin<1e9?bmin:FREE.Y)-.012;
-      const gx=C.ci*16+vx, gz=C.cj*16+vz; P[o]=x0+vx*m+(suHash(gx,gz)-.5)*.09; P[o+1]=y; P[o+2]=z0+vz*m+(suHash(gz+7,gx+3)-.5)*.09;   /* (las esquinas un poquito movidas: las orillas no se ven de cuadritos) */ if(Cl){ _suCol.set(FREE_COLS[bc>=0?bc:dc]||'#ffffff').convertSRGBToLinear(); Cl[o]=_suCol.r; Cl[o+1]=_suCol.g; Cl[o+2]=_suCol.b; } }
-    M.geometry.attributes.position.needsUpdate=true; if(Cl) M.geometry.attributes.color.needsUpdate=true; M.geometry.computeVertexNormals(); } }
+    M.visible=true; { const I=M.geometry.index.array; let n=0; for(let i=0;i<256;i++){ if(!(C.t[i]===p && C.h[i]>0)) continue; const x=i&15, z=i>>4, a=z*17+x, b=a+1, c=a+17, d=c+1; I[n++]=a; I[n++]=c; I[n++]=b; I[n++]=b; I[n++]=c; I[n++]=d; } M.geometry.index.needsUpdate=true; M.geometry.setDrawRange(0,n); }   // (solo los cuadritos que tienen esta sustancia: la orilla baja hasta el piso dentro de ellos)
+    const G=M.geometry.attributes, P=G.position.array, Cl=G.color.array, AH=G.aH.array, AW=G.aW.array, m=SU.cs, x0=FREE.X+C.ci*16*m, z0=FREE.Z+C.cj*16*m, K=SU_COLS[p];
+    let dc=0; if(p===5){ const cnt={}; let bm=0; for(let i=0;i<256;i++) if(C.t[i]===5){ const v=(cnt[C.c[i]]=(cnt[C.c[i]]||0)+1); if(v>bm){ bm=v; dc=C.c[i]; } } }   // (el color de la orillita)
+    if(K){ _suCa.set(K[0]).convertSRGBToLinear(); _suCb.set(K[1]).convertSRGBToLinear(); }
+    for(let vz=0;vz<=16;vz++) for(let vx=0;vx<=16;vx++){ let s=0, n=0, bmin=1e9, bc=-1, bh=0, f=0, hs=0, wb=0, fx=0, fz=0, ex=0, ez=0, ne=0;
+      for(let q=0;q<4;q++){ const ox=(q&1)-.5, oz=(q>>1)-.5, N=suNb(C,0,vx-1+(q&1),vz-1+(q>>1),false); if(!N){ ex+=ox; ez+=oz; ne++; continue; } const D=N[0], j=N[1]; const b=suB(D,j); if(b>=1e3) continue; if(b<bmin) bmin=b;
+        if(D.t[j]===p && D.h[j]>0){ s+=b+D.h[j]; n++; f++; hs+=D.h[j]; fx+=ox; fz+=oz; if(D.wb && D.wb[j]>wb) wb=D.wb[j]; if(D.h[j]>bh){ bh=D.h[j]; bc=D.c[j]; } } else { if(!D.t[j] && b<=bmin+.05){ s+=b; n++; } ex+=ox; ez+=oz; ne++; } }   // (junto a un cuadrito vacío la orilla baja: queda redondita)
+      const o=(vz*17+vx)*3, gx=C.ci*16+vx, gz=C.cj*16+vz, hh=f?hs/f:0; let y, sx=0, sz=0, jk=.06, ah=hh;
+      if(f && !ne){ y=s/n+.004; if(p===6) y+=(suHash(gx,gz)-.5)*.07*Math.min(1,hs/f/.08); }
+      else if(f){ y=(bmin<1e9?bmin:FREE.Y)+.0015+hh*SU_LIP[p]*f/4; ah=hh*f/8; jk=.09;   // v232b: la orilla baja hasta el piso (redondita, sin escalones)
+        if(f===1){ sx=fx*.42; sz=fz*.42; } else if(f===3){ sx=ex*.3; sz=ez*.3; } }   // (las esquinas de afuera se redondean y los rincones se rellenan)
+      else y=(bmin<1e9?bmin:FREE.Y)-.012;
+      P[o]=x0+(vx+sx)*m+(suHash(gx,gz)-.5)*jk; P[o+1]=y; P[o+2]=z0+(vz+sz)*m+(suHash(gz+7,gx+3)-.5)*jk;
+      AH[vz*17+vx]=ah; AW[vz*17+vx]=wb;
+      if(p===5) _suCol.set(FREE_COLS[bc>=0?bc:dc]||'#ffffff').convertSRGBToLinear(); else _suCol.copy(_suCa).lerp(_suCb,Math.min(1,Math.max(0,ah/K[2])));
+      Cl[o]=_suCol.r; Cl[o+1]=_suCol.g; Cl[o+2]=_suCol.b; }
+    G.position.needsUpdate=true; G.color.needsUpdate=true; G.aH.needsUpdate=true; G.aW.needsUpdate=true; M.geometry.computeVertexNormals(); } }
+// el slime (y la miel) tiemblan un ratito alrededor de donde los tocas
+function suWobble(x,z,r,a){ const m=SU.cs; for(let dz=-r;dz<=r;dz+=m) for(let dx=-r;dx<=r;dx+=m){ const q=suCell(x+dx,z+dz,false); if(!q) continue; const [C,i]=q; if(C.t[i]!==2 && C.t[i]!==4) continue; const w=a*(1-Math.hypot(dx,dz)/(r+m)); if(w>C.wb[i]){ C.wb[i]=w; C.dirty=true; C.wbOn=true; } } }
 // ¿algún vecino (también en diagonal) tiene esta sustancia? (la orillita que baja hasta el piso)
 function suNear(C,i,p){ for(let dz=-1;dz<=1;dz++) for(let dx=-1;dx<=1;dx++){ if(!dx && !dz) continue; const N=suNb(C,i,dx,dz,false); if(N && N[0].t[N[1]]===p && N[0].h[N[1]]>0) return true; } return false; }
 // ---- lo que pisa la sustancia la empuja (huellas) ----
 function suPush(x,z,yb,r,vx,vz,who){ const m=SU.cs, R=r+m*.5; let V=0, p=0, col=0, best=0; const out=[];
   for(let dz=-R;dz<=R;dz+=m) for(let dx=-R;dx<=R;dx+=m){ const d2=dx*dx+dz*dz; if(d2>r*r) continue; const q=suCell(x+dx,z+dz,false); if(!q) continue; const [C,i]=q; const h=C.h[i]; if(h<=0) continue; const b=suB(C,i), S=b+h, cut=Math.max(b,yb);
       if(S<=cut+.002) continue; const a=Math.min(h,S-cut), pt=C.t[i]; C.h[i]-=a; V+=a; if(a>best){ best=a; p=pt; col=C.c[i]; } if(cut<=b+.01) C.pr[i]=SU_T[pt].pr||0; if(C.h[i]<=1e-5){ C.h[i]=0; C.t[i]=0; } C.dirty=true; C.aw=2; C.ver++; }
-  if(V<=0) return null;
+  if(V<=0) return null; if(p===2||p===4) suWobble(x,z,r+.6,.7);
   // lo que se quitó se va a la orillita (más hacia adelante si va caminando)
   const sp=Math.hypot(vx,vz), ux=sp>.2?vx/sp:0, uz=sp>.2?vz/sp:0, R2=r+m*1.6; let W=0;
   for(let dz=-R2;dz<=R2;dz+=m) for(let dx=-R2;dx<=R2;dx+=m){ const d=Math.hypot(dx,dz); if(d<=r || d>R2) continue; const q=suCell(x+dx,z+dz,true); if(!q) continue; const [C,i]=q; if(C.t[i] && C.t[i]!==p) continue; if(suB(C,i)>yb+.35) continue;
@@ -23896,7 +23984,7 @@ function suSplat(p,col,vol,x,y,z,vx,vy,vz,nx,ny,nz,hit){ const T=SU_T[p], B=T.bu
   if(p===5 && hit && hit.sel && hit.sel.k==='b' && (!FNET.on || FNET.host)) suStainObj(hit,col);
   const fr=.25+.65*B, core=vol*(1-fr), N=Math.round(3+24*B);
   // el centro: donde pegó (si fue en un lado de un bloque, queda al pie, por fuera)
-  const ox=x+nx*.18, oz=z+nz*.18; if(p===4) SU.emit.push({x:ox,z:oz,p,col,rate:core/1.6,left:core,r:.25}); else if(core>0) suPour(ox,oz,p,col,core,Math.max(.25,Math.cbrt(core)*(p===3?1.1:1.4)));
+  const ox=x+nx*.18, oz=z+nz*.18; suRipple(ox,oz,.05); if(p===2||p===4) suWobble(ox,oz,1.2,1); if(p===4) SU.emit.push({x:ox,z:oz,p,col,rate:core/1.6,left:core,r:.25}); else if(core>0) suPour(ox,oz,p,col,core,Math.max(.25,Math.cbrt(core)*(p===3?1.1:1.4)));
   if(N>0 && fr>0){ const dv=vol*fr/N, rx=vx-2*(vx*nx+vy*ny+vz*nz)*nx, ry=vy-2*(vx*nx+vy*ny+vz*nz)*ny, rz=vz-2*(vx*nx+vy*ny+vz*nz)*nz, rl=Math.hypot(rx,ry,rz)||1;
     for(let k=0;k<N;k++){ const a=Math.random()*6.283, u=Math.random(), s=(1.5+6*B)*(.35+.65*Math.random()), hx=Math.cos(a)*Math.sqrt(1-u*u), hz=Math.sin(a)*Math.sqrt(1-u*u);
       let dx=hx+nx*.8+rx/rl*.5*B, dy=u*.9+ny*.8+.4, dz=hz+nz*.8+rz/rl*.5*B; const l=Math.hypot(dx,dy,dz)||1;
@@ -23932,11 +24020,11 @@ function suLaunch(p,col,r,net){ let x, y, z, vx, vy, vz; if(net){ [x,y,z,vx,vy,v
 // en una sala: lo que echas lo manda el dueño (tú lo ves al momento, el dueño lo reparte a todos)
 function suNetPour(x,z,p,col,vol,r){ suPour(x,z,p,col,vol,r); if(FNET.on && !FNET.host) fnOp(['q',p,col,+(x-FREE.X).toFixed(2),+(z-FREE.Z).toFixed(2),+vol.toFixed(4),+r.toFixed(2)]); freeSaveSoon(); }
 // ---- cada cuadro ----
-function suTick(dt){ const T=suSelT(); SU.T+=dt;
+function suTick(dt){ const T=suSelT(); SU.T+=dt; SU.U.uT.value=SU.T; if(SU.U.uRipN.value) suRipUp(); SU.U.uO.value.set(FREE.X,FREE.Z); try{ SU.U.uSky.value.copy(skyNow).convertSRGBToLinear(); if(sky.sunD) SU.U.uSunD.value.copy(sky.sunD); else SU.U.uSunD.value.copy(sun.position).sub(sun.target.position).normalize(); SU.U.uSunC.value.copy(sun.color).multiplyScalar(sun.intensity); }catch(e){}
   // la cubeta: el chorro sale mientras aprietas; la bola crece
   if(SU.hold && (!T || FREE.play || FREE.del || FREE.paint)){ SU.hold=null; }
   if(SU.hold){ const H=SU.hold, el=(performance.now()-H.t)/1000;
-    if(H.mode<3){ const S=SU_SIZES[H.mode], a=freeAim(); if(a && a.ok){ const v=S[2]*dt; SU.acc=(SU.acc||0)+v; H.done+=v; if(SU.acc>S[2]*.12){ suNetPour(a.x,a.z,H.p,H.col,SU.acc,S[1]); SU.acc=0; } suStream(true,a,H.p,H.col,S[1]); } }
+    if(H.mode<3){ const S=SU_SIZES[H.mode], a=freeAim(); if(a && a.ok){ const v=S[2]*dt; SU.acc=(SU.acc||0)+v; H.done+=v; if(SU.acc>S[2]*.12){ suNetPour(a.x,a.z,H.p,H.col,SU.acc,S[1]); SU.acc=0; if(H.p!==3 && H.p!==6) suRipple(a.x,a.z,.03); } suStream(true,a,H.p,H.col,S[1]); } }
     else { const r=suBallR(el); if(!SU.hb){ SU.hb=new THREE.Mesh(_suSph,suBallMat(H.p,H.col)); SU.hb.userData.noBatch=true; FREE.g.add(SU.hb); } SU.hb.material=suBallMat(H.p,H.col); SU.hb.visible=true; const [x,y,z]=suBallPos(r), w=1+Math.sin(SU.T*13)*.05;
       SU.hb.position.set(x,y,z); SU.hb.scale.set(r*w,r/w,r*w); ui('freeTxt').textContent='Bola de '+SU_T[H.p].n.toLowerCase()+' '+'●'.repeat(1+Math.round(Math.min(1,el/2.2)*4))+' · suelta para lanzarla'; if(el>6) suHoldEnd(); suStream(false); } }
   else { suStream(false); if(SU.hb) SU.hb.visible=false; }
@@ -23954,7 +24042,7 @@ function suTick(dt){ const T=suSelT(); SU.T+=dt;
     B.m.position.set(B.x,B.y,B.z); const w=1+Math.sin(B.t*18)*.06; B.m.scale.set(B.r*w,B.r/w,B.r*w); }
   // gotitas
   if(SU.drops.length){ for(let k=SU.drops.length-1;k>=0;k--){ const d=SU.drops[k]; d.t+=dt; d.vy-=9.8*dt; d.x+=d.vx*dt; d.y+=d.vy*dt; d.z+=d.vz*dt; const h=d.t>.05?suHit(d.x,d.y,d.z,d.r,true):null;
-      if(h || d.t>4 || !freeInside(d.x,d.z,.1)){ if(h && h.o && d.p===5 && !h.dyn && (!FNET.on || FNET.host)) suStainObj(h.o,d.col); const ox=h&&h.ny<.5?d.x+h.nx*.15:d.x, oz=h&&h.ny<.5?d.z+h.nz*.15:d.z; if(freeInside(ox,oz,.1)) suPour(ox,oz,d.p,d.col,d.v,.12); SU.drops.splice(k,1); } }
+      if(h || d.t>4 || !freeInside(d.x,d.z,.1)){ if(h && h.o && d.p===5 && !h.dyn && (!FNET.on || FNET.host)) suStainObj(h.o,d.col); const ox=h&&h.ny<.5?d.x+h.nx*.15:d.x, oz=h&&h.ny<.5?d.z+h.nz*.15:d.z; if(freeInside(ox,oz,.1)){ suPour(ox,oz,d.p,d.col,d.v,.12); if(d.p!==3 && d.p!==6 && Math.random()<.5) suRipple(ox,oz,.025); if(d.p===2||d.p===4) suWobble(ox,oz,.4,.6); } SU.drops.splice(k,1); } }
     suDropsDraw(); } else if(SU.dmOn){ suDropsDraw(); }
   SU.dmOn=SU.drops.length>0;
   // lo que pisa
@@ -23963,7 +24051,7 @@ function suTick(dt){ const T=suSelT(); SU.T+=dt;
     if(st && st[2]>me.y-.05){ const Ty=SU_T[st[0]], cc=suCell(me.x,me.z,false), k=Math.min(1,(st[2]-Math.max(me.y,cc?suB(cc[0],cc[1]):FREE.Y))/.05); slowT=1-(1-Ty.slow)*Math.max(0,k); SU.slip=!!Ty.slip;
       if(Ty.paint && st[1]>.003) SU.feet={c:st[3], amt:1, d:0, side:1, lx:me.x, lz:me.z}; }
     const r=suPush(me.x,me.z,me.y,.3,player.vel.x,player.vel.z,'me'); if(r){ const Ty=SU_T[r[0]]; slowT=Math.min(slowT,1-(1-Ty.slow)*Math.min(1,r[1]/.04)); if(Ty.slip) SU.slip=true; if(Ty.paint) SU.feet={c:r[2], amt:1, d:0, side:1, lx:me.x, lz:me.z}; }   // (caminando la vas abriendo: lo que empujas también te frena)
-    if(r){ const sp=Math.hypot(player.vel.x,player.vel.z); if(sp>1 && (SU.fxT=(SU.fxT||0)-dt)<=0){ SU.fxT=.22; try{ if(r[0]===1) splashBurst(me.x,me.y+.05,me.z,.35); else if(r[0]===6) dustBurst(me.x,me.y+.4,me.z,8,1.2,'#ffffff',.1); else if(r[0]!==5) dustBurst(me.x,me.y+.05,me.z,4,.8,SU_T[r[0]].col,.07); }catch(e){} } }
+    if(r){ const sp=Math.hypot(player.vel.x,player.vel.z); if(sp>1 && (SU.fxT=(SU.fxT||0)-dt)<=0){ SU.fxT=.22; if(r[0]!==3 && r[0]!==6) suRipple(me.x,me.z,.015+sp*.004); try{ if(r[0]===1) splashBurst(me.x,me.y+.05,me.z,.35); else if(r[0]===6) dustBurst(me.x,me.y+.4,me.z,8,1.2,'#ffffff',.1); else if(r[0]!==5) dustBurst(me.x,me.y+.05,me.z,4,.8,SU_T[r[0]].col,.07); }catch(e){} } }
     // huellitas de pintura donde ya no hay
     const F=SU.feet; if(F && F.amt>.15){ const dd=Math.hypot(me.x-F.lx,me.z-F.lz); F.d+=dd; F.lx=me.x; F.lz=me.z; if(F.d>.36 && player.grounded){ F.d=0; F.side=-F.side; const f=player.facing, ox=Math.cos(f)*.12*F.side, oz=-Math.sin(f)*.12*F.side, st2=suAt(me.x+ox,me.z+oz);
         if(!st2){ suPour(me.x+ox,me.z+oz,5,F.c,.0035*SU.cs*SU.cs*F.amt*2.2,.05); F.amt*=.86; } } } else SU.feet=null; }
@@ -23975,7 +24063,8 @@ function suTick(dt){ const T=suSelT(); SU.T+=dt;
   { const W=Math.min(4.8,dt*90), n=Math.max(1,Math.ceil(W)), sb=Math.min(1.2,W/n); for(let s=0;s<n;s++) suStep(sb); }   // (lo mismo por segundo a 20 o a 120 cuadros)
   for(const C of SU.list){ if(C.aw>0){ C.aw-=dt; } }
   // la espuma se deshace y las huellitas de pintura se borran (cada ¼ s)
-  if((SU.dk+=dt)>.25){ const a=SU.dk; SU.dk=0; for(const C of SU.list){ let ch=false; for(let i=0;i<256;i++){ if(C.pr[i]>0){ C.pr[i]-=a; if(C.pr[i]<=0){ C.pr[i]=0; C.aw=Math.max(C.aw,1); } } const t=C.t[i]; if(!t) continue; if(t===6){ C.h[i]-=a*.012; ch=true; } else if(t===5 && C.h[i]<.006){ C.h[i]-=a*.00025; ch=true; } if(C.h[i]<=1e-5){ C.h[i]=0; C.t[i]=0; } } if(ch){ C.dirty=true; C.aw=Math.max(C.aw,.3); C.ver++; } }
+  if((SU.dk+=dt)>.25){ const a=SU.dk; SU.dk=0; for(const C of SU.list){ let ch=false; if(C.wbOn){ let any=false; for(let i=0;i<256;i++){ if(C.wb[i]>0){ C.wb[i]=C.wb[i]>.03?C.wb[i]*Math.pow(.25,a):0; any=any||C.wb[i]>0; } } C.wbOn=any; C.dirty=true; }   // (se le va pasando el temblor)
+      for(let i=0;i<256;i++){ if(C.pr[i]>0){ C.pr[i]-=a; if(C.pr[i]<=0){ C.pr[i]=0; C.aw=Math.max(C.aw,1); } } const t=C.t[i]; if(!t) continue; if(t===6){ C.h[i]-=a*.012; ch=true; } else if(t===5 && C.h[i]<.006){ C.h[i]-=a*.00025; ch=true; } if(C.h[i]<=1e-5){ C.h[i]=0; C.t[i]=0; } } if(ch){ C.dirty=true; C.aw=Math.max(C.aw,.3); C.ver++; } }
     // la pintura mancha los bloques que toca (solo el dueño de la sala; lo demás se reparte)
     if(!FNET.on || FNET.host) for(const C of SU.list){ if(!C.n) continue; for(let i=0;i<256;i++){ if(C.t[i]!==5 || C.h[i]<.008) continue; const S=suB(C,i)+C.h[i]; for(const [dx,dz] of _suN){ const N=suNb(C,i,dx,dz,false); if(!N) continue; const bj=suB(N[0],N[1]); if(bj<S+.02 || bj>=1e3) continue; const [x,z]=suXZ(N[0],N[1]);
           for(const o of fgQuery(x,z,x,z)){ if(o.sel && o.sel.k==='b' && o.box.min.y<S+.01 && o.box.max.y>S-.05 && x>=o.box.min.x && x<=o.box.max.x && z>=o.box.min.z && z<=o.box.max.z) suStainObj(o,C.c[i]); } } } } }

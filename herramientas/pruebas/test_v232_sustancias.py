@@ -40,7 +40,7 @@ async def m():
     r=await ev("""(()=>{ __CLR(); suClear(); __AT(-20,-20); freeSelect({k:'s',a:1,b:0}); SU.mode=0; __S(2); __LOOKAT(FREE.X-20,FREE.Z-17); suHoldStart(); suHoldEnd(); const a=SU.vol; SU.holdEnd=0;
       __LOOKAT(FREE.X-20,FREE.Z-17); suHoldStart(); SU.hold.t-=0; for(let i=0;i<60;i++){ __LOOKAT(FREE.X-20,FREE.Z-17); suTick(1/30); } suHoldEnd(); const b=SU.vol; SU.holdEnd=0; SU.mode=2; __LOOKAT(FREE.X-23,FREE.Z-17); suHoldStart(); for(let i=0;i<30;i++){ __LOOKAT(FREE.X-23,FREE.Z-17); suTick(1/30); } suHoldEnd(); const c=SU.vol-b;
       freeSelect(null); camMode='third'; return [+a.toFixed(4), +(b-a).toFixed(4), +c.toFixed(4), __H(FREE.X-20,FREE.Z-17)>0]; })()""")
-    ok(r[0]>=.004 and abs(r[1]-.028)<.006 and abs(r[2]-.1)<.02 and r[3], 'un toque echa un chorrito (%s m³); 2 s con el chorro chico echan %s m³ y 1 s con el grande %s m³'%(r[0],r[1],r[2]))
+    ok(r[0]>=.004 and abs(r[1]-.05)<.01 and abs(r[2]-.16)<.03 and r[3], 'un toque echa un chorrito (%s m³); 2 s con el chorro chico echan %s m³ y 1 s con el grande %s m³'%(r[0],r[1],r[2]))
     # 3. cómo se extiende cada una
     r=await ev("""(()=>{ __CLR(); suClear(); __AT(-20,-20); [1,2,3,4,5,6].forEach((p,k)=>suPour(FREE.X-30+k*6,FREE.Z+10,p,3,.05,.3)); const A=[]; __S(30); A.push([1,2,3,4,5,6].map(__AREA)); __S(90); A.push([1,2,3,4,5,6].map(__AREA)); return A; })()""")
     a1,a2=r; area=lambda i:a2[i][0]; alto=lambda i:a2[i][1]
@@ -54,10 +54,10 @@ async def m():
     ok(r[3]>0, 'el slime que echas arriba de un bloque escurre por las orillas hasta el piso %s'%r)
     # 5. huellas: en el lodo se quedan, en el agua se rellenan
     r=await ev("""(()=>{ const out={}; for(const [p,v] of [[3,.16],[1,.05],[2,.1]]){ __CLR(); suClear(); __AT(-20,-20); const X=FREE.X-10, Z=FREE.Z+20; suPour(X,Z,p,0,v,.7); __S(p===1?60:20); const h0=__H(X,Z);
-        player.pos.set(X-1.4,FREE.Y+.05,Z); for(let i=0;i<40;i++){ player.pos.x+=.07; player.vel.set(2.1,0,0); __S(1); } const h1=__H(X,Z); player.pos.set(X+5,FREE.Y+.05,Z+5); __S(60); out[SU_T[p].id]=[+h0.toFixed(3),+h1.toFixed(3),+__H(X,Z).toFixed(3)]; } return out; })()""")
+        player.pos.set(X-1.4,FREE.Y+.05,Z); for(let i=0;i<40;i++){ player.pos.x+=.07; player.vel.set(2.1,0,0); __S(1); } const h1=__H(X,Z); player.pos.set(X+5,FREE.Y+.05,Z+5); __S(60); const off=[[.4,.7],[-.4,.7],[.4,-.7],[-.4,-.7]].map(([a,b])=>__H(X+a,Z+b)); out[SU_T[p].id]=[+h0.toFixed(3),+h1.toFixed(3),+__H(X,Z).toFixed(3),+(off.reduce((s,v)=>s+v,0)/4).toFixed(3)]; } return out; })()""")
     L,A,S=r['lodo'],r['agua'],r['slime']
     ok(L[1]<L[0]*.4 and L[2]<L[0]*.5, 'al caminar por el lodo queda tu huella y se queda marcada %s'%L)
-    ok(A[2]>A[0]*.7, 'en el agua también la abres, pero se vuelve a llenar %s'%A)
+    ok(A[2]>A[3]*.75 and A[2]>0, 'en el agua también la abres, pero se vuelve a llenar: queda igual que a los lados %s'%A)
     ok(S[1]<S[0]*.5 and S[2]>S[1], 'en el slime se va cerrando poco a poco %s'%S)
     # 6. te frenan
     r=await ev("""(()=>{ const out={}; for(const p of [1,3,4]){ __CLR(); suClear(); __AT(-20,-20); const X=FREE.X-10, Z=FREE.Z-10; suPour(X,Z,p,0,.25,1.2); __S(5); player.pos.set(X,FREE.Y+.05,Z); player.vel.set(0,0,0); __S(12); out[SU_T[p].id]=[+SU.slow.toFixed(2), SU.slip]; } return out; })()""")
