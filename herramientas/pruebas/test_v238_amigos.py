@@ -59,8 +59,19 @@ async def m():
     same=pb is not None and all(abs(((pa[1]>>s)&255)-((pb[1]>>s)&255))<20 for s in (16,8,0))
     ok(pb is not None and pb[0]>.4 and same, '🎨 Ana se tira de panza en pintura y Beto la ve pintada del mismo color (%s / %s)'%(hex(pa[1]), hex(pb[1]) if pb else None))
 
+    # 3b. (v238b) Ana con botas de lluvia y un manchón de pintura en la espalda: Beto ve el manchón y la ropa manchada
+    await ev(A,"""(()=>{ player.dive=null; player.diveAngle=0; player.pos.set(FREE.X-8,FREE.Y+.05,FREE.Z+8); __S(3); stClear(myStn); const id=Object.values(SHOP_BY).find(it=>it.slot==='shoes' && /lluvia/i.test(it.name)).id; wardrobe.eq=Object.assign({},wardrobe.eq,{shoes:id}); applyOutfit(plush,wardrobe.eq); try{ sendPresence(true); }catch(e){} __S(3);
+      plush.updateMatrixWorld(true); const fw=new THREE.Vector3(0,0,1).applyQuaternion(plush.quaternion), P=player.pos; myStn.rcT=0; stSpot(plush,myStn,5,new THREE.Vector3(P.x-fw.x*.7+.05,P.y+1.0,P.z-fw.z*.7),.3,1,0x3aa0ff); stTouch(myStn,3,.35,0,0); __S(3); return [myStn.sp.length, stPresenceX()]; })()""")
+    sx=await ev(A,"stPresenceX()")
+    rb=None
+    for i in range(30):
+      await sync(1)
+      rb=await ev(B,"""(()=>{ for(const r of mp.remotes.values()){ const S=r.stn; if(!S || !S.sp.length || !S.cl1 || !S.cl1.on) continue; let cw=0; r.obj.traverse(m=>{ if(m.isMesh && m.material && m.material.userData && m.material.userData.stOrig && stGKey(r.obj,m) && S.cl1.mats.get(m.material.userData.stOrig)===m.material) cw++; }); const s=S.sp[0]; return [s.p, s.bi, +s.z.toFixed(2), s.c, +S.cl1.A[3].toFixed(2), cw]; } return null; })()""")
+      if rb and rb[5]>0: break
+    ok(rb is not None and rb[0]==5 and rb[2]<-.1 and rb[5]>0, '🎯 Beto ve el manchón azul en la espalda de Ana y sus botas embarradas (%s; «sx» = %s letras)'%(rb, len(sx) if sx else 0))
+
     # 3. Ana se lava: Beto la ve limpia
-    await ev(A,"(()=>{ player.dive=null; player.diveAngle=0; player.pos.set(FREE.X-8,FREE.Y+.05,FREE.Z+8); __S(3); for(let q=1;q<8;q++) myStn.A[q]=0; __S(3); return 1; })()")
+    await ev(A,"(()=>{ player.dive=null; player.diveAngle=0; player.pos.set(FREE.X-8,FREE.Y+.05,FREE.Z+8); __S(3); stClear(myStn); __S(3); return 1; })()")
     cl=None
     for i in range(20):
       await sync(1)
