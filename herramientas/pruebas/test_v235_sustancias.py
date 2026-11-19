@@ -30,14 +30,14 @@ async def m():
 
     await ev("""(()=>{ window.__LAKE=(p,d,a,b)=>{ for(let ci=a;ci<=b;ci++) for(let cj=a;cj<=b;cj++){ const C=suChunk(ci,cj,true); if(C) suDec(C,'F|'+p+'|'+(p===5?'f00':'0')+'|'+Math.round(d/.003).toString(36)); } suRecount(); };
       window.__WALK=(k)=>{ const x=player.pos.x, z=player.pos.z; keys.KeyW=true; __S(k); keys.KeyW=false; return Math.hypot(player.pos.x-x,player.pos.z-z); }; return 1; })()""")
-    T="""const __VOL=()=>{ suRecount(); return SU.vol+FU.pts.reduce((a,P)=>a+(P.v||0),0)+[...SU.falls.values()].reduce((a,F)=>a+F.acc+F.q.filter((_,i)=>i%2).reduce((x,y)=>x+y,0),0); }; window.__VOL=__VOL;
+    T="""const __VOL=()=>{ suRecount(); return SU.vol+FU.pts.reduce((a,P)=>a+(P.v||0),0)+[...SU.falls.values()].reduce((a,F)=>a+F.acc+(F.q||[]).filter((_,i)=>i%2).reduce((x,y)=>x+y,0),0); }; window.__VOL=__VOL;
       window.__PLAT=(x0,z0,n,h)=>{ for(let a=0;a<n;a++) for(let b=0;b<n;b++) for(let y=0;y<h;y++) freeAddStatic({k:'b',a:0,b:2},FREE.X+x0+a+.5,FREE.Y+y,FREE.Z+z0+b+.5,0,true); }; 1"""
     await ev(T)
     # 1. cascada: lo que se cae de un bloque baja como chorro (se ve) y llega abajo cuando de verdad caería
     r=await ev("""(()=>{ __CLR(); suClear(); FU.pts.length=0; __AT(-20,-20); __PLAT(-1,-1,2,2); const v0=__VOL(); suPour(FREE.X,FREE.Z,1,0,.6,.5); let first=-1, fallsMax=0, inst=0;
-        for(let i=0;i<60;i++){ __S(1); fallsMax=Math.max(fallsMax,SU.falls.size); if(SU.fallM && SU.fallM.visible) inst=Math.max(inst,SU.fallM.count); let g=0; for(const C of SU.list) for(let k=0;k<256;k++) if(C.h[k]>0 && suB(C,k)<FREE.Y+.1) g+=C.h[k]; if(first<0 && g>.0005) first=i; }
+        for(let i=0;i<60;i++){ __S(1); fallsMax=Math.max(fallsMax,SU.falls.size); inst=Math.max(inst,FU.pts.filter(P=>!P.o).length);   /* (v236: las cascadas ya son gotitas de verdad) */ let g=0; for(const C of SU.list) for(let k=0;k<256;k++) if(C.h[k]>0 && suB(C,k)<FREE.Y+.1) g+=C.h[k]; if(first<0 && g>.0005) first=i; }
         for(let i=0;i<150;i++) __S(1); let g=0; for(const C of SU.list) for(let k=0;k<256;k++) if(C.h[k]>0 && suB(C,k)<FREE.Y+.1) g+=C.h[k]*.04; return [fallsMax, inst, first, +g.toFixed(3), +(__VOL()-v0).toFixed(3)]; })()""")
-    ok(r[0]>3 and r[1]>3, '💧 el agua que se cae de los bloques baja como chorro: %s chorros a la vez, se ven %s'%(r[0],r[1]))
+    ok(r[0]>3 and r[1]>3, '💧 el agua que se cae de los bloques baja como chorro: %s chorros a la vez, %s gotitas cayendo'%(r[0],r[1]))
     ok(r[2]>=6, 'y llega al piso cuando de verdad caería de 2 m (al cuadro %s, no de golpe)'%r[2])
     ok(r[3]>.3 and abs(r[4]-.6)<.01, 'abajo queda lo que cayó (%s m³) y no se pierde ni se inventa nada (%s m³ de %s)'%(r[3],r[4],.6))
     # 2. la orilla avanza poco a poco (no de cuadrito en cuadrito)

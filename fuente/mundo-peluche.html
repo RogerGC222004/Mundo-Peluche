@@ -1490,7 +1490,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='235';
+const GAME_VERSION='236';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -23836,8 +23836,15 @@ function suCell(x,z,make){ const gx=Math.floor((x-FREE.X)/SU.cs), gz=Math.floor(
 function suXZ(C,i){ return [FREE.X+((C.ci*16+(i&15))+.5)*SU.cs, FREE.Z+((C.cj*16+(i>>4))+.5)*SU.cs]; }
 // el piso de un cuadrito: lo más alto que hay (bloques, rampas…), o una pared si está fuera de la planicie
 function suB(C,i){ let b=C.b[i]; if(b===b) return b; const [x,z]=suXZ(C,i); if(!freeInside(x,z,.05)) b=1e3; else { const g=freeGround(x,z,FREE.Y+60); b=g===null?1e3:g; } C.b[i]=b; return b; }
+// v236: debajo de un techo (o de un segundo piso) también hay piso: lo que llega por abajo usa el piso de abajo (antes se iba arriba del techo)
+function suIv(C,i){ const M=C.iv||(C.iv=new Map()); let L=M.get(i); if(L!==undefined) return L; const [x,z]=suXZ(C,i); L=[];
+  for(const o of fgQuery(x,z,x,z)){ if(o.cols){ for(const b of o.cols) if(x>=b.min.x&&x<=b.max.x&&z>=b.min.z&&z<=b.max.z) L.push(b.min.y,b.max.y); continue; } if(!o.solid) continue; const b=o.box; if(x<b.min.x||x>b.max.x||z<b.min.z||z>b.max.z) continue;
+    if(o.cyl && (x-o.x)*(x-o.x)+(z-o.z)*(z-o.z)>o.cyl*o.cyl) continue; let top=b.max.y; if(o.hf){ const [lx,lz]=pqLocal(o,x,z), h=pqHf(o,lx,lz); if(h===null) continue; top=o.y+h; } L.push(b.min.y,top); }
+  if(!L.length) L=null; M.set(i,L); return L; }
+function suFloorAt(C,i,y){ const L=suIv(C,i); if(!L) return FREE.Y; let g=FREE.Y; for(let k=0;k<L.length;k+=2){ const lo=L[k], hi=L[k+1]; if(hi<=y+.05){ if(hi>g) g=hi; } else if(lo<y+.05) return null; } return g; }   // (null: ahí hay una pared)
+function suLowFloor(C,i,y){ if(C.h[i]>0 || C.h2[i]>0) return false; const b=suB(C,i); if(!(b>y+.05) || b>=1e3) return false; const lo=suFloorAt(C,i,y); if(lo===null || lo>=b-.05) return false; C.b[i]=lo; (C.lf||(C.lf=new Uint8Array(256)))[i]=1; return true; }
 function suInvalidate(box){ if(!SU.list.length) return; const m=SU.cs; for(const C of SU.list){ const x0=FREE.X+C.ci*16*m, z0=FREE.Z+C.cj*16*m; if(box.max.x<x0-m || box.min.x>x0+16*m+m || box.max.z<z0-m || box.min.z>z0+16*m+m) continue;
-    for(let i=0;i<256;i++){ const [x,z]=suXZ(C,i); if(x>=box.min.x-m && x<=box.max.x+m && z>=box.min.z-m && z<=box.max.z+m) C.b[i]=NaN; } C.aw=2; C.dirty=true; } }
+    for(let i=0;i<256;i++){ const [x,z]=suXZ(C,i); if(x>=box.min.x-m && x<=box.max.x+m && z>=box.min.z-m && z<=box.max.z+m){ C.b[i]=NaN; if(C.iv) C.iv.delete(i); if(C.lf) C.lf[i]=0; } } C.aw=2; C.dirty=true; } }
 // el vecino de (C,i) hacia dx,dz (puede estar en otro trozo; si no existe y hace falta, se crea)
 function suNb(C,i,dx,dz,make){ let lx=(i&15)+dx, lz=(i>>4)+dz, D=C; if(lx<0||lx>15||lz<0||lz>15){ const ci=C.ci+(lx<0?-1:lx>15?1:0), cj=C.cj+(lz<0?-1:lz>15?1:0); D=suChunk(ci,cj,make); if(!D) return null; lx=(lx+16)&15; lz=(lz+16)&15; } return [D,lz*16+lx]; }
 const _suN=[[-1,0],[1,0],[0,-1],[0,1]];
@@ -23867,7 +23874,7 @@ function suAdd(D,j,L,p,c,s,f,pend){ const T=L?D.t2:D.t, H=L?D.h2:D.h, Dl=L?D.d2:
   if(pend) Dl[j]+=f; else H[j]+=f; }
 // después de mover: lo vacío se borra, si la de abajo se acabó la de arriba baja, y si quedaron iguales (o se mezclan) se juntan
 function suFix(C,i){ if(C.h2[i]<=1e-5 && (C.t2[i] || C.h2[i])){ C.h2[i]=0; C.t2[i]=0; C.c2[i]=0; C.s2[i]=0; }
-  if(C.h[i]<=1e-5 || (C.t2[i] && C.h[i]<.0015)){ if(C.t2[i]){ C.t[i]=C.t2[i]; C.h[i]=C.h2[i]+Math.max(0,C.h[i]);   /* (v235: lo poquito de abajo se junta con lo de arriba, no se pierde) */ C.c[i]=C.c2[i]; C.s[i]=C.s2[i]; C.h2[i]=0; C.t2[i]=0; C.c2[i]=0; C.s2[i]=0; } else if(C.t[i] || C.h[i]){ C.h[i]=0; C.t[i]=0; C.c[i]=0; C.s[i]=0; } }
+  if(C.h[i]<=1e-5 || (C.t2[i] && C.h[i]<.0015)){ if(C.t2[i]){ C.t[i]=C.t2[i]; C.h[i]=C.h2[i]+Math.max(0,C.h[i]);   /* (v235: lo poquito de abajo se junta con lo de arriba, no se pierde) */ C.c[i]=C.c2[i]; C.s[i]=C.s2[i]; C.h2[i]=0; C.t2[i]=0; C.c2[i]=0; C.s2[i]=0; } else if(C.t[i] || C.h[i]){ C.h[i]=0; C.t[i]=0; C.c[i]=0; C.s[i]=0; if(C.lf && C.lf[i]){ C.lf[i]=0; C.b[i]=NaN; } } }
   else if(C.t2[i] && SU_T[C.t2[i]].dn>SU_T[C.t[i]].dn+.05 && !suMixable(C.t[i],C.t2[i])){ const t=C.t[i], h=C.h[i], c=C.c[i], ss=C.s[i]; C.t[i]=C.t2[i]; C.h[i]=C.h2[i]; C.c[i]=C.c2[i]; C.s[i]=C.s2[i]; C.t2[i]=t; C.h2[i]=h; C.c2[i]=c; C.s2[i]=ss; }   // (v235: si quedó lo pesado arriba, se hunde)
   else if(C.t2[i] && suMixable(C.t[i],C.t2[i])){ const p=C.t2[i], c=C.c2[i], s=C.s2[i], f=C.h2[i]; C.h2[i]=0; C.t2[i]=0; C.c2[i]=0; C.s2[i]=0; suAdd(C,i,0,p,c,s,f,false); } }
 // ¿a qué capa del vecino entra la sustancia p que corre hacia él? (-1: no puede)
@@ -23893,7 +23900,7 @@ function suStep(sub,diag,first){ const L=SU.list, NB=diag?_suNd:_suN, dk=diag?.7
         let b=Cb[i]; if(b!==b) b=suB(C,i); const S=b+(lay?Ch[i]+h:h); let F=0, n=0;
         for(let q=0;q<4;q++){ let D=C, j; const lx=(i&15)+NB[q][0], lz=(i>>4)+NB[q][1]; if(lx>=0 && lx<16 && lz>=0 && lz<16) j=lz*16+lx; else { const N=suNb(C,i,NB[q][0],NB[q][1],h>mH); if(!N) continue; D=N[0]; j=N[1]; }
           let sl; { const tt=D.t2[j], tb=D.t[j]; if(!tt && (!tb || tb===p)) sl=0; else { sl=suSlot(D,j,p); if(sl<0) continue; } }
-          let bj=D.b[j]; if(bj!==bj) bj=suB(D,j); if(bj>=1e3) continue;
+          let bj=D.b[j]; if(bj!==bj) bj=suB(D,j); if(bj>=1e3) continue; if(bj>S && suLowFloor(D,j,S)) bj=D.b[j];   /* (v236: debajo de un techo sí pasa) */
           const Sj=sl===2?bj:bj+D.h[j]+(sl?D.h2[j]:0), diff=S-Sj-Y-(D.pr[j]>0?.3:0)-(sl===1 && !lay && p!==6 && !D.t2[j]?.04:0); if(diff<=0) continue;   /* (junto a otra sustancia no se le sube encima, salvo que venga bastante más alto; la huella recién hecha no se rellena hasta que se le pasa) */
           const hj=sl===2?0:sl?D.h2[j]:D.h[j]; if(hj<=0 && h<mH && Sj>S-h-.01) continue;   /* (lo delgadito no se extiende en lo plano, pero sí escurre de bajada) */
           const f=diff*k*sub; if(f<=1e-7) continue; _suFl[n]=f; _suFj[n]=j; _suFs[n]=sl; _suFD[n]=D; _suFf[n]=b-Sj>.3?1:0; _suFS[n]=Sj; n++; F+=f; }   /* (v235: si abajo está mucho más bajo, es una cascada) */
@@ -23907,10 +23914,10 @@ function suStep(sub,diag,first){ const L=SU.list, NB=diag?_suNd:_suN, dk=diag?.7
     C.n=n; C.n2=n2; C.pend=false; if(mx>2e-5){ C.dirty=true; C.aw=2; moved++; } }
   return moved; }
 // echar: reparte el volumen (m³) en los cuadritos de un círculo (sobre lo que haya: se mezcla o queda encima)
-function suPour(x,z,p,col,vol,r,s){ if(vol<=0) return 0; if(SU.vol+vol>SU.max){ vol=SU.max-SU.vol; if(vol<=0) return 0; } const m=SU.cs, R=Math.max(m*.6,r), cells=[], top=FREE.Y+SU.hmax;
+function suPour(x,z,p,col,vol,r,s,ya){ if(vol<=0) return 0; if(SU.vol+vol>SU.max){ vol=SU.max-SU.vol; if(vol<=0) return 0; } const m=SU.cs, R=Math.max(m*.6,r), cells=[], top=FREE.Y+SU.hmax;
   const c=p===5?suCol(col):(+col>=SU_F?+col:0); s=p===5?(s===undefined?255:s|0):(s|0);
-  const q0=suCell(x,z,true), b0=q0?suB(q0[0],q0[1]):-1e9;   // (v235: lo que cae junto a un bloque no se sube encima de él)
-  for(let dz=-R;dz<=R+1e-6;dz+=m) for(let dx=-R;dx<=R+1e-6;dx+=m){ if(dx*dx+dz*dz>R*R+1e-6) continue; const q=suCell(x+dx,z+dz,true); if(!q) continue; const [C,i]=q, b=suB(C,i); if(b>=1e3 || b+C.h[i]+C.h2[i]>=top-.002 || (b0<1e3 && b>b0+.3)) continue; let sl=suPourSlot(C,i,p); if(sl<0) sl=3; q.push(sl); cells.push(q); }   /* (v235: 3 = sobre dos capas distintas: se revuelve con la de arriba) */
+  const q0=suCell(x,z,true); if(q0 && ya!==undefined) suLowFloor(q0[0],q0[1],ya); const b0=q0?suB(q0[0],q0[1]):-1e9;   // (v235: lo que cae junto a un bloque no se sube encima de él; v236: si llega por debajo de un techo, al piso de abajo)
+  for(let dz=-R;dz<=R+1e-6;dz+=m) for(let dx=-R;dx<=R+1e-6;dx+=m){ if(dx*dx+dz*dz>R*R+1e-6) continue; const q=suCell(x+dx,z+dz,true); if(!q) continue; const [C,i]=q; if(ya!==undefined) suLowFloor(C,i,ya); const b=suB(C,i); if(b>=1e3 || b+C.h[i]+C.h2[i]>=top-.002 || (b0<1e3 && b>b0+.3)) continue; let sl=suPourSlot(C,i,p); if(sl<0) sl=3; q.push(sl); cells.push(q); }   /* (v235: 3 = sobre dos capas distintas: se revuelve con la de arriba) */
   if(!cells.length){ const q=suCell(x,z,true); if(!q) return 0; const b=suB(q[0],q[1]); if(b>=1e3 || b+q[0].h[q[1]]+q[0].h2[q[1]]>=top-.002) return 0; const sl=suPourSlot(q[0],q[1],p); if(sl<0) return 0; q.push(sl); cells.push(q); }
   const dh=vol/(cells.length*m*m), now=performance.now(); let got=0; for(const [C,i,sl] of cells){ const a=Math.min(dh,top-(suB(C,i)+C.h[i]+C.h2[i])); if(!(a>0)) continue; got+=a*m*m; C.lp=now; C.lpT=SU.T; if(sl===3){ const v=C.h2[i]; if(a>v){ C.t2[i]=p; C.c2[i]=c; C.s2[i]=s; } C.h2[i]+=a; } else suAdd(C,i,sl,p,c,s,a,false); suFix(C,i); C.aw=2; C.dirty=true; C.n=Math.max(C.n,1); if(C.h2[i]>0) C.n2=Math.max(C.n2,1); C.ver++; }
   SU.vol+=got; return got; }   // (v234: hasta 10 m de alto)
@@ -23920,7 +23927,7 @@ function suRemoveAt(x,z){ const q=suCell(x,z,false); if(!q) return 0; const [C0,
     if(C.t2[i]===p && C.h2[i]>0){ C.h2[i]=0; hit=true; } else if(C.t[i]===p && C.h[i]>0){ C.h[i]=0; hit=true; } if(!hit) continue; suFix(C,i); C.dirty=true; C.aw=2; C.ver++; n++;
     for(const [dx,dz] of _suN){ const N=suNb(C,i,dx,dz,false); if(N) st.push(N); } }
   suRecount(); return n; }
-function suClear(){ SU.clr=(SU.clr|0)+1; if(SU.sc) suFarClear(); if(SU.falls) SU.falls.clear(); for(const p in SU.flatM){ const M=SU.flatM[p]; if(M){ M.visible=false; } } SU.flatDirty=false; for(const C of SU.list) for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } SU.ch.clear(); SU.list.length=0; SU.vol=0; SU.balls.forEach(b=>b.m && b.m.parent && b.m.parent.remove(b.m)); SU.balls.length=0; SU.rip.length=0; SU.U.uRipN.value=0; SU.drops.length=0; SU.emit.length=0; SU.pops.length=0; SU.feet=null; suDropsDraw(); suFoamDraw(true); }
+function suClear(){ SU.clr=(SU.clr|0)+1; if(SU.sc) suFarClear(); if(SU.falls) SU.falls.clear(); try{ for(const P of FU.pts) P.dead=true; FU.pts.length=0; }catch(e){} for(const p in SU.flatM){ const M=SU.flatM[p]; if(M){ M.visible=false; } } SU.flatDirty=false; for(const C of SU.list) for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } SU.ch.clear(); SU.list.length=0; SU.vol=0; SU.balls.forEach(b=>b.m && b.m.parent && b.m.parent.remove(b.m)); SU.balls.length=0; SU.rip.length=0; SU.U.uRipN.value=0; SU.drops.length=0; SU.emit.length=0; SU.pops.length=0; SU.feet=null; suDropsDraw(); suFoamDraw(true); }
 function suRecountFast(){ let v=0; const a=SU.cs*SU.cs; for(const C of SU.list){ if(C.vv!==C.ver || C.aw>0){ let w=0, n=0, n2=0; for(let i=0;i<256;i++){ const h=C.h[i], h2=C.h2[i]; if(h>0){ w+=h; n++; } if(h2>0){ w+=h2; n2++; } } C.v=w*a; C.n=n; C.n2=n2; C.vv=C.ver; } v+=C.v; } SU.vol=v; }
 function suRecount(){ let v=0; const a=SU.cs*SU.cs; for(const C of SU.list){ let n=0, n2=0; for(let i=0;i<256;i++){ const h=C.h[i], h2=C.h2[i]; if(h>0){ v+=h*a; n++; } if(h2>0){ v+=h2*a; n2++; } } C.n=n; C.n2=n2; } SU.vol=v; }
 // v232b: cómo se ven. En todas las calidades menos Mínima: brillos que se mueven (olitas), reflejo del cielo, ondas donde pisas o
@@ -23949,7 +23956,7 @@ float suF(vec2 p, float t){
 const SU_AMP=[0,.05,.05,.04,.045,.02,.0015], SU_E=[0,.06,.06,.03,.06,.06,.005], SU_REFL=[0,.55,.35,.12,.15,.22,.05], SU_LIP=[0,0,.3,.35,.3,0,.4], SU_GL=[0,[.6,200],[.5,120],[.06,60],[.45,160],[.5,160],[0,1]];   // (qué tan gordita queda la orilla)
 // la sombra se busca 6 cm más arriba: la capa delgadita queda a 1–2 cm del piso y si no, el piso le hace puntitos de sombra (moiré)
 const SU_SHV='#ifdef USE_SHADOWMAP\n  worldPosition.y+=.06;\n#endif\n#include <shadowmap_vertex>';
-function suMatsReset(){ const old=SU.mats; SU.mats={}; for(const C of SU.list) C.ms.forEach((M,k)=>{ if(M) M.material=suMat(k); }); for(const p in SU.flatM){ if(SU.flatM[p]) SU.flatM[p].material=suMat(+p); } if(SU.sc) for(const S of SU.sc.values()) S.ms.forEach((G,k)=>{ if(G) G.material=suMat(k); }); for(const k in old) old[k].dispose(); }
+function suMatsReset(){ const old=SU.mats; SU.mats={}; for(const C of SU.list) C.ms.forEach((M,k)=>{ if(M) M.material=suMat(k); }); for(const p in SU.flatM){ if(SU.flatM[p]) SU.flatM[p].material=suMat(+p); } if(SU.sc) for(const S of SU.sc.values()) S.ms.forEach((G,k)=>{ if(G) G.material=suMat(k); }); try{ FU_FL.rib.forEach((M,p)=>{ if(M) M.material=fuFlowMat(p); }); FU_FL.blob.forEach((I,p)=>{ if(I) I.material=fuFlowMat(p,true); }); }catch(e){} for(const k in old) old[k].dispose(); }
 function suMat(key){ if(SU.mats[key]) return SU.mats[key]; const p=key>6?key-6:key, top=key>6, T=SU_T[p], simple=settings.quality==='min'; SU.matQ=simple;   // (key 7–12: la capa de arriba, que gana siempre a la de abajo)
   const m=new THREE.MeshStandardMaterial({color:'#ffffff', roughness:T.ro, metalness:0, transparent:T.op<1, opacity:T.op, depthWrite:T.op>=.95, vertexColors:true, polygonOffset:true, polygonOffsetFactor:top?-2:-1, polygonOffsetUnits:top?-6:-1});
   if(p===6) m.emissive=new THREE.Color('#2c3038'); if(p===2) m.emissive=new THREE.Color('#14300a');
@@ -24089,32 +24096,24 @@ function suBuild(C){ C.dirty=false; const has=new Set(); for(let i=0;i<256;i++){
       M=new THREE.Mesh(g,suMat(key)); M.frustumCulled=true; M.receiveShadow=SU_T[p].op>=.95; M.castShadow=false; M.userData.noBatch=true; M.renderOrder=(p===1?3:2)+lay*2; C.ms[key]=M; FREE.g.add(M); }
     M.visible=!C.inF; M.userData.on=true; suBuildMesh(C,lay,p,M); }
   if(C.inF){ const S=suSup(C); if(!S.dirty) S.dirty=1; } }   // (v235: si está junto con lo lejano, se vuelve a juntar al ratito)
-// ---- v235: CASCADAS. Lo que se cae de una orilla alta (de un bloque) baja como chorro: se ve caer y llega abajo cuando de verdad
-// caería (√(2h/g)), en vez de aparecer de golpe en el piso ----
-SU.falls=new Map(); SU.fallU={value:0}; const _suFV=new THREE.Vector3(), _suCand=[], _suFr=new THREE.Frustum(), _suFrM=new THREE.Matrix4(), _suBS=new THREE.Sphere();
-function suFallFeed(C,i,D,j,p,c,s,v,b,Sj){ const key=C.k+':'+i+':'+D.k+':'+j+':'+p; let F=SU.falls.get(key);
-  if(!F){ if(SU.falls.size>=180) return false; const [xi,zi]=suXZ(C,i), [xj,zj]=suXZ(D,j), t=b+.012;
-    F={C, i, D, j, p, c, s, x:(xi+xj)/2+(xj-xi)*.08, z:(zi+zj)/2+(zj-zi)*.08, a:Math.atan2(xj-xi,zj-zi), top:t, bot:Sj, head:t, vh:0, tail:t, vt:0, q:[], acc:0, fed:SU.T, rate:0}; SU.falls.set(key,F); }
-  F.acc+=v; F.fed=SU.T; F.c=c; F.s=s; F.top=b+.012; if(F.vt){ F.vt=0; F.tail=F.top; if(F.head>=F.top-.01){ F.head=F.top; F.vh=0; } } return true; }
-function suFallMat(){ const cv=document.createElement('canvas'); cv.width=32; cv.height=128; const q=cv.getContext('2d'); q.fillStyle='#e6e6e6'; q.fillRect(0,0,32,128);
-  for(let k=0;k<30;k++){ const x=Math.random()*32, w=1+Math.random()*3, y=Math.random()*128, h=20+Math.random()*60; q.fillStyle=Math.random()<.5?'rgba(255,255,255,.95)':'rgba(160,160,160,.55)'; q.fillRect(x,y,w,h); q.fillRect(x,y-128,w,h); }
-  const t=new THREE.CanvasTexture(cv); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.encoding=THREE.sRGBEncoding;
-  const m=new THREE.MeshStandardMaterial({color:'#ffffff', map:t, roughness:.2, transparent:true, opacity:.72, depthWrite:false, side:THREE.DoubleSide});
-  m.onBeforeCompile=sh=>{ sh.uniforms.uFT=SU.fallU; sh.vertexShader='uniform float uFT;\n'+sh.vertexShader.replace('#include <uv_vertex>','#include <uv_vertex>\n#ifdef USE_UV\n  vUv=vec2(uv.x*.7,(modelMatrix*instanceMatrix*vec4(position,1.)).y*.9+uFT);\n#endif'); };   // (las rayitas bajan con el chorro)
-  return m; }
-function suFallsTick(dt){ let I=SU.fallM; if(!SU.falls.size){ if(I && I.visible){ I.count=0; I.visible=false; } return; }
-  if(!I){ const g=new THREE.PlaneGeometry(1,1); g.translate(0,-.5,0); I=SU.fallM=new THREE.InstancedMesh(g,suFallMat(),200); I.setColorAt(0,_suCol.set('#ffffff')); I.userData.noBatch=true; I.frustumCulled=false; I.renderOrder=4; I.count=0; FREE.g.add(I); }
-  SU.fallU.value-=dt*2.4; let n=0;
-  for(const [key,F] of SU.falls){
-    if(F.acc>0){ const H=Math.max(.05,F.top-F.bot); F.q.push(SU.T+Math.sqrt(2*H/9.8),F.acc); F.rate=F.rate*.85+F.acc/Math.max(dt,.008)*.15; F.acc=0; } else F.rate*=.85;
-    while(F.q.length && F.q[0]<=SU.T){ const v=F.q[1]; F.q.splice(0,2); const [x,z]=suXZ(F.D,F.j); suPour(x,z,F.p,F.c,v,.11,F.s); if(Math.random()<.1) suRipple(x,z,.02,F.p); }   // (llega abajo)
-    { const bj=suB(F.D,F.j); if(bj<1e3) F.bot=bj+F.D.h[F.j]+F.D.h2[F.j]; }
-    F.vh+=9.8*dt; F.head=Math.max(F.bot,F.head-F.vh*dt);   // (la punta del chorro va cayendo)
-    if(SU.T-F.fed>.15){ F.vt+=9.8*dt; F.tail-=F.vt*dt; } else F.tail=F.top;   // (si ya no llega más, la cola también cae)
-    if(F.tail<=F.bot+.005 && !F.q.length){ SU.falls.delete(key); continue; }
-    const len=F.tail-F.head; if(n>=200 || len<.01) continue; const w=SU.cs*(.55+.5*Math.min(1,F.rate/.03));
-    _suM4.makeRotationY(F.a); _suM4.scale(_suFV.set(w,len,1)); _suM4.setPosition(F.x,F.tail,F.z); I.setMatrixAt(n,_suM4); I.setColorAt(n,_suCol.setHex(F.p===1?suLerpHex(suHex(F.p,F.c,F.s),0xffffff,.35):suHex(F.p,F.c,F.s)).convertSRGBToLinear()); n++; }   // (el agua que cae se ve más clarita)
-  I.count=n; I.visible=n>0; I.instanceMatrix.needsUpdate=true; if(I.instanceColor) I.instanceColor.needsUpdate=true; }
+// ---- v236: CASCADAS DE VERDAD. Lo que se sale por la orilla de un bloque se vuelve chorritos de sustancia que caen con su peso
+// (los mismos que salen de la máquina: chocan con todo y donde caen, ahí queda). El agua sale rápido y se aleja un poco de la orilla;
+// la miel sale despacito, pegadita, en hilos gruesos ----
+SU.falls=new Map(); const _suFV=new THREE.Vector3(), _suCand=[], _suFr=new THREE.Frustum(), _suFrM=new THREE.Matrix4(), _suBS=new THREE.Sphere();
+const SU_FOUT=[0,.9,.35,.4,.14,.8,.3], SU_FMIN=[0,.0006,.0012,.0015,.0012,.0008,.001];
+function suFallFeed(C,i,D,j,p,c,s,v,b,Sj){ const [xi,zi]=suXZ(C,i), [xj,zj]=suXZ(D,j), dl=Math.hypot(xj-xi,zj-zi)||1, dx=(xj-xi)/dl, dz=(zj-zi)/dl, ex=(xi+xj)/2, ez=(zi+zj)/2;
+  const dg=Math.abs(dx)>.3 && Math.abs(dz)>.3, key=(dg?Math.round((ex-FREE.X)*10)+':'+Math.round((ez-FREE.Z)*10):Math.floor((ex-FREE.X)/.6)+':'+Math.floor((ez-FREE.Z)/.6))+':'+Math.round(dx*2)+':'+Math.round(dz*2)+':'+p; let F=SU.falls.get(key);   // (v236: un chorro por cada ~60 cm de orilla; en las esquinas, cada uno el suyo)
+  if(!F){ if(SU.falls.size>=120) return false; F={p, c, s, x:ex+dx*.03, z:ez+dz*.03, dx, dz, top:b, acc:0, fed:SU.T, rate:0, last:null, n:0, ko:.65+Math.random()*.7, ks:(Math.random()-.5)*.35, kw:Math.random()*6.28}; SU.falls.set(key,F); }   // (cada chorro distinto: más o menos fuerte, un poquito de lado; así no se ve cuadrado)
+  else if(F.fed!==SU.T){ F.n=0; } F.n++; const w=1/F.n; F.x+=(ex+dx*.03-F.x)*w; F.z+=(ez+dz*.03-F.z)*w;   // (en medio de los cuadritos que le echan)
+  F.acc+=v; F.fed=SU.T; F.c=c; F.s=s; F.top=b; return true; }
+function suFallsTick(dt){ if(!SU.falls.size) return; const MAX=settings.quality==='min'||settings.quality==='low'?260:600, busy=FU.pts.length>MAX*.7?3:1;
+  for(const [key,F] of SU.falls){ F.rate=F.rate*.85+F.acc/Math.max(dt,.008)*.15*(F.acc>0?1:0);
+    if(F.acc>0 && (F.acc>=SU_FMIN[F.p]*.15*busy*(F.p===4||F.p===2?.2:1) || SU.T-F.fed>.25) && FU.pts.length<MAX*1.5){ const v=F.acc; F.acc=0; const r=Math.cbrt(v/4.18879), out=SU_FOUT[F.p]*F.ko*(.45+.8*Math.min(1,F.rate/.03)), j=(F.ks+Math.sin(SU.T*2.3+F.kw)*.12)*(F.p===1||F.p===5?1:.4)+(F.p===1?(Math.random()-.5)*.1:0);
+      const P={x:F.x+F.dx*r, y:F.top+r*.6, z:F.z+F.dz*r, vx:F.dx*out-F.dz*j, vy:-.05, vz:F.dz*out+F.dx*j, t:0, r, hx:suHex(F.p,F.c,F.s), v, p:F.p, c:F.c, s:F.s, o:null, k:-1, g:-1e9, gT:0, st:0, born:SU.T};
+      if(F.p===4 || F.p===2 || F.p===3){ const ix=F.x-F.dx*.06, iz=F.z-F.dz*.06; for(const o of fgQuery(ix,iz,ix,iz)){ const bs=o.cols || (o.solid?[o.box]:null); if(!bs) continue; for(const b of bs){ if(ix<b.min.x||ix>b.max.x||iz<b.min.z||iz>b.max.z||Math.abs(b.max.y-F.top)>.06) continue;   // (v236: lo espeso escurre pegadito a la pared, no se despega)
+          P.st=1; P.wb=b; P.wx=Math.round(F.dx); P.wz=Math.round(F.dz); P.x=F.x+F.dx*(r*.8); P.z=F.z+F.dz*(r*.8); P.vx=P.vz=0; P.vy=0; break; } if(P.st) break; } }
+      const L=F.last; if(L && !L.dead && SU.T-L.born<.3) P.prev=L; F.last=P; FU.pts.push(P); }
+    if(F.acc<=0 && SU.T-F.fed>1.5) SU.falls.delete(key); } }
 // ---- v235: LO LEJANO MÁS SENCILLO. A más de ~25 m de la cámara, los trozos se juntan de 4×4 en un solo dibujo por sustancia
 // (antes cada trozo era un dibujo aparte: una inundación grande eran ~100 dibujos más) ----
 SU.sc=new Map();
@@ -24379,7 +24378,7 @@ function suNetOp(pid,op){ const t=op[1], n=Number.isFinite;
 const FU_N=['Goteo','Fuente','Regadera','Manguera'], FU_IC=['🫗','⛲','💧','🚿'], FU_Q=['Poquito','Normal','Mucho','Diluvio'], FU_RATE=[.012,.05,.2,.8], FU_PR=[[2,5,12,28],[10,18,32,55],[8,16,30,50],[10,18,32,55]];
 const FU_X=[null,['Altura',['Bajita','Media','Alta','Altísima'],[.8,1.8,3.2,5]],['Tamaño',['Chico','Mediano','Grande','Enorme'],[2.5,4,6,9]],['Distancia',['Cerca','Media','Lejos','Muy lejos'],[2,4,7,11]]];
 const FU_S=2.4;   // (Roger: grandota, como dos veces el frijolito: el tanque mide 2.5 m y con la fuente 3.4 m)
-const FU_LEN=20, FU_SEG=40, FU={pts:[], ms:new Set(), tab:1};
+const FU_LEN=20, FU_SEG=40, FU={pts:[], ms:new Set(), tab:1, bodies:[], dynNear:[]};
 const FU_LIM=[0,.2,.5,1,2,4], FU_LIMN=['Sin parar','Tobillos','Rodillas','Cintura','2 m','4 m'];   // v235: «llenar hasta» (y se apaga sola)
 function fuCfg(o){ const b=Math.max(0,Math.floor(+o.sel.b||0)), lo=b%4294967296, hi=Math.floor(b/4294967296), out=[]; for(let k=0;k<4;k++){ const v=Math.floor(lo/2**(k*8))&255; out.push({on:v&1, p:((v>>1)&7)%6+1, q:(v>>4)&3, x:(v>>6)&3, col:Math.min(FREE_COLS.length-1,Math.floor(hi/2**(k*4))&15)}); } out.lim=Math.min(5,(hi>>16)&7); return out; }
 function fuPack(C){ let lo=0, hi=0; C.forEach((c,k)=>{ lo+=((c.on?1:0)|(((c.p-1)&7)<<1)|((c.q&3)<<4)|((c.x&3)<<6))*2**(k*8); hi+=((c.col|0)&15)*2**(k*4); }); hi+=((C.lim|0)&7)*65536; return lo+hi*4294967296; }
@@ -24427,33 +24426,86 @@ function fuSrc(o,k,c){ const a=o.r*Math.PI/2, ry=v=>[Math.sin(a)*v[2]+Math.cos(a
 function fuLand(x,y,z,vx,vy,vz){ for(let i=0;i<160;i++){ vy-=9.8*.025; x+=vx*.025; y+=vy*.025; z+=vz*.025; if(!freeInside(x,z,.1)) return null; const h=suHit(x,y,z,.06,true); if(h){ if(h.ny<.5){ x+=h.nx*.15; z+=h.nz*.15; } return [x,z]; } } return [x,z]; }
 // ---- el chorro que se ve (gotitas que vuelan; las ven todos) ----
 // v235: cada gotita que sale ES sustancia (lleva su volumen, y su tamaño es ese volumen): donde cae, ahí queda (y tarda lo que tarda en caer)
-const FU_DR=[.035,.05,.075,.11]; const _fuQ=new THREE.Quaternion(), _fuV=new THREE.Vector3(), _fuSc=new THREE.Vector3();
+// v236: las que salen seguidas se unen en un chorro (que se dobla al caer y se rompe en gotas al final); cada sustancia con su aspecto;
+// chocan contigo y con tus amigos (te escurren y caen a tus pies), con las cosas con física (las empujan) y con las estructuras fijas
+// (en una pared se pegan y escurren; debajo de un techo no lo atraviesan; arriba de algo se quedan arriba)
+const FU_DR=[.035,.05,.075,.11]; const _fuQ=new THREE.Quaternion(), _fuV=new THREE.Vector3(), _fuSc=new THREE.Vector3(), _fuA=new THREE.Vector3(), _fuB=new THREE.Vector3(), _fuS=new THREE.Vector3(), _fuC2=new THREE.Vector3(), _fuDd=new THREE.Vector3();
+const FU_SLIDE=[0,1.6,.6,.8,.45,1.1,.5];   // qué tan rápido escurre por una pared o por un peluche
 function fuSpawn(o,k,c,S,dt,real){ const rd=FU_DR[c.q]*(k===0?.8:1), vn=4.18879*rd*rd*rd; o.fuAcc[k]+=FU_RATE[c.q]*(k===0?.3:1)*dt;   /* (v235: el goteo es goteo: sale menos) */ let n=Math.floor(o.fuAcc[k]/vn); if(n<1) return;
   const MAX=settings.quality==='min'||settings.quality==='low'?260:600, room=MAX-FU.pts.length; let per=vn; if(n>room){ n=Math.max(1,room); per=o.fuAcc[k]/n; } o.fuAcc[k]=Math.max(0,o.fuAcc[k]-n*per);   // (si hay muchas, menos pero más grandes: lo mismo de sustancia)
-  const hx=fuHex(c), col=fuC(c), sp=c.p===5?255:0, rr0=Math.cbrt(per/4.18879), v=real && SU.vol+per<=SU.max?per:0, Rmin=.82*FU_S;
+  const hx=fuHex(c), col=fuC(c), sp=c.p===5?255:0, rr0=Math.cbrt(per/4.18879), v=real && SU.vol+per<=SU.max?per:0, Rmin=.82*FU_S, N=n, last=(o.fuLast||(o.fuLast=[]))[k];
+  let prev=last && !last.dead && SU.T-last.born<.2 && last.p===c.p ? last : null;
   while(n-->0){ let x=S.x, y=S.y, z=S.z, vx=0, vy=0, vz=0;
     if(k===1){ vy=Math.sqrt(2*9.8*S.H)*(.92+Math.random()*.12); const tf=(vy+Math.sqrt(vy*vy+2*9.8*1.44*FU_S))/9.8, a=(o.fuA=((o.fuA||0)+2.39996)%6.2832), rr=Rmin+Math.random()*(.3+S.H*.25), vh=rr/tf; vx=Math.cos(a)*vh; vz=Math.sin(a)*vh; }   // (va dando la vuelta: cae parejo alrededor, ya por fuera de la máquina)
     else if(k===2){ const a=(o.fuSpin||0)+((Math.random()*3)|0)*2.094, rr=Math.max(Rmin,Math.sqrt(Math.random())*S.R), vy0=2, t=(vy0+Math.sqrt(vy0*vy0+2*9.8*1.27*FU_S))/9.8, vh=(rr-.21*FU_S)/t; x+=Math.cos(a)*.21*FU_S; z+=Math.sin(a)*.21*FU_S; vx=Math.cos(a)*vh; vz=Math.sin(a)*vh; vy=vy0; }
-    else if(k===3){ const j=.04; vx=(S.dx+(Math.random()-.5)*j)*S.v; vy=(S.dy+(Math.random()-.5)*j)*S.v; vz=(S.dz+(Math.random()-.5)*j)*S.v; }
-    else { vx=(Math.random()-.5)*.15; vz=(Math.random()-.5)*.15; vy=-.3; }
-    FU.pts.push({x, y, z, vx, vy, vz, t:0, r:rr0, hx, v, p:c.p, c:col, s:sp, o, k, g:-1e9, gT:0}); } }
-function fuSurfY(x,z,y){ const gx=Math.floor((x-FREE.X)/SU.cs), gz=Math.floor((z-FREE.Z)/SU.cs), ci=Math.floor(gx/16), cj=Math.floor(gz/16), C=SU.ch.get(suKey(ci,cj));
-  if(C){ const i=(gz-cj*16)*16+(gx-ci*16), b=suB(C,i); if(b<1e3) return b+C.h[i]+C.h2[i]; } const g=freeGround(x,z,y); return g===null?-1e9:g; }
+    else if(k===3){ const j=.02; vx=(S.dx+(Math.random()-.5)*j)*S.v; vy=(S.dy+(Math.random()-.5)*j)*S.v; vz=(S.dz+(Math.random()-.5)*j)*S.v; }
+    else { vx=(Math.random()-.5)*.06; vz=(Math.random()-.5)*.06; vy=-.3; }
+    const f=dt*(n/N); x+=vx*f; y+=vy*f; z+=vz*f;   // (las que salen en el mismo cuadro, repartidas en el camino: así se unen en chorro)
+    const P={x, y, z, vx, vy, vz, t:f, r:rr0, hx, v, p:c.p, c:col, s:sp, o, k, g:-1e9, gT:0, st:0, born:SU.T, mine:k===3 && FREE.hose===o};
+    if(prev && k!==2) P.prev=prev; prev=P; FU.pts.push(P); }
+  o.fuLast[k]=prev; }
+function fuSurfY(x,z,y){ const q=suCell(x,z,true); if(!q) return -1e9; const [C,i]=q, b=suB(C,i); if(b>=1e3) return -1e9; if(b>y+.05 && !(C.h[i]>0) && !(C.h2[i]>0)){ const lo=suFloorAt(C,i,y); if(lo!==null) return lo; } return b+C.h[i]+C.h2[i]; }   // (v236: lo de abajo de la gotita, aunque arriba haya un techo)
 // cayó: se vuelve sustancia ahí (y la máquina ve qué tan hondo está, para «llenar hasta»)
-function fuLanded(P,x,z){ if(!(P.v>0)) return;
+function fuLanded(P,x,z){ P.dead=true; if(!(P.v>0)) return;
   for(const q of FREE.objs){ if(q.gad!=='fuentes') continue; const dx=x-q.x, dz=z-q.z, m=Math.max(Math.abs(dx),Math.abs(dz)); if(m<1.15 && P.y>q.y+1){ const k=1.3/Math.max(m,.05); x=q.x+dx*k; z=q.z+dz*k; break; } }   // (v235: lo que cae encima de una máquina resbala por su orilla; arriba no se junta)
-  suPour(x,z,P.p,P.c,P.v,Math.max(.2,P.r*2.5),P.s);   /* (al caer se aplasta: cubre más que la gotita) */ if(Math.random()<.12) suRipple(x,z,.02,P.p);
+  suPour(x,z,P.p,P.c,P.v,Math.max(.2,P.r*2.5),P.s,P.y);   /* (al caer se aplasta: cubre más que la gotita; v236: llega a esa altura) */ if(Math.random()<.12) suRipple(x,z,.02,P.p);
   const o=P.o; if(!o || !o.fuLv || !FREE.objs.includes(o)) return; const C=fuCfg(o); if(!C.lim || !C[P.k].on) return; const q=suCell(x,z,false), d=q?q[0].h[q[1]]+q[0].h2[q[1]]:0; o.fuLv[P.k]=o.fuLv[P.k]*.9+d*.1;
   if(o.fuLv[P.k]>=FU_LIM[C.lim]){ C[P.k].on=0; fuSet(o,C); o.fuOn&=~(1<<P.k); if(Math.hypot(o.x-player.pos.x,o.z-player.pos.z)<40) flashNote('🚰 '+FU_IC[P.k]+' '+FU_N[P.k]+': ya llenó hasta '+FU_LIMN[C.lim].toLowerCase()+' y se apagó'); } }
-function fuPtsTick(dt){ const L=FU.pts; let I=FU.pm; if(!L.length){ if(I && I.visible){ I.count=0; I.visible=false; } return; }
-  if(!I){ I=FU.pm=new THREE.InstancedMesh(_suDropG,new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.15,transparent:true,opacity:.9}),600); I.setColorAt(0,_suCol.set('#ffffff')); I.userData.noBatch=true; I.frustumCulled=false; I.count=0; FREE.g.add(I); }
-  let n=0; for(let k=L.length-1;k>=0;k--){ const P=L[k]; P.t+=dt; P.vy-=9.8*dt; const ox=P.x, oz=P.z; P.x+=P.vx*dt; P.y+=P.vy*dt; P.z+=P.vz*dt;
-    if((P.gT-=dt)<=0 || P.y<P.g+1.5){ P.gT=.08; P.g=fuSurfY(P.x,P.z,P.y); }
-    if(!freeInside(P.x,P.z,.05)){ L.splice(k,1); continue; }
-    if(P.y<P.g || P.t>6){ const wall=P.g-P.y>.35; fuLanded(P,wall?ox:P.x,wall?oz:P.z); L.splice(k,1); continue; }   // (si pegó en la pared de un bloque, cae al pie, por fuera)
-    if(n>=600) continue; const sp=Math.hypot(P.vx,P.vy,P.vz)||1; _fuQ.setFromUnitVectors(_fuUp,_fuV.set(P.vx/sp,P.vy/sp,P.vz/sp)); _fuSc.set(P.r*.85,P.r*(1+Math.min(2.4,sp*.16)),P.r*.85); _suM4.compose(_fuV.set(P.x,P.y,P.z),_fuQ,_fuSc);   // (estiradita hacia donde va: se ve como chorro)
-    I.setMatrixAt(n,_suM4); I.setColorAt(n,_suCol.setHex(P.hx)); n++; }
-  I.count=n; I.visible=n>0; I.instanceMatrix.needsUpdate=true; if(I.instanceColor) I.instanceColor.needsUpdate=true; }
+// ¿pegó en algo fijo? (con la posición de antes se sabe de qué lado llegó)
+function fuStatic(P,px,py,pz){ const r=P.r*.8; for(const o of fgQuery(P.x-r,P.z-r,P.x+r,P.z+r)){ const bs=o.cols || (o.solid?[o.box]:null); if(!bs) continue;
+    for(const b of bs){ if(P.x+r<b.min.x || P.x-r>b.max.x || P.z+r<b.min.z || P.z-r>b.max.z || P.y+r<b.min.y || P.y-r>b.max.y) continue;
+      if(py-r>=b.max.y-.04) return 1;   // (llegó por arriba: se queda arriba)
+      if(py+r<=b.min.y+.04){ P.y=b.min.y-r-.005; P.vy=-Math.abs(P.vy)*.15; P.vx*=.3; P.vz*=.3; return 2; }   // (por abajo: un techo no se atraviesa)
+      let nx=0, nz=0; if(px<=b.min.x) nx=-1; else if(px>=b.max.x) nx=1; else if(pz<=b.min.z) nz=-1; else if(pz>=b.max.z) nz=1;
+      else { const d=[P.x-b.min.x,b.max.x-P.x,P.z-b.min.z,b.max.z-P.z], m=Math.min(...d), i=d.indexOf(m); nx=i===0?-1:i===1?1:0; nz=i===2?-1:i===3?1:0; }
+      if(nx) P.x=(nx<0?b.min.x:b.max.x)+nx*(r+.01); else P.z=(nz<0?b.min.z:b.max.z)+nz*(r+.01);
+      P.st=1; P.wb=b; P.wx=nx; P.wz=nz; P.vx=0; P.vz=0; P.vy=Math.min(0,P.vy)*.2; return 3; } }   // (de lado: se pega a la pared y escurre)
+  return 0; }
+// ¿pegó en un peluche? (tú o tus amigos): te escurre y cae a tus pies; la pintura te deja huellitas
+function fuBody(P){ if(P.t<.25 && P.mine) return false; const tryB=(pos,me)=>{ if(!pos) return false; const dx=P.x-pos.x, dz=P.z-pos.z, d=Math.hypot(dx,dz), R=.38+P.r*.6; if(d>R || P.y<pos.y-.05 || P.y>pos.y+1.55) return false;
+    P.st=2; P.bp=pos; P.ba=Math.atan2(dz,dx); P.bR=.36+P.r*.5; P.by=P.y-pos.y; P.vx=0; P.vz=0; P.vy=0; if(me && P.p===5) SU.feet={c:P.c, amt:1, d:0, side:1, lx:pos.x, lz:pos.z}; return true; };
+  if(tryB(player.pos,true)) return true; for(const pos of FU.bodies) if(tryB(pos,false)) return true; return false; }
+// ¿pegó en algo con física? lo empuja un poquito y rebota
+function fuDyn(P,real){ for(const d of FU.dynNear){ if(d.held) continue; const c=d.root.position, rr=(d.r||.3)+P.r*.8, dx=P.x-c.x, dy=P.y-c.y, dz=P.z-c.z, l2=dx*dx+dy*dy+dz*dz; if(l2>rr*rr) continue;
+    const l=Math.sqrt(l2)||1, nx=dx/l, ny=dy/l, nz=dz/l; P.x=c.x+nx*rr; P.y=c.y+ny*rr; P.z=c.z+nz*rr; const vn=P.vx*nx+P.vy*ny+P.vz*nz;
+    if(real && P.v>0){ const k=Math.min(.6,P.v*600/((d.P&&d.P.mass)||.5)); d.v.x+=P.vx*k; d.v.y+=Math.max(0,P.vy*k*.3); d.v.z+=P.vz*k; d.kick=.2; freeWake(d); if(d.bx) bxWake(d); }
+    if(vn<0){ P.vx-=nx*vn*1.25; P.vy-=ny*vn*1.25; P.vz-=nz*vn*1.25; } P.vx*=.45; P.vz*=.45; return true; } return false; }
+// cómo se ve cada sustancia al ir cayendo
+function fuFlowMat(p,blob){ const k='fl'+p+(blob?'b':''); if(SU.mats[k]) return SU.mats[k]; const T=[null,{op:.55,ro:.04,me:.15},{op:.8,ro:.15,me:0},{op:1,ro:.95,me:0},{op:.9,ro:.07,me:.05},{op:1,ro:.35,me:0},{op:1,ro:.9,me:0}][p];
+  return SU.mats[k]=new THREE.MeshStandardMaterial({vertexColors:!blob, roughness:T.ro, metalness:T.me, transparent:T.op<1, opacity:T.op, depthWrite:T.op>=1, side:THREE.DoubleSide}); }
+const FU_FL={rib:[], blob:[]};
+function fuFlowMesh(p){ let M=FU_FL.rib[p]; if(M) return M; const N=700, g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(N*18),3)); g.setAttribute('normal',new THREE.BufferAttribute(new Float32Array(N*18),3)); g.setAttribute('color',new THREE.BufferAttribute(new Float32Array(N*18),3));
+  const I=new Uint16Array(N*12); for(let s=0;s<N;s++){ const a=s*6; I.set([a,a+3,a+1, a+1,a+3,a+4, a+1,a+4,a+2, a+2,a+4,a+5],s*12); } g.setIndex(new THREE.BufferAttribute(I,1)); g.setDrawRange(0,0);
+  M=FU_FL.rib[p]=new THREE.Mesh(g,fuFlowMat(p)); M.userData.noBatch=true; M.frustumCulled=false; M.renderOrder=5; FREE.g.add(M); return M; }
+function fuBlobMesh(p){ let I=FU_FL.blob[p]; if(I) return I; I=FU_FL.blob[p]=new THREE.InstancedMesh(p===6?_suBubG:_suDropG,fuFlowMat(p,true),p===6?1800:700); I.setColorAt(0,_suCol.set('#ffffff')); I.userData.noBatch=true; I.frustumCulled=false; I.renderOrder=5; I.count=0; FREE.g.add(I); return I; }
+function fuPtsTick(dt){ const L=FU.pts, real=!FNET.on || FNET.host;
+  if(!L.length){ for(const M of FU_FL.rib) if(M && M.visible){ M.visible=false; M.geometry.setDrawRange(0,0); } for(const I of FU_FL.blob) if(I && I.visible){ I.visible=false; I.count=0; } return; }
+  { FU.bodies=[]; for(const r of mp.remotes.values()) if(r.fz && r.pos) FU.bodies.push(r.pos); const B=FU.bb||[0,0,0,0]; FU.dynNear=FREE.dyn.length?FREE.dyn.filter(d=>{ const c=d.root.position; return c.x>B[0]-1.5 && c.x<B[1]+1.5 && c.z>B[2]-1.5 && c.z<B[3]+1.5; }):[]; }   // (solo lo que está cerca de las gotitas)
+  { let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9; for(const P of L){ if(P.x<x0) x0=P.x; if(P.x>x1) x1=P.x; if(P.z<z0) z0=P.z; if(P.z>z1) z1=P.z; } FU.bb=[x0,x1,z0,z1]; }
+  // mover y chocar
+  for(let k=L.length-1;k>=0;k--){ const P=L[k]; P.t+=dt; P.hp=P.hn=false;
+    if(P.st===2){ P.by-=FU_SLIDE[P.p]*dt; P.x=P.bp.x+Math.cos(P.ba)*P.bR; P.z=P.bp.z+Math.sin(P.ba)*P.bR; P.y=P.bp.y+P.by; if(P.by<=.05){ fuLanded(P,P.x,P.z); L.splice(k,1); } continue; }   // (escurriendo por un peluche)
+    if(P.st===1){ P.vy=Math.max(-FU_SLIDE[P.p],P.vy-9.8*dt*.5); P.y+=P.vy*dt; const b=P.wb; if(P.y+P.r<b.min.y){ P.st=0; P.vx=P.wx*.15; P.vz=P.wz*.15; } }   // (escurriendo por una pared; si se acaba, cae)
+    else { const sp=Math.hypot(P.vx,P.vy,P.vz), n=Math.min(4,Math.max(1,Math.ceil(sp*dt/.15))), h=dt/n; let hit=0;
+      for(let q=0;q<n && !hit;q++){ const px=P.x, py=P.y, pz=P.z; P.vy-=9.8*h; P.x+=P.vx*h; P.y+=P.vy*h; P.z+=P.vz*h; hit=fuStatic(P,px,py,pz); if(hit===1){ P.y=py; P.land=true; break; } if(!hit && (fuBody(P) || fuDyn(P,real))) break; } }
+    if(!freeInside(P.x,P.z,.05)){ P.dead=true; L.splice(k,1); continue; }
+    if((P.gT-=dt)<=0 || Math.abs(P.x-(P.gx||0))+Math.abs(P.z-(P.gz||0))>.2 || (P.y<P.g+.4 && P.gT<.1)){ P.gT=.15; P.gx=P.x; P.gz=P.z; P.g=fuSurfY(P.x,P.z,P.y); }   // (el piso de abajo: no en cada cuadro, cuesta)
+    if(P.land || P.y-P.r*.5<P.g || P.t>8){ fuLanded(P,P.x,P.z); L.splice(k,1); continue; } }   // (v236: o cayó encima de algo)
+  // dibujar: chorro (de una gotita a la que sigue) y gotitas sueltas (o las puntas)
+  const cam=camera.position, rib=[0,0,0,0,0,0,0], blob=[0,0,0,0,0,0,0];
+  for(const P of L){ const A=P.prev; if(!A || A.dead || P.p===6 || A.p!==P.p) continue; const d=Math.hypot(P.x-A.x,P.y-A.y,P.z-A.z); if(d>Math.max(P.p===4||P.p===2?.9:P.p===3?.45:.3,(P.r+A.r)*3.2) || d<1e-4) continue;   // (la miel y el slime hacen hilos largos)
+    const M=fuFlowMesh(P.p), s=rib[P.p]; if(s>=700) continue; rib[P.p]++; A.hn=P.hp=true;
+    const pos=M.geometry.attributes.position.array, nor=M.geometry.attributes.normal.array, col=M.geometry.attributes.color.array;
+    _fuA.set(A.x,A.y,A.z); _fuB.set(P.x,P.y,P.z); _fuDd.subVectors(_fuB,_fuA); _fuC2.addVectors(_fuA,_fuB).multiplyScalar(.5); _fuV.subVectors(cam,_fuC2).normalize(); _fuS.crossVectors(_fuDd,_fuV); const sl=_fuS.length(); if(sl<1e-6){ rib[P.p]--; continue; } _fuS.multiplyScalar(1/sl);
+    const ra=A.r*.95, rb=P.r*.95, o=s*18; _suCol.setHex(P.p===1?suLerpHex(A.hx,0xffffff,.25):A.hx).convertSRGBToLinear(); const cr=_suCol.r, cg=_suCol.g, cb=_suCol.b;
+    for(let e=0;e<2;e++){ const Q=e?_fuB:_fuA, r=e?rb:ra; for(let w=0;w<3;w++){ const sd=w-1, q=o+(e*3+w)*3; pos[q]=Q.x+_fuS.x*sd*r+_fuV.x*r*(w===1?.5:0); pos[q+1]=Q.y+_fuS.y*sd*r+_fuV.y*r*(w===1?.5:0); pos[q+2]=Q.z+_fuS.z*sd*r+_fuV.z*r*(w===1?.5:0);
+        const nx=_fuS.x*sd*.8+_fuV.x*(w===1?1:.6), ny=_fuS.y*sd*.8+_fuV.y*(w===1?1:.6), nz=_fuS.z*sd*.8+_fuV.z*(w===1?1:.6), nl=Math.hypot(nx,ny,nz)||1; nor[q]=nx/nl; nor[q+1]=ny/nl; nor[q+2]=nz/nl; col[q]=cr; col[q+1]=cg; col[q+2]=cb; } } }
+  for(let p=1;p<=6;p++){ const M=FU_FL.rib[p]; if(!M) continue; const n=rib[p]; M.visible=n>0; M.geometry.setDrawRange(0,n*12); if(n){ const A=M.geometry.attributes; A.position.needsUpdate=A.normal.needsUpdate=A.color.needsUpdate=true; } }
+  for(const P of L){ const lone=!(P.hp && P.hn), opaque=P.p===3 || P.p===5; if(!lone && !opaque) continue; const I=fuBlobMesh(P.p), lim=P.p===6?1800:700; let n=blob[P.p];   // (el agua y el slime: solo las puntas, si no se ven manchas)
+    if(P.p===6){ for(let k=0;k<3 && n<lim;k++,n++){ const r=P.r*(.5+.2*k); _suM4.makeScale(r,r,r).setPosition(P.x+(k-1)*P.r*.6,P.y+(k===1?P.r*.4:0),P.z+(k===2?P.r*.5:0)); I.setMatrixAt(n,_suM4); I.setColorAt(n,_suCol.set('#ffffff')); } blob[6]=n; continue; }   // (la espuma: burbujitas)
+    if(n>=lim) continue; const sp=lone?Math.hypot(P.vx,P.vy,P.vz)||1:1; if(lone && sp>1.2){ _fuQ.setFromUnitVectors(_fuUp,_fuV.set(P.vx/sp,P.vy/sp,P.vz/sp)); _fuSc.set(P.r*.85,P.r*(1+Math.min(1.6,sp*.1)),P.r*.85); } else { _fuQ.identity(); _fuSc.set(P.r,P.r,P.r); }
+    _suM4.compose(_fuV.set(P.x,P.y,P.z),_fuQ,_fuSc); I.setMatrixAt(n,_suM4); I.setColorAt(n,_suCol.setHex(P.p===1?suLerpHex(P.hx,0xffffff,.25):P.hx).convertSRGBToLinear()); blob[P.p]=n+1; }
+  for(let p=1;p<=6;p++){ const I=FU_FL.blob[p]; if(!I) continue; I.count=blob[p]; I.visible=blob[p]>0; if(blob[p]){ I.instanceMatrix.needsUpdate=true; if(I.instanceColor) I.instanceColor.needsUpdate=true; } } }
 // ---- la manguera: una cuerda de 40 pedacitos que se arrastra por el piso ----
 const _fuT=new THREE.Vector3(), _fuN1=new THREE.Vector3(), _fuN2=new THREE.Vector3(), _fuUp=new THREE.Vector3(0,1,0), _fuX=new THREE.Vector3(1,0,0);
 function fuTube(N){ const g=new THREE.BufferGeometry(), R=6, I=[]; for(let i=0;i<N-1;i++) for(let j=0;j<R;j++){ const a=i*R+j, b=i*R+(j+1)%R, c=a+R, d=b+R; I.push(a,c,b,b,c,d); }
