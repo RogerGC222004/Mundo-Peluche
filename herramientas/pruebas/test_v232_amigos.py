@@ -52,7 +52,8 @@ async def m():
     for i in range(14):
       await sync(1); seenA=max(seenA,await ev(A,"SU.balls.length"))
     colA=await ev(A,"FREE.objs.find(o=>o.sel.k==='b').sel.b"); await sync(10); colB=await ev(B,"(FREE.objs.find(o=>o.sel.k==='b')||{sel:{}}).sel.b")
-    ok(seenA>=1 and colA==6 and colB==6, 'Beto avienta una bola de pintura: Ana la ve volar, el bloque queda pintado para los dos %s'%[seenA,colA,colB])
+    wA=await ev(A,"[...SU.wl.values()].reduce((a,W)=>a+W.t.filter((t,k)=>t===5 && W.h[k]>0).length,0)"); wB=await ev(B,"[...SU.wl.values()].reduce((a,W)=>a+W.t.filter((t,k)=>t===5 && W.h[k]>0).length,0)")
+    ok(seenA>=1 and colA==9 and colB==9 and wA>0, 'Beto avienta una bola de pintura: Ana la ve volar y le queda pintada la pared donde pegó; el bloque no cambia de color para nadie (v236; lo de las paredes lo calcula cada quien) %s'%[seenA,colA,colB,wA,wB])
     await ev(A,"(()=>{ camMode='first'; player.pos.set(FREE.X-8,FREE.Y+.05,FREE.Z-8); player.facing=0; camera.position.set(FREE.X-8,FREE.Y+1.5,FREE.Z-8); camera.lookAt(FREE.X-8,FREE.Y+1,FREE.Z-2); camera.updateMatrixWorld(); suLaunch(1,0,.3); camMode='third'; return 1; })()")
     seenB=0
     for i in range(8):

@@ -23843,7 +23843,7 @@ function suIv(C,i){ const M=C.iv||(C.iv=new Map()); let L=M.get(i); if(L!==undef
   if(!L.length) L=null; M.set(i,L); return L; }
 function suFloorAt(C,i,y){ const L=suIv(C,i); if(!L) return FREE.Y; let g=FREE.Y; for(let k=0;k<L.length;k+=2){ const lo=L[k], hi=L[k+1]; if(hi<=y+.05){ if(hi>g) g=hi; } else if(lo<y+.05) return null; } return g; }   // (null: ahí hay una pared)
 function suLowFloor(C,i,y){ if(C.h[i]>0 || C.h2[i]>0) return false; const b=suB(C,i); if(!(b>y+.05) || b>=1e3) return false; const lo=suFloorAt(C,i,y); if(lo===null || lo>=b-.05) return false; C.b[i]=lo; (C.lf||(C.lf=new Uint8Array(256)))[i]=1; return true; }
-function suInvalidate(box){ wlInvalidate(box); if(!SU.list.length) return; const m=SU.cs; for(const C of SU.list){ const x0=FREE.X+C.ci*16*m, z0=FREE.Z+C.cj*16*m; if(box.max.x<x0-m || box.min.x>x0+16*m+m || box.max.z<z0-m || box.min.z>z0+16*m+m) continue;
+function suInvalidate(box){ wlInvalidate(box); if(SU.fg) SU.fg.clear(); if(!SU.list.length) return; const m=SU.cs; for(const C of SU.list){ const x0=FREE.X+C.ci*16*m, z0=FREE.Z+C.cj*16*m; if(box.max.x<x0-m || box.min.x>x0+16*m+m || box.max.z<z0-m || box.min.z>z0+16*m+m) continue;
     for(let i=0;i<256;i++){ const [x,z]=suXZ(C,i); if(x>=box.min.x-m && x<=box.max.x+m && z>=box.min.z-m && z<=box.max.z+m){ C.b[i]=NaN; if(C.iv) C.iv.delete(i); if(C.lf) C.lf[i]=0; } } C.aw=2; C.dirty=true; } }
 // el vecino de (C,i) hacia dx,dz (puede estar en otro trozo; si no existe y hace falta, se crea)
 function suNb(C,i,dx,dz,make){ let lx=(i&15)+dx, lz=(i>>4)+dz, D=C; if(lx<0||lx>15||lz<0||lz>15){ const ci=C.ci+(lx<0?-1:lx>15?1:0), cj=C.cj+(lz<0?-1:lz>15?1:0); D=suChunk(ci,cj,make); if(!D) return null; lx=(lx+16)&15; lz=(lz+16)&15; } return [D,lz*16+lx]; }
@@ -23927,7 +23927,7 @@ function suRemoveAt(x,z){ const q=suCell(x,z,false); if(!q) return 0; const [C0,
     if(C.t2[i]===p && C.h2[i]>0){ C.h2[i]=0; hit=true; } else if(C.t[i]===p && C.h[i]>0){ C.h[i]=0; hit=true; } if(!hit) continue; suFix(C,i); C.dirty=true; C.aw=2; C.ver++; n++;
     for(const [dx,dz] of _suN){ const N=suNb(C,i,dx,dz,false); if(N) st.push(N); } }
   suRecount(); return n; }
-function suClear(){ SU.clr=(SU.clr|0)+1; if(SU.sc) suFarClear(); if(SU.falls) SU.falls.clear(); if(SU.wl) wlClear(); try{ for(const P of FU.pts) P.dead=true; FU.pts.length=0; }catch(e){} for(const p in SU.flatM){ const M=SU.flatM[p]; if(M){ M.visible=false; } } SU.flatDirty=false; for(const C of SU.list) for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } SU.ch.clear(); SU.list.length=0; SU.vol=0; SU.balls.forEach(b=>b.m && b.m.parent && b.m.parent.remove(b.m)); SU.balls.length=0; SU.rip.length=0; SU.U.uRipN.value=0; SU.drops.length=0; SU.emit.length=0; SU.pops.length=0; SU.feet=null; suDropsDraw(); suFoamDraw(true); }
+function suClear(){ SU.clr=(SU.clr|0)+1; if(SU.fg) SU.fg.clear(); if(SU.sc) suFarClear(); if(SU.falls) SU.falls.clear(); if(SU.wl) wlClear(); try{ for(const P of FU.pts) P.dead=true; FU.pts.length=0; }catch(e){} for(const p in SU.flatM){ const M=SU.flatM[p]; if(M){ M.visible=false; } } SU.flatDirty=false; for(const C of SU.list) for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } SU.ch.clear(); SU.list.length=0; SU.vol=0; SU.balls.forEach(b=>b.m && b.m.parent && b.m.parent.remove(b.m)); SU.balls.length=0; SU.rip.length=0; SU.U.uRipN.value=0; SU.drops.length=0; SU.emit.length=0; SU.pops.length=0; SU.feet=null; suDropsDraw(); suFoamDraw(true); }
 function suRecountFast(){ let v=0; const a=SU.cs*SU.cs; for(const C of SU.list){ if(C.vv!==C.ver || C.aw>0){ let w=0, n=0, n2=0; for(let i=0;i<256;i++){ const h=C.h[i], h2=C.h2[i]; if(h>0){ w+=h; n++; } if(h2>0){ w+=h2; n2++; } } C.v=w*a; C.n=n; C.n2=n2; C.vv=C.ver; } v+=C.v; } SU.vol=v; }
 function suRecount(){ let v=0; const a=SU.cs*SU.cs; for(const C of SU.list){ let n=0, n2=0; for(let i=0;i<256;i++){ const h=C.h[i], h2=C.h2[i]; if(h>0){ v+=h*a; n++; } if(h2>0){ v+=h2*a; n2++; } } C.n=n; C.n2=n2; } SU.vol=v; }
 // v232b: cómo se ven. En todas las calidades menos Mínima: brillos que se mueven (olitas), reflejo del cielo, ondas donde pisas o
@@ -24042,6 +24042,13 @@ function suWB(w){ const W=_suW; let b=W.b[w]; if(b!==b && W.D[w]){ b=W.b[w]=suB(
 let _suFF=0, _suSS=0, _suPL=0;
 function suSP(w,p){ const W=_suW; if(W.t2[w]===p && W.h2[w]>.003){ _suFF=suWB(w)+W.h[w]; _suSS=_suFF+W.h2[w]; _suPL=1; return _suFF===_suFF; } if(W.t[w]===p && W.h[w]>0){ _suFF=suWB(w); _suSS=_suFF+W.h[w]; _suPL=0; return _suFF===_suFF; } return false; }
 const _suHn=new Float32Array(4), _suNk=new Int8Array(4);
+// v236: qué tan lejos está la cara del bloque desde la esquina de la cuadrícula (hacia dx,dz); se guarda (se borra si cambian los bloques)
+SU.fg=new Map();
+function suFaceGap(cx,cz,dx,dz,y){ const key=((Math.round((cx-FREE.X)*5)+60000)*200000+(Math.round((cz-FREE.Z)*5)+60000))*4+(dx>0?0:dx<0?1:dz>0?2:3); let g=SU.fg.get(key); if(g!==undefined) return g; g=-1;
+  for(const o of fgQuery(cx-.25,cz-.25,cx+.25,cz+.25)){ const bs=o.cols || (o.solid?[o.box]:null); if(!bs) continue; for(const b of bs){ if(!(b.min.y<y+.05 && b.max.y>y+.05)) continue;
+      if(dx){ if(cz<b.min.z-.101 || cz>b.max.z+.101) continue; const f=Math.max(0,(dx>0?b.min.x-cx:cx-b.max.x)-.004); if(f>-.001 && f<.11 && (g<0 || f<g)) g=f; }
+      else { if(cx<b.min.x-.101 || cx>b.max.x+.101) continue; const f=Math.max(0,(dz>0?b.min.z-cz:cz-b.max.z)-.004); if(f>-.001 && f<.11 && (g<0 || f<g)) g=f; } } }
+  if(g<0) g=0; SU.fg.set(key,g); return g; }
 function suBuildMesh(C,lay,p,M){ const W=_suW, m=SU.cs, x0=FREE.X+C.ci*16*m, z0=FREE.Z+C.cj*16*m, K=SU_COLS[p], LIP=SU_LIP[p], Hn=_suHn;
   const G=M.geometry.attributes, P=G.position.array, Nn=G.normal.array, Cl=G.color.array, AH=G.aH.array, AW=G.aW.array; let v=0, nc=0;
   if(K){ _suCa.set(K[0]).convertSRGBToLinear(); _suCb.set(K[1]).convertSRGBToLinear(); }
@@ -24062,7 +24069,7 @@ function suBuildMesh(C,lay,p,M){ const W=_suW, m=SU.cs, x0=FREE.X+C.ci*16*m, z0=
       if(!e){ y=sS/f+.004; if(p===6) y+=(suHash(C.ci*16+gx,C.cj*16+gz)-.5)*.07*Math.min(1,hm/.08); if(sw && !wl){ if(f===1){ sx=fx*.42; sz=fz*.42; } else if(f===3){ sx=ex*.3; sz=ez*.3; } } }
       else { y=Fa+.0015+hm*LIP*f/4; ah=hm*f/8; if(ot) y=Math.max(y,otT+.002); if(!wl && !ot){ const gq=1-Math.min(1,hm/(SU_T[p].minH*1.2));   /* (v235: el cuadrito recién mojado empieza chiquito y crece mientras se llena: la orilla avanza poco a poco) */
         if(f===1){ const kq=.42+gq*.5; sx=fx*kq; sz=fz*kq; } else if(f+sw===3 || f===3){ sx=ex*.3; sz=ez*.3; } else if(f===2){ sx=fx*gq*.45; sz=fz*gq*.45; } const G1=C.ci*16+gx, G2=C.cj*16+gz; jx=(suHash(G1,G2)-.5)*.09; jz=(suHash(G2+7,G1+3)-.5)*.09; } }
-      if(wl){ if(wxs) sx+=wxs>0?.45:-.45; if(wzs) sz+=wzs>0?.45:-.45; }   // (v236: junto a un bloque la orilla llega hasta su cara: la cara puede pasar a media celdita; si queda adentro, el bloque la tapa)
+      if(wl && (wxs || wzs)){ const cx=x0+gx*m, cz=z0+gz*m; if(wxs){ const s1=wxs>0?1:-1; sx+=s1*Math.min(.45,suFaceGap(cx,cz,s1,0,B0)/m); } if(wzs){ const s1=wzs>0?1:-1; sz+=s1*Math.min(.45,suFaceGap(cx,cz,0,s1,B0)/m); } }   // (v236: junto a un bloque la orilla llega justo hasta su cara: la cara puede pasar a media celdita)
       for(let a4=0;a4<4;a4++){ const hv=Hn[a4]; if(hv!==hv) Hn[a4]=y; else if(hv===-1e9) Hn[a4]=Fa; }
       if(lay) y+=.0015;
       const ggx=(Hn[1]+Hn[3]-Hn[0]-Hn[2])/(2*m), ggz=(Hn[2]+Hn[3]-Hn[0]-Hn[1])/(2*m), nl=1/Math.sqrt(ggx*ggx+1+ggz*ggz), o=v*3;
@@ -24174,7 +24181,8 @@ function wlAdd(ax,sg,pl,u,y,p,c,s,v,top){ if(!(v>0) || !wlOk(p)) return false; l
 function wlSpread(ax,sg,pl,u,y,p,c,s,v,R){ if(!(v>0) || !wlOk(p)) return false; R=Math.max(.07,R); const L=_wlB; L.length=0; let tw=0;
   for(let du=-R;du<=R+1e-6;du+=WL_CS*.8) for(let dy=-R;dy<=R+1e-6;dy+=WL_CS*.8){ const q=1-(du*du+dy*dy)/(R*R+1e-9); if(q<=0) continue; let W=wlSheet(ax,sg,pl,u+du,y+dy,false); if(!W){ if(!wlValidAt(ax,sg,pl,u+du,y+dy)) continue; W=wlSheet(ax,sg,pl,u+du,y+dy,true); } const i=wlIdx(W,u+du,y+dy); if(i<0 || !wlValid(W,i)) continue; L.push(W,i,q); tw+=q; }
   if(!(tw>0)) return false; for(let k=0;k<L.length;k+=3) wlPut(L[k],L[k+1],p,c,s,v*L[k+2]/tw/WL_A); return true; }
-function wlAddBlob(x,y,z,nx,nz,p,c,s,v,r){ if(!(v>0) || !wlOk(p)) return false; const ax=Math.abs(nx)>=Math.abs(nz)?0:1, sg=(ax?nz:nx)>0?1:-1, dd=(r||.05)+.05, b=ax?wlSolid(x,y,z-sg*dd,true):wlSolid(x-sg*dd,y,z,true); if(!b) return false;
+function wlAddBlob(x,y,z,nx,nz,p,c,s,v,r){ if(!(v>0) || !wlOk(p)) return false; const ax=Math.abs(nx)>=Math.abs(nz)?0:1, sg=(ax?nz:nx)>0?1:-1, dd=(r||.05)+.05; let b=null;
+  for(const k of [0,-.6,.6,-1,1]){ const o=k*(r||.05); b=ax?wlSolid(x+o,y,z-sg*dd,true):wlSolid(x-sg*dd,y,z+o,true); if(b) break; } if(!b) return false;   // (si pegó en la orilla del bloque, se busca la cara un poquito al lado)
   const pl=ax?(sg>0?b.max.z:b.min.z):(sg>0?b.max.x:b.min.x); return wlSpread(ax,sg,pl,ax?x:z,y,p,c,s,v,(r||.05)*1.3); }
 // la cara de abajo de una cascada (la orilla por donde se sale)
 function wlFace(F){ for(const kk of [.06,.16,.27]){ const ix=F.cx-F.dx*kk, iz=F.cz-F.dz*kk; for(const o of fgQuery(ix,iz,ix,iz)){ if(!o.sel || o.sel.k!=='b' || (o.sel.a|0)>2) continue; for(const b of (o.cols||[o.box])){
@@ -24480,7 +24488,7 @@ function suTick(dt){ const T=suSelT(); SU.T+=dt; SU.U.uT.value=SU.T; if(SU.U.uRi
         for(const [dx,dz] of _suN){ const N=suNb(C,i,dx,dz,false); if(!N) continue; const bj=suB(N[0],N[1]); if(bj<S+.02 || bj>=1e3) continue; const [x,z]=suXZ(N[0],N[1]);
           const [xi,zi]=suXZ(C,i), b0=suB(C,i); let hit=null; for(const o of fgQuery(x,z,x,z)){ if(o.sel && o.sel.k==='b' && (o.sel.a|0)<=2 && o.box.min.y<S+.01 && o.box.max.y>S-.05 && x>=o.box.min.x && x<=o.box.max.x && z>=o.box.min.z && z<=o.box.max.z){ hit=o; break; } } if(!hit) continue;
           const ax=dx?0:1, sg=-(dx||dz), pl=ax?(sg>0?hit.box.max.z:hit.box.min.z):(sg>0?hit.box.max.x:hit.box.min.x), uc=ax?xi:zi, ps=(top?C.s2[i]:C.s[i]); let got=0;
-          for(let y=b0+.05;y<S && y<b0+3;y+=WL_CS) for(const du of [-.05,.05]){ let W=wlSheet(ax,sg,pl,uc+du,y,false); if(!W){ if(!wlValidAt(ax,sg,pl,uc+du,y)) continue; W=wlSheet(ax,sg,pl,uc+du,y,true); } const k=wlIdx(W,uc+du,y); if(k<0 || !wlValid(W,k)) continue; const need=WL_ST[5]*1.25-(W.t[k]===5?W.h[k]:0); if(need<=0 || (W.t[k] && W.t[k]!==5 && W.h[k]>1e-6)) continue; wlPut(W,k,5,pc,ps,need); got+=need*WL_A; }
+          for(let y=b0+.02;y<Math.max(S,b0+.03) && y<b0+3;y+=WL_CS) for(const du of [-.05,.05]){ let W=wlSheet(ax,sg,pl,uc+du,y,false); if(!W){ if(!wlValidAt(ax,sg,pl,uc+du,y)) continue; W=wlSheet(ax,sg,pl,uc+du,y,true); } const k=wlIdx(W,uc+du,y); if(k<0 || !wlValid(W,k)) continue; const need=WL_ST[5]*1.25-(W.t[k]===5?W.h[k]:0); if(need<=0 || (W.t[k] && W.t[k]!==5 && W.h[k]>1e-6)) continue; wlPut(W,k,5,pc,ps,need); got+=need*WL_A; }
           if(got>0){ const a=got/(SU.cs*SU.cs); if(top) C.h2[i]=Math.max(0,C.h2[i]-a); else C.h[i]=Math.max(0,C.h[i]-a); C.dirty=true; C.ver++; } } } } }   // (lo que se queda pegado sale del charco: no se inventa pintura)
   // y se quitan los trozos vacíos que ya no se mueven (v234: la cuenta solo en los que cambiaron; en una sala, cuando ya se avisó que quedaron vacíos)
   if((SU.gc=(SU.gc||0)+dt)>2){ SU.gc=0; suRecountFast(); for(let k=SU.list.length-1;k>=0;k--){ const C=SU.list[k]; if(C.n || C.aw>0) continue; if(FNET.on && FNET.host && SU.sent.has(C.k) && SU.sent.get(C.k)!==C.ver) continue;
