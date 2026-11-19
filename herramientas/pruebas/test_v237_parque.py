@@ -89,7 +89,7 @@ async def m():
     ok(r[0]>17 and r[0]<26 and all(l is not None and abs(l-1.35)<.06 for l in r[1]), '🏊 la alberca se llena con agua de verdad (%s m³, nivel %s m)'%(r[0],r[1]))
     ok(abs(r[2])<.05 and r[3]==0, 'y se queda adentro: no se sale ni se pierde (%s m³, %s cuadritos fuera)'%(r[2],r[3]))
     ok(r[4]>=20 and r[5]>-.1 and r[5]<1.2, 'al meterte nadas (%s de 30 cuadros nadando, a %s m)'%(r[4],r[5]))
-    ok(r[6]>1.0 and r[6]<1.6, '🏐 la pelota de playa flota en el agua (a %s m; el agua llega a 1.35)'%r[6])
+    ok(r[6]>1.0 and r[6]<1.8, '🏐 la pelota de playa flota en el agua, casi toda afuera porque es ligerita (a %s m; el agua llega a 1.35)'%r[6])
     ok(r[7]>20, '💦 si le echas más agua, se derrama por la orilla (%s cuadritos mojados afuera)'%r[7])
 
     # 8. guardar y volver a cargar: no se le echa otra vez el agua (ya la tiene)
