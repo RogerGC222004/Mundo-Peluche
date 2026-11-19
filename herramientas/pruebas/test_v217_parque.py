@@ -35,9 +35,9 @@ async def m():
     ok(r==[5,8,10,24,5,19], 'se ponen caminando: 5 que se mueven, la fila son 8 dominós, los bolos 10 y la torre 1 %s'%r)
     # 3. columpio: te subes, te columpias, te bajas
     r=await ev("""(()=>{ const o=FREE.pqv.find(q=>q.pq==='columpio'), a=o.r*Math.PI/2; player.pos.set(o.x+Math.sin(a)*.6,FREE.Y+.05,o.z+Math.cos(a)*.6); player.facing=a+Math.PI; player.vel.set(0,0,0); __run(.2);
-      const acts=__act(); __do('Columpiarse'); const ys=[], zs=[]; __run(5,i=>{ if(i%5===0){ zs.push(player.pos.z-o.z); ys.push(player.pos.y); } }); const amp=o.ride.amp, k=player.pg&&player.pg.k;
+      const acts=__act(); __do('Columpiarse'); const ys=[], zs=[]; let amp=0; __run(5,i=>{ if(i%5===0) __do('🦵 Impulsarse'); if(i%5===0){ zs.push(player.pos.z-o.z); ys.push(player.pos.y); } amp=Math.max(amp,Math.abs(o.ride.th||0)); }); const k=player.pg&&player.pg.k;   /* (v237: el columpio es de verdad: te impulsas con las piernas) */
       const acts2=__act(); __do('Bajarse'); __run(.3); return [acts&&acts[0], k, +amp.toFixed(2), +(Math.max(...zs)-Math.min(...zs)).toFixed(2), +(Math.max(...ys)-Math.min(...ys)).toFixed(2), acts2&&acts2[0], player.pg, +(Math.hypot(player.pos.x-o.x,player.pos.z-o.z)).toFixed(1), player.grounded]; })()""")
-    ok(r[0]=='Columpiarse' and r[1]=='fmv' and r[2]>.5 and r[3]>1.2 and r[4]>.2 and r[5]=='Bajarse' and r[6] is None and r[7]>=1, 'columpio: «Columpiarse» te sienta y te columpia (ida y vuelta %s m), «Bajarse» te deja enfrente %s'%(r[3],r))
+    ok(r[0]=='Columpiarse' and r[1]=='fmv' and r[2]>.5 and r[3]>1.2 and r[4]>.2 and r[5]=='Bajarse' and r[6] is None and r[7]>=1, 'columpio: «Columpiarse» te sienta, con «Impulsarse» te columpias (ida y vuelta %s m), «Bajarse» te deja enfrente %s'%(r[3],r))
     # 4. sube y baja (dos asientos) y carrusel (te subes y das vueltas; parado también te lleva)
     r=await ev("""(()=>{ const o=FREE.pqv.find(q=>q.pq==='subebaja'), U=o.root.userData.pq; U.seats[1].getWorldPosition(_pqV); player.pos.set(_pqV.x,FREE.Y+.05,_pqV.z+.6); __run(.2); const acts=__act(); __do('Subirse al sube y baja');
       const zs=[]; __run(3,i=>zs.push(U.mov.rotation.z)); const seat=player.pg&&player.pg.i; jump(); __run(.2); return [acts&&acts[0], seat, +(Math.max(...zs)-Math.min(...zs)).toFixed(2), player.pg]; })()""")

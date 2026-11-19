@@ -42,9 +42,9 @@ async def m():
       player.pos.set(X,Y+.05,Z+5.5); player.vel.set(0,0,0); __run(.2); let rim=0, inn=false; __run(3,()=>{ if(player.swim) inn=true; if(inn){ stick.y=0; return; } yaw=0; stick.y=-.8; rim=Math.max(rim,player.pos.y-Y); }); stick.y=0; rim=+rim.toFixed(2); __run(1.5); const swim=player.swim, fy=+(player.pos.y-Y).toFixed(2);
       __run(2); const balls=[+(bp.root.position.y-Y).toFixed(2), +(bb.root.position.y-Y).toFixed(2)]; let out=null; __run(3,()=>{ if(out) { stick.y=0; return; } yaw=-Math.PI/2; stick.y=-.8; if(!player.swim) out=[player.swim, +(player.pos.y-Y).toFixed(2), +(player.pos.x-X).toFixed(1)]; }); stick.y=0; out=out||[player.swim,0,0];
       return [rim, swim, fy, balls, out, swimLevel(X,Z)-Y]; })()""")
-    ok(r[0]>1.4 and r[1] and .1<r[2]<.6 and r[3][0]>1.1 and r[3][1]<.5 and r[4][0]==False and r[4][1]>1.4 and r[5]==1.4, 'alberca: subes la escalera (%s m), te echas y nadas; la pelota de playa flota y la de boliche se hunde; nadando a la orilla te sales %s'%(r[0],r))
+    ok(r[0]>1.4 and r[1] and .1<r[2]<.6 and r[3][0]>1.1 and r[3][1]<.5 and r[4][0]==False and r[4][1]>1.4 and abs(r[5]-1.35)<.06, 'alberca: subes la escalera (%s m), te echas y nadas; la pelota de playa flota y la de boliche se hunde; nadando a la orilla te sales %s'%(r[0],r))
     # 5. charco: chapoteas y vas más despacio
-    r=await ev("""(()=>{ const X=FREE.X+10,Y=FREE.Y,Z=FREE.Z-20, o=freeAddStatic({k:'n',a:'charco',b:0},X,Y,Z,0,true); player.pos.set(X,Y+.05,Z); player.vel.set(0,0,0); __run(.2); const x0=player.pos.x; __walk(.5,1,0); const wet=player.inWater, sp=(player.pos.x-x0)/.5;
+    r=await ev("""(()=>{ const X=FREE.X+10,Y=FREE.Y,Z=FREE.Z-20, o=freeAddStatic({k:'n',a:'charco',b:0},X,Y,Z,0,true); player.pos.set(X,Y+.05,Z); player.vel.set(0,0,0); __run(.2); const x0=player.pos.x; SU.rip.length=0; __walk(.5,1,0); const wet=SU.rip.length>0, sp=(player.pos.x-x0)/.5;   /* (v237: el charco es agua de verdad: al caminar haces ondas y salpicas) */
       player.pos.set(X+6,Y+.05,Z); __run(.2); const x1=player.pos.x; __walk(.5,1,0); const sp2=(player.pos.x-x1)/.5; return [wet, +sp.toFixed(1), +sp2.toFixed(1)]; })()""")
     ok(r[0] and r[1]<r[2]*.8, 'charco: chapoteas y caminas más despacio (%s m/s en el agua, %s afuera) %s'%(r[1],r[2],r))
     # 6. tobogán de agua
@@ -64,8 +64,8 @@ async def m():
     ok(r[0] and 5<r[1]<8.1 and r[2] is None, 'patineta: vas parado y la pared te detiene (llegaste a %s m, la pared está a 8) %s'%(r[1],r))
     # 9. se guarda (con el carrito donde lo dejaste)
     r=await ev("""(()=>{ freeSave(); const o=JSON.parse(localStorage.getItem('mundoPelucheLibre')); const car=o.s.find(e=>e[0]==='v'&&e[1]==='carrito'); car[5]+=35-.5; ui('toMenuBtn').click(); __run(.2); FREE.loaded=null; freeEnter(); __run(.3);
-      const c2=FREE.pqv.find(q=>q.pq==='carrito'); return [o.s.filter(e=>e[0]==='n').length, car[5]>15, (FREE.nat||[]).length, (FREE.wat||[]).length, c2 && +(c2.z-FREE.Z+35-.5).toFixed(1)]; })()""")
-    ok(r[0]==4 and r[1] and r[2]==4 and r[3]==3 and r[4]>15, 'se guarda: las plantas y el agua vuelven, y el carrito está donde lo dejaste %s'%r)
+      const c2=FREE.pqv.find(q=>q.pq==='carrito'); suRecount(); return [o.s.filter(e=>e[0]==='n').length, car[5]>15, (FREE.nat||[]).length, (FREE.wat||[]).length, c2 && +(c2.z-FREE.Z+35-.5).toFixed(1), +SU.vol.toFixed(1)]; })()""")
+    ok(r[0]==4 and r[1] and r[2]==4 and r[3]==1 and r[4]>15 and r[5]>15, 'se guarda: las plantas y el agua vuelven, y el carrito está donde lo dejaste %s'%r)
     # 10. editor de mapas: pestaña Naturaleza
     r=await ev("""(()=>{ ui('toMenuBtn').click(); menuModes(true); ui('mapBtn').click(); mapType='juego'; ui('mapName').value='Agua'; mapCreate(); const tabs=mapTabs().map(t=>t[0]).join(','); MED.tab='natura'; MED.sub='agua'; medRender();
       const cards=[...document.querySelectorAll('#medGrid .hed-card')].map(c=>c.textContent).join('|'); medDone(); return [tabs, cards.includes('Alberca') && cards.includes('Tobogán')]; })()""")

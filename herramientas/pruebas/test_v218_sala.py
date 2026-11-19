@@ -38,7 +38,7 @@ async def m():
       await sync(1)
       if await ev(B,"fnSynced() && (FREE.pqv||[]).length===2 && (FREE.nat||[]).length===2"): break
     r=await ev(B,"[(FREE.pqv||[]).length, (FREE.nat||[]).length, (FREE.wat||[]).length]")
-    ok(r==[2,2,2], 'Beto entra y ve la alberca, el tobogán, el árbol y el carrito de Ana %s'%r)
+    ok(r==[2,2,1], 'Beto entra y ve la alberca, el tobogán, el árbol y el carrito de Ana (v237: el agua de la alberca ya es sustancia de verdad; solo el tobogán trae la suya) %s'%r)
     # 2. Beto maneja el carrito: Ana lo ve moverse con Beto adentro; al bajarse se queda donde lo dejó (para los dos)
     await ev(B,"(()=>{ const o=FREE.pqv.find(q=>q.pq==='carrito'); player.pos.set(o.x,FREE.Y+.05,o.z-1.1); player.vel.set(0,0,0); __S(1); return __do('Manejar el carrito'); })()")
     seen=[]

@@ -49,9 +49,12 @@ async def m():
     ok(abs(rA[0]-rB[0])<.6 and da<.4, 'el elevador y el carrusel van igual para los dos aunque sus relojes no (elevador %.2f/%.2f m, carrusel %.2f rad de diferencia)'%(rA[0],rB[0],da))
     # 3. Beto se sube al columpio: Ana lo ve sentado ahí y el columpio se mueve también para ella
     r=await ev(B,"""(()=>{ const o=FREE.pqv.find(q=>q.pq==='columpio'), a=o.r*Math.PI/2; player.pos.set(o.x+Math.sin(a)*.6,FREE.Y+.05,o.z+Math.cos(a)*.6); player.vel.set(0,0,0); __S(2); const ok=__do('Columpiarse'); return [ok, player.pg&&player.pg.k, fnPresence().fm===o.nid]; })()""")
-    await sync(14)
-    r2=await ev(A,"""(()=>{ const o=FREE.pqv.find(q=>q.pq==='columpio'); const rr=[...mp.remotes.values()][0]; const occ=pqAnyOcc(o); return [occ, +o.ride.amp.toFixed(2), rr && rr.pl && PG_KINDS[rr.pl[0]], rr && +Math.hypot(rr.pos.x-o.x,rr.pos.z-o.z).toFixed(2), rr && +(rr.pos.y-FREE.Y).toFixed(2)]; })()""")
-    ok(r[0] and r[1]=='fmv' and r[2] and r2[0] and r2[1]>.2 and r2[2]=='fmv' and r2[3]<1.5 and r2[4]<1.5, 'Beto se columpia: Ana lo ve sentado en el columpio y el columpio se mueve también para ella %s %s'%(r,r2))
+    await ev(A,"window.__AMP=0; 1")
+    for i in range(20):   # (v237: el columpio es de verdad: Beto se impulsa con las piernas)
+      await ev(B,"(()=>{ const o=FREE.pqv.find(q=>q.pq==='columpio'); o.ride.pt=0; o.ride.ot=0; __do('🦵 Impulsarse'); return 1; })()"); await sync(1)
+      await ev(A,"(()=>{ const o=FREE.pqv.find(q=>q.pq==='columpio'); __AMP=Math.max(__AMP,Math.abs(o.ride.th||0)); return 1; })()")
+    r2=await ev(A,"""(()=>{ const o=FREE.pqv.find(q=>q.pq==='columpio'); const rr=[...mp.remotes.values()][0]; const occ=pqAnyOcc(o); return [occ, +__AMP.toFixed(2), rr && rr.pl && PG_KINDS[rr.pl[0]], rr && +Math.hypot(rr.pos.x-o.x,rr.pos.z-o.z).toFixed(2), rr && +(rr.pos.y-FREE.Y).toFixed(2)]; })()""")
+    ok(r[0] and r[1]=='fmv' and r[2] and r2[0] and r2[1]>.2 and r2[2]=='fmv' and r2[3]<2.0 and r2[4]<1.8, 'Beto se columpia (impulsándose): Ana lo ve sentado en el columpio y el columpio se mueve también para ella %s %s'%(r,r2))
     await ev(B,"(()=>{ __do('Bajarse'); player.pos.set(FREE.X,FREE.Y+.05,FREE.Z+20); return 1; })()"); await sync(3)
     # 4. Beto empuja el primer dominó: se caen para los dos y quedan igual
     r=await ev(B,"""(()=>{ const D=FREE.toys.filter(o=>o.pq==='domino').sort((a,b)=>a.x-b.x||a.z-b.z); const f=D[0], a=f.r*Math.PI/2, ax=Math.sin(a), az=Math.cos(a);

@@ -43,12 +43,12 @@ async def m():
       player.pos.set(FREE.X,bd.box.max.y+.02,FREE.Z-1); player.vy=0; __S(10); const me=+(player.pos.z-FREE.Z+1).toFixed(2);
       __CLR(); const a=__ST('tele',0,0,0), c=__ST('tele',8,6,0); __AT(-3,-3); __AT(0,0); __S(2); const tp=[+(player.pos.x-FREE.X).toFixed(1), +(player.pos.z-FREE.Z).toFixed(1)];
       __CLR(); const k=__ST('catapulta',0,0,0); const [cx,cz]=freeW(k,0,.78); const ball=freeAddDyn('goma',cx,FREE.Y+.5,cz); __S(6); const [lx,lz]=freeW(k,.85,-.4); __AT(-3,-3); player.pos.set(lx,FREE.Y+.05,lz); __S(3); const fly=[+ball.v.y.toFixed(1), +(ball.root.position.y-FREE.Y).toFixed(1)];
-      __CLR(); __ST('molino',0,0,0); const p0=[]; let moved=0; for(let i=0;i<20;i++){ player.pos.set(FREE.X+1.4,FREE.Y+.05,FREE.Z); player.vy=0; const x0=player.pos.x, z0=player.pos.z; __S(1); moved=Math.max(moved,Math.hypot(player.pos.x-x0,player.pos.z-z0)); }
+      __CLR(); __ST('molino',0,0,0); __S(1); FREE.objs.find(o=>o.gad==='molino').mv.w=2.5;   /* (v237: el molino gira de verdad: aquí ya va girando) */ const p0=[]; let moved=0; for(let i=0;i<20;i++){ player.pos.set(FREE.X+1.4,FREE.Y+.05,FREE.Z); player.vy=0; const x0=player.pos.x, z0=player.pos.z; __S(1); moved=Math.max(moved,Math.hypot(player.pos.x-x0,player.pos.z-z0)); }
       return [box, me, tp, fly, +moved.toFixed(2)]; })()""")
     ok(r[0]>1 and r[1]>.5, 'banda: lleva la caja (%s m) y a ti (%s m) hacia adelante'%(r[0],r[1]))
     ok(abs(r[2][0]-8)<.3 and abs(r[2][1]-6.9)<.3, 'teletransportador: entras por uno y sales junto al otro %s'%r[2])
     ok(r[3][0]>5 or r[3][1]>1.5, 'catapulta: al pisar la palanca avienta la pelota %s'%r[3])
-    ok(r[4]>.03, 'molino: sus aspas te empujan (%s m en un cuadro)'%r[4])
+    ok(r[4]>.03, 'molino: cuando gira, sus aspas te empujan (%s m en un cuadro)'%r[4])
     # piano
     r=await ev("""(()=>{ __CLR(); __AT(-10,-10); const pn=__ST('piano',0,0,0); __TN.length=0; for(let x=-3.5;x<=3.5;x+=.5){ player.pos.set(FREE.X+x,FREE.Y+.05,FREE.Z); player.vy=0; __S(1); } return __TN.filter(f=>f>250 && f<530); })()""")
     ok(len(r)==8 and r==sorted(r), 'piano: caminando por encima suenan las 8 notas en orden %s'%r)
