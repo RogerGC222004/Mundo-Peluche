@@ -41,7 +41,7 @@ async def m():
     ok(abs(r[3]-.6)<.01, 'no se pierde ni se inventa sustancia (%s m³ de 0.6)'%r[3])
     # 2. los chorros chocan: con una pared (se pegan y escurren), con un techo (no lo atraviesan)
     r=await ev("""(()=>{ __CLR(); suClear(); FU.pts.length=0; __AT(-20,-20); const o=freeAddStatic({k:'p',a:'fuentes',b:0},FREE.X,FREE.Y,FREE.Z,0,true); for(let z=-2;z<=2;z++) for(let y=0;y<3;y++) freeAddStatic({k:'b',a:0,b:4},FREE.X+5.5,FREE.Y+y,FREE.Z+z,0,true);
-        fuSet(o,[0,1,2,3].map(i=>({on:i===3?1:0,p:1,q:2,x:2,col:0}))); let wall=0, through=0; for(let i=0;i<70;i++){ __S(1); for(const P of FU.pts){ if(P.st===1) wall++; if(P.x>FREE.X+6.05) through++; } }
+        fuSet(o,[0,1,2,3].map(i=>({on:i===3?1:0,p:1,q:2,x:2,col:0}))); let wall=0, through=0; for(let i=0;i<70;i++){ __S(1); for(const P of FU.pts){ if(P.st===1) wall++; if(P.x>FREE.X+6.05) through++; } for(const W of SU.wl.values()) for(let k=0;k<1024;k++) if(W.h[k]>0) wall++; }   /* (v236: el agua que pega se queda escurriendo en la pared como capita) */
         suRecount(); let behind=0; for(const C of SU.list) for(let k=0;k<256;k++) if(C.h[k]>0){ const [x]=suXZ(C,k); if(x>FREE.X+6.1) behind++; }
         __CLR(); suClear(); FU.pts.length=0; const o2=freeAddStatic({k:'p',a:'fuentes',b:0},FREE.X,FREE.Y,FREE.Z,0,true); for(let x=-3;x<=3;x++) for(let z=-3;z<=3;z++) freeAddStatic({k:'b',a:2,b:3},FREE.X+x,FREE.Y+4.2,FREE.Z+z,0,true);
         const C2=fuCfg(o2); C2[1].on=1; C2[1].q=2; C2[1].x=3; fuSet(o2,C2); let up=0, under=0; for(let i=0;i<60;i++){ __S(1); for(const P of FU.pts){ if(P.y>FREE.Y+4.25) up++; if(P.vy<0 && P.y>FREE.Y+3.5) under++; } }

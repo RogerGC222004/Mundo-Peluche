@@ -24109,16 +24109,19 @@ function suFallFeed(C,i,D,j,p,c,s,v,b,Sj){ const [xi,zi]=suXZ(C,i), [xj,zj]=suXZ
   const film=wlOk(p); if(!film && FU.pts.length>=fuMaxPts()*1.5 && (!F || F.acc>SU_FMIN[p]*2)) return false;   /* (v236: si ya hay muchísimas gotitas, lo demás baja de golpe como antes; si no se juntaba una bola gigante) */
   if(!F){ if(SU.falls.size>=120) return false; F={p, c, s, x:ex+dx*.03, z:ez+dz*.03, dx, dz, top:b, acc:0, fed:SU.T, rate:0, last:null, n:0, ko:.65+Math.random()*.7, ks:(Math.random()-.5)*.35, kw:Math.random()*6.28}; F.cx=F.x; F.cz=F.z; SU.falls.set(key,F); }   // (cada chorro distinto: más o menos fuerte, un poquito de lado; así no se ve cuadrado)
   else if(F.fed!==SU.T){ F.n=0; } F.n++; const w=1/F.n; F.x+=(ex+dx*.03-F.x)*w; F.z+=(ez+dz*.03-F.z)*w;   // (en medio de los cuadritos que le echan)
-  if(film){ if(F.wl===undefined) F.wl=wlFace(F)||false; const Wf=F.wl;   // (v236: lo espeso se queda en la pared de abajo, en el lugar exacto por donde se salió)
+  F.fv=(F.fv||0)+v; if(film && !(p===1 && F.cur)){   /* (v236: el agua: si sale poquita escurre pegada a la pared; si sale mucha, cae como cortina un poquito separada) */ if(F.wl===undefined) F.wl=wlFace(F)||false; const Wf=F.wl;   // (v236: lo espeso se queda en la pared de abajo, en el lugar exacto por donde se salió)
     if(Wf){ const uu=Wf.ax?ex:ez, a1=wlValidU(Wf,uu-.05,b-.05), a2=wlValidU(Wf,uu+.05,b-.05);   // (lo que sale de un cuadrito de 20 cm cae en los 2 de la pared que le tocan; en la esquina, en el que sí tiene pared)
       if((a1 || a2) && wlAdd(Wf.ax,Wf.sg,Wf.pl,a1?uu-.05:uu+.05,b-.05,p,c,s,a1&&a2?v*.5:v,b)){ if(a1 && a2) wlAdd(Wf.ax,Wf.sg,Wf.pl,uu+.05,b-.05,p,c,s,v*.5,b); F.fed=SU.T; F.c=c; F.s=s; F.top=b; return true; } }
-    if(FU.pts.length>=fuMaxPts()*1.5 && F.acc>SU_FMIN[p]*2) return false; }
+  }
+  if(FU.pts.length>=fuMaxPts()*1.5 && F.acc>SU_FMIN[p]*2) return false;
   F.acc+=v; F.fed=SU.T; F.c=c; F.s=s; F.top=b; return true; }
 function fuMaxPts(){ return settings.quality==='min'||settings.quality==='low'?260:600; }
 function suFallsTick(dt){ if(!SU.falls.size) return; const MAX=fuMaxPts(), busy=FU.pts.length>MAX*.7?3:1;
-  for(const [key,F] of SU.falls){ F.rate=F.rate*.85+F.acc/Math.max(dt,.008)*.15*(F.acc>0?1:0);
+  for(const [key,F] of SU.falls){ F.rate=F.rate*.85+(F.fv||0)/Math.max(dt,.008)*.15; F.fv=0;
+    if(F.p===1){ F.wd=Math.max(.2,Math.min(.8,F.n*SU.cs)); F.wq=F.rate/F.wd; if(!F.cur && F.wq>.024) F.cur=1; else if(F.cur && F.wq<.016) F.cur=0; }   // (litros por segundo por metro de orilla: mucha agua se despega de la pared)
     if(F.acc>0 && (F.acc>=SU_FMIN[F.p]*.15*busy*(F.p===4||F.p===2?.2:1) || SU.T-F.fed>.25) && FU.pts.length<MAX*1.5){ const v=Math.min(F.acc,SU_FMIN[F.p]*1.5); F.acc-=v;   /* (cada gotita de un tamaño normal; lo que sobra sale en la siguiente) */ const r=Math.cbrt(v/4.18879), out=SU_FOUT[F.p]*F.ko*(.45+.8*Math.min(1,F.rate/.03)), j=(F.ks+Math.sin(SU.T*2.3+F.kw)*.12)*(F.p===1||F.p===5?1:.4)+(F.p===1?(Math.random()-.5)*.1:0);
       const P={x:F.x+F.dx*r, y:F.top+r*.6, z:F.z+F.dz*r, vx:F.dx*out-F.dz*j, vy:-.05, vz:F.dz*out+F.dx*j, t:0, r, hx:suHex(F.p,F.c,F.s), v, p:F.p, c:F.c, s:F.s, o:null, k:-1, g:-1e9, gT:0, st:0, born:SU.T};
+      if(F.p===1 && F.cur){ const o2=(.2+.6*Math.min(1,F.wq/.1))*(.9+F.ko*.15), jj=F.ks*.15; P.vx=F.dx*o2-F.dz*jj; P.vz=F.dz*o2+F.dx*jj; P.x=F.x+F.dx*.02; P.z=F.z+F.dz*.02; P.y=F.top-.01; P.cw=F.wd*.5+.03; P.sx=-F.dz; P.sz=F.dx; }   // (la cortina: ancha como la orilla por donde sale, poquito separada, más entre más agua)
       if(F.p===4 || F.p===2 || F.p===3) for(const kk of [.06,.16,.27]){ if(P.st) break; const ix=F.cx-F.dx*kk, iz=F.cz-F.dz*kk; for(const o of fgQuery(ix,iz,ix,iz)){   /* (la orilla del bloque puede quedar a media celdita: se busca un poco hacia adentro) */ const bs=o.cols || (o.solid?[o.box]:null); if(!bs) continue; for(const b of bs){ if(ix<b.min.x||ix>b.max.x||iz<b.min.z||iz>b.max.z||Math.abs(b.max.y-F.top)>.06) continue;   // (v236: lo espeso escurre pegadito a la pared, no se despega)
           const ox=F.cx>b.max.x?F.cx-b.max.x:F.cx<b.min.x?b.min.x-F.cx:0, oz=F.cz>b.max.z?F.cz-b.max.z:F.cz<b.min.z?b.min.z-F.cz:0; let wx=0, wz=0;   /* (v236: la cara por la que de verdad sale; antes en diagonal quedaba en otra cara) */
           if(ox>0 && ox>=oz) wx=F.cx>b.max.x?1:-1; else if(oz>0) wz=F.cz>b.max.z?1:-1;   /* (todo con el lugar fijo del chorro: si no, en la unión de dos bloques brinca de uno a otro) */ else if(Math.abs(F.dx)>=Math.abs(F.dz)) wx=F.dx>0?1:-1; else wz=F.dz>0?1:-1;
@@ -24134,9 +24137,9 @@ function suFallsTick(dt){ if(!SU.falls.size) return; const MAX=fuMaxPts(), busy=
 // tiras corren un poco más que otras (así salen los chorros, y en la punta se junta la gota gorda); abajo se va al piso o, si abajo no
 // hay nada, la gota cuelga, engorda y se cae. Solo se calcula la pared que se está moviendo.
 const WL_CS=.1, WL_N=32, WL_A=WL_CS*WL_CS, WL_MIN=.0004;
-const WL_K=[0,0,900,450,700,26000,0];   // qué tan rápido corre cada una (slime, lodo, miel, pintura)
-const WL_ST=[0,0,.004,.009,.0025,.0007,0];   // lo que se queda pegado (m)
-const WL_DR=[0,0,.03,.04,.028,.012,0];   // qué tan gorda se pone la gota que cuelga antes de caer
+const WL_K=[0,110000,900,450,700,26000,0];   // (el agua: una capita delgadita que corre rápido)   // qué tan rápido corre cada una (slime, lodo, miel, pintura)
+const WL_ST=[0,.0002,.004,.009,.0025,.0007,0];   // lo que se queda pegado (m)
+const WL_DR=[0,.006,.03,.04,.028,.012,0];   // qué tan gorda se pone la gota que cuelga antes de caer
 SU.wl=new Map(); const _wlB=[], _wlHc=new Float32Array(33*33), _wlLv=new Float32Array(32), _wlLy=new Float32Array(32), _wlLi=new Int16Array(32);
 function wlOk(p){ return WL_K[p]>0; }
 // ¿hay un bloque ahí? (film: solo bloques de caras planas, que es donde se pega; si no, cualquier cosa sólida estorba)
@@ -24250,7 +24253,7 @@ function wlBuildP(W,p,M,nb){ const H=W.h, T=W.t, Hc=_wlHc, Pd=_wlPad, GU=_wlGu, 
     if(k===1){ du=(b1||t1?.36:-.36); dy=(t0||t1?.36:-.36); } else if(k===2){ if(b0===t0 && b1===t1) du=b1?.24:-.24; else if(b0===b1 && t0===t1) dy=t0?.24:-.24; } DU[o]=du*cs; DY[o]=dy*cs; }
   let v=0, n=0; const E=1.15, OFF=.0012, NK=4, K=SU_COLS[p], K2=K?K[2]:1; let r0=0, g0=0, b0=0, r1=0, g1=0, b1=0; if(K){ _suCa.set(K[0]).convertSRGBToLinear(); _suCb.set(K[1]).convertSRGBToLinear(); }   // (el color como en el piso: delgadito, clarito; grueso, más fuerte)
   const put=(u,y,d,du,dy,r,gg,b)=>{ const o=v*3, w=W.pl+sg*(d*E+OFF); if(ax){ P[o]=u; P[o+2]=w; } else { P[o]=w; P[o+2]=u; } P[o+1]=y;
-    let nx=-du*NK, ny=-dy*NK, nn=1; const l=Math.hypot(nx,ny,nn)||1; nx/=l; ny/=l; nn/=l; if(ax){ Nn[o]=nx; Nn[o+2]=nn*sg; } else { Nn[o]=nn*sg; Nn[o+2]=nx; } Nn[o+1]=ny; const q=K?Math.min(1,d/K2):0; Cl[o]=r0+(r1-r0)*q; Cl[o+1]=g0+(g1-g0)*q; Cl[o+2]=b0+(b1-b0)*q; return v++; };   // (por punto, así no se ven cuadritos)
+    let nx=-du*NK, ny=-dy*NK, nn=1; if(p===1){ ny+=Math.sin(y*38-SU.T*13+u*3)*.35; nx+=Math.sin(u*27+y*9-SU.T*5)*.12; }   /* (el agua: rizos que bajan) */ const l=Math.hypot(nx,ny,nn)||1; nx/=l; ny/=l; nn/=l; if(ax){ Nn[o]=nx; Nn[o+2]=nn*sg; } else { Nn[o]=nn*sg; Nn[o+2]=nx; } Nn[o+1]=ny; const q=K?Math.min(1,d/K2):0; Cl[o]=r0+(r1-r0)*q; Cl[o+1]=g0+(g1-g0)*q; Cl[o+2]=b0+(b1-b0)*q; return v++; };   // (por punto, así no se ven cuadritos)
   const hc=(cu,cy)=>Hc[cy*33+cu], gu=(cu,cy)=>GU[cy*33+cu], gy=(cu,cy)=>GY[cy*33+cu];
   for(let i=0;i<1024;i++){ const h=T[i]===p && H[i]>WL_MIN?H[i]:0; if(!h) continue; const iu=i&31, iy=i>>5, tp=W.tp[iu], top=tp===tp && Math.floor((tp-.05-W.y0)/cs)===iy;
     if(K){ suVCol(p,W.c[i],W.s[i],0,K); r0=_suCol.r; g0=_suCol.g; b0=_suCol.b; suVCol(p,W.c[i],W.s[i],K2,K); r1=_suCol.r; g1=_suCol.g; b1=_suCol.b; } else { _suCol.setHex(suHex(p,W.c[i],W.s[i])).convertSRGBToLinear(); r0=r1=_suCol.r; g0=g1=_suCol.g; b0=b1=_suCol.b; } const r=0, gg=0, b=0;
@@ -24344,7 +24347,6 @@ function suBallMat(p,c,s){ const hx=suHex(p,c|0,s|0), k='b'+p+':'+hx; if(SU.mats
 function suVolOf(r){ return 4.18879*r*r*r; }
 function suSplat(p,c,s,vol,x,y,z,vx,vy,vz,nx,ny,nz,hit,r){ const T=SU_T[p], B=T.burst; r=r||Math.cbrt(vol/4.18879);
   try{ if(p===1) splashBurst(x,y,z,Math.min(1.4,.4+vol*4)); freeTone(p===4?140:p===3?120:260+B*300,.25,'sine',.12,90); }catch(e){}
-  if(p===5 && hit && hit.sel && hit.sel.k==='b' && (!FNET.on || FNET.host)) suStainObj(hit,c);
   const N=B>0?Math.min(40,Math.round(4+22*B)):0, drop=N?vol*B*.8:0, core=vol-drop, wall=ny<.5;
   // el centro, del tamaño de la bola: donde pegó (si fue en un lado de un bloque, al pie, por fuera)
   const ox=x+(wall?nx*(r*.6+.1):0), oz=z+(wall?nz*(r*.6+.1):0); suRipple(ox,oz,.05,p); if(p===2) suWobble(ox,oz,r+.8,1); if(p===6) suPop(x,y,z,12);
@@ -24412,7 +24414,7 @@ function suTick(dt){ const T=suSelT(); SU.T+=dt; SU.U.uT.value=SU.T; if(SU.U.uRi
     B.m.position.set(B.x,B.y,B.z); const w=1+Math.sin(B.t*18)*.04; B.m.scale.set(B.r*w,B.r/w,B.r*w); }
   // gotas (de verdad: al caer se vuelven sustancia)
   if(SU.drops.length){ for(let k=SU.drops.length-1;k>=0;k--){ const d=SU.drops[k]; d.t+=dt; d.vy-=9.8*dt; d.x+=d.vx*dt; d.y+=d.vy*dt; d.z+=d.vz*dt; const h=d.t>.05?suHit(d.x,d.y,d.z,d.r,true):null;
-      if(h || d.t>4 || !freeInside(d.x,d.z,.1)){ if(h && h.o && d.p===5 && !h.dyn && (!FNET.on || FNET.host)) suStainObj(h.o,d.c); if(h && h.ny<.5 && !h.dyn && wlOk(d.p) && wlAddBlob(d.x,d.y,d.z,h.nx,h.nz,d.p,d.c,d.s,d.v,d.r)){ SU.drops.splice(k,1); continue; }   /* (v236: se queda en la pared) */ const ox=h&&h.ny<.5?d.x+h.nx*.15:d.x, oz=h&&h.ny<.5?d.z+h.nz*.15:d.z;
+      if(h || d.t>4 || !freeInside(d.x,d.z,.1)){ if(h && h.ny<.5 && !h.dyn && wlOk(d.p) && wlAddBlob(d.x,d.y,d.z,h.nx,h.nz,d.p,d.c,d.s,d.v,d.r)){ SU.drops.splice(k,1); continue; }   /* (v236: se queda en la pared) */ const ox=h&&h.ny<.5?d.x+h.nx*.15:d.x, oz=h&&h.ny<.5?d.z+h.nz*.15:d.z;
         if(freeInside(ox,oz,.1)){ suPour(ox,oz,d.p,d.c,d.v,Math.max(.1,d.r),d.s); if(Math.random()<.5) suRipple(ox,oz,.025,d.p); if(d.p===2) suWobble(ox,oz,.4,.6); if(d.p===6) suPop(ox,d.y,oz,2); } SU.drops.splice(k,1); } }
     suDropsDraw(); } else if(SU.dmOn){ suDropsDraw(); }
   SU.dmOn=SU.drops.length>0;
@@ -24451,10 +24453,13 @@ function suTick(dt){ const T=suSelT(); SU.T+=dt; SU.U.uT.value=SU.T; if(SU.U.uRi
           else if(t===5 && H[i]<.006){ H[i]-=a*.00025; ch=true; } }
         if((C.t[i] && C.h[i]<=1e-5) || (C.t2[i] && C.h2[i]<=1e-5)) suFix(C,i); }
       if(ch){ C.dirty=true; C.aw=Math.max(C.aw,.3); C.ver++; } }
-    // la pintura mancha los bloques que toca (solo el dueño de la sala; lo demás se reparte)
+    // la pintura deja pintada la pared hasta donde la toca (v236: solo esa parte, no todo el bloque)
     if(!FNET.on || FNET.host) for(const C of SU.list){ if(!C.n || !(C.kinds & 32)) continue; for(let i=0;i<256;i++){ const top=C.t2[i]===5, pc=top?C.c2[i]:C.c[i]; if(!top && C.t[i]!==5) continue; if((top?C.h2[i]:C.h[i])<.008) continue; const S=suB(C,i)+C.h[i]+C.h2[i];
         for(const [dx,dz] of _suN){ const N=suNb(C,i,dx,dz,false); if(!N) continue; const bj=suB(N[0],N[1]); if(bj<S+.02 || bj>=1e3) continue; const [x,z]=suXZ(N[0],N[1]);
-          for(const o of fgQuery(x,z,x,z)){ if(o.sel && o.sel.k==='b' && o.box.min.y<S+.01 && o.box.max.y>S-.05 && x>=o.box.min.x && x<=o.box.max.x && z>=o.box.min.z && z<=o.box.max.z) suStainObj(o,pc); } } } } }
+          const [xi,zi]=suXZ(C,i), b0=suB(C,i); let hit=null; for(const o of fgQuery(x,z,x,z)){ if(o.sel && o.sel.k==='b' && (o.sel.a|0)<=2 && o.box.min.y<S+.01 && o.box.max.y>S-.05 && x>=o.box.min.x && x<=o.box.max.x && z>=o.box.min.z && z<=o.box.max.z){ hit=o; break; } } if(!hit) continue;
+          const ax=dx?0:1, sg=-(dx||dz), pl=ax?(sg>0?hit.box.max.z:hit.box.min.z):(sg>0?hit.box.max.x:hit.box.min.x), uc=ax?xi:zi, ps=(top?C.s2[i]:C.s[i]); let got=0;
+          for(let y=b0+.05;y<S && y<b0+3;y+=WL_CS) for(const du of [-.05,.05]){ let W=wlSheet(ax,sg,pl,uc+du,y,false); if(!W){ if(!wlValidAt(ax,sg,pl,uc+du,y)) continue; W=wlSheet(ax,sg,pl,uc+du,y,true); } const k=wlIdx(W,uc+du,y); if(k<0 || !wlValid(W,k)) continue; const need=WL_ST[5]*1.25-(W.t[k]===5?W.h[k]:0); if(need<=0 || (W.t[k] && W.t[k]!==5 && W.h[k]>1e-6)) continue; wlPut(W,k,5,pc,ps,need); got+=need*WL_A; }
+          if(got>0){ const a=got/(SU.cs*SU.cs); if(top) C.h2[i]=Math.max(0,C.h2[i]-a); else C.h[i]=Math.max(0,C.h[i]-a); C.dirty=true; C.ver++; } } } } }   // (lo que se queda pegado sale del charco: no se inventa pintura)
   // y se quitan los trozos vacíos que ya no se mueven (v234: la cuenta solo en los que cambiaron; en una sala, cuando ya se avisó que quedaron vacíos)
   if((SU.gc=(SU.gc||0)+dt)>2){ SU.gc=0; suRecountFast(); for(let k=SU.list.length-1;k>=0;k--){ const C=SU.list[k]; if(C.n || C.aw>0) continue; if(FNET.on && FNET.host && SU.sent.has(C.k) && SU.sent.get(C.k)!==C.ver) continue;
       if(C.fm) suFarSet(C,false); for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } if(C.flat){ C.flat=null; SU.flatDirty=true; } SU.ch.delete(C.k); SU.list.splice(k,1); SU.bubX=1e9; } }
@@ -24629,7 +24634,7 @@ function fuDyn(P,real){ for(const d of FU.dynNear){ if(d.held) continue; const c
 // cómo se ve cada sustancia al ir cayendo
 function fuFlowMat(p,blob){ const k='fl'+p+(blob?'b':''); if(SU.mats[k]) return SU.mats[k]; const T=[null,{op:.55,ro:.04,me:.15},{op:.8,ro:.15,me:0},{op:1,ro:.95,me:0},{op:.9,ro:.07,me:.05},{op:1,ro:.35,me:0},{op:1,ro:.9,me:0}][p];
   return SU.mats[k]=new THREE.MeshStandardMaterial({vertexColors:!blob, roughness:T.ro, metalness:T.me, transparent:T.op<1, opacity:T.op, depthWrite:T.op>=1, side:THREE.DoubleSide}); }
-const FU_FL={rib:[], blob:[]};
+const FU_FL={rib:[], blob:[]}, _fuCw=new THREE.Vector3();
 function fuFlowMesh(p){ let M=FU_FL.rib[p]; if(M) return M; const N=700, g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(N*18),3)); g.setAttribute('normal',new THREE.BufferAttribute(new Float32Array(N*18),3)); g.setAttribute('color',new THREE.BufferAttribute(new Float32Array(N*18),3));
   const I=new Uint16Array(N*12); for(let s=0;s<N;s++){ const a=s*6; I.set([a,a+3,a+1, a+1,a+3,a+4, a+1,a+4,a+2, a+2,a+4,a+5],s*12); } g.setIndex(new THREE.BufferAttribute(I,1)); g.setDrawRange(0,0);
   M=FU_FL.rib[p]=new THREE.Mesh(g,fuFlowMat(p)); M.userData.noBatch=true; M.frustumCulled=false; M.renderOrder=5; FREE.g.add(M); return M; }
@@ -24653,13 +24658,14 @@ function fuPtsTick(dt){ const L=FU.pts, real=!FNET.on || FNET.host;
   const cam=camera.position, rib=[0,0,0,0,0,0,0], blob=[0,0,0,0,0,0,0];
   const seg=(A,P)=>{ const M=fuFlowMesh(P.p), s=rib[P.p]; if(s>=700) return false;
     const pos=M.geometry.attributes.position.array, nor=M.geometry.attributes.normal.array, col=M.geometry.attributes.color.array;
-    const onW=P.st===1 && A.st===1 && P.wx===A.wx && P.wz===A.wz;   // (v236: escurriendo por una pared: una tira aplastada pegadita a ella)
-    if(onW){ const ox=P.wx?P.wf+P.wx*.008:0, oz=P.wz?P.wf+P.wz*.008:0; _fuA.set(P.wx?ox:A.x,A.y,P.wz?oz:A.z); _fuB.set(P.wx?ox:P.x,P.y,P.wz?oz:P.z); _fuV.set(P.wx,0,P.wz); _fuS.set(-P.wz,0,P.wx); }
+    const onW=P.st===1 && A.st===1 && P.wx===A.wx && P.wz===A.wz, cur=!onW && A.cw>0 && P.cw>0;   // (v236: escurriendo por una pared: una tira aplastada pegadita a ella; el agua que cae fuerte: una cortina plana)
+    if(cur){ _fuA.set(A.x,A.y,A.z); _fuB.set(P.x,P.y,P.z); _fuDd.subVectors(_fuB,_fuA); _fuS.set(P.sx,0,P.sz); _fuV.crossVectors(_fuS,_fuDd); const l=_fuV.length(); if(l<1e-6) return false; _fuV.multiplyScalar(1/l); _fuC2.addVectors(_fuA,_fuB).multiplyScalar(.5); if(_fuV.dot(_fuCw.subVectors(cam,_fuC2))<0) _fuV.negate(); }
+    else if(onW){ const ox=P.wx?P.wf+P.wx*.008:0, oz=P.wz?P.wf+P.wz*.008:0; _fuA.set(P.wx?ox:A.x,A.y,P.wz?oz:A.z); _fuB.set(P.wx?ox:P.x,P.y,P.wz?oz:P.z); _fuV.set(P.wx,0,P.wz); _fuS.set(-P.wz,0,P.wx); }
     else { _fuA.set(A.x,A.y,A.z); _fuB.set(P.x,P.y,P.z); _fuDd.subVectors(_fuB,_fuA); _fuC2.addVectors(_fuA,_fuB).multiplyScalar(.5); _fuV.subVectors(cam,_fuC2).normalize(); _fuS.crossVectors(_fuDd,_fuV); const sl=_fuS.length(); if(sl<1e-6) return false; _fuS.multiplyScalar(1/sl); }
-    rib[P.p]=s+1; const ra=A.r*(onW?1.15:.95), rb=P.r*(onW?1.15:.95), o=s*18; _suCol.setHex(P.p===1?suLerpHex(A.hx,0xffffff,.25):A.hx).convertSRGBToLinear(); const cr=_suCol.r, cg=_suCol.g, cb=_suCol.b;
-    for(let e=0;e<2;e++){ const Q=e?_fuB:_fuA, r=e?rb:ra; for(let w=0;w<3;w++){ const sd=w-1, q=o+(e*3+w)*3; const bu=w===1?(onW?.85:.5):0; pos[q]=Q.x+_fuS.x*sd*r+_fuV.x*r*bu; pos[q+1]=Q.y+_fuS.y*sd*r+_fuV.y*r*bu; pos[q+2]=Q.z+_fuS.z*sd*r+_fuV.z*r*bu;
-        const kS=onW?.9:.8, nx=_fuS.x*sd*kS+_fuV.x*(w===1?1:.6), ny=_fuS.y*sd*kS+_fuV.y*(w===1?1:.6), nz=_fuS.z*sd*kS+_fuV.z*(w===1?1:.6), nl=Math.hypot(nx,ny,nz)||1; nor[q]=nx/nl; nor[q+1]=ny/nl; nor[q+2]=nz/nl; col[q]=cr; col[q+1]=cg; col[q+2]=cb; } } return true; };
-  for(const P of L){ const A=P.prev; if(!A || A.dead || P.p===6 || A.p!==P.p) continue; const d=Math.hypot(P.x-A.x,P.y-A.y,P.z-A.z); if(d>Math.max(P.p===4||P.p===2?.9:P.p===3?.45:.3,(P.r+A.r)*3.2) || d<1e-4) continue;   // (la miel y el slime hacen hilos largos)
+    rib[P.p]=s+1; const ra=cur?A.cw:A.r*(onW?1.15:.95), rb=cur?P.cw:P.r*(onW?1.15:.95), o=s*18; _suCol.setHex(P.p===1?suLerpHex(A.hx,0xffffff,.25):A.hx).convertSRGBToLinear(); const cr=_suCol.r, cg=_suCol.g, cb=_suCol.b;
+    for(let e=0;e<2;e++){ const Q=e?_fuB:_fuA, r=e?rb:ra; for(let w=0;w<3;w++){ const sd=w-1, q=o+(e*3+w)*3; const bu=w===1?(onW?.85:cur?.1:.5):0; pos[q]=Q.x+_fuS.x*sd*r+_fuV.x*r*bu; pos[q+1]=Q.y+_fuS.y*sd*r+_fuV.y*r*bu; pos[q+2]=Q.z+_fuS.z*sd*r+_fuV.z*r*bu;
+        const kS=onW?.9:cur?.3:.8, nx=_fuS.x*sd*kS+_fuV.x*(w===1?1:.6), ny=_fuS.y*sd*kS+_fuV.y*(w===1?1:.6), nz=_fuS.z*sd*kS+_fuV.z*(w===1?1:.6), nl=Math.hypot(nx,ny,nz)||1; nor[q]=nx/nl; nor[q+1]=ny/nl; nor[q+2]=nz/nl; col[q]=cr; col[q+1]=cg; col[q+2]=cb; } } return true; };
+  for(const P of L){ const A=P.prev; if(!A || A.dead || P.p===6 || A.p!==P.p) continue; const d=Math.hypot(P.x-A.x,P.y-A.y,P.z-A.z); if(d>Math.max(P.cw?.8:P.p===4||P.p===2?.9:P.p===3?.45:.3,(P.r+A.r)*3.2) || d<1e-4) continue;   // (la miel y el slime hacen hilos largos)
     if(seg(A,P)) A.hn=P.hp=true; }
   // v236: lo que escurre por una pared sigue pegado a la orilla de arriba mientras le siga llegando: se ve que viene de arriba, doblando la orilla
   const lips=FU.lips||(FU.lips=[]); let nL=0;
@@ -24667,7 +24673,7 @@ function fuPtsTick(dt){ const L=FU.pts, real=!FNET.on || FNET.host;
     const G=lips[nL]||(lips[nL]={st:1}); G.p=H.p; G.r=H.r; G.hx=H.hx; G.wx=F.wx; G.wz=F.wz; G.wf=F.wf; G.y=F.wy-.004; G.x=F.wx?F.wf+F.wx*H.r*.8:H.x; G.z=F.wz?F.wf+F.wz*H.r*.8:H.z;
     if(H.y<G.y-.01 && seg(H,G)) H.hn=true; nL++; }
   for(let p=1;p<=6;p++){ const M=FU_FL.rib[p]; if(!M) continue; const n=rib[p]; M.visible=n>0; M.geometry.setDrawRange(0,n*12); if(n){ const A=M.geometry.attributes; A.position.needsUpdate=A.normal.needsUpdate=A.color.needsUpdate=true; } }
-  for(const P of L){ const lone=!(P.hp && P.hn), opaque=P.p===3 || P.p===5; if(!lone && !opaque) continue; const I=fuBlobMesh(P.p), lim=P.p===6?1800:700; let n=blob[P.p];   // (el agua y el slime: solo las puntas, si no se ven manchas)
+  for(const P of L){ const lone=!(P.hp && P.hn), opaque=P.p===3 || P.p===5; if(!lone && !opaque) continue; if(P.cw && (P.hp || P.hn)) continue;   /* (la cortina no lleva bolitas en las puntas) */ const I=fuBlobMesh(P.p), lim=P.p===6?1800:700; let n=blob[P.p];   // (el agua y el slime: solo las puntas, si no se ven manchas)
     if(P.p===6){ for(let k=0;k<3 && n<lim;k++,n++){ const r=P.r*(.5+.2*k); _suM4.makeScale(r,r,r).setPosition(P.x+(k-1)*P.r*.6,P.y+(k===1?P.r*.4:0),P.z+(k===2?P.r*.5:0)); I.setMatrixAt(n,_suM4); I.setColorAt(n,_suCol.set('#ffffff')); } blob[6]=n; continue; }   // (la espuma: burbujitas)
     if(n>=lim) continue; if(P.st===1){ const big=!P.hp?1.35:1, t=P.r*.85*big, w=P.r*1.2*big; _fuQ.identity(); _fuSc.set(P.wx?t:w,P.r*1.5*big,P.wz?t:w); _suM4.compose(_fuV.set(P.wx?P.wf:P.x,P.y-(big>1?P.r*.3:0),P.wz?P.wf:P.z),_fuQ,_fuSc);   /* (la gota de la punta, más gordita; media gota sale de la pared) */ I.setMatrixAt(n,_suM4); I.setColorAt(n,_suCol.setHex(P.p===1?suLerpHex(P.hx,0xffffff,.25):P.hx).convertSRGBToLinear()); blob[P.p]=n+1; continue; }   // (v236: pegada a la pared, aplastadita)
     const sp=lone?Math.hypot(P.vx,P.vy,P.vz)||1:1; if(lone && sp>1.2){ _fuQ.setFromUnitVectors(_fuUp,_fuV.set(P.vx/sp,P.vy/sp,P.vz/sp)); _fuSc.set(P.r*.85,P.r*(1+Math.min(1.6,sp*.1)),P.r*.85); } else { _fuQ.identity(); _fuSc.set(P.r,P.r,P.r); }

@@ -89,20 +89,26 @@ async def m():
     # 7. se guarda con el mundo y se carga igual
     r=await ev("""(()=>{ const a=__WL(4); const pk=wlPack(); const s=JSON.stringify(pk||[]); suClear(); const b=__WL(4); wlUnpack(JSON.parse(s)); const c=__WL(4); return [a,b,c,s.length]; })()""")
     ok(r[1][1]==0 and abs(r[2][2]-r[0][2])<.002 and abs(r[2][1]-r[0][1])<=r[0][1]*.03, '💾 lo de las paredes se guarda con el mundo y vuelve igual (%s → %s m³; %s letras)'%(r[0][2],r[2][2],r[3]))
-    # 8. el agua no se queda en la pared (cae en chorro); la pintura sí, con su color
-    r=await ev("""(()=>{ __CLR(); suClear(); FU.pts.length=0; __AT(-20,-20); __TOW(0,0); for(let i=0;i<60;i++){ suPour(FREE.X,FREE.Z,1,0,.03,.5); __S(1); } const wa=SU.wl.size;
-        __CLR(); suClear(); FU.pts.length=0; __TOW(0,0); for(let i=0;i<90;i++){ suPour(FREE.X,FREE.Z,5,3,.03,.5); __S(1); } let pc=0, ok=0; for(const W of SU.wl.values()) for(let i=0;i<1024;i++) if(W.h[i]>0 && W.t[i]===5){ pc++; if((W.c[i]&0xffffff)===(suCol(3)&0xffffff)) ok++; }
-        return [wa, pc, ok]; })()""")
-    ok(r[0]==0, '💧 el agua no se queda pegada en la pared: cae en chorro (%s hojas)'%r[0])
-    ok(r[1]>20 and r[2]==r[1], '🎨 la pintura sí escurre por la pared, con su color (%s cuadritos)'%r[1])
-    # 9. rendimiento: 4 paredes con miel corriendo
+    # 8. el agua: si sale poquita escurre pegada a la pared; si sale mucha cae como cortina, un poquito separada (más entre más agua)
+    r=await ev("""(()=>{ const run=(q,n)=>{ __CLR(); suClear(); FU.pts.length=0; __AT(-20,-20); __TOW(0,0); let cur=0, far=0, near=1e9; for(let i=0;i<n;i++){ suPour(FREE.X,FREE.Z,1,0,q,.5); __S(1); for(const P of FU.pts) if(P.cw){ cur++; if(P.y<FREE.Y+.4){ const m=Math.max(Math.abs(P.x-FREE.X),Math.abs(P.z-FREE.Z))-1.5; far=Math.max(far,m); near=Math.min(near,m); } } }
+        return [cur, __WL(1)[1], +far.toFixed(2), +(near<1e8?near:0).toFixed(2)]; }; return [run(.03,90), run(.002,150)]; })()""")
+    ok(r[0][0]>100 and .1<r[0][2]<1.2, '💧 mucha agua cae como cortina un poquito separada de la pared (%s gotitas de cortina; abajo a %s–%s m de la pared)'%(r[0][0],r[0][3],r[0][2]))
+    ok(r[1][0]==0 and r[1][1]>30, 'poquita agua escurre pegada a la pared, como capita (%s cuadritos mojados; cortina: %s)'%(r[1][1],r[1][0]))
+    # 9. la pintura pinta solo donde cae (ya no el bloque completo)
+    r=await ev("""(()=>{ __CLR(); suClear(); FU.pts.length=0; __AT(-20,-20); __TOW(0,0,6); const B=FREE.objs.filter(q=>q.sel && q.sel.k==='b'); const b0=B.map(q=>q.sel.b).join(); const o=B[0], rr=.17;
+        suSplat(5,suCol(3),255,4.18879*rr*rr*rr,FREE.X-.8,FREE.Y+1.5,FREE.Z-1.5-rr*.5,0,0,6,0,0,-1,o,rr); __S(60);
+        let n=0, xs=[]; for(const W of SU.wl.values()) for(let i=0;i<1024;i++) if(W.h[i]>0 && W.t[i]===5){ n++; xs.push(W.u0+((i&31)+.5)*WL_CS-FREE.X); } const w=xs.length?Math.max(...xs)-Math.min(...xs):0;
+        return [B.map(q=>q.sel.b).join()===b0, n, +w.toFixed(2)]; })()""")
+    ok(r[0], '🎨 la pintura ya no pinta el bloque completo de golpe %s'%r)
+    ok(r[1]>5 and r[2]<.8, 'solo queda pintado donde pegó y por donde escurrió (%s cuadritos, %s m de ancho)'%(r[1],r[2]))
+    # 10. rendimiento: 4 paredes con miel corriendo
     r=await ev("""(()=>{ __CLR(); suClear(); FU.pts.length=0; __AT(-20,-20); __TOW(0,0); for(let i=0;i<120;i++){ suPour(FREE.X,FREE.Z,4,0,.03,.5); __S(1); }
         __LOOK(FREE.X,FREE.Y+1,FREE.Z); let t0=performance.now(); for(let i=0;i<40;i++) wlTick(.033); const tick=(performance.now()-t0)/40;
         for(const W of SU.wl.values()) W.dirty=true; t0=performance.now(); for(const W of SU.wl.values()) wlBuild(W); const build=(performance.now()-t0)/SU.wl.size;
         let draws=0; for(const W of SU.wl.values()) for(const M of W.ms) if(M && M.visible) draws++; return [+tick.toFixed(2), +build.toFixed(2), draws, SU.wl.size]; })()""")
     ok(r[0]<2.5, '⚡ calcular las 4 paredes con miel corriendo cuesta %s ms por cuadro (aquí, sin tarjeta de video)'%r[0])
     ok(r[2]<=r[3], 'y se dibuja con un dibujo por pared (%s dibujos, %s hojas; armar cada una %s ms)'%(r[2],r[3],r[1]))
-    # 10. escoba/limpiar: se borra todo, también las paredes
+    # 11. escoba/limpiar: se borra todo, también las paredes
     r=await ev("(()=>{ suClear(); return [SU.wl.size, FREE.g.children.filter(o=>o.isMesh && o.material && o.material===fuFlowMat(4) && o.visible).length]; })()")
     ok(r[0]==0 and r[1]==0, '🧹 al limpiar también se limpian las paredes %s'%r)
     ok(not errs, 'sin errores %s'%errs[:3])
