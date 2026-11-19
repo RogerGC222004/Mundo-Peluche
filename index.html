@@ -1651,7 +1651,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='232';
+const GAME_VERSION='233';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -23969,19 +23969,25 @@ function freeActions(){ if(!FREE.on) return null; if(FREE.play || (player.pg && 
 // Los bloques son paredes (el piso de cada cuadrito es lo más alto que hay ahí); si la sustancia sube más que el bloque, se pasa.
 // Lo que pisa (tu peluche, tus amigos, pelotas y cajas) la empuja a los lados: así quedan las huellas; el agua se rellena luego,
 // el slime y la miel despacito y el lodo casi nada. Los trozos que ya no se mueven se duermen (no cuestan nada).
+// v233: dos capas por cuadrito (una sustancia encima de otra, como pastel; la espuma siempre flota) y mezclas: agua + pintura =
+// agua de color (o pintura aguada), agua + lodo = lodo aguado (corre más), pintura + pintura = mezcla de colores (amarillo + azul =
+// verde), slime + pintura = slime de color. Color de cada capa: c = 0x1000000|rgb (0 = sin color); s = cuánto pigmento (0–255),
+// o en el lodo, qué tan aguado está. vm = cuánto más sale de la cubeta (las espesas salen mucho más que el agua).
 const SU_T=[null,
-  {id:'agua',   n:'Agua',    col:'#3d97e6', op:.88, ro:.04, k:.2,   Y:0,    minH:.016, pr:0, slow:.9,  slip:1, drag:.5, burst:1},
-  {id:'slime',  n:'Slime',   col:'#74d94e', op:.9,  ro:.2,  k:.035, Y:.0015, minH:.045, pr:1, slow:.74, drag:2.4, burst:.45},
-  {id:'lodo',   n:'Lodo',    col:'#7a5232', op:1,   ro:.95, k:.028, Y:.06,  minH:.06,  pr:90,  slow:.56, drag:4, burst:.15},
-  {id:'miel',   n:'Miel',    col:'#f0a12a', op:.9,  ro:.1,  k:.011, Y:0,    minH:.03,  pr:3, slow:.42, drag:6, burst:0},
-  {id:'pintura',n:'Pintura', col:null,      op:1,   ro:.32, k:.11,  Y:.002, minH:.007, pr:0, slow:.92, drag:1, burst:.8, paint:1},
-  {id:'espuma', n:'Espuma',  col:'#f6f9ff', op:.96, ro:.92, k:.02,  Y:.09,  minH:.12,  pr:25,  slow:.95, drag:.7, burst:.55, decay:.012}];
+  {id:'agua',   n:'Agua',    col:'#3d97e6', op:.88, ro:.04, k:.2,   Y:0,    minH:.016, pr:0,  slow:.9,  slip:1, drag:.5, burst:1,   vm:1},
+  {id:'slime',  n:'Slime',   col:'#74d94e', op:.9,  ro:.2,  k:.035, Y:.008, minH:.06,  pr:1,  slow:.74, drag:2.4, burst:.45, vm:3.5},
+  {id:'lodo',   n:'Lodo',    col:'#7a5232', op:1,   ro:.95, k:.028, Y:.1,   minH:.07,  pr:90, slow:.56, drag:4, burst:.15,  vm:4},
+  {id:'miel',   n:'Miel',    col:'#f0a12a', op:.9,  ro:.1,  k:.011, Y:0,    minH:.03,  pr:3,  slow:.42, drag:6, burst:0,    vm:3.5},
+  {id:'pintura',n:'Pintura', col:null,      op:1,   ro:.32, k:.11,  Y:.002, minH:.007, pr:0,  slow:.92, drag:1, burst:.8, paint:1, vm:1},
+  {id:'espuma', n:'Espuma',  col:'#f6f9ff', op:.96, ro:.92, k:.02,  Y:.12,  minH:.14,  pr:25, slow:.95, drag:.7, burst:.55, decay:.012, vm:6}];
 const SU_BY={}; SU_T.forEach((T,i)=>{ if(T){ T.i=i; SU_BY[T.id]=T; } });
-const SU_SIZES=[['chico',.3,.025],['mediano',.5,.07],['grande',.8,.16]];   // radio del chorro (m) y cuánto sale (m³ por segundo)
-var SU={dm:{}, cs:.2, ch:new Map(), list:[], max:25, maxCh:140, vol:0, mode:0, hold:null, holdEnd:0, balls:[], drops:[], emit:[], slow:1, slip:false, feet:null, stain:new Set(), T:0, dk:0, rb:0, idx:null, mats:{}, netV:0, sent:new Map(), seen:new Set(), rxT:0};
+const SU_SIZES=[['chico',.3,.025],['mediano',.5,.07],['grande',.8,.16]];   // radio del chorro (m) y cuánto sale de agua (m³ por segundo; las demás ×vm)
+var SU={dm:{}, cs:.2, ch:new Map(), list:[], max:40, maxCh:140, vol:0, mode:0, hold:null, holdEnd:0, balls:[], drops:[], emit:[], pops:[], slow:1, slip:false, feet:null, stain:new Set(), T:0, dk:0, rb:0, idx:null, mats:{}, netV:0, sent:new Map(), seen:new Set(), rxT:0};
+const SU_F=0x1000000;
 function suKey(ci,cj){ return ci*4096+cj; }
 function suChunk(ci,cj,make){ const k=suKey(ci,cj); let C=SU.ch.get(k); if(!C && make){ if(SU.list.length>=SU.maxCh) return null;
-    C={ci,cj,k, wb:new Float32Array(256), pr:new Float32Array(256), h:new Float32Array(256), t:new Uint8Array(256), c:new Uint8Array(256), b:new Float32Array(256).fill(NaN), d:new Float32Array(256), aw:2, dirty:true, ms:[], n:0, ver:1, idle:0}; SU.ch.set(k,C); SU.list.push(C); } return C; }
+    C={ci,cj,k, wb:new Float32Array(256), pr:new Float32Array(256), h:new Float32Array(256), t:new Uint8Array(256), c:new Uint32Array(256), s:new Uint8Array(256), d:new Float32Array(256),
+      h2:new Float32Array(256), t2:new Uint8Array(256), c2:new Uint32Array(256), s2:new Uint8Array(256), d2:new Float32Array(256), b:new Float32Array(256).fill(NaN), aw:2, dirty:true, ms:[], n:0, n2:0, ver:1, idle:0}; SU.ch.set(k,C); SU.list.push(C); } return C; }
 function suCell(x,z,make){ const gx=Math.floor((x-FREE.X)/SU.cs), gz=Math.floor((z-FREE.Z)/SU.cs), ci=Math.floor(gx/16), cj=Math.floor(gz/16), C=suChunk(ci,cj,make); return C?[C,(gz-cj*16)*16+(gx-ci*16)]:null; }
 function suXZ(C,i){ return [FREE.X+((C.ci*16+(i&15))+.5)*SU.cs, FREE.Z+((C.cj*16+(i>>4))+.5)*SU.cs]; }
 // el piso de un cuadrito: lo más alto que hay (bloques, rampas…), o una pared si está fuera de la planicie
@@ -23991,34 +23997,79 @@ function suInvalidate(box){ if(!SU.list.length) return; const m=SU.cs; for(const
 // el vecino de (C,i) hacia dx,dz (puede estar en otro trozo; si no existe y hace falta, se crea)
 function suNb(C,i,dx,dz,make){ let lx=(i&15)+dx, lz=(i>>4)+dz, D=C; if(lx<0||lx>15||lz<0||lz>15){ const ci=C.ci+(lx<0?-1:lx>15?1:0), cj=C.cj+(lz<0?-1:lz>15?1:0); D=suChunk(ci,cj,make); if(!D) return null; lx=(lx+16)&15; lz=(lz+16)&15; } return [D,lz*16+lx]; }
 const _suN=[[-1,0],[1,0],[0,-1],[0,1]];
-// un paso: cada cuadrito le pasa a sus vecinos más bajitos
-function suStep(sub){ const L=SU.list; let moved=0;
-  for(const C of L){ if(C.aw<=0 || !C.n) continue; const H=C.h, Tt=C.t;
-    for(let i=0;i<256;i++){ const h=H[i]; if(h<=0) continue; const p=Tt[i], T=SU_T[p]; if(T.k*sub<=0) continue; const S=suB(C,i)+h; let F=0, nb=null, fl=null;
-      for(let q=0;q<4;q++){ const N=suNb(C,i,_suN[q][0],_suN[q][1],h>T.minH); if(!N) continue; const D=N[0], j=N[1], tj=D.t[j]; if(tj && tj!==p) continue;
-        const hj=D.h[j], Sj=suB(D,j)+hj, diff=S-Sj-T.Y-(D.pr[j]>0?.3:0); if(diff<=0) continue;   /* (la huella recién hecha no se rellena hasta que se le pasa) */ if(hj<=0 && h<T.minH) continue; const f=diff*T.k*sub; if(f<=1e-7) continue;
-        if(!nb){ nb=[]; fl=[]; } nb.push(D,j); fl.push(f); F+=f; }
-      if(!nb) continue; const lim=h*.9, s=F>lim?lim/F:1; C.d[i]-=F*s;
-      for(let q=0;q<fl.length;q++){ const D=nb[q*2], j=nb[q*2+1], f=fl[q]*s; D.d[j]+=f; if(!D.t[j]){ D.t[j]=p; D.c[j]=C.c[i]; } if(D!==C) D.aw=2; } } }
-  for(const C of L){ if(C.aw<=0 && !C.pend) continue; const H=C.h, Dd=C.d; let mx=0, n=0;
-    for(let i=0;i<256;i++){ const d=Dd[i]; if(d!==0){ H[i]+=d; Dd[i]=0; const a=d<0?-d:d; if(a>mx) mx=a; } if(H[i]<=1e-5){ if(H[i]!==0 || C.t[i]){ H[i]=0; C.t[i]=0; } } else n++; }
-    C.n=n; C.pend=false; if(mx>2e-5){ C.dirty=true; C.aw=2; moved++; } }
+// ---- colores y mezclas ----
+// un color de la paleta (número chico) o ya en rgb (con la marca SU_F)
+function suCol(v){ v=+v||0; if(v>=SU_F) return v&0x1ffffff; const h=FREE_COLS[v|0]; return SU_F|(h?parseInt(h.slice(1),16):0xffffff); }
+// el color de la paleta más parecido (para pintar bloques)
+function suPal(c){ if(!(c>=SU_F)) return c|0; const r=(c>>16)&255, g=(c>>8)&255, b=c&255; let best=0, bd=1e9; for(let k=0;k<FREE_COLS.length;k++){ const v=parseInt(FREE_COLS[k].slice(1),16), d=((v>>16&255)-r)**2+((v>>8&255)-g)**2+((v&255)-b)**2; if(d<bd){ bd=d; best=k; } } return best; }
+// mezclar pigmentos como pintura de verdad (amarillo + azul = verde): promedio "multiplicado"; w = cuánto pigmento trae cada uno
+function suMixRGB(c1,w1,c2,w2){ if(!(w1>0) || !c1) return w2>0&&c2?c2:c1; if(!(w2>0) || !c2) return c1; const W=w1+w2; let o=0;
+  for(let sh=16;sh>=0;sh-=8){ const a=((c1>>sh)&255)/255+.04, b=((c2>>sh)&255)/255+.04, v=Math.exp((Math.log(a)*w1+Math.log(b)*w2)/W)-.04; o|=Math.max(0,Math.min(255,Math.round(v*255)))<<sh; } return SU_F|o; }
+// ¿se mezclan? (agua+pintura, agua+lodo, slime+pintura, y cada una consigo misma)
+function suMixable(a,b){ if(a===b) return true; const k=a<b?a*10+b:b*10+a; return k===15 || k===13 || k===25; }
+// q (con color cq, pigmento sq y volumen v) recibe f de p (c, s): [sustancia que queda, color, pigmento]
+function suMixTo(q,cq,sq,v,p,c,s,f){ const W=v+f;
+  if(q===3 || p===3){ const vl=q===3?v:f, wl=(q===3?sq:s)/255, va=q===3?f:v, wf=(vl*wl*.8+va)/W;   // agua + lodo: lodo aguado (o agua turbia si es casi toda agua)
+    if(wf>.85) return [1, SU_F|0x6b4a2b, Math.min(110,Math.round((1-wf)*700))];
+    return [3, 0, Math.round(Math.min(1,wf/.8)*255)]; }
+  if(q===2 || p===2){ const cs=q===2?cq:c, ss=q===2?sq:s, vs=q===2?v:f, cp=q===2?c:cq, sp=q===2?s:sq, vp=q===2?f:v;   // slime + pintura: slime de color
+    return [2, suMixRGB(cs,ss*vs,cp,sp*vp), Math.min(255,Math.round((ss*vs+sp*vp)/W))]; }
+  const ns=(sq*v+s*f)/W; return [ns>=128?5:1, suMixRGB(cq,sq*v,c,s*f), Math.min(255,Math.round(ns))]; }   // agua + pintura: según cuánta pintura hay
+// agregar f de p a la capa L de (D,j); pend = en el paso de flujo (se suma al final)
+function suAdd(D,j,L,p,c,s,f,pend){ const T=L?D.t2:D.t, H=L?D.h2:D.h, Dl=L?D.d2:D.d, Cc=L?D.c2:D.c, Ss=L?D.s2:D.s, q=T[j], v=H[j]+(pend?Dl[j]:0);
+  if(!q || v<=1e-6){ T[j]=p; Cc[j]=c; Ss[j]=s; }
+  else if(q===p){ if(Cc[j]!==c || Ss[j]!==s){ if(p===3) Ss[j]=Math.round((Ss[j]*v+s*f)/(v+f)); else if(p===1 || p===2 || p===5){ Cc[j]=suMixRGB(Cc[j],Ss[j]*v,c,s*f); Ss[j]=Math.min(255,Math.round((Ss[j]*v+s*f)/(v+f))); } } }
+  else { const r=suMixTo(q,Cc[j],Ss[j],v,p,c,s,f); T[j]=r[0]; Cc[j]=r[1]; Ss[j]=r[2]; }
+  if(pend) Dl[j]+=f; else H[j]+=f; }
+// después de mover: lo vacío se borra, si la de abajo se acabó la de arriba baja, y si quedaron iguales (o se mezclan) se juntan
+function suFix(C,i){ if(C.h2[i]<=1e-5 && (C.t2[i] || C.h2[i])){ C.h2[i]=0; C.t2[i]=0; C.c2[i]=0; C.s2[i]=0; }
+  if(C.h[i]<=1e-5 || (C.t2[i] && C.h[i]<.0015)){ if(C.t2[i]){ C.t[i]=C.t2[i]; C.h[i]=C.h2[i]; C.c[i]=C.c2[i]; C.s[i]=C.s2[i]; C.h2[i]=0; C.t2[i]=0; C.c2[i]=0; C.s2[i]=0; } else if(C.t[i] || C.h[i]){ C.h[i]=0; C.t[i]=0; C.c[i]=0; C.s[i]=0; } }
+  else if(C.t2[i] && suMixable(C.t[i],C.t2[i])){ const p=C.t2[i], c=C.c2[i], s=C.s2[i], f=C.h2[i]; C.h2[i]=0; C.t2[i]=0; C.c2[i]=0; C.s2[i]=0; suAdd(C,i,0,p,c,s,f,false); } }
+// ¿a qué capa del vecino entra la sustancia p que corre hacia él? (-1: no puede)
+function suSlot(D,j,p){ const tb=D.t[j], tt=D.t2[j];
+  if(tt){ if(suMixable(p,tt)) return 1; if(suMixable(p,tb) && tt===6) return 0; return -1; }   // (debajo de la espuma sí pasa)
+  if(!tb || suMixable(p,tb)) return 0;
+  if(tb===6) return 2;   // (por debajo de la espuma: la espuma sube)
+  return 1; }
+// meterse debajo de la espuma: la espuma pasa a la capa de arriba (con lo que ya traía en este paso)
+function suUnderFoam(D,j){ if(D.t[j]!==6 || D.t2[j]) return; D.t2[j]=6; D.h2[j]=D.h[j]; D.d2[j]=D.d[j]; D.c2[j]=0; D.s2[j]=0; D.t[j]=0; D.h[j]=0; D.d[j]=0; D.c[j]=0; D.s[j]=0; D.n2=Math.max(D.n2,1); }
+// al echar desde arriba: si abajo hay espuma, la espuma sube y lo nuevo queda debajo
+function suPourSlot(C,i,p){ if(C.t[i]===6 && !C.t2[i] && p!==6 && C.h[i]>0){ C.t2[i]=6; C.h2[i]=C.h[i]; C.c2[i]=0; C.s2[i]=0; C.t[i]=0; C.h[i]=0; C.c[i]=0; C.s[i]=0; return 0; } return suSlot(C,i,p); }
+// ---- un paso: cada cuadrito le pasa a sus vecinos más bajitos (cada capa por su lado) ----
+const _suFl=new Float32Array(4), _suFj=new Int32Array(4), _suFs=new Int8Array(4), _suFD=[null,null,null,null];
+const _suNd=[[-1,-1],[1,-1],[-1,1],[1,1]];
+// v233: un paso hacia los 4 lados y el siguiente en diagonal (más lejos: aguanta un poco más), así los montones y charcos quedan redondos y no cuadrados
+function suStep(sub,diag){ const L=SU.list, NB=diag?_suNd:_suN, dk=diag?.7:1, dY=diag?1.414:1; let moved=0;
+  for(const C of L){ if(C.aw<=0 || !C.n) continue;
+    for(let lay=0;lay<2;lay++){ if(lay && !C.n2) continue; const H=lay?C.h2:C.h, Tt=lay?C.t2:C.t, Cc=lay?C.c2:C.c, Ss=lay?C.s2:C.s, Dd=lay?C.d2:C.d;
+      for(let i=0;i<256;i++){ const h=H[i]; if(h<=0) continue; const p=Tt[i], T=SU_T[p]; let k=T.k, Y=T.Y, mH=T.minH; if(p===3 && Ss[i]){ const w=Ss[i]/255; k+=w*.13; Y=Y*(1-w)+.004*w; mH-=w*.045; }   // (el lodo aguado corre más)
+        k*=dk; Y*=dY; if(k*sub<=0) continue; const S=suB(C,i)+(lay?C.h[i]+h:h); let F=0, n=0;
+        for(let q=0;q<4;q++){ const N=suNb(C,i,NB[q][0],NB[q][1],h>mH); if(!N) continue; const D=N[0], j=N[1], sl=suSlot(D,j,p); if(sl<0) continue; const bj=suB(D,j); if(bj>=1e3) continue;
+          const Sj=sl===2?bj:bj+D.h[j]+(sl?D.h2[j]:0), diff=S-Sj-Y-(D.pr[j]>0?.3:0)-(sl===1 && !lay && p!==6 && !D.t2[j]?.04:0); if(diff<=0) continue;   /* (junto a otra sustancia no se le sube encima, salvo que venga bastante más alto) */   /* (la huella recién hecha no se rellena hasta que se le pasa) */
+          const hj=sl===2?0:sl?D.h2[j]:D.h[j]; if(hj<=0 && h<mH && Sj>S-h-.01) continue;   /* (lo delgadito no se extiende en lo plano, pero sí escurre de bajada) */ const f=diff*k*sub; if(f<=1e-7) continue;
+          _suFl[n]=f; _suFj[n]=j; _suFs[n]=sl; _suFD[n]=D; n++; F+=f; }
+        if(!n) continue; const lim=h*.9, s=F>lim?lim/F:1; Dd[i]-=F*s;
+        for(let q=0;q<n;q++){ const D=_suFD[q]; let sl=_suFs[q]; if(sl===2){ suUnderFoam(D,_suFj[q]); sl=0; } suAdd(D,_suFj[q],sl,p,Cc[i],Ss[i],_suFl[q]*s,true); if(D!==C){ D.aw=2; D.pend=true; } } } } }
+  for(const C of L){ if(C.aw<=0 && !C.pend) continue; let mx=0, n=0, n2=0;
+    for(let i=0;i<256;i++){ let d=C.d[i]; if(d!==0){ C.h[i]+=d; C.d[i]=0; if(d<0) d=-d; if(d>mx) mx=d; } d=C.d2[i]; if(d!==0){ C.h2[i]+=d; C.d2[i]=0; if(d<0) d=-d; if(d>mx) mx=d; }
+      if(C.h[i]<=1e-5 || C.t2[i]) suFix(C,i); else if(!C.t[i]) C.h[i]=0; if(C.h[i]>0) n++; if(C.h2[i]>0) n2++; }
+    C.n=n; C.n2=n2; C.pend=false; if(mx>2e-5){ C.dirty=true; C.aw=2; moved++; } }
   return moved; }
-// echar: reparte el volumen (m³) en los cuadritos de un círculo
-function suPour(x,z,p,col,vol,r){ if(vol<=0) return 0; if(SU.vol+vol>SU.max){ vol=SU.max-SU.vol; if(vol<=0) return 0; } const m=SU.cs, R=Math.max(m*.6,r), cells=[];
-  for(let dz=-R;dz<=R+1e-6;dz+=m) for(let dx=-R;dx<=R+1e-6;dx+=m){ if(dx*dx+dz*dz>R*R+1e-6) continue; const q=suCell(x+dx,z+dz,true); if(!q) continue; const [C,i]=q; if(suB(C,i)>=1e3) continue; if(C.t[i] && C.t[i]!==p && C.h[i]>.01) continue; cells.push(q); }
-  if(!cells.length){ const q=suCell(x,z,true); if(!q) return 0; cells.push(q); }
-  const dh=vol/(cells.length*m*m), now=performance.now(); for(const [C,i] of cells){ C.lp=now; if(C.t[i]!==p){ C.t[i]=p; } if(p===5) C.c[i]=col|0; C.h[i]+=dh; C.aw=2; C.dirty=true; C.n=Math.max(C.n,1); C.ver++; }
+// echar: reparte el volumen (m³) en los cuadritos de un círculo (sobre lo que haya: se mezcla o queda encima)
+function suPour(x,z,p,col,vol,r,s){ if(vol<=0) return 0; if(SU.vol+vol>SU.max){ vol=SU.max-SU.vol; if(vol<=0) return 0; } const m=SU.cs, R=Math.max(m*.6,r), cells=[];
+  const c=p===5?suCol(col):(+col>=SU_F?+col:0); s=p===5?(s===undefined?255:s|0):(s|0);
+  for(let dz=-R;dz<=R+1e-6;dz+=m) for(let dx=-R;dx<=R+1e-6;dx+=m){ if(dx*dx+dz*dz>R*R+1e-6) continue; const q=suCell(x+dx,z+dz,true); if(!q) continue; const [C,i]=q; if(suB(C,i)>=1e3) continue; const sl=suPourSlot(C,i,p); if(sl<0) continue; q.push(sl); cells.push(q); }
+  if(!cells.length){ const q=suCell(x,z,true); if(!q) return 0; const sl=suPourSlot(q[0],q[1],p); if(sl<0) return 0; q.push(sl); cells.push(q); }
+  const dh=vol/(cells.length*m*m), now=performance.now(); for(const [C,i,sl] of cells){ C.lp=now; suAdd(C,i,sl,p,c,s,dh,false); suFix(C,i); C.aw=2; C.dirty=true; C.n=Math.max(C.n,1); if(C.h2[i]>0) C.n2=Math.max(C.n2,1); C.ver++; }
   SU.vol+=vol; return vol; }
-// quitar: todo lo que está junto de la misma sustancia (lo que se ve como un solo charco)
-function suRemoveAt(x,z){ const q=suCell(x,z,false); if(!q) return 0; const [C0,i0]=q, p=C0.t[i0]; if(!p) return 0; const seen=new Set(), st=[[C0,i0]]; let n=0;
-  while(st.length && n<40000){ const [C,i]=st.pop(), key=C.k*256+i; if(seen.has(key)) continue; seen.add(key); if(C.t[i]!==p || C.h[i]<=0) continue; C.h[i]=0; C.t[i]=0; C.dirty=true; C.aw=2; C.ver++; n++;
+// quitar: todo lo que está junto de la misma sustancia (lo que se ve como un solo charco); si hay dos capas, la de arriba
+function suRemoveAt(x,z){ const q=suCell(x,z,false); if(!q) return 0; const [C0,i0]=q, p=C0.t2[i0]||C0.t[i0]; if(!p) return 0; const seen=new Set(), st=[[C0,i0]]; let n=0;
+  while(st.length && n<40000){ const [C,i]=st.pop(), key=C.k*256+i; if(seen.has(key)) continue; seen.add(key); let hit=false;
+    if(C.t2[i]===p && C.h2[i]>0){ C.h2[i]=0; hit=true; } else if(C.t[i]===p && C.h[i]>0){ C.h[i]=0; hit=true; } if(!hit) continue; suFix(C,i); C.dirty=true; C.aw=2; C.ver++; n++;
     for(const [dx,dz] of _suN){ const N=suNb(C,i,dx,dz,false); if(N) st.push(N); } }
   suRecount(); return n; }
-function suClear(){ for(const C of SU.list) for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } SU.ch.clear(); SU.list.length=0; SU.vol=0; SU.balls.forEach(b=>b.m && b.m.parent && b.m.parent.remove(b.m)); SU.balls.length=0; SU.rip.length=0; SU.U.uRipN.value=0; SU.drops.length=0; SU.emit.length=0; SU.feet=null; suDropsDraw(); }
-function suRecount(){ let v=0; const a=SU.cs*SU.cs; for(const C of SU.list){ let n=0; for(let i=0;i<256;i++){ const h=C.h[i]; if(h>0){ v+=h*a; n++; } } C.n=n; } SU.vol=v; }
-// ---- dibujarlas: cada trozo, una malla por sustancia (una rejilla de 17×17 esquinas) ----
-function suIndex(){ if(SU.idx) return SU.idx; const I=[]; for(let z=0;z<16;z++) for(let x=0;x<16;x++){ const a=z*17+x, b=a+1, c=a+17, d=c+1; I.push(a,c,b,b,c,d); } return SU.idx=new THREE.BufferAttribute(new Uint16Array(I),1); }
+function suClear(){ for(const C of SU.list) for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } SU.ch.clear(); SU.list.length=0; SU.vol=0; SU.balls.forEach(b=>b.m && b.m.parent && b.m.parent.remove(b.m)); SU.balls.length=0; SU.rip.length=0; SU.U.uRipN.value=0; SU.drops.length=0; SU.emit.length=0; SU.pops.length=0; SU.feet=null; suDropsDraw(); suFoamDraw(true); }
+function suRecount(){ let v=0; const a=SU.cs*SU.cs; for(const C of SU.list){ let n=0, n2=0; for(let i=0;i<256;i++){ const h=C.h[i], h2=C.h2[i]; if(h>0){ v+=h*a; n++; } if(h2>0){ v+=h2*a; n2++; } } C.n=n; C.n2=n2; } SU.vol=v; }
 // v232b: cómo se ven. En todas las calidades menos Mínima: brillos que se mueven (olitas), reflejo del cielo, ondas donde pisas o
 // caen gotas, espuma blanca en la orillita del agua, burbujitas en el slime, grumos con brillo de mojado en el lodo y bolitas en la
 // espuma. El color de cada esquina lo pone suBuild (el agua es más oscura donde está honda, como el mar). En Mínima: el color con su brillo.
@@ -24045,9 +24096,9 @@ float suF(vec2 p, float t){
 const SU_AMP=[0,.05,.05,.04,.045,.02,.0015], SU_E=[0,.06,.06,.03,.06,.06,.005], SU_REFL=[0,.55,.35,.12,.15,.22,.05], SU_LIP=[0,0,.3,.35,.3,0,.4], SU_GL=[0,[.6,200],[.5,120],[.06,60],[.45,160],[.5,160],[0,1]];   // (qué tan gordita queda la orilla)
 // la sombra se busca 6 cm más arriba: la capa delgadita queda a 1–2 cm del piso y si no, el piso le hace puntitos de sombra (moiré)
 const SU_SHV='#ifdef USE_SHADOWMAP\n  worldPosition.y+=.06;\n#endif\n#include <shadowmap_vertex>';
-function suMatsReset(){ const old=SU.mats; SU.mats={}; for(const C of SU.list) C.ms.forEach((M,p)=>{ if(M) M.material=suMat(p); }); for(const k in old) old[k].dispose(); }
-function suMat(p){ if(SU.mats[p]) return SU.mats[p]; const T=SU_T[p], simple=settings.quality==='min'; SU.matQ=simple;
-  const m=new THREE.MeshStandardMaterial({color:'#ffffff', roughness:T.ro, metalness:0, transparent:T.op<1, opacity:T.op, depthWrite:T.op>=.95, vertexColors:true, polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-1});
+function suMatsReset(){ const old=SU.mats; SU.mats={}; for(const C of SU.list) C.ms.forEach((M,k)=>{ if(M) M.material=suMat(k); }); for(const k in old) old[k].dispose(); }
+function suMat(key){ if(SU.mats[key]) return SU.mats[key]; const p=key>6?key-6:key, top=key>6, T=SU_T[p], simple=settings.quality==='min'; SU.matQ=simple;   // (key 7–12: la capa de arriba, que gana siempre a la de abajo)
+  const m=new THREE.MeshStandardMaterial({color:'#ffffff', roughness:T.ro, metalness:0, transparent:T.op<1, opacity:T.op, depthWrite:T.op>=.95, vertexColors:true, polygonOffset:true, polygonOffsetFactor:top?-2:-1, polygonOffsetUnits:top?-6:-1});
   if(p===6) m.emissive=new THREE.Color('#2c3038'); if(p===2) m.emissive=new THREE.Color('#14300a');
   if(!simple){ if(!SU.U.uDet.value){ try{ SU.U.uDet.value=seaTex; }catch(e){} if(!SU.U.uDet.value){ const t=new THREE.DataTexture(new Uint8Array([150,190,220,255]),1,1); t.needsUpdate=true; SU.U.uDet.value=t; } }
     m.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,SU.U); sh.defines=Object.assign(sh.defines||{},{SU_K:p});
@@ -24055,7 +24106,15 @@ function suMat(p){ if(SU.mats[p]) return SU.mats[p]; const T=SU_T[p], simple=set
       sh.fragmentShader='uniform float uT; uniform vec3 uSky; uniform vec4 uRip[8]; uniform int uRipN; uniform vec3 uSunD; uniform vec3 uSunC; uniform sampler2D uDet; varying vec2 vL; varying float vSuH;\n'+SU_GLSL+'\n'+sh.fragmentShader
         .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
   { float e=${SU_E[p].toFixed(3)}, a=${SU_AMP[p].toFixed(4)}, f0=suF(vL,uT); vec2 g=vec2(suF(vL+vec2(e,0.0),uT)-f0, suF(vL+vec2(0.0,e),uT)-f0)/e*a;
-    for(int k=0;k<8;k++){ if(k>=uRipN) break; vec4 R=uRip[k]; float age=uT-R.z; if(age<0.0 || age>2.5) continue; vec2 dv=vL-R.xy; float d=length(dv)+1e-3, x=d-age*1.3-.05, env=R.w*exp(-age*1.6)*exp(-x*x*30.0); g+=env*7.0*cos(x*22.0)*dv/d; }
+#if SU_K==1 || SU_K==5
+    for(int k=0;k<8;k++){ if(k>=uRipN) break; vec4 R=uRip[k]; float age=uT-R.z; if(age<0.0 || age>2.5) continue; vec2 dv=vL-R.xy; float d=length(dv)+1e-3;
+#if SU_K==1
+      float x=d-age*1.3-.05, env=R.w*exp(-age*1.6)*exp(-x*x*30.0); g+=env*7.0*cos(x*22.0)*dv/d;
+#else
+      float x=d-age*1.9-.03, env=R.w*exp(-age*4.0)*exp(-x*x*90.0); g+=env*3.0*cos(x*45.0)*dv/d;
+#endif
+    }
+#endif
     float up=clamp(dot(normal,(viewMatrix*vec4(0.0,1.0,0.0,0.0)).xyz)*2.0,0.0,1.0); normal=normalize(normal+(viewMatrix*vec4(-g.x,0.0,-g.y,0.0)).xyz*up); }`)
         .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
 #if SU_K==3
@@ -24090,72 +24149,127 @@ function suMat(p){ if(SU.mats[p]) return SU.mats[p]; const T=SU_T[p], simple=set
   }
   gl_FragColor = vec4( outgoingLight, diffuseColor.a );`); }; m.customProgramCacheKey=()=>'su'+p; }
   else { m.onBeforeCompile=sh=>{ sh.vertexShader=sh.vertexShader.replace('#include <shadowmap_vertex>',SU_SHV); }; m.customProgramCacheKey=()=>'sus'+p; }
-  return SU.mats[p]=m; }
-SU.rip=[]; function suRipple(x,z,a){ if(SU.rip.length>=8) SU.rip.shift(); SU.rip.push([x-FREE.X,z-FREE.Z,SU.T,Math.min(.06,a)]); suRipUp(); }
+  return SU.mats[key]=m; }
+// v233: ondas solo en el agua (y chiquitas y rápidas en la pintura); el slime tiembla, la miel se hunde, el lodo se marca, la espuma revienta
+SU.rip=[]; function suRipple(x,z,a,p){ if(p!==undefined && p!==1 && p!==5) return; if(SU.rip.length>=8) SU.rip.shift(); SU.rip.push([x-FREE.X,z-FREE.Z,SU.T,Math.min(.06,a)]); suRipUp(); }
 // (solo las ondas que siguen vivas van al dibujo: si nadie pisa, no cuestan nada)
 function suRipUp(){ const L=SU.rip; while(L.length && SU.T-L[0][2]>2.5) L.shift(); const V=SU.U.uRip.value; for(let k=0;k<L.length;k++) V[k].set(L[k][0],L[k][1],L[k][2],L[k][3]); SU.U.uRipN.value=L.length; }
 const _suCol=new THREE.Color();
 function suHash(a,b){ let h=(a*374761393+b*668265263)|0; h=(h^(h>>>13))*1274126177|0; return ((h^(h>>>16))>>>0)/4294967296; }
 const SU_COLS=[null,['#4aa3d8','#1d5ea8',.04],['#c8ff6a','#3fcf2c',.1],['#8f653d','#4f3119',.12],['#ffbc36','#cf6a06',.08],null,['#f4f7fc','#dfe5ef',.4]];   // (de bajito a hondo, como el mar)
 const _suCa=new THREE.Color(), _suCb=new THREE.Color();
-function suBuild(C){ C.dirty=false; const types=new Set(); for(let i=0;i<256;i++) if(C.t[i] && C.h[i]>0) types.add(C.t[i]);
-  for(let p=1;p<=6;p++){ const has=types.has(p); let M=C.ms[p]; if(!has){ if(M){ M.visible=false; } continue; }
-    if(!M){ const g=new THREE.BufferGeometry(); g.setIndex(new THREE.BufferAttribute(new Uint16Array(1536),1)); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(289*3),3)); g.setAttribute('normal',new THREE.BufferAttribute(new Float32Array(289*3),3));
-      g.setAttribute('color',new THREE.BufferAttribute(new Float32Array(289*3),3)); g.setAttribute('aH',new THREE.BufferAttribute(new Float32Array(289),1)); g.setAttribute('aW',new THREE.BufferAttribute(new Float32Array(289),1));
-      M=new THREE.Mesh(g,suMat(p)); M.frustumCulled=false; M.receiveShadow=SU_T[p].op>=.95; M.castShadow=false; M.userData.noBatch=true; M.renderOrder=p===1?3:2; C.ms[p]=M; FREE.g.add(M); }
-    M.visible=true; { const I=M.geometry.index.array; let n=0; for(let i=0;i<256;i++){ if(!(C.t[i]===p && C.h[i]>0)) continue; const x=i&15, z=i>>4, a=z*17+x, b=a+1, c=a+17, d=c+1; I[n++]=a; I[n++]=c; I[n++]=b; I[n++]=b; I[n++]=c; I[n++]=d; } M.geometry.index.needsUpdate=true; M.geometry.setDrawRange(0,n); }   // (solo los cuadritos que tienen esta sustancia: la orilla baja hasta el piso dentro de ellos)
-    const G=M.geometry.attributes, P=G.position.array, Cl=G.color.array, AH=G.aH.array, AW=G.aW.array, m=SU.cs, x0=FREE.X+C.ci*16*m, z0=FREE.Z+C.cj*16*m, K=SU_COLS[p];
-    let dc=0; if(p===5){ const cnt={}; let bm=0; for(let i=0;i<256;i++) if(C.t[i]===5){ const v=(cnt[C.c[i]]=(cnt[C.c[i]]||0)+1); if(v>bm){ bm=v; dc=C.c[i]; } } }   // (el color de la orillita)
-    if(K){ _suCa.set(K[0]).convertSRGBToLinear(); _suCb.set(K[1]).convertSRGBToLinear(); }
-    for(let vz=0;vz<=16;vz++) for(let vx=0;vx<=16;vx++){ let s=0, n=0, bmin=1e9, bc=-1, bh=0, f=0, hs=0, wb=0, fx=0, fz=0, ex=0, ez=0, ne=0;
-      for(let q=0;q<4;q++){ const ox=(q&1)-.5, oz=(q>>1)-.5, N=suNb(C,0,vx-1+(q&1),vz-1+(q>>1),false); if(!N){ ex+=ox; ez+=oz; ne++; continue; } const D=N[0], j=N[1]; const b=suB(D,j); if(b>=1e3) continue; if(b<bmin) bmin=b;
-        if(D.t[j]===p && D.h[j]>0){ s+=b+D.h[j]; n++; f++; hs+=D.h[j]; fx+=ox; fz+=oz; if(D.wb && D.wb[j]>wb) wb=D.wb[j]; if(D.h[j]>bh){ bh=D.h[j]; bc=D.c[j]; } } else { if(!D.t[j] && b<=bmin+.05){ s+=b; n++; } ex+=ox; ez+=oz; ne++; } }   // (junto a un cuadrito vacío la orilla baja: queda redondita)
-      const o=(vz*17+vx)*3, gx=C.ci*16+vx, gz=C.cj*16+vz, hh=f?hs/f:0; let y, sx=0, sz=0, jk=.06, ah=hh;
-      if(f && !ne){ y=s/n+.004; if(p===6) y+=(suHash(gx,gz)-.5)*.07*Math.min(1,hs/f/.08); }
-      else if(f){ y=(bmin<1e9?bmin:FREE.Y)+.0015+hh*SU_LIP[p]*f/4; ah=hh*f/8; jk=.09;   // v232b: la orilla baja hasta el piso (redondita, sin escalones)
-        if(f===1){ sx=fx*.42; sz=fz*.42; } else if(f===3){ sx=ex*.3; sz=ez*.3; } }   // (las esquinas de afuera se redondean y los rincones se rellenan)
-      else y=(bmin<1e9?bmin:FREE.Y)-.012;
-      P[o]=x0+(vx+sx)*m+(suHash(gx,gz)-.5)*jk; P[o+1]=y; P[o+2]=z0+(vz+sz)*m+(suHash(gz+7,gx+3)-.5)*jk;
-      AH[vz*17+vx]=ah; AW[vz*17+vx]=wb;
-      if(p===5) _suCol.set(FREE_COLS[bc>=0?bc:dc]||'#ffffff').convertSRGBToLinear(); else _suCol.copy(_suCa).lerp(_suCb,Math.min(1,Math.max(0,ah/K[2])));
-      Cl[o]=_suCol.r; Cl[o+1]=_suCol.g; Cl[o+2]=_suCol.b; }
-    G.position.needsUpdate=true; G.color.needsUpdate=true; G.aH.needsUpdate=true; G.aW.needsUpdate=true; M.geometry.computeVertexNormals(); } }
-// el slime (y la miel) tiemblan un ratito alrededor de donde los tocas
-function suWobble(x,z,r,a){ const m=SU.cs; for(let dz=-r;dz<=r;dz+=m) for(let dx=-r;dx<=r;dx+=m){ const q=suCell(x+dx,z+dz,false); if(!q) continue; const [C,i]=q; if(C.t[i]!==2 && C.t[i]!==4) continue; const w=a*(1-Math.hypot(dx,dz)/(r+m)); if(w>C.wb[i]){ C.wb[i]=w; C.dirty=true; C.wbOn=true; } } }
-// ¿algún vecino (también en diagonal) tiene esta sustancia? (la orillita que baja hasta el piso)
-function suNear(C,i,p){ for(let dz=-1;dz<=1;dz++) for(let dx=-1;dx<=1;dx++){ if(!dx && !dz) continue; const N=suNb(C,i,dx,dz,false); if(N && N[0].t[N[1]]===p && N[0].h[N[1]]>0) return true; } return false; }
-// ---- lo que pisa la sustancia la empuja (huellas) ----
-function suPush(x,z,yb,r,vx,vz,who){ const m=SU.cs, R=r+m*.5; let V=0, p=0, col=0, best=0; const out=[];
-  for(let dz=-R;dz<=R;dz+=m) for(let dx=-R;dx<=R;dx+=m){ const d2=dx*dx+dz*dz; if(d2>r*r) continue; const q=suCell(x+dx,z+dz,false); if(!q) continue; const [C,i]=q; const h=C.h[i]; if(h<=0) continue; const b=suB(C,i), S=b+h, cut=Math.max(b,yb);
-      if(S<=cut+.002) continue; const a=Math.min(h,S-cut), pt=C.t[i]; C.h[i]-=a; V+=a; if(a>best){ best=a; p=pt; col=C.c[i]; } if(cut<=b+.01) C.pr[i]=SU_T[pt].pr||0; if(C.h[i]<=1e-5){ C.h[i]=0; C.t[i]=0; } C.dirty=true; C.aw=2; C.ver++; }
-  if(V<=0) return null; if(p===2||p===4) suWobble(x,z,r+.6,.7);
+const _suCb2=new THREE.Color(), _suM4=new THREE.Matrix4();
+function suLerpHex(a,b,k){ let o=0; for(let sh=16;sh>=0;sh-=8){ const x=(a>>sh)&255, y=(b>>sh)&255; o|=Math.round(x+(y-x)*k)<<sh; } return o; }
+// el color que se ve (bola, gotas, chorro): con su pigmento o qué tan aguado está el lodo
+function suHex(p,c,s){ if(p===5) return c?c&0xffffff:0xffffff; const base=parseInt(SU_T[p].col.slice(1),16);
+  if((p===1 || p===2) && c && s) return suLerpHex(base,c&0xffffff,Math.min(p===1?.9:.85,s/255*(p===1?1.8:1.5)));
+  if(p===3 && s) return suLerpHex(base,0x9a7650,s/255*.55); return base; }
+// el color de una esquina (de bajito a hondo, como el mar; con su pigmento)
+function suVCol(p,c,s,ah,K){ if(p===5){ _suCol.setHex(c?c&0xffffff:0xffffff).convertSRGBToLinear(); return; } _suCol.copy(_suCa).lerp(_suCb,Math.min(1,Math.max(0,ah/K[2])));
+  if((p===1 || p===2) && c && s){ _suCb2.setHex(c&0xffffff).convertSRGBToLinear(); _suCol.lerp(_suCb2,Math.min(p===1?.9:.85,s/255*(p===1?1.8:1.5))); }
+  else if(p===3 && s){ _suCb2.setHex(0x9a7650).convertSRGBToLinear(); _suCol.lerp(_suCb2,s/255*.55); } }
+// ---- dibujarlas (v233): una malla por capa y sustancia; cada cuadrito con sus 4 esquinas. Así la orilla junto a un bloque se
+// queda pegada a su pared (no se mete) y lo que está arriba de un bloque no baja por dentro de él hasta el piso; las alturas se
+// promedian con los vecinos del mismo nivel y la luz se calcula lisita (sin escalones) ----
+function suIdx4(){ if(SU.idx) return SU.idx; const I=new Uint16Array(1536); for(let k=0;k<256;k++){ const a=4*k; I.set([a,a+2,a+1,a+1,a+2,a+3],k*6); } return SU.idx=new THREE.BufferAttribute(I,1); }
+const _suW={t:new Uint8Array(324), h:new Float32Array(324), t2:new Uint8Array(324), h2:new Float32Array(324), b:new Float32Array(324), c:new Uint32Array(324), s:new Uint8Array(324), c2:new Uint32Array(324), s2:new Uint8Array(324), wb:new Float32Array(324), D:new Array(324), j:new Int16Array(324)};
+// una ventanita de 18×18 cuadritos (el trozo y una orillita de sus vecinos), para no buscar a cada rato
+function suWin(C){ const W=_suW, near=[]; for(let dz=-1;dz<=1;dz++) for(let dx=-1;dx<=1;dx++) near.push(dx||dz?suChunk(C.ci+dx,C.cj+dz,false):C);
+  for(let wz=0;wz<18;wz++) for(let wx=0;wx<18;wx++){ const lx=wx-1, lz=wz-1, D=near[(lz<0?0:lz>15?2:1)*3+(lx<0?0:lx>15?2:1)], w=wz*18+wx; W.D[w]=D;
+    if(!D){ W.t[w]=0; W.h[w]=0; W.t2[w]=0; W.h2[w]=0; W.wb[w]=0; W.b[w]=NaN; continue; }
+    const j=((lz+16)&15)*16+((lx+16)&15); W.j[w]=j; W.t[w]=D.t[j]; W.h[w]=D.h[j]; W.t2[w]=D.t2[j]; W.h2[w]=D.h2[j]; W.c[w]=D.c[j]; W.s[w]=D.s[j]; W.c2[w]=D.c2[j]; W.s2[w]=D.s2[j]; W.wb[w]=D.wb[j]; W.b[w]=D.b[j]; } }
+function suWB(w){ const W=_suW; let b=W.b[w]; if(b!==b && W.D[w]){ b=W.b[w]=suB(W.D[w],W.j[w]); } return b; }
+let _suFF=0, _suSS=0, _suPL=0;
+function suSP(w,p){ const W=_suW; if(W.t2[w]===p && W.h2[w]>0){ _suFF=suWB(w)+W.h[w]; _suSS=_suFF+W.h2[w]; _suPL=1; return _suFF===_suFF; } if(W.t[w]===p && W.h[w]>0){ _suFF=suWB(w); _suSS=_suFF+W.h[w]; _suPL=0; return _suFF===_suFF; } return false; }
+const _suHn=new Float32Array(4);
+function suBuildMesh(C,lay,p,M){ const W=_suW, m=SU.cs, x0=FREE.X+C.ci*16*m, z0=FREE.Z+C.cj*16*m, K=SU_COLS[p], LIP=SU_LIP[p], Hn=_suHn;
+  const G=M.geometry.attributes, P=G.position.array, Nn=G.normal.array, Cl=G.color.array, AH=G.aH.array, AW=G.aW.array; let v=0, nc=0;
+  if(K){ _suCa.set(K[0]).convertSRGBToLinear(); _suCb.set(K[1]).convertSRGBToLinear(); }
+  for(let i=0;i<256;i++){ const x=i&15, z=i>>4, w0=(z+1)*18+x+1; if(!(lay?(W.t2[w0]===p && W.h2[w0]>(p===1?.004:0)):(W.t[w0]===p && W.h[w0]>0))) continue;   // (una capita de agua de arriba casi sin nada no se dibuja; las demás, aunque sea delgadita, sí: cubren lo de abajo)
+    const F0=suWB(w0)+(lay?W.h[w0]:0), S0=F0+(lay?W.h2[w0]:W.h[w0]); nc++;
+    for(let q=0;q<4;q++){ const gx=x+(q&1), gz=z+(q>>1); let f=0, sS=0, sF=0, hs=0, fx=0, fz=0, e=0, ex=0, ez=0, wl=0, sw=0, wbm=0, bh=-1, bc=0, bs=0, ot=0, otT=-1e9;
+      for(let a4=0;a4<4;a4++){ const a=a4&1, bb=a4>>1, wn=(gz+bb)*18+gx+a, ax=a-.5, az=bb-.5, bn=suWB(wn);
+        if(bn>=1e3){ wl++; Hn[a4]=NaN; continue; }   // (pared: la orilla se queda arriba, pegada a ella)
+        if(suSP(wn,p) && Math.abs(_suSS-S0)<.3){ f++; sS+=_suSS; sF+=_suFF; const hh=_suSS-_suFF; hs+=hh; fx+=ax; fz+=az; Hn[a4]=_suSS; if(W.wb[wn]>wbm) wbm=W.wb[wn]; if(hh>bh){ bh=hh; bc=_suPL?W.c2[wn]:W.c[wn]; bs=_suPL?W.s2[wn]:W.s[wn]; } continue; }
+        const tot=(bn===bn?bn:F0)+W.h[wn]+W.h2[wn]; if(tot>S0+.02){ if(W.h[wn]>0 && !(bn>S0)){ sw++; ex+=ax; ez+=az; } else wl++; Hn[a4]=NaN; continue; }   // (un bloque, o otra sustancia más alta: «pared blanda», ahí sí se redondea)
+        e++; ex+=ax; ez+=az; if(W.h[wn]>0 && tot>F0+Math.max(.004,(S0-F0)*.35)){ ot++; if(tot>otT) otT=tot; Hn[a4]=tot; } else Hn[a4]=-1e9; }   // (vacío o más bajito: aquí la orilla baja hasta su piso; junto a otra sustancia, hasta su superficie)
+      if(!f){ f=1; sS=S0; sF=F0; hs=S0-F0; }
+      const Fa=sF/f, hm=hs/f; let y, sx=0, sz=0, ah=hm, jx=0, jz=0;
+      if(!e){ y=sS/f+.004; if(p===6) y+=(suHash(C.ci*16+gx,C.cj*16+gz)-.5)*.07*Math.min(1,hm/.08); if(sw && !wl){ if(f===1){ sx=fx*.42; sz=fz*.42; } else if(f===3){ sx=ex*.3; sz=ez*.3; } } }
+      else { y=Fa+.0015+hm*LIP*f/4; ah=hm*f/8; if(ot) y=Math.max(y,otT+.002); if(!wl && !ot){ if(f===1){ sx=fx*.42; sz=fz*.42; } else if(f+sw===3 || f===3){ sx=ex*.3; sz=ez*.3; } const G1=C.ci*16+gx, G2=C.cj*16+gz; jx=(suHash(G1,G2)-.5)*.09; jz=(suHash(G2+7,G1+3)-.5)*.09; } }
+      for(let a4=0;a4<4;a4++){ const hv=Hn[a4]; if(hv!==hv) Hn[a4]=y; else if(hv===-1e9) Hn[a4]=Fa; }
+      if(lay) y+=.0015;
+      const ggx=(Hn[1]+Hn[3]-Hn[0]-Hn[2])/(2*m), ggz=(Hn[2]+Hn[3]-Hn[0]-Hn[1])/(2*m), nl=1/Math.sqrt(ggx*ggx+1+ggz*ggz), o=v*3;
+      P[o]=x0+(gx+sx)*m+jx; P[o+1]=y; P[o+2]=z0+(gz+sz)*m+jz; Nn[o]=-ggx*nl; Nn[o+1]=nl; Nn[o+2]=-ggz*nl; AH[v]=ah; AW[v]=wbm;
+      suVCol(p,bc,bs,ah,K); Cl[o]=_suCol.r; Cl[o+1]=_suCol.g; Cl[o+2]=_suCol.b; v++; } }
+  G.position.needsUpdate=true; G.normal.needsUpdate=true; G.color.needsUpdate=true; G.aH.needsUpdate=true; G.aW.needsUpdate=true; M.geometry.setDrawRange(0,nc*6); }
+function suBuild(C){ C.dirty=false; const has=new Set(); for(let i=0;i<256;i++){ if(C.h[i]>0 && C.t[i]) has.add(C.t[i]); if(C.h2[i]>0 && C.t2[i]) has.add(C.t2[i]+6); }
+  C.hadFoam=C.hasFoam; C.hasFoam=has.has(6) || has.has(12); if(has.size) suWin(C);
+  for(let key=1;key<=12;key++){ let M=C.ms[key]; if(!has.has(key)){ if(M) M.visible=false; continue; } const lay=key>6?1:0, p=lay?key-6:key;
+    if(!M){ const g=new THREE.BufferGeometry(); g.setIndex(suIdx4()); for(const [n,k] of [['position',3],['normal',3],['color',3],['aH',1],['aW',1]]) g.setAttribute(n,new THREE.BufferAttribute(new Float32Array(1024*k),k));
+      M=new THREE.Mesh(g,suMat(key)); M.frustumCulled=false; M.receiveShadow=SU_T[p].op>=.95; M.castShadow=false; M.userData.noBatch=true; M.renderOrder=(p===1?3:2)+lay*2; C.ms[key]=M; FREE.g.add(M); }
+    M.visible=true; suBuildMesh(C,lay,p,M); } }
+// el slime tiembla un ratito alrededor de donde lo tocas (v233: solo el slime; la miel se hunde despacito)
+function suWobble(x,z,r,a){ const m=SU.cs; for(let dz=-r;dz<=r;dz+=m) for(let dx=-r;dx<=r;dx+=m){ const q=suCell(x+dx,z+dz,false); if(!q) continue; const [C,i]=q; if(C.t[i]!==2 && C.t2[i]!==2) continue; const w=a*(1-Math.hypot(dx,dz)/(r+m)); if(w>C.wb[i]){ C.wb[i]=w; C.dirty=true; C.wbOn=true; } } }
+// ---- la espuma: burbujitas de verdad encima (de varios tamaños); al pasar o al deshacerse, revientan ----
+const _suBubG=new THREE.SphereGeometry(1,7,5);
+function suFoamDraw(off){ let I=SU.bub; if(off){ if(I){ I.count=0; I.visible=false; } return; } const lowQ=settings.quality==='min' || settings.quality==='low', MAX=lowQ?700:1600;
+  if(!I){ const mat=new THREE.MeshStandardMaterial({color:'#ffffff', roughness:.12, metalness:0, transparent:true, opacity:.8, emissive:new THREE.Color('#3a3f48')}); I=SU.bub=new THREE.InstancedMesh(_suBubG,mat,1600); I.userData.noBatch=true; I.frustumCulled=false; I.count=0; I.renderOrder=6; FREE.g.add(I); }
+  let n=0; const cx=camera.position.x, cz=camera.position.z, m=SU.cs, RR=lowQ?14:22;
+  for(const C of SU.list){ if(!C.hasFoam || n>=MAX) continue; const x0=FREE.X+C.ci*16*m, z0=FREE.Z+C.cj*16*m; if(Math.hypot(x0+1.6-cx,z0+1.6-cz)>RR+2.3) continue;
+    for(let i=0;i<256 && n<MAX;i++){ let h, top; if(C.t2[i]===6 && C.h2[i]>0){ h=C.h2[i]; top=suB(C,i)+C.h[i]+h; } else if(C.t[i]===6 && C.h[i]>0){ h=C.h[i]; top=suB(C,i)+h; } else continue;
+      const gx=C.ci*16+(i&15), gz=C.cj*16+(i>>4), px=FREE.X+(gx+.5)*m, pz=FREE.Z+(gz+.5)*m; if((px-cx)**2+(pz-cz)**2>RR*RR) continue;
+      const nb=h<.03?1:h<.07?2:lowQ?3:4, k0=Math.min(1,.35+h/.12);
+      for(let k=0;k<nb && n<MAX;k++){ const r1=suHash(gx*7+k*13,gz*5+k), r2=suHash(gz*11+k*3,gx*3+k*17), r3=suHash(gx+k*31,gz*7+k*5), rr=(.03+.04*r3)*k0;
+        _suM4.makeScale(rr,rr*.92,rr).setPosition(px+(r1-.5)*m*.85, top-rr*.25+(r2-.5)*.02, pz+(r2-.5)*m*.85); I.setMatrixAt(n++,_suM4); } } }
+  I.count=n; I.visible=n>0; I.instanceMatrix.needsUpdate=true; SU.bubX=cx; SU.bubZ=cz; }
+// el "pop": unas chispitas blancas que saltan
+function suPop(x,y,z,n){ for(let k=0;k<n && SU.pops.length<160;k++){ const a=Math.random()*6.283, s=.5+Math.random()*1.3; SU.pops.push({x:x+(Math.random()-.5)*.2,y,z:z+(Math.random()-.5)*.2,vx:Math.cos(a)*s,vy:.8+Math.random()*1.6,vz:Math.sin(a)*s,t:0,r:.012+Math.random()*.014}); }
+  const now=performance.now(); if(now-(SU.popT||0)>110){ SU.popT=now; try{ freeTone(1000+Math.random()*600,.05,'sine',.025,1900); }catch(e){} } }
+function suPopsTick(dt){ let I=SU.popM; if(!SU.pops.length){ if(I && I.visible){ I.count=0; I.visible=false; } return; }
+  if(!I){ I=SU.popM=new THREE.InstancedMesh(_suDropG,new THREE.MeshBasicMaterial({color:'#ffffff', transparent:true, opacity:.9}),160); I.userData.noBatch=true; I.frustumCulled=false; FREE.g.add(I); }
+  let n=0; for(let k=SU.pops.length-1;k>=0;k--){ const P=SU.pops[k]; P.t+=dt; if(P.t>.35){ SU.pops.splice(k,1); continue; } P.vy-=6*dt; P.x+=P.vx*dt; P.y+=P.vy*dt; P.z+=P.vz*dt; const r=P.r*(1-P.t/.35); _suM4.makeScale(r,r,r).setPosition(P.x,P.y,P.z); I.setMatrixAt(n++,_suM4); }
+  I.count=n; I.visible=n>0; I.instanceMatrix.needsUpdate=true; }
+// ---- lo que pisa la sustancia la empuja (huellas): las dos capas; la espuma revienta, el slime tiembla y el lodo salpica ----
+function suPush(x,z,yb,r,vx,vz,who){ const m=SU.cs, R=r+m*.5; let V=0; const got=[];
+  const take=(p,c,s,a)=>{ let g=null; for(const e of got) if(e[0]===p){ g=e; break; } if(!g) got.push(g=[p,c,s,0,0]); if(a>g[4]){ g[1]=c; g[2]=s; g[4]=a; } g[3]+=a; };
+  for(let dz=-R;dz<=R;dz+=m) for(let dx=-R;dx<=R;dx+=m){ if(dx*dx+dz*dz>r*r) continue; const q=suCell(x+dx,z+dz,false); if(!q) continue; const [C,i]=q; const h0=C.h[i]; if(h0<=0) continue; const b=suB(C,i), cut=Math.max(b,yb), h1=C.h2[i]; let any=false;
+      if(h1>0){ const lo=b+h0, top=lo+h1; if(top>cut+.002){ const a=Math.min(h1,top-Math.max(cut,lo)); if(a>0){ take(C.t2[i],C.c2[i],C.s2[i],a); C.h2[i]-=a; V+=a; any=true; } } }
+      if(b+h0>cut+.002){ const a=Math.min(h0,b+h0-cut); take(C.t[i],C.c[i],C.s[i],a); C.h[i]-=a; V+=a; any=true; }
+      if(!any) continue; if(cut<=b+.01) C.pr[i]=Math.max(SU_T[C.t[i]].pr||0, C.t2[i]?SU_T[C.t2[i]].pr||0:0); suFix(C,i); C.dirty=true; C.aw=2; C.ver++; }
+  if(V<=0) return null; let best=0, bp=0, bc=0; for(const g of got) if(g[3]>best){ best=g[3]; bp=g[0]; bc=g[1]; }
+  const sp=Math.hypot(vx,vz);
+  for(const g of got){ if(g[0]===2) suWobble(x,z,r+.6,.7);
+    if(g[0]===6){ const a=g[3]*.35; g[3]-=a; SU.vol-=a; suPop(x,yb+.12,z,who==='me'?3:2); }   // (las burbujas que pisas revientan)
+    if(g[0]===3 && who==='me' && sp>1.2 && g[3]>.0015 && Math.random()<.4 && SU.drops.length<80){ for(let k=0;k<2;k++){ const dv=.0005, a=Math.atan2(vz,vx)+(Math.random()-.5)*2.2, s=1.2+Math.random()*1.5; SU.drops.push({x,y:yb+.08,z,vx:Math.cos(a)*s,vy:1.4+Math.random(),vz:Math.sin(a)*s,p:3,c:g[1],s:g[2],v:dv,r:Math.cbrt(dv/4.18879),t:0}); } g[3]-=.001; } }   // (el lodo salpica gotitas de lodo de verdad)
   // lo que se quitó se va a la orillita (más hacia adelante si va caminando)
-  const sp=Math.hypot(vx,vz), ux=sp>.2?vx/sp:0, uz=sp>.2?vz/sp:0, R2=r+m*1.6; let W=0;
-  for(let dz=-R2;dz<=R2;dz+=m) for(let dx=-R2;dx<=R2;dx+=m){ const d=Math.hypot(dx,dz); if(d<=r || d>R2) continue; const q=suCell(x+dx,z+dz,true); if(!q) continue; const [C,i]=q; if(C.t[i] && C.t[i]!==p) continue; if(suB(C,i)>yb+.35) continue;
-      const cs=(dx*ux+dz*uz)/d, w=(sp>.2?Math.max(.03,.35+cs):1)*(1.6-(d-r)/(R2-r)); out.push(C,i,w); W+=w; }   /* (caminando: casi nada para atrás, así queda la huella) */
-  if(!W){ return null; } for(let k=0;k<out.length;k+=3){ const C=out[k], i=out[k+1], a=V*out[k+2]/W; if(!C.t[i]){ C.t[i]=p; C.c[i]=col; } C.h[i]+=a; C.n=Math.max(C.n,1); C.dirty=true; C.aw=2; C.ver++; }
-  return [p,V,col]; }
-// ¿qué hay bajo este punto? [sustancia, alto, superficie]
-function suAt(x,z){ const q=suCell(x,z,false); if(!q) return null; const [C,i]=q; if(!C.t[i] || C.h[i]<=0) return null; return [C.t[i], C.h[i], suB(C,i)+C.h[i], C.c[i]]; }
-// ---- la bola: crece mientras aprietas; al soltar sale volando; al chocar revienta según qué tan espesa es ----
+  const ux=sp>.2?vx/sp:0, uz=sp>.2?vz/sp:0, R2=r+m*1.6;
+  for(const g of got){ if(g[3]<=1e-7) continue; const out=[]; let Wt=0;
+    for(let pass=0;pass<2 && !Wt;pass++) for(let dz=-R2;dz<=R2;dz+=m) for(let dx=-R2;dx<=R2;dx+=m){ const d=Math.hypot(dx,dz); if(d<=r || d>R2) continue; const q=suCell(x+dx,z+dz,true); if(!q) continue; const [C,i]=q; if(suB(C,i)>yb+.35) continue; const sl=suSlot(C,i,g[0]); if(sl<0 || (!pass && sl===1 && C.t2[i]!==g[0])) continue;   /* (primero a donde no hay otra sustancia; si no cabe, encima) */
+        const cs=(dx*ux+dz*uz)/d, w=(sp>.2?Math.max(.03,.35+cs):1)*(1.6-(d-r)/(R2-r)); out.push(C,i,sl,w); Wt+=w; }   /* (caminando: casi nada para atrás, así queda la huella) */
+    if(!Wt) continue; for(let k=0;k<out.length;k+=4){ const C=out[k], i=out[k+1]; let sl=out[k+2]; if(sl===2){ suUnderFoam(C,i); sl=0; } suAdd(C,i,sl,g[0],g[1],g[2],g[3]*out[k+3]/Wt,false); suFix(C,i); C.n=Math.max(C.n,1); if(C.h2[i]>0) C.n2=Math.max(C.n2,1); C.dirty=true; C.aw=2; C.ver++; } }
+  return [bp,V,bc]; }
+// ¿qué hay bajo este punto? [sustancia de arriba, su alto, superficie, color, pigmento]
+function suAt(x,z){ const q=suCell(x,z,false); if(!q) return null; const [C,i]=q; if(!C.t[i] || C.h[i]<=0) return null; const b=suB(C,i); if(C.t2[i] && C.h2[i]>0) return [C.t2[i], C.h2[i], b+C.h[i]+C.h2[i], C.c2[i], C.s2[i]]; return [C.t[i], C.h[i], b+C.h[i], C.c[i], C.s[i]]; }
+// ---- la bola: lleva justo la sustancia que se ve (su volumen); al chocar, ese mismo tanto cae donde pegó, y lo que salpica son gotas de verdad ----
 const _suSph=new THREE.SphereGeometry(1,18,12), _suDropG=new THREE.SphereGeometry(1,8,6);
-function suBallMat(p,col){ const k=p+':'+(p===5?col:0); if(SU.mats['b'+k]) return SU.mats['b'+k]; const T=SU_T[p];
-  const m=new THREE.MeshStandardMaterial({color:p===5?FREE_COLS[col]:T.col, roughness:T.ro*.8, transparent:T.op<1, opacity:Math.min(1,T.op+.08), emissive:new THREE.Color(p===5?FREE_COLS[col]:T.col).multiplyScalar(.25)}); return SU.mats['b'+k]=m; }
+function suBallMat(p,c,s){ const hx=suHex(p,c|0,s|0), k='b'+p+':'+hx; if(SU.mats[k]) return SU.mats[k]; const T=SU_T[p];
+  const m=new THREE.MeshStandardMaterial({color:hx, roughness:T.ro*.8, transparent:T.op<1, opacity:Math.min(1,T.op+.08), emissive:new THREE.Color(hx).multiplyScalar(.25)}); return SU.mats[k]=m; }
 function suVolOf(r){ return 4.18879*r*r*r; }
-function suSplat(p,col,vol,x,y,z,vx,vy,vz,nx,ny,nz,hit){ const T=SU_T[p], B=T.burst, sp=Math.hypot(vx,vy,vz);
-  try{ if(p===1||p===5) splashBurst(x,y,z,Math.min(1.4,.4+vol*4)); else dustBurst(x,y,z,10+Math.round(20*B),1.5+3*B,p===5?FREE_COLS[col]:T.col,.16); freeTone(p===4?140:p===3?120:260+B*300,.25,'sine',.12,90); }catch(e){}
-  if(p===6){ try{ for(let k=0;k<3;k++) dustBurst(x,y+.3,z,14,2,'#ffffff',.12); }catch(e){} }
-  if(p===5 && hit && hit.sel && hit.sel.k==='b' && (!FNET.on || FNET.host)) suStainObj(hit,col);
-  const fr=.25+.65*B, core=vol*(1-fr), N=Math.round(3+24*B);
-  // el centro: donde pegó (si fue en un lado de un bloque, queda al pie, por fuera)
-  const ox=x+nx*.18, oz=z+nz*.18; suRipple(ox,oz,.05); if(p===2||p===4) suWobble(ox,oz,1.2,1); if(p===4) SU.emit.push({x:ox,z:oz,p,col,rate:core/1.6,left:core,r:.25}); else if(core>0) suPour(ox,oz,p,col,core,Math.max(.25,Math.cbrt(core)*(p===3?1.1:1.4)));
-  if(N>0 && fr>0){ const dv=vol*fr/N, rx=vx-2*(vx*nx+vy*ny+vz*nz)*nx, ry=vy-2*(vx*nx+vy*ny+vz*nz)*ny, rz=vz-2*(vx*nx+vy*ny+vz*nz)*nz, rl=Math.hypot(rx,ry,rz)||1;
-    for(let k=0;k<N;k++){ const a=Math.random()*6.283, u=Math.random(), s=(1.5+6*B)*(.35+.65*Math.random()), hx=Math.cos(a)*Math.sqrt(1-u*u), hz=Math.sin(a)*Math.sqrt(1-u*u);
+function suSplat(p,c,s,vol,x,y,z,vx,vy,vz,nx,ny,nz,hit,r){ const T=SU_T[p], B=T.burst; r=r||Math.cbrt(vol/4.18879);
+  try{ if(p===1) splashBurst(x,y,z,Math.min(1.4,.4+vol*4)); freeTone(p===4?140:p===3?120:260+B*300,.25,'sine',.12,90); }catch(e){}
+  if(p===5 && hit && hit.sel && hit.sel.k==='b' && (!FNET.on || FNET.host)) suStainObj(hit,c);
+  const N=B>0?Math.min(40,Math.round(4+22*B)):0, drop=N?vol*B*.8:0, core=vol-drop, wall=ny<.5;
+  // el centro, del tamaño de la bola: donde pegó (si fue en un lado de un bloque, al pie, por fuera)
+  const ox=x+(wall?nx*(r*.6+.1):0), oz=z+(wall?nz*(r*.6+.1):0); suRipple(ox,oz,.05,p); if(p===2) suWobble(ox,oz,r+.8,1); if(p===6) suPop(x,y,z,12);
+  if(core>0){ if(wall && (p===4 || p===2)) SU.emit.push({x:ox,z:oz,p,c,s,rate:core/(p===4?1.6:.8),left:core,r:Math.max(.15,r*.8)}); else suPour(ox,oz,p,c,core,Math.max(.12,r),s); }   // (la miel y el slime escurren por la pared)
+  if(N){ const dv=drop/N, rd=Math.cbrt(dv/4.18879), dn=vx*nx+vy*ny+vz*nz, rx=vx-2*dn*nx, ry=vy-2*dn*ny, rz=vz-2*dn*nz, rl=Math.hypot(rx,ry,rz)||1;
+    for(let k=0;k<N;k++){ const a=Math.random()*6.283, u=Math.random(), sp=(1.5+6*B)*(.35+.65*Math.random()), hx=Math.cos(a)*Math.sqrt(1-u*u), hz=Math.sin(a)*Math.sqrt(1-u*u);
       let dx=hx+nx*.8+rx/rl*.5*B, dy=u*.9+ny*.8+.4, dz=hz+nz*.8+rz/rl*.5*B; const l=Math.hypot(dx,dy,dz)||1;
-      if(SU.drops.length<90) SU.drops.push({x:x+nx*.1,y:y+.05+ny*.1,z:z+nz*.1,vx:dx/l*s,vy:dy/l*s,vz:dz/l*s,p,col,v:dv,r:Math.min(.09,.03+Math.cbrt(dv)*.25),t:0}); } } }
-function suStainObj(o,col){ if(!o || !o.sel || o.sel.k!=='b' || o.sel.b===col) return; try{ if(freeRepaint(o,col)){ if(FNET.on && FNET.host && o.nid) FNET.dirty.add(o.bk); freeSaveSoon(); } }catch(e){} }
+      if(SU.drops.length<90) SU.drops.push({x:x+nx*.1,y:y+.05+ny*.1,z:z+nz*.1,vx:dx/l*sp,vy:dy/l*sp,vz:dz/l*sp,p,c,s,v:dv,r:rd,t:0}); else suPour(ox,oz,p,c,dv,.15,s); } } }
+function suStainObj(o,col){ const b=suPal(col); if(!o || !o.sel || o.sel.k!=='b' || o.sel.b===b) return; try{ if(freeRepaint(o,b)){ if(FNET.on && FNET.host && o.nid) FNET.dirty.add(o.bk); freeSaveSoon(); } }catch(e){} }
 // lo que hay en ese punto para una bola o gota: el piso/sustancia, una pieza sólida, una pelota o un peluche
-function suHit(x,y,z,r,skipMe){ const q=suCell(x,z,false); let g; if(q){ const [C,i]=q; g=suB(C,i)+C.h[i]; } else { g=freeGround(x,z,y+r); if(g===null) g=FREE.Y; }
+function suHit(x,y,z,r,skipMe){ const q=suCell(x,z,false); let g; if(q){ const [C,i]=q; g=suB(C,i)+C.h[i]+C.h2[i]; } else { g=freeGround(x,z,y+r); if(g===null) g=FREE.Y; }
   if(y-r<=g) return {nx:0,ny:1,nz:0,y:g,o:null};
   for(const o of fgQuery(x-r,z-r,x+r,z+r)){ const bs=o.cols || (o.solid?[o.box]:null); if(!bs) continue; for(const b of bs){ const cx=Math.max(b.min.x,Math.min(b.max.x,x)), cy=Math.max(b.min.y,Math.min(b.max.y,y)), cz=Math.max(b.min.z,Math.min(b.max.z,z)), dx=x-cx, dy=y-cy, dz=z-cz, d=Math.hypot(dx,dy,dz);
       if(d<r){ let nx=dx, ny=dy, nz=dz; if(d<1e-4){ nx=0; ny=1; nz=0; } else { nx/=d; ny/=d; nz/=d; } return {nx,ny,nz,o}; } } }
@@ -24163,50 +24277,55 @@ function suHit(x,y,z,r,skipMe){ const q=suCell(x,z,false); let g; if(q){ const [
   const W=[]; if(!skipMe) W.push(player.pos); for(const rm of mp.remotes.values()) if(rm.pos) W.push(rm.pos);
   for(const w of W){ if(y>w.y-.1 && y<w.y+PLAYER_H+.1 && Math.hypot(x-w.x,z-w.z)<.45+r){ const l=Math.hypot(x-w.x,z-w.z)||1; return {nx:(x-w.x)/l,ny:0,nz:(z-w.z)/l,o:null,pl:w}; } }
   return null; }
-function suDropsDraw(){ if(!SU.dm) return; const L=SU.drops; for(let p=1;p<=6;p++){ const I=SU.dm[p]; if(I){ I.count=0; I.visible=false; } } const M=new THREE.Matrix4();
-  for(const d of L){ let I=SU.dm[d.p]; if(!I){ I=SU.dm[d.p]=new THREE.InstancedMesh(_suDropG,d.p===5?new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.3}):suBallMat(d.p,0),90); if(d.p===5) I.setColorAt(0,_suCol.set('#fff')); I.userData.noBatch=true; I.frustumCulled=false; I.count=0; FREE.g.add(I); } if(I.count>=90) continue;
-    M.makeScale(d.r,d.r,d.r).setPosition(d.x,d.y,d.z); I.setMatrixAt(I.count,M); if(d.p===5){ I.setColorAt(I.count,_suCol.set(FREE_COLS[d.col]||'#fff')); if(I.instanceColor) I.instanceColor.needsUpdate=true; } I.count++; I.visible=true; I.instanceMatrix.needsUpdate=true; } }
+function suDropsDraw(){ const L=SU.drops; for(let p=1;p<=6;p++){ const I=SU.dm[p]; if(I){ I.count=0; I.visible=false; } }
+  for(const d of L){ let I=SU.dm[d.p]; if(!I){ const T=SU_T[d.p]; I=SU.dm[d.p]=new THREE.InstancedMesh(_suDropG,new THREE.MeshStandardMaterial({color:'#ffffff', roughness:T.ro*.8, transparent:T.op<1, opacity:Math.min(1,T.op+.05)}),90); I.setColorAt(0,_suCol.set('#ffffff')); I.userData.noBatch=true; I.frustumCulled=false; I.count=0; FREE.g.add(I); } if(I.count>=90) continue;
+    _suM4.makeScale(d.r,d.r,d.r).setPosition(d.x,d.y,d.z); I.setMatrixAt(I.count,_suM4); I.setColorAt(I.count,_suCol.setHex(suHex(d.p,d.c,d.s))); I.count++; I.visible=true; }
+  for(let p=1;p<=6;p++){ const I=SU.dm[p]; if(I && I.count){ I.instanceMatrix.needsUpdate=true; if(I.instanceColor) I.instanceColor.needsUpdate=true; } } }
 // ---- la cubeta en la mano: Echar / Chorro / Listo ----
 function suSelT(){ return FREE.sel && FREE.sel.k==='s' ? SU_T[FREE.sel.a] : null; }
 function suActions(){ const T=suSelT(); if(!T) return null; const m=SU.mode;
   return [m<3?{label:'🪣 Echar', run:suHoldStart, charge:true}:{label:'🔮 Cargar bola', run:suHoldStart, charge:true}, {label:m<3?'Chorro: '+SU_SIZES[m][0]:'Chorro: 🔮 bola', run:()=>{ if(SU.hold) suHoldEnd(); SU.mode=(SU.mode+1)%4; FREE.tipTx=null; freeRenderHud(); }}, {label:'Listo', run:()=>{ if(SU.hold) suHoldEnd(); freeSelect(null); }}]; }
 function suHoldStart(){ const T=suSelT(); if(!T || SU.hold || performance.now()-SU.holdEnd<350) return; if(SU.vol>=SU.max-.005){ flashNote('Ya hay mucha sustancia: quita un poco con el bote de basura o la escoba'); return; }
-  SU.hold={t:performance.now(), mode:SU.mode, p:T.i, col:(FREE.sel.b|0), done:0}; }
+  SU.hold={t:performance.now(), mode:SU.mode, p:T.i, col:T.i===5?suCol(FREE.sel.b|0):0, done:0}; }
 function suHoldEnd(){ const H=SU.hold; if(!H) return; SU.hold=null; SU.holdEnd=performance.now(); const el=(performance.now()-H.t)/1000;
-  if(H.mode<3){ const need=SU_SIZES[H.mode][2]*.35-H.done; if(need>0){ const a=freeAim(); suNetPour(a.x,a.z,H.p,H.col,need,SU_SIZES[H.mode][1]); } }   // un toque: un chorrito
+  if(H.mode<3){ const need=SU_SIZES[H.mode][2]*SU_T[H.p].vm*.35-H.done; if(need>0){ const a=freeAim(); suNetPour(a.x,a.z,H.p,H.col,need,SU_SIZES[H.mode][1]); } }   // un toque: un chorrito
   else { const r=suBallR(el); suLaunch(H.p,H.col,r); if(SU.hb){ SU.hb.visible=false; } } freeRenderHud(); }
 function suBallR(el){ return .12+.36*Math.min(1,el/2.2); }
 function suBallPos(r){ const f=player.facing; return [player.pos.x+Math.sin(f)*(.5+r)-Math.cos(f)*(.35+r*.5), player.pos.y+1.2+r*.4, player.pos.z+Math.cos(f)*(.5+r)+Math.sin(f)*(.35+r*.5)]; }   // (enfrente y un poco a un lado, para que se vea)
-function suLaunch(p,col,r,net){ let x, y, z, vx, vy, vz; if(net){ [x,y,z,vx,vy,vz]=net; } else { [x,y,z]=suBallPos(r); _frR.setFromCamera(_frC.set(0,camMode==='first'?0:.2),camera); const D=_frR.ray.direction, s=14-7*Math.min(1,(r-.12)/.36); vx=D.x*s; vy=D.y*s+2.2; vz=D.z*s;
-    if(FNET.on && !FNET.host) fnOp(['qb',p,col,+r.toFixed(3),...[x-FREE.X,y-FREE.Y,z-FREE.Z,vx,vy,vz].map(v=>+v.toFixed(2))]); }
-  const mm=new THREE.Mesh(_suSph,suBallMat(p,col)); mm.scale.setScalar(r); mm.position.set(x,y,z); mm.userData.noBatch=true; FREE.g.add(mm);
-  SU.balls.push({x,y,z,vx,vy,vz,r,p,col,v:suVolOf(r),m:mm,t:0,me:!net}); try{ freeTone(300+200*(1-r),.2,'triangle',.06,500); }catch(e){} }
+function suLaunch(p,col,r,net){ const c=p===5?suCol(col):(+col>=SU_F?+col:0), s=p===5?255:0; let x, y, z, vx, vy, vz, v=suVolOf(r);
+  if(!net){ let air=0; for(const B of SU.balls) air+=B.v; const room=SU.max-SU.vol-air; if(room<.004){ flashNote('Ya hay mucha sustancia: quita un poco con el bote de basura o la escoba'); return; } if(v>room){ v=room; r=Math.cbrt(v/4.18879); } }   // (lo que lleva la bola cuenta)
+  if(net){ [x,y,z,vx,vy,vz]=net; } else { [x,y,z]=suBallPos(r); _frR.setFromCamera(_frC.set(0,camMode==='first'?0:.2),camera); const D=_frR.ray.direction, sp=14-7*Math.min(1,(r-.12)/.36); vx=D.x*sp; vy=D.y*sp+2.2; vz=D.z*sp;
+    if(FNET.on && !FNET.host) fnOp(['qb',p,c,+r.toFixed(3),...[x-FREE.X,y-FREE.Y,z-FREE.Z,vx,vy,vz].map(q=>+q.toFixed(2))]); }
+  const mm=new THREE.Mesh(_suSph,suBallMat(p,c,s)); mm.scale.setScalar(r); mm.position.set(x,y,z); mm.userData.noBatch=true; FREE.g.add(mm);
+  SU.balls.push({x,y,z,vx,vy,vz,r,p,col:c,c,s,v,m:mm,t:0,me:!net}); try{ freeTone(300+200*(1-r),.2,'triangle',.06,500); }catch(e){} }
 // en una sala: lo que echas lo manda el dueño (tú lo ves al momento, el dueño lo reparte a todos)
 function suNetPour(x,z,p,col,vol,r){ suPour(x,z,p,col,vol,r); if(FNET.on && !FNET.host) fnOp(['q',p,col,+(x-FREE.X).toFixed(2),+(z-FREE.Z).toFixed(2),+vol.toFixed(4),+r.toFixed(2)]); freeSaveSoon(); }
 // ---- cada cuadro ----
 function suTick(dt){ const T=suSelT(); SU.T+=dt; SU.U.uT.value=SU.T; if(SU.U.uRipN.value) suRipUp(); SU.U.uO.value.set(FREE.X,FREE.Z); try{ SU.U.uSky.value.copy(skyNow).convertSRGBToLinear(); if(sky.sunD) SU.U.uSunD.value.copy(sky.sunD); else SU.U.uSunD.value.copy(sun.position).sub(sun.target.position).normalize(); SU.U.uSunC.value.copy(sun.color).multiplyScalar(sun.intensity); }catch(e){}
-  // la cubeta: el chorro sale mientras aprietas; la bola crece
+  // la cubeta: el chorro sale mientras aprietas (las espesas salen mucho más); la bola crece
   if(SU.hold && (!T || FREE.play || FREE.del || FREE.paint)){ SU.hold=null; }
   if(SU.hold){ const H=SU.hold, el=(performance.now()-H.t)/1000;
-    if(H.mode<3){ const S=SU_SIZES[H.mode], a=freeAim(); if(a && a.ok){ const v=S[2]*dt; SU.acc=(SU.acc||0)+v; H.done+=v; if(SU.acc>S[2]*.12){ suNetPour(a.x,a.z,H.p,H.col,SU.acc,S[1]); SU.acc=0; if(H.p!==3 && H.p!==6) suRipple(a.x,a.z,.03); } suStream(true,a,H.p,H.col,S[1]); } }
-    else { const r=suBallR(el); if(!SU.hb){ SU.hb=new THREE.Mesh(_suSph,suBallMat(H.p,H.col)); SU.hb.userData.noBatch=true; FREE.g.add(SU.hb); } SU.hb.material=suBallMat(H.p,H.col); SU.hb.visible=true; const [x,y,z]=suBallPos(r), w=1+Math.sin(SU.T*13)*.05;
+    if(H.mode<3){ const S=SU_SIZES[H.mode], vm=SU_T[H.p].vm, a=freeAim(); if(a && a.ok){ const v=S[2]*vm*dt; SU.acc=(SU.acc||0)+v; H.done+=v; if(SU.acc>S[2]*vm*.12){ suNetPour(a.x,a.z,H.p,H.col,SU.acc,S[1]); SU.acc=0; suRipple(a.x,a.z,.03,H.p); } suStream(true,a,H.p,H.col,S[1]*(1+(vm-1)*.08)); } }
+    else { const r=suBallR(el), sb=H.p===5?255:0; if(!SU.hb){ SU.hb=new THREE.Mesh(_suSph,suBallMat(H.p,H.col,sb)); SU.hb.userData.noBatch=true; FREE.g.add(SU.hb); } SU.hb.material=suBallMat(H.p,H.col,sb); SU.hb.visible=true; const [x,y,z]=suBallPos(r), w=1+Math.sin(SU.T*13)*.05;
       SU.hb.position.set(x,y,z); SU.hb.scale.set(r*w,r/w,r*w); ui('freeTxt').textContent='Bola de '+SU_T[H.p].n.toLowerCase()+' '+'●'.repeat(1+Math.round(Math.min(1,el/2.2)*4))+' · suelta para lanzarla'; if(el>6) suHoldEnd(); suStream(false); } }
   else { suStream(false); if(SU.hb) SU.hb.visible=false; }
   { const gh=FREE.ghost; if(gh && T){ const ring=gh.getObjectByName('suRing'); if(ring){ ring.visible=SU.mode<3; const r=SU.mode<3?SU_SIZES[SU.mode][1]:.3; ring.scale.set(r,r,r); } const bk=gh.getObjectByName('suBucket'); if(bk) bk.visible=SU.mode<3; } }
-  if(!SU.list.length && !SU.balls.length && !SU.drops.length && !SU.emit.length){ SU.slow=1; SU.slip=false; return; }
-  // la miel que escurre despacito
-  for(let k=SU.emit.length-1;k>=0;k--){ const E=SU.emit[k], a=Math.min(E.left,E.rate*dt); suPour(E.x,E.z,E.p,E.col,a,E.r); E.left-=a; if(E.left<=1e-6) SU.emit.splice(k,1); }
+  suPopsTick(dt);
+  if(!SU.list.length && !SU.balls.length && !SU.drops.length && !SU.emit.length){ SU.slow=1; SU.slip=false; if(SU.bub && SU.bub.count) suFoamDraw(true); return; }
+  // la miel y el slime que escurren por la pared
+  for(let k=SU.emit.length-1;k>=0;k--){ const E=SU.emit[k], a=Math.min(E.left,E.rate*dt); suPour(E.x,E.z,E.p,E.c!==undefined?E.c:E.col,a,E.r,E.s); E.left-=a; if(E.left<=1e-6) SU.emit.splice(k,1); }
   // bolas
   for(let k=SU.balls.length-1;k>=0;k--){ const B=SU.balls[k]; B.t+=dt; B.vy-=9.5*dt; const n=Math.max(1,Math.ceil(Math.hypot(B.vx,B.vy,B.vz)*dt/(B.r*.6)));
     let hit=null; for(let s=0;s<n && !hit;s++){ B.x+=B.vx*dt/n; B.y+=B.vy*dt/n; B.z+=B.vz*dt/n; hit=suHit(B.x,B.y,B.z,B.r,B.t<.35); }
     if(!freeInside(B.x,B.z,.1) || B.t>6) hit=hit||{nx:0,ny:1,nz:0};
     if(hit){ if(hit.dyn && hit.o){ try{ freeWake(hit.o); hit.o.v.x+=B.vx*.25; hit.o.v.y+=2; hit.o.v.z+=B.vz*.25; }catch(e){} }
       if(hit.pl===player.pos){ player.vel.x+=B.vx*.15; player.vel.z+=B.vz*.15; try{ flashNote('¡Te cayó '+SU_T[B.p].n.toLowerCase()+'!'); }catch(e){} }
-      suSplat(B.p,B.col,B.v,B.x,B.y,B.z,B.vx,B.vy,B.vz,hit.nx,hit.ny,hit.nz,hit.o); B.m.parent && B.m.parent.remove(B.m); SU.balls.splice(k,1); continue; }
-    B.m.position.set(B.x,B.y,B.z); const w=1+Math.sin(B.t*18)*.06; B.m.scale.set(B.r*w,B.r/w,B.r*w); }
-  // gotitas
+      suSplat(B.p,B.c,B.s,B.v,B.x,B.y,B.z,B.vx,B.vy,B.vz,hit.nx,hit.ny,hit.nz,hit.o,B.r); B.m.parent && B.m.parent.remove(B.m); SU.balls.splice(k,1); continue; }
+    B.m.position.set(B.x,B.y,B.z); const w=1+Math.sin(B.t*18)*.04; B.m.scale.set(B.r*w,B.r/w,B.r*w); }
+  // gotas (de verdad: al caer se vuelven sustancia)
   if(SU.drops.length){ for(let k=SU.drops.length-1;k>=0;k--){ const d=SU.drops[k]; d.t+=dt; d.vy-=9.8*dt; d.x+=d.vx*dt; d.y+=d.vy*dt; d.z+=d.vz*dt; const h=d.t>.05?suHit(d.x,d.y,d.z,d.r,true):null;
-      if(h || d.t>4 || !freeInside(d.x,d.z,.1)){ if(h && h.o && d.p===5 && !h.dyn && (!FNET.on || FNET.host)) suStainObj(h.o,d.col); const ox=h&&h.ny<.5?d.x+h.nx*.15:d.x, oz=h&&h.ny<.5?d.z+h.nz*.15:d.z; if(freeInside(ox,oz,.1)){ suPour(ox,oz,d.p,d.col,d.v,.12); if(d.p!==3 && d.p!==6 && Math.random()<.5) suRipple(ox,oz,.025); if(d.p===2||d.p===4) suWobble(ox,oz,.4,.6); } SU.drops.splice(k,1); } }
+      if(h || d.t>4 || !freeInside(d.x,d.z,.1)){ if(h && h.o && d.p===5 && !h.dyn && (!FNET.on || FNET.host)) suStainObj(h.o,d.c); const ox=h&&h.ny<.5?d.x+h.nx*.15:d.x, oz=h&&h.ny<.5?d.z+h.nz*.15:d.z;
+        if(freeInside(ox,oz,.1)){ suPour(ox,oz,d.p,d.c,d.v,Math.max(.1,d.r),d.s); if(Math.random()<.5) suRipple(ox,oz,.025,d.p); if(d.p===2) suWobble(ox,oz,.4,.6); if(d.p===6) suPop(ox,d.y,oz,2); } SU.drops.splice(k,1); } }
     suDropsDraw(); } else if(SU.dmOn){ suDropsDraw(); }
   SU.dmOn=SU.drops.length>0;
   // lo que pisa
@@ -24215,7 +24334,7 @@ function suTick(dt){ const T=suSelT(); SU.T+=dt; SU.U.uT.value=SU.T; if(SU.U.uRi
     if(st && st[2]>me.y-.05){ const Ty=SU_T[st[0]], cc=suCell(me.x,me.z,false), k=Math.min(1,(st[2]-Math.max(me.y,cc?suB(cc[0],cc[1]):FREE.Y))/.05); slowT=1-(1-Ty.slow)*Math.max(0,k); SU.slip=!!Ty.slip;
       if(Ty.paint && st[1]>.003) SU.feet={c:st[3], amt:1, d:0, side:1, lx:me.x, lz:me.z}; }
     const r=suPush(me.x,me.z,me.y,.3,player.vel.x,player.vel.z,'me'); if(r){ const Ty=SU_T[r[0]]; slowT=Math.min(slowT,1-(1-Ty.slow)*Math.min(1,r[1]/.04)); if(Ty.slip) SU.slip=true; if(Ty.paint) SU.feet={c:r[2], amt:1, d:0, side:1, lx:me.x, lz:me.z}; }   // (caminando la vas abriendo: lo que empujas también te frena)
-    if(r){ const sp=Math.hypot(player.vel.x,player.vel.z); if(sp>1 && (SU.fxT=(SU.fxT||0)-dt)<=0){ SU.fxT=.22; if(r[0]!==3 && r[0]!==6) suRipple(me.x,me.z,.015+sp*.004); try{ if(r[0]===1) splashBurst(me.x,me.y+.05,me.z,.35); else if(r[0]===6) dustBurst(me.x,me.y+.4,me.z,8,1.2,'#ffffff',.1); else if(r[0]!==5) dustBurst(me.x,me.y+.05,me.z,4,.8,SU_T[r[0]].col,.07); }catch(e){} } }
+    if(r){ const sp=Math.hypot(player.vel.x,player.vel.z); if(sp>1 && (SU.fxT=(SU.fxT||0)-dt)<=0){ SU.fxT=.22; suRipple(me.x,me.z,.015+sp*.004,r[0]); try{ if(r[0]===1) splashBurst(me.x,me.y+.05,me.z,.35); }catch(e){} } }
     // huellitas de pintura donde ya no hay
     const F=SU.feet; if(F && F.amt>.15){ const dd=Math.hypot(me.x-F.lx,me.z-F.lz); F.d+=dd; F.lx=me.x; F.lz=me.z; if(F.d>.36 && player.grounded){ F.d=0; F.side=-F.side; const f=player.facing, ox=Math.cos(f)*.12*F.side, oz=-Math.sin(f)*.12*F.side, st2=suAt(me.x+ox,me.z+oz);
         if(!st2){ suPour(me.x+ox,me.z+oz,5,F.c,.0035*SU.cs*SU.cs*F.amt*2.2,.05); F.amt*=.86; } } } else SU.feet=null; }
@@ -24224,21 +24343,31 @@ function suTick(dt){ const T=suSelT(); SU.T+=dt; SU.U.uT.value=SU.T; if(SU.U.uRi
   for(const d of FREE.dyn){ if(d.sleep || d.held || d.P.st) continue; const c=d.root.position, rr=d.bx?Math.min(.45,d.bx.rad*.75):d.r*.8, yb=d.bx?c.y-d.bx.rad*.6:c.y-d.r; if(!SU.list.length) break; const st=suAt(c.x,c.z);
     const pu=suPush(c.x,c.z,yb,rr,d.v.x,d.v.z,'d'), tp=pu?pu[0]:(st && st[2]>yb?st[0]:0); if(!tp) continue; const Ty=SU_T[tp], k=Math.exp(-Ty.drag*dt*(pu?Math.min(1,.4+pu[1]/.03):Math.min(1,(st[2]-yb)/(d.r||.2)))); d.v.x*=k; d.v.z*=k; if(Ty.drag>3 && d.v.y>0) d.v.y*=.3; if(d.bx) d.bx.w.multiplyScalar(k); }
   // que corran (el agua da 3 pasitos por cuadro; si nadie se mueve, se duermen)
-  { const W=Math.min(4.8,dt*90), n=Math.max(1,Math.ceil(W)), sb=Math.min(1.2,W/n); for(let s=0;s<n;s++) suStep(sb); }   // (lo mismo por segundo a 20 o a 120 cuadros)
+  { const W=Math.min(4.8,dt*90), n=Math.max(1,Math.ceil(W)), sb=Math.min(1.2,W/n); for(let s=0;s<n;s++) suStep(sb,((SU.sp=(SU.sp|0)+1)%3)===2); }   // (lo mismo por segundo a 20 o a 120 cuadros)
   for(const C of SU.list){ if(C.aw>0){ C.aw-=dt; } }
-  // la espuma se deshace y las huellitas de pintura se borran (cada ¼ s)
-  if((SU.dk+=dt)>.25){ const a=SU.dk; SU.dk=0; for(const C of SU.list){ let ch=false; if(C.wbOn){ let any=false; for(let i=0;i<256;i++){ if(C.wb[i]>0){ C.wb[i]=C.wb[i]>.03?C.wb[i]*Math.pow(.25,a):0; any=any||C.wb[i]>0; } } C.wbOn=any; C.dirty=true; }   // (se le va pasando el temblor)
-      for(let i=0;i<256;i++){ if(C.pr[i]>0){ C.pr[i]-=a; if(C.pr[i]<=0){ C.pr[i]=0; C.aw=Math.max(C.aw,1); } } const t=C.t[i]; if(!t) continue; if(t===6){ C.h[i]-=a*.012; ch=true; } else if(t===5 && C.h[i]<.006){ C.h[i]-=a*.00025; ch=true; } if(C.h[i]<=1e-5){ C.h[i]=0; C.t[i]=0; } } if(ch){ C.dirty=true; C.aw=Math.max(C.aw,.3); C.ver++; } }
+  // la espuma se deshace (sus burbujas revientan) y las huellitas de pintura se borran (cada ¼ s)
+  if((SU.dk+=dt)>.25){ const a=SU.dk; SU.dk=0; const cx=camera.position.x, cz=camera.position.z, m=SU.cs;
+    for(const C of SU.list){ let ch=false; if(C.wbOn){ let any=false; for(let i=0;i<256;i++){ if(C.wb[i]>0){ C.wb[i]=C.wb[i]>.03?C.wb[i]*Math.pow(.25,a):0; any=any||C.wb[i]>0; } } C.wbOn=any; C.dirty=true; }   // (se le va pasando el temblor)
+      const near=C.hasFoam && Math.hypot(FREE.X+(C.ci*16+8)*m-cx,FREE.Z+(C.cj*16+8)*m-cz)<14;
+      for(let i=0;i<256;i++){ if(C.pr[i]>0){ C.pr[i]-=a; if(C.pr[i]<=0){ C.pr[i]=0; C.aw=Math.max(C.aw,1); } } if(!C.t[i]) continue;
+        for(let lay=0;lay<2;lay++){ const Tt=lay?C.t2:C.t, H=lay?C.h2:C.h, t=Tt[i]; if(!t) continue;
+          if(t===6){ H[i]-=a*.012; ch=true; if(near && Math.random()<.05*a/.25){ const [x,z]=suXZ(C,i); suPop(x,suB(C,i)+C.h[i]+C.h2[i],z,2); } }
+          else if(t===5 && H[i]<.006){ H[i]-=a*.00025; ch=true; } }
+        if((C.t[i] && C.h[i]<=1e-5) || (C.t2[i] && C.h2[i]<=1e-5)) suFix(C,i); }
+      if(ch){ C.dirty=true; C.aw=Math.max(C.aw,.3); C.ver++; } }
     // la pintura mancha los bloques que toca (solo el dueño de la sala; lo demás se reparte)
-    if(!FNET.on || FNET.host) for(const C of SU.list){ if(!C.n) continue; for(let i=0;i<256;i++){ if(C.t[i]!==5 || C.h[i]<.008) continue; const S=suB(C,i)+C.h[i]; for(const [dx,dz] of _suN){ const N=suNb(C,i,dx,dz,false); if(!N) continue; const bj=suB(N[0],N[1]); if(bj<S+.02 || bj>=1e3) continue; const [x,z]=suXZ(N[0],N[1]);
-          for(const o of fgQuery(x,z,x,z)){ if(o.sel && o.sel.k==='b' && o.box.min.y<S+.01 && o.box.max.y>S-.05 && x>=o.box.min.x && x<=o.box.max.x && z>=o.box.min.z && z<=o.box.max.z) suStainObj(o,C.c[i]); } } } } }
+    if(!FNET.on || FNET.host) for(const C of SU.list){ if(!C.n) continue; for(let i=0;i<256;i++){ const top=C.t2[i]===5, pc=top?C.c2[i]:C.c[i]; if(!top && C.t[i]!==5) continue; if((top?C.h2[i]:C.h[i])<.008) continue; const S=suB(C,i)+C.h[i]+C.h2[i];
+        for(const [dx,dz] of _suN){ const N=suNb(C,i,dx,dz,false); if(!N) continue; const bj=suB(N[0],N[1]); if(bj<S+.02 || bj>=1e3) continue; const [x,z]=suXZ(N[0],N[1]);
+          for(const o of fgQuery(x,z,x,z)){ if(o.sel && o.sel.k==='b' && o.box.min.y<S+.01 && o.box.max.y>S-.05 && x>=o.box.min.x && x<=o.box.max.x && z>=o.box.min.z && z<=o.box.max.z) suStainObj(o,pc); } } } } }
   // y se quitan los trozos vacíos que ya no se mueven
-  if((SU.gc=(SU.gc||0)+dt)>2){ SU.gc=0; suRecount(); for(let k=SU.list.length-1;k>=0;k--){ const C=SU.list[k]; if(C.n || C.aw>0) continue; for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } SU.ch.delete(C.k); SU.list.splice(k,1); } }
+  if((SU.gc=(SU.gc||0)+dt)>2){ SU.gc=0; suRecount(); for(let k=SU.list.length-1;k>=0;k--){ const C=SU.list[k]; if(C.n || C.aw>0) continue; for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } SU.ch.delete(C.k); SU.list.splice(k,1); SU.bubX=1e9; } }
   // dibujar (los que cambiaron; en los teléfonos lentos, menos por cuadro)
-  let budget=settings.quality==='min'||settings.quality==='low'?6:12; const L=SU.list, N=L.length; for(let k=0;k<N && budget>0;k++){ const C=L[(SU.rb+k)%N]; if(C.dirty){ suBuild(C); budget--; } } SU.rb=(SU.rb+1)%Math.max(1,N); }
+  let budget=settings.quality==='min'||settings.quality==='low'?6:12, fb=false; const L=SU.list, N=L.length; for(let k=0;k<N && budget>0;k++){ const C=L[(SU.rb+k)%N]; if(C.dirty){ suBuild(C); if(C.hasFoam || C.hadFoam) fb=true; budget--; } } SU.rb=(SU.rb+1)%Math.max(1,N);
+  // las burbujas de la espuma (cuando cambió o cuando te mueves lejos)
+  if(fb || Math.hypot(camera.position.x-(SU.bubX||0),camera.position.z-(SU.bubZ||0))>2.5){ if(L.some(C=>C.hasFoam)) suFoamDraw(); else if(SU.bub && SU.bub.count) suFoamDraw(true); } }
 // el chorro que cae de la cubeta
-function suStream(on,a,p,col,r){ if(!on){ if(SU.st) SU.st.visible=false; return; } if(!SU.st){ SU.st=new THREE.Mesh(new THREE.CylinderGeometry(1,1,1,10,1,true),suBallMat(1,0)); SU.st.userData.noBatch=true; FREE.g.add(SU.st); }
-  const s=SU.st, gy=a.y, top=gy+.85, w=.03+r*.12; s.material=suBallMat(p,col); s.visible=true; s.position.set(a.x,(gy+top)/2,a.z); s.scale.set(w*(1+Math.sin(SU.T*30)*.15),top-gy,w); }
+function suStream(on,a,p,col,r){ if(!on){ if(SU.st) SU.st.visible=false; return; } if(!SU.st){ SU.st=new THREE.Mesh(new THREE.CylinderGeometry(1,1,1,10,1,true),suBallMat(1,0,0)); SU.st.userData.noBatch=true; FREE.g.add(SU.st); }
+  const s=SU.st, gy=a.y, top=gy+.85, w=.03+r*.12; s.material=suBallMat(p,col,p===5?255:0); s.visible=true; s.position.set(a.x,(gy+top)/2,a.z); s.scale.set(w*(1+Math.sin(SU.T*30)*.15),top-gy,w); }
 // la cubeta (fantasma y fotito)
 function suMakeBucket(root,p,col){ const T=SU_T[p], c=p===5?FREE_COLS[col|0]:T.col, g=new THREE.Group(); g.name='suBucket'; g.position.set(.25,.95,0); g.rotation.z=.85; root.add(g);
   const body=new THREE.Mesh(new THREE.CylinderGeometry(.24,.18,.34,16,1,true),FM('#c8ccd6')); body.material.side=THREE.DoubleSide; g.add(body); const bot=new THREE.Mesh(new THREE.CircleGeometry(.18,16),FM('#aeb3bf')); bot.rotation.x=Math.PI/2; bot.position.y=-.17; g.add(bot);
@@ -24248,25 +24377,42 @@ function suMakeBucket(root,p,col){ const T=SU_T[p], c=p===5?FREE_COLS[col|0]:T.c
 // ---- guardar ----
 function suPack(){ suRecount(); if(!SU.list.length || SU.vol<1e-4) return undefined; const out=[]; for(const C of SU.list){ if(!C.n) continue; const s=suEnc(C); if(s) out.push([C.ci,C.cj,s]); } return out.length?out:undefined; }
 function suUnpack(L){ suClear(); if(!Array.isArray(L)) return; for(const e of L.slice(0,SU.maxCh)){ if(!Array.isArray(e) || e.length!==3 || !Number.isInteger(e[0]) || !Number.isInteger(e[1]) || typeof e[2]!=='string') continue; const C=suChunk(e[0],e[1],true); if(C) suDec(C,e[2]); } suRecount(); }
-// un trozo en texto: grupos «tipo,color,cuántos,alturas» (alturas de 3 en 3 mm, 2 letras); «0,n» = n vacíos
-function suEnc(C){ const parts=[]; let i=0; while(i<256){ const t=C.h[i]>.0015?C.t[i]:0, c=t===5?C.c[i]:0; let j=i; const hs=[];
-    while(j<256){ const tj=C.h[j]>.0015?C.t[j]:0, cj=tj===5?C.c[j]:0; if(tj!==t || cj!==c) break; if(t) hs.push(Math.min(1295,Math.round(C.h[j]/.003)).toString(36).padStart(2,'0')); j++; }
-    parts.push(t?t+','+c+','+(j-i)+','+hs.join(''):'0,'+(j-i)); i=j; } return parts.join(';'); }
-function suDec(C,s){ C.h.fill(0); C.t.fill(0); C.c.fill(0); let i=0; for(const g of s.split(';')){ const q=g.split(','), t=+q[0]|0; if(!t){ i+=Math.max(0,+q[1]|0); continue; } const c=+q[1]|0, n=+q[2]|0, H=q[3]||''; if(t<1||t>6) { i+=n; continue; }
-    for(let k=0;k<n && i<256;k++,i++){ const h=parseInt(H.substr(k*2,2),36)*.003; if(h>0){ C.h[i]=h; C.t[i]=t; C.c[i]=Math.max(0,Math.min(FREE_COLS.length-1,c)); } } if(i>=256) break; }
-  C.dirty=true; C.aw=1; C.n=1; C.ver++; }
+// v233: un trozo en texto: «v2|capa de abajo|capa de arriba»; cada capa en grupos «tipo,color,cuántos,alturas» (alturas de 3 en 3 mm,
+// 2 letras); «0,n» = n vacíos. color: «0» sin color, «wN» qué tan aguado está el lodo, o el pigmento en 16 tonos por canal + cuánto.
+// (los de v232 no tienen «v2|» y su color es el número de la paleta)
+function suQ(t,c,s){ if(t===3) return s?'w'+(s>>4).toString(36):'0'; if((t===1 || t===2 || t===5) && c){ return ((((c>>20)&15)<<12)|(((c>>12)&15)<<8)|(((c>>4)&15)<<4)|(s>>4)).toString(36); } return '0'; }
+function suUnQ(t,q){ if(!q || q==='0') return [0, t===5?255:0]; if(q[0]==='w'){ const v=parseInt(q.slice(1),36)|0; return [0, v?Math.min(255,v*16+8):0]; }
+  const v=parseInt(q,36)|0, s4=v&15; return [SU_F|((v>>12&15)*17<<16)|((v>>8&15)*17<<8)|((v>>4&15)*17), t===5?255:(s4?Math.min(255,s4*16+8):0)]; }
+function suEncL(C,lay){ const T=lay?C.t2:C.t, H=lay?C.h2:C.h, Cc=lay?C.c2:C.c, Ss=lay?C.s2:C.s, parts=[]; let i=0;
+  const kOf=k=>{ const t=H[k]>.0015?T[k]:0; return t?t+','+suQ(t,Cc[k],Ss[k]):'0'; };
+  while(i<256){ const kk=kOf(i), on=kk!=='0'; let j=i; const hs=[]; while(j<256 && kOf(j)===kk){ if(on) hs.push(Math.min(1295,Math.round(H[j]/.003)).toString(36).padStart(2,'0')); j++; }
+    parts.push(on?kk+','+(j-i)+','+hs.join(''):'0,'+(j-i)); i=j; } return parts.join(';'); }
+function suEnc(C){ return 'v2|'+suEncL(C,0)+(C.n2?'|'+suEncL(C,1):''); }
+function suDecL(C,lay,str){ const T=lay?C.t2:C.t, H=lay?C.h2:C.h, Cc=lay?C.c2:C.c, Ss=lay?C.s2:C.s; let i=0;
+  for(const g of str.split(';')){ const q=g.split(','), t=+q[0]|0; if(!t){ i+=Math.max(0,+q[1]|0); continue; } const n=+q[2]|0, HH=q[3]||''; if(t<1 || t>6){ i+=n; continue; } const cs=suUnQ(t,q[1]);
+    for(let k=0;k<n && i<256;k++,i++){ const h=parseInt(HH.substr(k*2,2),36)*.003; if(h>0){ H[i]=h; T[i]=t; Cc[i]=cs[0]; Ss[i]=cs[1]; } } if(i>=256) break; } }
+function suWipe(C){ for(const a of [C.h,C.t,C.c,C.s,C.h2,C.t2,C.c2,C.s2]) a.fill(0); C.n=0; C.n2=0; }
+function suDec(C,s){ suWipe(C);
+  if(s.startsWith('v2|')){ const P=s.split('|'); suDecL(C,0,P[1]||''); if(P[2]) suDecL(C,1,P[2]); }
+  else { let i=0; for(const g of s.split(';')){ const q=g.split(','), t=+q[0]|0; if(!t){ i+=Math.max(0,+q[1]|0); continue; } const c=+q[1]|0, n=+q[2]|0, H=q[3]||''; if(t<1 || t>6){ i+=n; continue; }
+      for(let k=0;k<n && i<256;k++,i++){ const h=parseInt(H.substr(k*2,2),36)*.003; if(h>0){ C.h[i]=h; C.t[i]=t; if(t===5){ C.c[i]=suCol(Math.max(0,Math.min(FREE_COLS.length-1,c))); C.s[i]=255; } } } if(i>=256) break; } }
+  let n=0, n2=0; for(let i=0;i<256;i++){ if(C.t2[i] && !(C.h[i]>0)) suFix(C,i); if(C.h[i]>0) n++; if(C.h2[i]>0) n2++; } C.n=n; C.n2=n2; C.dirty=true; C.aw=1; C.ver++; }
 // ---- en una sala: el dueño manda cómo están (unos trozos cada vez, primero los que cambiaron) ----
 function suNetPack(budget){ if(!SU.list.length && !SU.balls.length) return {c:[], k:'', b:[]}; const out=[]; let used=0; const add=C=>{ const s=C.n?suEnc(C):''; if(used+s.length>budget && out.length) return false; out.push([C.ci,C.cj,s]); used+=s.length+12; SU.sent.set(C.k,C.ver); return true; };
-  for(const C of SU.list){ if(out.length>=3) break; if((SU.sent.get(C.k)||0)!==C.ver && (C.n || SU.sent.has(C.k))){ if(!add(C)) break; } }
-  if(out.length<3 && SU.list.length){ for(let k=0;k<SU.list.length;k++){ const C=SU.list[(SU.rr=((SU.rr|0)+1)%SU.list.length)]; if(C.n && !out.some(e=>e[0]===C.ci&&e[1]===C.cj)){ add(C); break; } } }   // (uno de los quietos, para quien acaba de llegar)
-  return {c:out, k:SU.list.filter(C=>C.n).map(C=>C.ci+'.'+C.cj).join(' '), b:SU.balls.filter(B=>B.me && B.t<1.5).map(B=>B.id||(B.id=MY_PID+(++SU.netV))).slice(0,4).map(id=>{ const B=SU.balls.find(q=>q.id===id); return [id,B.p,B.col,+B.r.toFixed(3),...[B.x-FREE.X,B.y-FREE.Y,B.z-FREE.Z,B.vx,B.vy,B.vz].map(v=>+v.toFixed(2))]; })}; }
+  const L=SU.list, N=L.length;
+  // v233: por turnos: 2 de los que cambiaron y 1 de los quietos (para quien acaba de llegar); una vez va primero el quieto, para que nunca se quede sin lugar
+  const idle=()=>{ for(let k=0;k<N;k++){ const C=L[((SU.rr|0)+1)%N]; if(!C.n || out.some(e=>e[0]===C.ci&&e[1]===C.cj)){ SU.rr=((SU.rr|0)+1)%N; continue; } if(add(C)) SU.rr=((SU.rr|0)+1)%N; break; } };
+  const first=(SU.pk=(SU.pk|0)+1)&1; if(first && N) idle();
+  { const o0=SU.rc=((SU.rc|0)+1)%Math.max(1,N); for(let k=0;k<N;k++){ if(out.length>=(first?3:2)) break; const C=L[(o0+k)%N]; if((SU.sent.get(C.k)||0)!==C.ver && (C.n || SU.sent.has(C.k)) && !out.some(e=>e[0]===C.ci&&e[1]===C.cj)){ if(!add(C)) break; } } }
+  if(!first && N && out.length<3) idle();
+  return {c:out, k:SU.list.filter(C=>C.n).map(C=>C.ci+'.'+C.cj).join(' '), b:SU.balls.filter(B=>B.me && B.t<1.5).map(B=>B.id||(B.id=MY_PID+(++SU.netV))).slice(0,4).map(id=>{ const B=SU.balls.find(q=>q.id===id); return [id,B.p,B.c,+B.r.toFixed(3),...[B.x-FREE.X,B.y-FREE.Y,B.z-FREE.Z,B.vx,B.vy,B.vz].map(v=>+v.toFixed(2))]; })}; }
 function suNetApply(q){ if(!q || typeof q!=='object') return; const now=performance.now();
-  if(Array.isArray(q.c)) for(const e of q.c.slice(0,4)){ if(!Array.isArray(e) || !Number.isInteger(e[0]) || !Number.isInteger(e[1]) || typeof e[2]!=='string' || e[2].length>3000) continue; const C=suChunk(e[0],e[1],true); if(!C || now-(C.lp||0)<1200) continue; if(e[2]) suDec(C,e[2]); else { C.h.fill(0); C.t.fill(0); C.n=0; C.dirty=true; } C.rx=now; }
-  if(typeof q.k==='string' && q.k.length<4000){ const keep=new Set(q.k.split(' ').filter(Boolean)); for(const C of SU.list){ if(C.n && !keep.has(C.ci+'.'+C.cj) && now-(C.rx||0)>2500 && now-(C.lp||0)>2500){ C.h.fill(0); C.t.fill(0); C.n=0; C.dirty=true; } } }
+  if(Array.isArray(q.c)) for(const e of q.c.slice(0,4)){ if(!Array.isArray(e) || !Number.isInteger(e[0]) || !Number.isInteger(e[1]) || typeof e[2]!=='string' || e[2].length>6000) continue; const C=suChunk(e[0],e[1],true); if(!C || now-(C.lp||0)<1200) continue; if(e[2]) suDec(C,e[2]); else { suWipe(C); C.dirty=true; } C.rx=now; }
+  if(typeof q.k==='string' && q.k.length<4000){ const keep=new Set(q.k.split(' ').filter(Boolean)); for(const C of SU.list){ if(C.n && !keep.has(C.ci+'.'+C.cj) && now-(C.rx||0)>2500 && now-(C.lp||0)>2500){ suWipe(C); C.dirty=true; } } }
   if(Array.isArray(q.b)) for(const e of q.b.slice(0,6)){ if(!Array.isArray(e) || e.length!==10 || typeof e[0]!=='string' || SU.seen.has(e[0])) continue; SU.seen.add(e[0]); if(SU.seen.size>200) SU.seen.clear(); const [id,p,col,r,...v]=e; if(!(p>=1&&p<=6) || !(r>.05&&r<.6) || !v.every(Number.isFinite)) continue;
     suLaunch(p,col|0,r,[FREE.X+v[0],FREE.Y+v[1],FREE.Z+v[2],v[3],v[4],v[5]]); } }
 function suNetOp(pid,op){ const t=op[1], n=Number.isFinite;
-  if(t==='q'){ const [,,p,col,x,z,vol,r]=op; if(!(p>=1&&p<=6) || !n(x) || !n(z) || !(vol>0&&vol<.2) || !(r>0&&r<1.2)) return; suPour(FREE.X+x,FREE.Z+z,p|0,col|0,vol,r); }
+  if(t==='q'){ const [,,p,col,x,z,vol,r]=op; if(!(p>=1&&p<=6) || !n(x) || !n(z) || !(vol>0&&vol<1) || !(r>0&&r<1.2)) return; suPour(FREE.X+x,FREE.Z+z,p|0,col|0,vol,r); }
   else if(t==='qb'){ const [,,p,col,r,...v]=op; if(!(p>=1&&p<=6) || !(r>.05&&r<.6) || v.length!==6 || !v.every(n)) return; suLaunch(p|0,col|0,r,[FREE.X+v[0],FREE.Y+v[1],FREE.Z+v[2],v[3],v[4],v[5]]); }
   else if(t==='qx'){ const [,,x,z]=op; if(n(x) && n(z)) suRemoveAt(FREE.X+x,FREE.Z+z); }
   else if(t==='qc') suClear(); }
