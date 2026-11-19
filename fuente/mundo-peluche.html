@@ -1490,7 +1490,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='238';
+const GAME_VERSION='239';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -22943,7 +22943,7 @@ function grTick(dt){ if(!GR.M) return; const P=GR.pos, V=GR.v; let n=GR.n;
   const g=GR.M.geometry; g.setDrawRange(0,m); if(m || GR.was){ g.attributes.position.needsUpdate=true; g.attributes.color.needsUpdate=true; } GR.was=m>0; GR.M.visible=m>0; }
 // la sustancia en (x,z): lo más alto entre el centro y su orillita (así no se cuenta el hueco que la misma cosa abrió); sin espuma para lo que no es ligerito
 function suSurf(x,z,r,dn){ let best=null; const chk=(px,pz)=>{ const q=suCell(px,pz,false); if(!q) return; const [C,i]=q; let h=C.h[i], p=C.t[i]; if(!(h>0) || !p) return; const b=suB(C,i); if(b>=1e3) return; let top=b+h;
-    if(C.t2[i] && C.h2[i]>0){ if(C.t2[i]!==6 || dn<.3){ top+=C.h2[i]; p=C.t2[i]; } } else if(p===6 && dn>=.3) return; if(p===7) return; if(!best || top>best[0]) best=[top,p]; };   // (en la arena no se flota: uno se para encima)
+    if(C.t2[i] && C.h2[i]>0){ if(C.t2[i]!==6 || dn<.3){ top+=C.h2[i]; p=C.t2[i]; } } else if(p===6 && dn>=.3) return; if(p===7) return; top+=wvH(px,pz,r); if(!best || top>best[0]) best=[top,p]; };   // (v239: con la ola)   // (en la arena no se flota: uno se para encima)
   chk(x,z); const rr=r+.12; chk(x+rr,z); chk(x-rr,z); chk(x,z+rr); chk(x,z-rr); return best; }
 // ---- la planicie ----
 function freeBuildWorld(){ if(FREE.g) return; const g=FREE.g=new THREE.Group(); g.visible=false; scene.add(g);
@@ -23347,10 +23347,11 @@ function freePhys(dt){ const D=FREE.dyn; if(!D.length || (FNET.on && !FNET.host)
     if(d.P.toy){ if((d.ts || d.P.toy==='helio' || d.P.toy==='papalote') && d.sleep) freeWake(d); if(!d.sleep && toyHost(d,dt)) continue; }   // v229: juguetes   // v224: lo trae alguien cargando (arriba de la cabeza)
     // v216: dormida (quieta): solo despierta si algo la empuja o un peluche se le acerca
     if(d.sleep && SU.list.length && ((d.suT=(d.suT||Math.random()*.5)-dt)<=0)){ d.suT=.5; const rho=freeDn(d), sf=suSurf(p.x,p.z,r,rho); if(sf && SU_T[sf[1]].dn>rho && (sf[0]-(p.y-r))/(2*r)>rho/SU_T[sf[1]].dn+.18) freeWake(d); }   // v237: le llegó sustancia (más honda de lo que flota): despierta
+    if(d.sleep && WV.act && wvStir(p.x,p.z,r+.2)) freeWake(d);   // v239: el agua se movió
     if(d.sleep){ if(v.lengthSq()>.0004) freeWake(d); else { let near=false; for(const w of who){ if(Math.abs(p.x-w.x)<r+.7 && Math.abs(p.z-w.z)<r+.7 && p.y<w.y+PLAYER_H+r+.3 && p.y+r>w.y-.3){ near=true; break; } } if(near) freeWake(d); else continue; } }
     if(FREE.wat && FREE.wat.length && d.P.mass<1){ const wt=pqWaterTop(p.x,p.z); if(wt!==null && p.y<wt+r*.15){ v.y+=(G+Math.min(30,(wt-p.y)*40))*dt; const f=Math.max(0,1-2.4*dt); v.x*=f; v.y*=f; v.z*=f; d.still=0; } }   // v218: flotan en el agua
     d.flt=false; if(SU.list.length && !d.P.float){ const rho=freeDn(d), sf=suSurf(p.x,p.z,r,rho); if(sf && p.y-r<sf[0]){ const T=SU_T[sf[1]], fr=Math.min(1,(sf[0]-(p.y-r))/(2*r)), ra=Math.min(T.dn/rho,6), up=G*ra*fr;   // v237: flota o se hunde según lo que pesa (como de verdad)
-        const vis=.6+T.drag, kx=Math.exp(-vis*Math.min(3,fr/Math.max(rho,.05))*dt), ky=Math.exp(-(2*Math.sqrt(G*ra/(2*r))*Math.min(1,fr*4)+vis*.8*fr)*dt); v.x*=kx; v.z*=kx; v.y*=ky; v.y+=up*dt;   /* (lo ligero se frena más: tiene menos peso para seguir; y sube y baja sin rebotar como resorte) */   /* (lo espeso frena suave: en la miel avanza despacito, en el agua casi nada) */
+        const vis=.6+T.drag, kx=Math.exp(-vis*Math.min(3,fr/Math.max(rho,.05))*dt), ky=Math.exp(-(2*Math.sqrt(G*ra/(2*r))*Math.min(1,fr*4)+vis*.8*fr)*dt); { const u=wvU(p.x,p.z,null,r+.2); v.x=u[0]+(v.x-u[0])*kx; v.z=u[1]+(v.z-u[1])*kx; } v.y*=ky; v.y+=up*dt;   /* v239: la corriente se la lleva */   /* (lo ligero se frena más: tiene menos peso para seguir; y sube y baja sin rebotar como resorte) */   /* (lo espeso frena suave: en la miel avanza despacito, en el agua casi nada) */
         if(T.dn>rho && fr>.25) d.flt=true; } }
     if(d.P.float){ const gb=freeGround(p.x,p.z,p.y+.2), h0=(gb===null?FREE.Y:gb)+3.2; v.y+=((h0-p.y)*4-v.y*2)*dt; const f=Math.max(0,1-.8*dt); v.x*=f; v.z*=f; } else v.y-=G*(d.gk===undefined?1:d.gk)*dt;   // v224: el globo flota (v229: lo que planea cae más despacio)
     p.addScaledVector(v,dt); d.kick=Math.max(0,d.kick-dt);
@@ -23425,12 +23426,13 @@ function bxPhys(dt,D){ const L=[]; for(const d of D) if(d.bx && !d.held) L.push(
   for(const d of L){ if(!d.sleep) continue; const x=d.bx.x, rr=d.bx.rad+.45; let wk=false; for(const w of who){ if(Math.abs(x.x-w[3])<rr && Math.abs(x.z-w[5])<rr && x.y-d.bx.rad<w[4]+PLAYER_H && x.y+d.bx.rad>w[4]){ wk=true; break; } }
     if(!wk) for(const sd of S){ if(sd.sleep) continue; const c=sd.root.position, q=d.bx.rad+sd.r+.15; if((c.x-x.x)**2+(c.y-x.y)**2+(c.z-x.z)**2<q*q){ wk=true; break; } }
     if(!wk && SU.list.length && ((d.suT=(d.suT||Math.random()*.5)-dt)<=0)){ d.suT=.5; const rho=freeDn(d), sf=suSurf(x.x,x.z,.1,rho); if(sf && SU_T[sf[1]].dn>rho){ const R=d.bx.R, he=d.bx.he, hy=Math.abs(R[3])*he[0]+Math.abs(R[4])*he[1]+Math.abs(R[5])*he[2], fr=(sf[0]-(x.y-hy))/(2*hy); if(fr>rho/SU_T[sf[1]].dn+.18) wk=true; } }   // v237: le llegó sustancia (le queda más honda de lo que flota): se despierta para flotar
+    if(!wk && WV.act && wvStir(x.x,x.z,d.bx.rad*.8+.1)) wk=true;   // v239: el agua se movió
     if(wk){ bxWake(d); awake++; } }
   if(!awake){ p0.copy(pp); for(const r of mp.remotes.values()) if(r._bxp && r.pos) r._bxp.copy(r.pos); return; }
   const n=BX.sub, h=Math.min(dt,.033)/n, C=[]; BX.cnt=0;
   for(const d of L){ const b=d.bx; b.sd=!d.sleep && (SU.hasSand||SU.hasCrust) && (suSandTop(b.x.x,b.x.z)>-1e8 || suSandTop(b.x.x+b.rad,b.x.z)>-1e8 || suSandTop(b.x.x-b.rad,b.x.z)>-1e8 || suSandTop(b.x.x,b.x.z+b.rad)>-1e8 || suSandTop(b.x.x,b.x.z-b.rad)>-1e8); }   // v237: ¿tiene arena cerca? (entonces se para encima)
   for(const d of L){ const b=d.bx; b.su=null; if(d.sleep || !SU.list.length) continue; const rho=freeDn(d), sf=suSurf(b.x.x,b.x.z,Math.min(.5,b.rad*.6),rho); if(!sf || sf[0]<b.x.y-b.rad) continue;   // v237: en la sustancia: flota o se hunde según su peso, y lo espeso la frena suave
-    const T=SU_T[sf[1]], N=b.pts.length/3, ra=Math.min(T.dn/rho,6), R=b.R, he=b.he, hy=Math.abs(R[3])*he[0]+Math.abs(R[4])*he[1]+Math.abs(R[5])*he[2]; b.su=sf; b.suT=T; b.suK=BX.G*ra/N*h*h/b.im; b.suN=0; b.suNt=N; b.suWn=2*Math.sqrt(BX.G*ra/(2*hy)); b.suRho=rho; }
+    const T=SU_T[sf[1]], N=b.pts.length/3, ra=Math.min(T.dn/rho,6), R=b.R, he=b.he, hy=Math.abs(R[3])*he[0]+Math.abs(R[4])*he[1]+Math.abs(R[5])*he[2]; b.su=sf; b.suT=T; b.suU=wvU(b.x.x,b.x.z,b.suU||[0,0],b.rad*.8+.1); b.suK=BX.G*ra/N*h*h/b.im; b.suN=0; b.suNt=N; b.suWn=2*Math.sqrt(BX.G*ra/(2*hy)); b.suRho=rho; }
   for(let s=0;s<n;s++){ const f=(s+1)/n; C.length=0;
     for(const d of L){ if(d.sleep) continue; const b=d.bx; b.xp.copy(b.x); b.qp.copy(b.q); b.Rp.set(b.R); const v=d.v;
       v.y-=BX.G*h; b.x.addScaledVector(v,h); const w=b.w, q=b.q, qx=q.x, qy=q.y, qz=q.z, qw=q.w, k=.5*h;
@@ -23470,7 +23472,7 @@ function bxPhys(dt,D){ const L=[]; for(const d of D) if(d.bx && !d.held) L.push(
     // velocidades a partir de cuánto se movió
     for(const d of L){ if(d.sleep) continue; const b=d.bx, v=d.v; v.set((b.x.x-b.xp.x)/h,(b.x.y-b.xp.y)/h,(b.x.z-b.xp.z)/h);
       _bxQ.copy(b.qp).invert().premultiply(b.q); const sg=_bxQ.w<0?-2:2; b.w.set(_bxQ.x*sg/h,_bxQ.y*sg/h,_bxQ.z*sg/h); const wl=b.w.length(); if(wl>30) b.w.multiplyScalar(30/wl);
-      if(b.su && b.suN>0){ const fr=Math.min(1,b.suN/b.suNt), vis=.6+b.suT.drag, kf=Math.min(3,fr/Math.max(b.suRho,.05)), kx=Math.exp(-vis*kf*h); v.x*=kx; v.z*=kx; v.y*=Math.exp(-(b.suWn*Math.min(1,fr*4)+vis*.8*fr)*h); b.w.multiplyScalar(Math.exp(-(vis*1.5*kf+.5*fr)*h)); b.suN=0; } }
+      if(b.su && b.suN>0){ const fr=Math.min(1,b.suN/b.suNt), vis=.6+b.suT.drag, kf=Math.min(3,fr/Math.max(b.suRho,.05)), kx=Math.exp(-vis*kf*h), uu=b.suU||_wvU0; v.x=uu[0]+(v.x-uu[0])*kx; v.z=uu[1]+(v.z-uu[1])*kx; v.y*=Math.exp(-(b.suWn*Math.min(1,fr*4)+vis*.8*fr)*h); b.w.multiplyScalar(Math.exp(-(vis*1.5*kf+.5*fr)*h)); b.suN=0; } }
     // fricción al resbalar (con velocidad)
     for(let c=0;c<C.length;c+=12){ const A=C[c], B=C[c+1], nx=C[c+2], ny=C[c+3], nz=C[c+4], l=C[c+5], rAx=C[c+6], rAy=C[c+7], rAz=C[c+8], rBx=C[c+9], rBy=C[c+10], rBz=C[c+11], a=A.bx, wa=a.w, va=A.v;
       let vx=va.x+wa.y*rAz-wa.z*rAy, vy=va.y+wa.z*rAx-wa.x*rAz, vz=va.z+wa.x*rAy-wa.y*rAx; let b=null;
@@ -24185,13 +24187,13 @@ function suRemoveAt(x,z){ const q=suCell(x,z,false); if(!q) return 0; const [C0,
     if(C.t2[i]===p && C.h2[i]>0){ C.h2[i]=0; hit=true; } else if(C.t[i]===p && C.h[i]>0){ C.h[i]=0; hit=true; } if(!hit) continue; suFix(C,i); C.dirty=true; C.aw=2; C.ver++; n++;
     for(const [dx,dz] of _suN){ const N=suNb(C,i,dx,dz,false); if(N) st.push(N); } }
   suRecount(); return n; }
-function suClear(){ SU.clr=(SU.clr|0)+1; SU.hasSand=false; SU.hasCrust=false; GR.n=0; if(SU.fg) SU.fg.clear(); if(SU.sc) suFarClear(); if(SU.falls) SU.falls.clear(); if(SU.wl) wlClear(); try{ for(const P of FU.pts) P.dead=true; FU.pts.length=0; }catch(e){} for(const p in SU.flatM){ const M=SU.flatM[p]; if(M){ M.visible=false; } } SU.flatDirty=false; for(const C of SU.list) for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } SU.ch.clear(); SU.list.length=0; SU.vol=0; SU.balls.forEach(b=>b.m && b.m.parent && b.m.parent.remove(b.m)); SU.balls.length=0; SU.rip.length=0; SU.U.uRipN.value=0; SU.fo.length=0; SU.U.uFoN.value=0; SU.drops.length=0; SU.emit.length=0; SU.pops.length=0; SU.feet=null; suDropsDraw(); suFoamDraw(true); }
+function suClear(){ try{ wvOff(); WV.bod.clear(); }catch(e){} SU.clr=(SU.clr|0)+1; SU.hasSand=false; SU.hasCrust=false; GR.n=0; if(SU.fg) SU.fg.clear(); if(SU.sc) suFarClear(); if(SU.falls) SU.falls.clear(); if(SU.wl) wlClear(); try{ for(const P of FU.pts) P.dead=true; FU.pts.length=0; }catch(e){} for(const p in SU.flatM){ const M=SU.flatM[p]; if(M){ M.visible=false; } } SU.flatDirty=false; for(const C of SU.list) for(const m of C.ms) if(m){ m.parent && m.parent.remove(m); m.geometry.dispose(); } SU.ch.clear(); SU.list.length=0; SU.vol=0; SU.balls.forEach(b=>b.m && b.m.parent && b.m.parent.remove(b.m)); SU.balls.length=0; SU.rip.length=0; SU.U.uRipN.value=0; SU.fo.length=0; SU.U.uFoN.value=0; SU.drops.length=0; SU.emit.length=0; SU.pops.length=0; SU.feet=null; suDropsDraw(); suFoamDraw(true); }
 function suRecountFast(){ let v=0; const a=SU.cs*SU.cs; for(const C of SU.list){ if(C.vv!==C.ver || C.aw>0){ let w=0, n=0, n2=0; for(let i=0;i<256;i++){ const h=C.h[i], h2=C.h2[i]; if(h>0){ w+=h; n++; } if(h2>0){ w+=h2; n2++; } } C.v=w*a; C.n=n; C.n2=n2; C.vv=C.ver; } v+=C.v; } SU.vol=v; }
 function suRecount(){ let v=0; const a=SU.cs*SU.cs; for(const C of SU.list){ let n=0, n2=0; for(let i=0;i<256;i++){ const h=C.h[i], h2=C.h2[i]; if(h>0){ v+=h*a; n++; } if(h2>0){ v+=h2*a; n2++; } } C.n=n; C.n2=n2; } SU.vol=v; }
 // v232b: cómo se ven. En todas las calidades menos Mínima: brillos que se mueven (olitas), reflejo del cielo, ondas donde pisas o
 // caen gotas, espuma blanca en la orillita del agua, burbujitas en el slime, grumos con brillo de mojado en el lodo y bolitas en la
 // espuma. El color de cada esquina lo pone suBuild (el agua es más oscura donde está honda, como el mar). En Mínima: el color con su brillo.
-SU.U={uT:{value:0}, uSky:{value:new THREE.Color('#9fd3ff')}, uO:{value:new THREE.Vector2()}, uRip:{value:Array.from({length:8},()=>new THREE.Vector4(0,0,-99,0))}, uRipN:{value:0}, uFo:{value:Array.from({length:6},()=>new THREE.Vector4())}, uFoS:{value:[new THREE.Vector4(),new THREE.Vector4()]}, uFoN:{value:0}, uSunD:{value:new THREE.Vector3(0,1,0)}, uSunC:{value:new THREE.Color(1,1,1)}, uDet:{value:null}};
+SU.U={uT:{value:0}, uSky:{value:new THREE.Color('#9fd3ff')}, uO:{value:new THREE.Vector2()}, uRip:{value:Array.from({length:8},()=>new THREE.Vector4(0,0,-99,0))}, uRipN:{value:0}, uFo:{value:Array.from({length:6},()=>new THREE.Vector4())}, uFoS:{value:[new THREE.Vector4(),new THREE.Vector4()]}, uFoN:{value:0}, uSunD:{value:new THREE.Vector3(0,1,0)}, uSunC:{value:new THREE.Color(1,1,1)}, uDet:{value:null}}; SU.U.uWv={value:null}; SU.U.uWvO={value:new THREE.Vector4(0,0,1/128,0)};   // (v239: las olas y corrientes)
 const SU_GLSL=`
 float suN(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); float a=fract(sin(dot(i,vec2(127.1,311.7)))*43758.5), b=fract(sin(dot(i+vec2(1,0),vec2(127.1,311.7)))*43758.5), c=fract(sin(dot(i+vec2(0,1),vec2(127.1,311.7)))*43758.5), d=fract(sin(dot(i+vec2(1,1),vec2(127.1,311.7)))*43758.5); return mix(mix(a,b,f.x),mix(c,d,f.x),f.y); }
 float suF(vec2 p, float t){
@@ -24222,10 +24224,13 @@ function suMat(key){ if(SU.mats[key]) return SU.mats[key]; const p=key>SU_NT?key
   if(p===6) m.emissive=new THREE.Color('#2c3038'); if(p===2) m.emissive=new THREE.Color('#14300a');
   if(!simple){ if(!SU.U.uDet.value){ try{ SU.U.uDet.value=seaTex; }catch(e){} if(!SU.U.uDet.value){ const t=new THREE.DataTexture(new Uint8Array([150,190,220,255]),1,1); t.needsUpdate=true; SU.U.uDet.value=t; } }
     m.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,SU.U); sh.defines=Object.assign(sh.defines||{},{SU_K:p});
-      sh.vertexShader='attribute float aH; attribute float aW; uniform float uT; uniform vec2 uO; varying vec2 vL; varying float vSuH;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n  transformed.y+=sin(uT*9.0+position.x*5.0+position.z*4.0)*aW*.025;\n  vSuH=aH; vL=(modelMatrix*vec4(transformed,1.0)).xz-uO;').replace('#include <shadowmap_vertex>',SU_SHV);
-      sh.fragmentShader='uniform float uT; uniform vec3 uSky; uniform vec4 uRip[8]; uniform int uRipN; uniform vec4 uFo[6]; uniform vec4 uFoS[2]; uniform int uFoN; uniform vec3 uSunD; uniform vec3 uSunC; uniform sampler2D uDet; varying vec2 vL; varying float vSuH;\n'+SU_GLSL+'\n'+sh.fragmentShader
+      sh.vertexShader='attribute float aH; attribute float aW; uniform float uT; uniform vec2 uO; uniform sampler2D uWv; uniform vec4 uWvO; varying vec2 vL; varying float vSuH;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n  transformed.y+=sin(uT*9.0+position.x*5.0+position.z*4.0)*aW*.025;\n  vSuH=aH; vL=(modelMatrix*vec4(transformed,1.0)).xz-uO;'+(p!==7 && renderer.capabilities.vertexTextures?'\n  if(uWvO.w>.5){ vec4 wq=texture2D(uWv,(vL*'+(1/SU.cs).toFixed(3)+'-uWvO.xy)*uWvO.z); transformed.y+=(wq.r*255.0-128.0)*('+(WV_HMAX/127).toFixed(6)+')*wq.a*smoothstep(.004,.04,aH); }':'')).replace('#include <shadowmap_vertex>',SU_SHV);
+      sh.fragmentShader='uniform float uT; uniform vec3 uSky; uniform sampler2D uWv; uniform vec4 uWvO; uniform vec4 uRip[8]; uniform int uRipN; uniform vec4 uFo[6]; uniform vec4 uFoS[2]; uniform int uFoN; uniform vec3 uSunD; uniform vec3 uSunC; uniform sampler2D uDet; varying vec2 vL; varying float vSuH;\n'+SU_GLSL+'\n'+sh.fragmentShader
         .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
   { float e=${SU_E[p].toFixed(3)}, a=${SU_AMP[p].toFixed(4)}, f0=suF(vL,uT); vec2 g=vec2(suF(vL+vec2(e,0.0),uT)-f0, suF(vL+vec2(0.0,e),uT)-f0)/e*a;
+#if SU_K!=7
+    if(uWvO.w>.5){ vec2 wu=(vL*${(1/SU.cs).toFixed(3)}-uWvO.xy)*uWvO.z; float w0=texture2D(uWv,wu).r, w1=texture2D(uWv,wu+vec2(uWvO.z*.5,0.0)).r, w2=texture2D(uWv,wu+vec2(0.0,uWvO.z*.5)).r; g+=vec2(w1-w0,w2-w0)*${(255*WV_HMAX/127/(SU.cs*.5)*(p===1?4:p===5?3:2)).toFixed(4)}; }   // v239: la ola inclina la superficie
+#endif
 #if SU_K==1 || SU_K==5
     for(int k=0;k<8;k++){ if(k>=uRipN) break; vec4 R=uRip[k]; float age=uT-R.z; if(age<0.0 || age>2.5) continue; vec2 dv=vL-R.xy; float d=length(dv)+1e-3;
 #if SU_K==1
@@ -24242,7 +24247,11 @@ function suMat(key){ if(SU.mats[key]) return SU.mats[key]; const p=key>SU_NT?key
 #endif`)
         .replace('#include <color_fragment>',`#include <color_fragment>
 #if SU_K==1
-  { vec3 det=pow(texture2D(uDet,vL/3.0+vec2(uT*.02,uT*.012)).rgb,vec3(2.2)); diffuseColor.rgb*=mix(vec3(1.0),det*1.3,.55);   // la misma tela del mar
+  { vec2 b0=vL/3.0+vec2(uT*.02,uT*.012); vec3 det;
+    if(uWvO.w>.5){ vec2 cu=(texture2D(uWv,(vL*${(1/SU.cs).toFixed(3)}-uWvO.xy)*uWvO.z).gb*255.0-128.0)*${(1.5/127).toFixed(5)}; float f1=fract(uT*.4), f2=fract(uT*.4+.5);   // v239: la tela del agua se va con la corriente
+      det=pow(mix(texture2D(uDet,b0-cu*f1*.833).rgb,texture2D(uDet,b0+vec2(.37,.21)-cu*f2*.833).rgb,abs(f1*2.0-1.0)),vec3(2.2)); }
+    else det=pow(texture2D(uDet,b0).rgb,vec3(2.2));
+    diffuseColor.rgb*=mix(vec3(1.0),det*1.3,.55);   // la misma tela del mar
     diffuseColor.rgb=mix(diffuseColor.rgb,vec3(1.0),(1.0-smoothstep(.003,.014,vSuH))*.6*(.5+.5*smoothstep(.25,.7,det.g))); diffuseColor.a*=mix(.7,1.0,smoothstep(.0,.03,vSuH)); 
     float fo=0.0; for(int k=0;k<6;k++){ if(k>=uFoN) break; vec4 F=uFo[k]; vec4 S4=k<4?uFoS[0]:uFoS[1]; int j=k<4?k:k-4; float s=dot(S4,vec4(equal(ivec4(j),ivec4(0,1,2,3))));   // v237: espuma blanca donde pega la cortina de agua
       vec2 e=F.zw, d0=vL-F.xy; float tt=clamp(dot(d0,e)/max(dot(e,e),1e-4),-1.0,1.0), d=length(d0-e*tt); if(d>.9) continue;
@@ -24259,7 +24268,8 @@ function suMat(key){ if(SU.mats[key]) return SU.mats[key]; const p=key>SU_NT?key
     if(dk>.05){ vec2 q=vL*3.2, c=floor(q), f=fract(q); float d1=9.0, d2=9.0; for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 o=vec2(float(i),float(j)), h=vec2(fract(sin(dot(c+o,vec2(127.1,311.7)))*43758.5),fract(sin(dot(c+o,vec2(269.5,183.3)))*43758.5)); float d=length(o+h-f); if(d<d1){ d2=d1; d1=d; } else if(d<d2) d2=d; }
       float cr=1.0-smoothstep(.0,.07,d2-d1); diffuseColor.rgb*=1.0-cr*.6*dk; diffuseColor.rgb*=1.0+(fract(sin(dot(c,vec2(7.1,3.3)))*91.7)-.5)*.1*dk; } }
 #elif SU_K==6
-  diffuseColor.rgb*=mix(.84,1.0,suF(vL,uT));
+  { float fz=suF(vL,uT); if(uWvO.w>.5){ vec2 cu=(texture2D(uWv,(vL*${(1/SU.cs).toFixed(3)}-uWvO.xy)*uWvO.z).gb*255.0-128.0)*${(1.5/127).toFixed(5)}; float f1=fract(uT*.4), f2=fract(uT*.4+.5); fz=mix(suF(vL-cu*f1*2.5,uT),suF(vL+vec2(.37,.21)-cu*f2*2.5,uT),abs(f1*2.0-1.0)); }   // v239: la espuma se ve ir con la corriente
+    diffuseColor.rgb*=mix(.84,1.0,fz); }
 #elif SU_K==7
   { float dd=length(vViewPosition), lod=1.0-smoothstep(3.5,13.0,dd); vec2 w=vL+vec2(vSuH*3.1,vSuH*2.3);   // v237: de cerca, miles de granitos de colores y piedritas (se reacomodan cuando la arena se mueve)
     vec2 q=w*230.0, c=floor(q); float r=fract(sin(dot(c,vec2(12.9898,78.233)))*43758.5453);
@@ -24297,7 +24307,150 @@ SU.fo=[]; function suFoAdd(P,x,z){ const L=SU.fo, F=P.fF||null; let e=F?L.find(q
 function suFoUp(){ const L=SU.fo; for(let k=L.length-1;k>=0;k--) if(SU.T-L[k].T>2.5) L.splice(k,1);
   if(L.length>6){ const cx=camera.position.x, cz=camera.position.z; L.sort((a,b)=>Math.hypot(a.x-cx,a.z-cz)-Math.hypot(b.x-cx,b.z-cz)); }
   const V=SU.U.uFo.value, S=SU.U.uFoS.value, n=Math.min(6,L.length); for(let k=0;k<n;k++){ const e=L[k]; V[k].set(e.x-FREE.X,e.z-FREE.Z,e.ex,e.ez); S[k>>2].setComponent(k&3,e.s*Math.max(0,Math.min(1,(2.5-(SU.T-e.T))/1.5))); } SU.U.uFoN.value=n; }
-SU.rip=[]; function suRipple(x,z,a,p){ if(p!==undefined && p!==1 && p!==5) return; if(SU.rip.length>=8) SU.rip.shift(); SU.rip.push([x-FREE.X,z-FREE.Z,SU.T,Math.min(.06,a)]); suRipUp(); }
+SU.rip=[]; function suRipple(x,z,a,p,noWv){ if(!noWv && a>0) try{ wvImp(x,z,Math.min(.06,a)*1.2,.3+Math.min(.06,a)*4); }catch(e){} if(p!==undefined && p!==1 && p!==5) return;   // (v239: también una ola de verdad, que viaja y rebota)
+  if(SU.rip.length>=8) SU.rip.shift(); SU.rip.push([x-FREE.X,z-FREE.Z,SU.T,Math.min(.06,a)]); suRipUp(); }
+// ======================================================================================
+// ---------------- v239: OLAS Y CORRIENTES ----------------
+// Encima de la sustancia (sin mover nada de volumen) se lleva, en un cuadro de 128×128 cuadritos (25 m) alrededor de la cámara:
+//  · olas: qué tan arriba/abajo está la superficie (h) y qué tan rápido se mueve (v); viajan, rebotan en paredes y orillas y se apagan
+//    (rápidas y grandes en el agua; lentitas y chiquitas en la miel, el slime y el lodo; la arena y el lodo seco no tienen olas)
+//  · corrientes: hacia dónde va el líquido (ux, uz): las empujan los chorros, cascadas y fuentes, lo que nada o camina, y el viento;
+//    arrastran lo que flota, a quien nada y la espuma (que también se va con el viento)
+// Solo se calcula donde hay movimiento y se apaga sola cuando todo se calma: quieta, no cuesta nada. Cada quien calcula sus olas con lo
+// que ve (las cosas y los peluches que se mueven, los chorros, las bolas); lo que flota y la espuma los mueve el anfitrión (como siempre).
+// ======================================================================================
+const WV_N=128, WV_KS=[0,1,.55,.3,.38,.9,0,0], WV_KD=[0,.45,2.4,4.5,3.4,.6,9,9], WV_KF=[0,.12,1.4,3,2.4,.25,1.2,9], WV_HMAX=.15, WV_UMAX=2;
+var WV={act:false, ox:-64, oz:-64, h:new Float32Array(WV_N*WV_N), v:new Float32Array(WV_N*WV_N), ux:new Float32Array(WV_N*WV_N), uz:new Float32Array(WV_N*WV_N),
+  tx:new Float32Array(WV_N*WV_N), tz:new Float32Array(WV_N*WV_N), k:new Uint8Array(WV_N*WV_N), D:new Float32Array(WV_N*WV_N), S:new Float32Array(WV_N*WV_N),
+  x0:0, z0:0, x1:-1, z1:-1, tb:null, rT:0, foT:0, tex:null, data:null, bod:new Map(), steps:0, ms:0};
+const _wvU=[0,0];
+function wvCell(x,z){ return [Math.floor((x-FREE.X)/SU.cs)-WV.ox, Math.floor((z-FREE.Z)/SU.cs)-WV.oz]; }
+function wvIdx(x,z){ const ix=Math.floor((x-FREE.X)/SU.cs)-WV.ox, iz=Math.floor((z-FREE.Z)/SU.cs)-WV.oz; return ix<0||iz<0||ix>=WV_N||iz>=WV_N?-1:iz*WV_N+ix; }
+// (lo que flota aparta el líquido de debajo: se promedia lo de alrededor, en un círculo del tamaño de la cosa)
+const _wvS=[0,0,0,0,0];
+function wvSamp(x,z,r){ const o=_wvS; o[0]=o[1]=o[2]=o[3]=o[4]=0; if(!WV.act) return o; const cs=SU.cs, [cx,cz]=wvCell(x,z), rc=Math.max(1,Math.ceil((r||.2)/cs)); let n=0;
+  for(let dz=-rc;dz<=rc;dz++) for(let dx=-rc;dx<=rc;dx++){ const ix=cx+dx, iz=cz+dz; if(ix<0||iz<0||ix>=WV_N||iz>=WV_N || dx*dx+dz*dz>rc*rc+1) continue; const i=iz*WV_N+ix, k=WV.k[i]; if(!k) continue; o[0]+=WV.h[i]; o[1]+=WV.ux[i]; o[2]+=WV.uz[i]; o[3]=Math.max(o[3],Math.abs(WV.v[i])); n++; }
+  if(n){ o[0]/=n; o[1]/=n; o[2]/=n; } o[4]=n; return o; }
+function wvH(x,z,r){ if(!WV.act) return 0; const i=wvIdx(x,z); if(i>=0 && WV.k[i] && !r) return WV.h[i]; return wvSamp(x,z,r||.2)[0]; }   // la ola aquí (m)
+function wvU(x,z,o,r){ o=o||_wvU; o[0]=0; o[1]=0; if(!WV.act) return o; const S=wvSamp(x,z,r||.3); o[0]=S[1]; o[1]=S[2]; return o; }   // la corriente aquí (m/s)
+function wvStir(x,z,r){ if(!WV.act) return false; const S=wvSamp(x,z,r||.3); return S[4]>0 && (Math.abs(S[1])+Math.abs(S[2])>.03 || S[3]>.03 || Math.abs(S[0])>.008); }   // ¿se mueve el líquido aquí? (despierta lo que flota)
+// algo pasó aquí: el cuadro de olas se prende y crece para cubrirlo
+function wvWake(ix,iz,r){ const m=r+8, x0=Math.max(0,ix-m), z0=Math.max(0,iz-m), x1=Math.min(WV_N-1,ix+m), z1=Math.min(WV_N-1,iz+m); if(x1<x0 || z1<z0) return false;
+  if(!WV.act){ WV.act=true; WV.x0=x0; WV.z0=z0; WV.x1=x1; WV.z1=z1; WV.rT=0; wvRefresh(x0,z0,x1,z1); }
+  else if(x0<WV.x0 || z0<WV.z0 || x1>WV.x1 || z1>WV.z1){ const a=Math.min(WV.x0,x0), b=Math.min(WV.z0,z0), c=Math.max(WV.x1,x1), d=Math.max(WV.z1,z1); wvRefresh(a,b,c,d); WV.x0=a; WV.z0=b; WV.x1=c; WV.z1=d; }
+  return true; }
+// una ola: hunde (o levanta, si amp<0) la superficie en un círculo; viaja sola desde ahí
+function wvImp(x,z,amp,r){ WV.hAny=true; if(!FREE.on || !SU.list.length || !(Math.abs(amp)>1e-5)) return; if(!WV.act){ const a=suAt(x,z); if(!a || a[0]===6 || a[0]===7) return; }   // (en lo seco no se prende nada)
+  const [ix,iz]=wvCell(x,z), rc=Math.max(1,Math.ceil(r/SU.cs)); if(ix<-rc || iz<-rc || ix>=WV_N+rc || iz>=WV_N+rc) return; if(!wvWake(ix,iz,rc)) return;
+  const H=WV.h, K=WV.k; for(let dz=-rc;dz<=rc;dz++) for(let dx=-rc;dx<=rc;dx++){ const jx=ix+dx, jz=iz+dz; if(jx<0||jz<0||jx>=WV_N||jz>=WV_N) continue; const j=jz*WV_N+jx, k=K[j]; if(!k || k===6) continue; const d=Math.hypot(dx,dz)/(rc+.5); if(d>=1) continue;
+    const w=(1-d*d); H[j]=Math.max(-WV_HMAX,Math.min(WV_HMAX,H[j]-amp*w*w*WV_KS[k])); } }
+// empuja el líquido: va (vx, vz) hacia allá; k = qué tanto lo arrastra (0–1); add: suma en vez de arrastrar
+function wvPush(x,z,vx,vz,r,k,add){ WV.uAny=true; if(!FREE.on || !SU.list.length) return; if(!WV.act){ const a=suAt(x,z); if(!a || a[0]===7) return; }
+  const [ix,iz]=wvCell(x,z), rc=Math.max(0,Math.round(r/SU.cs)); if(ix<-rc || iz<-rc || ix>=WV_N+rc || iz>=WV_N+rc) return; if(!wvWake(ix,iz,rc)) return;
+  const UX=WV.ux, UZ=WV.uz, K=WV.k; for(let dz=-rc;dz<=rc;dz++) for(let dx=-rc;dx<=rc;dx++){ const jx=ix+dx, jz=iz+dz; if(jx<0||jz<0||jx>=WV_N||jz>=WV_N) continue; const j=jz*WV_N+jx; if(!K[j]) continue; const d=rc?Math.hypot(dx,dz)/(rc+.5):0; if(d>=1) continue; const w=(1-d)*k;
+    if(add){ UX[j]+=vx*w; UZ[j]+=vz*w; } else { UX[j]+=(vx-UX[j])*w; UZ[j]+=(vz-UZ[j])*w; } const s=Math.hypot(UX[j],UZ[j]); if(s>WV_UMAX){ UX[j]*=WV_UMAX/s; UZ[j]*=WV_UMAX/s; } } }
+// qué hay en cada cuadrito (se revisa seguido, solo en la parte que se mueve): el líquido de arriba, qué tan hondo y dónde está su superficie
+function wvRefresh(x0,z0,x1,z1){ const N=WV_N, K=WV.k, Dd=WV.D, S=WV.S, H=WV.h, V=WV.v, UX=WV.ux, UZ=WV.uz, gx0=WV.ox+x0, gz0=WV.oz+z0, gx1=WV.ox+x1, gz1=WV.oz+z1;
+  for(let cj=Math.floor(gz0/16);cj<=Math.floor(gz1/16);cj++) for(let ci=Math.floor(gx0/16);ci<=Math.floor(gx1/16);ci++){ const C=SU.ch.get(suKey(ci,cj));
+    const lx0=Math.max(0,gx0-ci*16), lx1=Math.min(15,gx1-ci*16), lz0=Math.max(0,gz0-cj*16), lz1=Math.min(15,gz1-cj*16);
+    for(let lz=lz0;lz<=lz1;lz++) for(let lx=lx0;lx<=lx1;lx++){ const j=(cj*16+lz-WV.oz)*N+(ci*16+lx-WV.ox); let kk=0, D=0, top=0;
+      if(C && C.n){ const i=lz*16+lx, t=C.t[i], h=C.h[i]; if(t && h>0){ const b=suB(C,i); if(b<1e3){ const t2=C.t2[i], h2=t2?C.h2[i]:0; top=b+h+h2;
+        if(t===7){ if(t2 && t2!==6 && t2!==7 && h2>.012){ kk=t2; D=h2; } }   // (agua encima de la arena)
+        else if(t===3 && C.c[i]>170){ }   // (lodo seco: costra)
+        else if(t===6){ kk=6; }   // (pura espuma: no hace olas, pero el viento la mueve)
+        else { kk=t; D=h; if(t2 && h2>0 && t2!==6 && t2!==7){ kk=t2; D+=h2; } if(D<.012) kk=0; } } } }
+      K[j]=kk; Dd[j]=D; S[j]=top; if(!kk){ H[j]=0; V[j]=0; UX[j]=0; UZ[j]=0; } else if(kk===6){ H[j]=0; V[j]=0; } } } }
+// el viento sobre el agua (la misma dirección en que se van los pétalos)
+function wvWind(){ const w=Math.max(0,(weatherNow.wind||0)-.2)*(FREE.on && FREE.roof?0:1);   // (la brisa de siempre no; con viento de verdad, sí)
+  return [w*.94*.25, w*.34*.25]; }
+// cada cuadro
+function wvStep(dt){ if(!WV.act) return; const t0=performance.now(); dt=Math.min(dt,.05); WV.rT-=dt;
+  if(WV.rT<=0){ WV.rT=.2; if(!wvShrink()) return; }
+  const N=WV_N, H=WV.h, V=WV.v, K=WV.k, S=WV.S, Dd=WV.D, UX=WV.ux, UZ=WV.uz, TX=WV.tx, TZ=WV.tz, x0=WV.x0, z0=WV.z0, x1=WV.x1, z1=WV.z1, cs=SU.cs, ics2=1/(cs*cs);
+  // olas: cada cuadrito jala hacia el promedio de sus vecinos; donde no hay vecino (pared, orilla o un escalón) rebota
+  if(WV.hAny){ const n=Math.max(1,Math.ceil(dt/.026)), h=dt/n, dk=WV.dk||(WV.dk=new Float32Array(8)); for(let k=0;k<8;k++) dk[k]=Math.exp(-WV_KD[k]*h); const c2=WV.c2||(WV.c2=new Float32Array(N*N));
+    for(let iz=z0;iz<=z1;iz++){ const r=iz*N; for(let ix=x0;ix<=x1;ix++){ const i=r+ix, k=K[i]; if(k && k!==6){ const c=Math.min(2.1,Math.sqrt(9.8*Math.max(Dd[i],.02)))*WV_KS[k]; c2[i]=c*c*ics2*h; } } }
+    for(let s=0;s<n;s++){
+      for(let iz=z0;iz<=z1;iz++){ const r=iz*N; for(let ix=x0;ix<=x1;ix++){ const i=r+ix, k=K[i]; if(!k || k===6) continue; const hi=H[i], si=S[i]; let lap=0, j, kj;
+          j=i-1; kj=K[j]; if(ix>x0 && kj && kj!==6 && Math.abs(S[j]-si)<.15) lap+=H[j]-hi;
+          j=i+1; kj=K[j]; if(ix<x1 && kj && kj!==6 && Math.abs(S[j]-si)<.15) lap+=H[j]-hi;
+          j=i-N; kj=K[j]; if(iz>z0 && kj && kj!==6 && Math.abs(S[j]-si)<.15) lap+=H[j]-hi;
+          j=i+N; kj=K[j]; if(iz<z1 && kj && kj!==6 && Math.abs(S[j]-si)<.15) lap+=H[j]-hi;
+          V[i]=(V[i]+c2[i]*lap)*dk[k]; } }
+      for(let iz=z0;iz<=z1;iz++){ const r=iz*N; for(let ix=x0;ix<=x1;ix++){ const i=r+ix; if(!K[i] || K[i]===6) continue; let v=(H[i]+V[i]*h)*.9995; H[i]=v>WV_HMAX?WV_HMAX:v<-WV_HMAX?-WV_HMAX:v; } } } }
+  // corrientes: se llevan a sí mismas (de donde vienen), se reparten un poquito, no atraviesan paredes, se frenan y el viento empuja
+  const [wx,wz]=wvWind(), wind=wx*wx+wz*wz>1e-6;
+  if(WV.uAny || wind){
+    for(let iz=z0;iz<=z1;iz++){ const r=iz*N; for(let ix=x0;ix<=x1;ix++){ const i=r+ix; TX[i]=UX[i]; TZ[i]=UZ[i]; } }
+    const kd=WV.kd||(WV.kd=new Float32Array(8)); for(let k=0;k<8;k++) kd[k]=Math.exp(-WV_KF[k]*dt); const nu=Math.min(.2,4*dt), sc=dt/cs;
+    for(let iz=z0;iz<=z1;iz++){ const r=iz*N; for(let ix=x0;ix<=x1;ix++){ const i=r+ix, k=K[i]; if(!k) continue; let ux=TX[i], uz=TZ[i];
+        const L=ix>x0&&K[i-1], R=ix<x1&&K[i+1], U=iz>z0&&K[i-N], Dn=iz<z1&&K[i+N];
+        let lx=0, lz=0; if(L){ lx+=TX[i-1]-ux; lz+=TZ[i-1]-uz; } if(R){ lx+=TX[i+1]-ux; lz+=TZ[i+1]-uz; } if(U){ lx+=TX[i-N]-ux; lz+=TZ[i-N]-uz; } if(Dn){ lx+=TX[i+N]-ux; lz+=TZ[i+N]-uz; }
+        if(ux===0 && uz===0 && lx===0 && lz===0 && !(wind && (k===1 || k===5 || k===6))) continue;
+        const nb=1+(L?1:0)+(R?1:0)+(U?1:0)+(Dn?1:0), bx=(ux*2+(L?TX[i-1]:0)+(R?TX[i+1]:0)+(U?TX[i-N]:0)+(Dn?TX[i+N]:0))/(nb+1), bz=(uz*2+(L?TZ[i-1]:0)+(R?TZ[i+1]:0)+(U?TZ[i-N]:0)+(Dn?TZ[i+N]:0))/(nb+1);   // (se mira hacia atrás con la corriente de alrededor: así el frente avanza)
+        if(bx*bx+bz*bz>1e-6){ const ax=Math.max(x0,Math.min(x1-.001,ix-bx*sc)), az=Math.max(z0,Math.min(z1-.001,iz-bz*sc)), jx=Math.floor(ax), jz=Math.floor(az), tx=ax-jx, tz=az-jz, j=jz*N+jx;   // (de dónde viene el agua que llega aquí)
+          const w00=K[j]?(1-tx)*(1-tz):0, w10=jx+1<=x1 && K[j+1]?tx*(1-tz):0, w01=jz+1<=z1 && K[j+N]?(1-tx)*tz:0, w11=jx+1<=x1 && jz+1<=z1 && K[j+N+1]?tx*tz:0;
+          ux=TX[j]*w00+(w10?TX[j+1]*w10:0)+(w01?TX[j+N]*w01:0)+(w11?TX[j+N+1]*w11:0); uz=TZ[j]*w00+(w10?TZ[j+1]*w10:0)+(w01?TZ[j+N]*w01:0)+(w11?TZ[j+N+1]*w11:0); }
+        ux+=lx*nu; uz+=lz*nu; if(wind && (k===1 || k===5 || k===6)){ ux+=wx*.4*dt; uz+=wz*.4*dt; }
+        if(ux<0 && !L) ux=0; if(ux>0 && !R) ux=0; if(uz<0 && !U) uz=0; if(uz>0 && !Dn) uz=0;   // (contra la pared no: se va de lado)
+        UX[i]=ux*kd[k]; UZ[i]=uz*kd[k]; } } }
+  WV.steps++; WV.ms=WV.ms*.95+(performance.now()-t0)*.05; }
+// cada rato: se ajusta a lo que todavía se mueve (y se apaga si ya todo está quieto)
+function wvShrink(){ const N=WV_N, H=WV.h, V=WV.v, UX=WV.ux, UZ=WV.uz, K=WV.k; let a=N, b=N, c=-1, d=-1, ha=false, ua=false; const [wx,wz]=wvWind(), wind=wx*wx+wz*wz>1e-6;
+  for(let iz=WV.z0;iz<=WV.z1;iz++){ const r=iz*N; for(let ix=WV.x0;ix<=WV.x1;ix++){ const i=r+ix; if(!K[i]) continue; const hh=Math.abs(H[i])>1.5e-3 || Math.abs(V[i])>1.5e-3, uu=Math.abs(UX[i])+Math.abs(UZ[i])>.008; if(hh) ha=true; if(uu) ua=true; if(hh || uu || (wind && (K[i]===6 || K[i]===1 || K[i]===5))){ if(ix<a) a=ix; if(iz<b) b=iz; if(ix>c) c=ix; if(iz>d) d=iz; } } }
+  WV.hAny=ha; WV.uAny=ua||wind;
+  if(c<0){ wvOff(); return false; }
+  const m=8; a=Math.max(0,a-m); b=Math.max(0,b-m); c=Math.min(N-1,c+m); d=Math.min(N-1,d+m);
+  for(let iz=WV.z0;iz<=WV.z1;iz++){ const r=iz*N; for(let ix=WV.x0;ix<=WV.x1;ix++) if(ix<a||ix>c||iz<b||iz>d){ const i=r+ix; H[i]=0; V[i]=0; UX[i]=0; UZ[i]=0; } }
+  WV.x0=a; WV.z0=b; WV.x1=c; WV.z1=d; wvRefresh(a,b,c,d); return true; }
+function wvOff(){ const N=WV_N; for(let iz=WV.z0;iz<=WV.z1;iz++) for(let ix=WV.x0;ix<=WV.x1;ix++){ const i=iz*N+ix; WV.h[i]=0; WV.v[i]=0; WV.ux[i]=0; WV.uz[i]=0; } WV.act=false; WV.x1=-1; WV.z1=-1; if(SU.U.uWvO) SU.U.uWvO.value.w=0; }
+// el cuadro de olas te sigue (por pedazos de 16): lo que queda dentro se conserva
+function wvPlace(){ const cs=SU.cs, c=state==='play'?player.pos:camera.position, gx=Math.floor((c.x-FREE.X)/cs), gz=Math.floor((c.z-FREE.Z)/cs);   // (alrededor de tu peluche) if(gx>=WV.ox+40 && gx<WV.ox+88 && gz>=WV.oz+40 && gz<WV.oz+88) return;
+  const nx=Math.floor(gx/16)*16-56, nz=Math.floor(gz/16)*16-56, dx=nx-WV.ox, dz=nz-WV.oz; if(!dx && !dz) return;
+  if(WV.act){ const N=WV_N; for(const A of [WV.h,WV.v,WV.ux,WV.uz,WV.k,WV.D,WV.S]){ const B=A.slice(); A.fill(0); for(let iz=0;iz<N;iz++){ const sz=iz+dz; if(sz<0||sz>=N) continue; for(let ix=0;ix<N;ix++){ const sx=ix+dx; if(sx<0||sx>=N) continue; A[iz*N+ix]=B[sz*N+sx]; } } }
+    WV.x0=Math.max(0,WV.x0-dx); WV.z0=Math.max(0,WV.z0-dz); WV.x1=Math.min(N-1,WV.x1-dx); WV.z1=Math.min(N-1,WV.z1-dz); WV.tb=null; if(WV.data) wvTexClear(); if(WV.x1<WV.x0 || WV.z1<WV.z0){ WV.ox=nx; WV.oz=nz; wvOff(); return; } }
+  WV.ox=nx; WV.oz=nz; }
+// la textura que lee el dibujo: R = la ola, G y B = la corriente, A = ¿hay líquido?
+function wvTexClear(){ const D=WV.data; for(let i=0;i<D.length;i+=4){ D[i]=128; D[i+1]=128; D[i+2]=128; D[i+3]=0; } WV.tb=null; if(WV.tex) WV.tex.needsUpdate=true; }
+function wvTex(){ const U=SU.U.uWvO; if(!U) return; if(!WV.act){ U.value.w=0; return; } if(settings.quality==='min') { U.value.w=0; return; }
+  if(!WV.tex){ WV.data=new Uint8Array(WV_N*WV_N*4); WV.tex=new THREE.DataTexture(WV.data,WV_N,WV_N,THREE.RGBAFormat,THREE.UnsignedByteType); WV.tex.magFilter=THREE.LinearFilter; WV.tex.minFilter=THREE.LinearFilter; WV.tex.wrapS=WV.tex.wrapT=THREE.ClampToEdgeWrapping; WV.tex.generateMipmaps=false; wvTexClear(); SU.U.uWv.value=WV.tex; }
+  const N=WV_N, D=WV.data, H=WV.h, UX=WV.ux, UZ=WV.uz, K=WV.k, tb=WV.tb, x0=tb?Math.min(tb[0],WV.x0):WV.x0, z0=tb?Math.min(tb[1],WV.z0):WV.z0, x1=tb?Math.max(tb[2],WV.x1):WV.x1, z1=tb?Math.max(tb[3],WV.z1):WV.z1;
+  for(let iz=z0;iz<=z1;iz++){ const r=iz*N; for(let ix=x0;ix<=x1;ix++){ const i=r+ix, o=i*4, k=K[i], liq=k && k!==6 && ix>=WV.x0 && ix<=WV.x1 && iz>=WV.z0 && iz<=WV.z1;
+      D[o]=liq?Math.max(0,Math.min(255,128+H[i]*(127/WV_HMAX))):128; D[o+1]=k?Math.max(0,Math.min(255,128+UX[i]*(127/1.5))):128; D[o+2]=k?Math.max(0,Math.min(255,128+UZ[i]*(127/1.5))):128; D[o+3]=liq?255:0; } }
+  WV.tb=[WV.x0,WV.z0,WV.x1,WV.z1]; WV.tex.needsUpdate=true; U.value.set(WV.ox,WV.oz,1/N,1); }
+// lo que se mueve en el líquido hace olas y lo arrastra: tú, tus amigos y las cosas
+function wvBody(key,x,y,z,r,hgt,dt){ const B=WV.bod; let e=B.get(key); if(!e){ e={x,y,z,t:SU.T}; B.set(key,e); return; } const ddt=Math.max(1e-3,SU.T-e.t), vx=(x-e.x)/ddt, vy=(y-e.y)/ddt, vz=(z-e.z)/ddt, py=e.y; e.x=x; e.y=y; e.z=z; e.t=SU.T; e.seen=SU.T;
+  if(ddt>.3) return; const q=suCell(x,z,false); if(!q) return; const [C,i]=q, t=C.t2[i] && C.h2[i]>.01?C.t2[i]:C.t[i]; if(!t || t===6 || t===7 || (t===3 && C.c[i]>170)) return; const b=suB(C,i); if(b>=1e3) return; const S=b+C.h[i]+C.h2[i]; if(S-b<.03) return;
+  if(y>S+.05 || y+hgt<S-.05) return;   // (no toca la superficie: ni arriba ni hasta el fondo)
+  const sp=Math.hypot(vx,vz);
+  if(py>S-.02 && y<=S && vy<-1.2){ wvImp(x,z,Math.min(.12,-vy*.018*(.5+r)),r+.35); try{ suRipple(x,z,.05,t,true); }catch(e){} }   // ¡splash! (cae desde arriba)
+  if(sp>.25){ wvImp(x+vx*.06,z+vz*.06,Math.min(.012,sp*.0035)*Math.min(1,dt*30)*(.6+r),r+.12); if(key!=='me') wvPush(x,z,vx,vz,r,Math.min(.6,dt*2.5)); } }   // (tu propia estela no te empuja a ti: si no, te irías solito)   // (al moverse: estela y la jala tantito)
+function wvBodies(dt){ if(!SU.list.length) return; const cx=camera.position.x, cz=camera.position.z, near=(x,z)=>Math.abs(x-cx)<13 && Math.abs(z-cz)<13;
+  if(state==='play' && !player.car && near(player.pos.x,player.pos.z)) wvBody('me',player.pos.x,player.pos.y,player.pos.z,.32,stHgt(plush),dt);
+  try{ for(const r of mp.remotes.values()){ const o=r.obj; if(o && o.visible && near(o.position.x,o.position.z)) wvBody(r,o.position.x,o.position.y,o.position.z,.32,1.6,dt); } }catch(e){}
+  for(const d of FREE.dyn){ if(d.held) continue; const p=d.root.position; if(!near(p.x,p.z)) continue; const rr=d.bx?Math.min(.6,d.bx.rad*.7):(d.r||.3); wvBody(d,p.x,p.y-rr,p.z,rr,rr*2,dt); }
+  if((WV.gcT=(WV.gcT||0)-dt)<=0){ WV.gcT=3; for(const [k,e] of WV.bod) if(SU.T-(e.seen||e.t)>3) WV.bod.delete(k); } }
+// la espuma se va con la corriente y el viento (la mueve quien manda la sustancia; los demás la reciben)
+function wvFoam(){ const N=WV_N, UX=WV.ux, UZ=WV.uz, K=WV.k, cs=SU.cs, touched=new Set(); let moved=0;
+  for(let iz=WV.z0;iz<=WV.z1;iz++) for(let ix=WV.x0;ix<=WV.x1;ix++){ const i=iz*N+ix; if(!K[i]) continue; const ux=UX[i], uz=UZ[i], s=Math.abs(ux)+Math.abs(uz); if(s<.03) continue;
+    const gx=WV.ox+ix, gz=WV.oz+iz, C=SU.ch.get(suKey(Math.floor(gx/16),Math.floor(gz/16))); if(!C) continue; const ci=((gz%16)+16)%16*16+((gx%16)+16)%16, top=C.t2[ci]===6 && C.h2[ci]>0, only=!C.t2[ci] && C.t[ci]===6 && C.h[ci]>0; if(!top && !only) continue;
+    const ax=Math.abs(ux)>=Math.abs(uz), dx=ax?Math.sign(ux):0, dz=ax?0:Math.sign(uz), Nb=suNb(C,ci,dx,dz,true); if(!Nb) continue; const [Dc,j]=Nb; const bj=suB(Dc,j); if(bj>=1e3) continue; const sl=suSlot(Dc,j,6); if(sl<0) continue;
+    if(bj+Dc.h[j]+(sl?Dc.h2[j]:0)>suB(C,ci)+C.h[ci]+C.h2[ci]+.05) continue;   // (no se sube a lo alto)
+    const H=top?C.h2:C.h, f=Math.min(.35,(ax?Math.abs(ux):Math.abs(uz))*.1/cs), a=H[ci]*f; if(a<1e-4) continue;
+    H[ci]-=a; let sl2=sl; if(sl2===2){ suUnderFoam(Dc,j); sl2=0; } suAdd(Dc,j,sl2,6,top?C.c2[ci]:C.c[ci],top?C.s2[ci]:C.s[ci],a,false); suFix(C,ci); touched.add(C); touched.add(Dc); moved++; }
+  for(const C of touched){ let n=0, n2=0; for(let i=0;i<256;i++){ if(C.h[i]>0) n++; if(C.h2[i]>0) n2++; } C.n=n; C.n2=n2; C.dirty=true; C.aw=2; C.ver++; }
+  return moved; }
+function wvWade(){ const a=suAt(player.pos.x,player.pos.z); return !!a && a[0]!==6 && a[0]!==7 && a[2]-player.pos.y>.35; }   // (vas metido en el líquido hasta las rodillas o más)
+// cada cuadro (en el Modo libre)
+function wvTick(dt){ if(!FREE.on || !SU.list.length){ if(WV.act) wvOff(); WV.bod.clear(); return; } wvPlace(); wvBodies(dt);
+  if(SU.hold && SU.hold.mode<3 && SU.st && SU.st.visible){ try{ const a=freeAim(); if(a && a.ok){ wvImp(a.x,a.z,.0025*Math.min(1,dt*30)*(1+SU.hold.mode),.3+SU.hold.mode*.15); } }catch(e){} }   // (el chorro de la cubeta)
+  const [wx,wz]=wvWind(); if(!WV.act && wx*wx+wz*wz>.0004 && (WV.wT=(WV.wT||0)-dt)<=0){ WV.wT=1; const [ix,iz]=wvCell(player.pos.x,player.pos.z); if(ix>=0 && iz>=0 && ix<WV_N && iz<WV_N) wvWake(ix,iz,40); }   // (con viento, lo de cerca se mueve)
+  wvStep(dt);
+  if(WV.act && (!FNET.on || FNET.host) && (WV.foT=(WV.foT||0)-dt)<=0){ WV.foT=.1; try{ wvFoam(); }catch(e){} }
+  // tú: la corriente te lleva si nadas (o tantito si vas metido caminando)
+  if(WV.act && state==='play' && !player.car && (player.swim && SU.swimP || wvWade())){ const u=wvU(player.pos.x,player.pos.z), k=player.swim?.85:.35; if(Math.abs(u[0])+Math.abs(u[1])>.01){ const nx=player.pos.x+u[0]*k*dt, nz=player.pos.z+u[1]*k*dt, j=wvIdx(nx,nz); if(j>=0 && WV.k[j]){ player.pos.x=nx; player.pos.z=nz; } } }
+  wvTex(); }
+const _wvU0=[0,0];
 // (solo las ondas que siguen vivas van al dibujo: si nadie pisa, no cuestan nada)
 function suRipUp(){ const L=SU.rip; while(L.length && SU.T-L[0][2]>2.5) L.shift(); const V=SU.U.uRip.value; for(let k=0;k<L.length;k++) V[k].set(L[k][0],L[k][1],L[k][2],L[k][3]); SU.U.uRipN.value=L.length; }
 const _suCol=new THREE.Color();
@@ -24675,7 +24828,7 @@ function suRingTop(x,z,r){ let s=0, n=0; for(let k=0;k<8;k++){ const a=k*.7854, 
 // v234: ¿se nada aquí? si la sustancia está honda (1 m; 85 cm si ya ibas nadando). Regresa el «nivel» para el nado: en el lodo flotas
 // hasta la cintura, en la miel y el slime un poco más arriba que en el agua. La espuma no: te hundes en ella.
 function suSwimTop(x,z){ const q=suCell(x,z,false); SU.swimP=0; if(!q) return null; const [C,i]=q; if(!(C.h[i]>0)) return null; const b=suB(C,i), S=b+C.h[i]+C.h2[i], top=C.t2[i] && C.h2[i]>.05?C.t2[i]:C.t[i];
-  if(top===6 || top===7 || S-b-(C.t[i]===7?C.h[i]:0)<(player.swim?.85:1)) return null; SU.swimP=top; return S+SU_T[top].fl; }   // (v237: en la arena no se nada; el agua de encima cuenta desde la arena)
+  if(top===6 || top===7 || S-b-(C.t[i]===7?C.h[i]:0)<(player.swim?.85:1)) return null; SU.swimP=top; return S+SU_T[top].fl+wvH(x,z); }   // (v237: en la arena no se nada; el agua de encima cuenta desde la arena)
 // ¿qué hay bajo este punto? [sustancia de arriba, su alto, superficie, color, pigmento]
 function suAt(x,z){ const q=suCell(x,z,false); if(!q) return null; const [C,i]=q; if(!C.t[i] || C.h[i]<=0) return null; const b=suB(C,i); if(C.t2[i] && C.h2[i]>0) return [C.t2[i], C.h2[i], b+C.h[i]+C.h2[i], C.c2[i], C.s2[i]]; return [C.t[i], C.h[i], b+C.h[i], C.c[i], C.s[i]]; }
 // ---- la bola: lleva justo la sustancia que se ve (su volumen); al chocar, ese mismo tanto cae donde pegó, y lo que salpica son gotas de verdad ----
@@ -24727,7 +24880,7 @@ function suLaunch(p,col,r,net){ const c=p===5?suCol(col):(+col>=SU_F?+col:0), s=
 // en una sala: lo que echas lo manda el dueño (tú lo ves al momento, el dueño lo reparte a todos)
 function suNetPour(x,z,p,col,vol,r){ suPour(x,z,p,col,vol,r); if(FNET.on && !FNET.host) fnOp(['qp',p,col,+(x-FREE.X).toFixed(2),+(z-FREE.Z).toFixed(2),+vol.toFixed(4),+r.toFixed(2)]); freeSaveSoon(); }
 // ---- cada cuadro ----
-function suTick(dt){ const T=suSelT(); SU.T+=dt; SU.U.uT.value=SU.T; if(SU.U.uRipN.value) suRipUp(); if(SU.fo.length || SU.U.uFoN.value) suFoUp(); SU.U.uO.value.set(FREE.X,FREE.Z); try{ SU.U.uSky.value.copy(skyNow).convertSRGBToLinear(); if(sky.sunD) SU.U.uSunD.value.copy(sky.sunD); else SU.U.uSunD.value.copy(sun.position).sub(sun.target.position).normalize(); SU.U.uSunC.value.copy(sun.color).multiplyScalar(sun.intensity); }catch(e){}
+function suTick(dt){ const T=suSelT(); SU.T+=dt; SU.U.uT.value=SU.T; if(SU.U.uRipN.value) suRipUp(); if(SU.fo.length || SU.U.uFoN.value) suFoUp(); SU.U.uO.value.set(FREE.X,FREE.Z); try{ wvTick(dt); }catch(e){ if(!WV.err){ WV.err=1; console.warn('olas',e); } } try{ SU.U.uSky.value.copy(skyNow).convertSRGBToLinear(); if(sky.sunD) SU.U.uSunD.value.copy(sky.sunD); else SU.U.uSunD.value.copy(sun.position).sub(sun.target.position).normalize(); SU.U.uSunC.value.copy(sun.color).multiplyScalar(sun.intensity); }catch(e){}
   // la cubeta: el chorro sale mientras aprietas (las espesas salen mucho más); la bola crece
   if(SU.hold && (!T || FREE.play || FREE.del || FREE.paint)){ SU.hold=null; }
   if(SU.hold){ const H=SU.hold, el=(performance.now()-H.t)/1000;
@@ -24973,7 +25126,7 @@ function fuSpawn(o,k,c,S,dt,real){ const rd=FU_DR[c.q]*(k===0?.8:1), vn=4.18879*
   o.fuLast[k]=prev; }
 function fuSurfY(x,z,y){ const q=suCell(x,z,true); if(!q) return -1e9; const [C,i]=q, b=suB(C,i); if(b>=1e3) return -1e9; if(b>y+.05 && !(C.h[i]>0) && !(C.h2[i]>0)){ const lo=suFloorAt(C,i,y); if(lo!==null) return lo; } return b+C.h[i]+C.h2[i]; }   // (v236: lo de abajo de la gotita, aunque arriba haya un techo)
 // cayó: se vuelve sustancia ahí (y la máquina ve qué tan hondo está, para «llenar hasta»)
-function fuLanded(P,x,z){ P.dead=true; if(!(P.v>0)) return; if(P.p===7) grAdd(x,P.y+.02,z,P.vx*.15,Math.min(2.4,.5-P.vy*.22),P.vz*.15,Math.min(9,2+Math.round(P.v/2e-4)),.14,P.s|0,P.y-.03);   // v237: la arena que cae rebota en granitos
+function fuLanded(P,x,z){ P.dead=true; try{ const r=P.r||.05; wvImp(x,z,Math.min(.03,r*(1.1-Math.min(0,P.vy||0)*.12)),Math.max(.2,r*2.5)); if(Math.abs(P.vx||0)+Math.abs(P.vz||0)>.3) wvPush(x,z,(P.vx||0)*.55,(P.vz||0)*.55,.25,.3); }catch(e){}   /* v239: el chorro que cae hace olas y empuja el agua hacia donde va */ if(!(P.v>0)) return; if(P.p===7) grAdd(x,P.y+.02,z,P.vx*.15,Math.min(2.4,.5-P.vy*.22),P.vz*.15,Math.min(9,2+Math.round(P.v/2e-4)),.14,P.s|0,P.y-.03);   // v237: la arena que cae rebota en granitos
   for(const q of FREE.objs){ if(q.gad!=='fuentes') continue; const dx=x-q.x, dz=z-q.z, m=Math.max(Math.abs(dx),Math.abs(dz)); if(m<1.15 && P.y>q.y+1){ const k=1.3/Math.max(m,.05); x=q.x+dx*k; z=q.z+dz*k; break; } }   // (v235: lo que cae encima de una máquina resbala por su orilla; arriba no se junta)
   if(P.cw && SU.T-(SU.spT||0)>.12 && Math.random()<.3){ SU.spT=SU.T; try{ splashBurst(x,P.y,z,.3); }catch(e){} }   // (la cortina salpica donde cae)
   if(P.cw && P.p===1 && P.v>0){ const k=Math.min(4,Math.max(1,Math.ceil(P.cw*2/.4))), wv=P.v/k, sx=P.sx||0, sz=P.sz||0;   /* v237: la cortina pega a lo largo de toda su orilla (no solo en medio): el agua que cae fuerte se llena de aire y deja una tira de espuma blanca donde pega (se va deshaciendo cuando deja de caer) */
