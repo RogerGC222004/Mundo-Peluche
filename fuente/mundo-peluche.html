@@ -23909,7 +23909,8 @@ function suStep(sub,diag,first){ const L=SU.list, NB=diag?_suNd:_suN, dk=diag?.7
 // echar: reparte el volumen (m³) en los cuadritos de un círculo (sobre lo que haya: se mezcla o queda encima)
 function suPour(x,z,p,col,vol,r,s){ if(vol<=0) return 0; if(SU.vol+vol>SU.max){ vol=SU.max-SU.vol; if(vol<=0) return 0; } const m=SU.cs, R=Math.max(m*.6,r), cells=[], top=FREE.Y+SU.hmax;
   const c=p===5?suCol(col):(+col>=SU_F?+col:0); s=p===5?(s===undefined?255:s|0):(s|0);
-  for(let dz=-R;dz<=R+1e-6;dz+=m) for(let dx=-R;dx<=R+1e-6;dx+=m){ if(dx*dx+dz*dz>R*R+1e-6) continue; const q=suCell(x+dx,z+dz,true); if(!q) continue; const [C,i]=q, b=suB(C,i); if(b>=1e3 || b+C.h[i]+C.h2[i]>=top-.002) continue; let sl=suPourSlot(C,i,p); if(sl<0) sl=3; q.push(sl); cells.push(q); }   /* (v235: 3 = sobre dos capas distintas: se revuelve con la de arriba) */
+  const q0=suCell(x,z,true), b0=q0?suB(q0[0],q0[1]):-1e9;   // (v235: lo que cae junto a un bloque no se sube encima de él)
+  for(let dz=-R;dz<=R+1e-6;dz+=m) for(let dx=-R;dx<=R+1e-6;dx+=m){ if(dx*dx+dz*dz>R*R+1e-6) continue; const q=suCell(x+dx,z+dz,true); if(!q) continue; const [C,i]=q, b=suB(C,i); if(b>=1e3 || b+C.h[i]+C.h2[i]>=top-.002 || (b0<1e3 && b>b0+.3)) continue; let sl=suPourSlot(C,i,p); if(sl<0) sl=3; q.push(sl); cells.push(q); }   /* (v235: 3 = sobre dos capas distintas: se revuelve con la de arriba) */
   if(!cells.length){ const q=suCell(x,z,true); if(!q) return 0; const b=suB(q[0],q[1]); if(b>=1e3 || b+q[0].h[q[1]]+q[0].h2[q[1]]>=top-.002) return 0; const sl=suPourSlot(q[0],q[1],p); if(sl<0) return 0; q.push(sl); cells.push(q); }
   const dh=vol/(cells.length*m*m), now=performance.now(); let got=0; for(const [C,i,sl] of cells){ const a=Math.min(dh,top-(suB(C,i)+C.h[i]+C.h2[i])); if(!(a>0)) continue; got+=a*m*m; C.lp=now; C.lpT=SU.T; if(sl===3){ const v=C.h2[i]; if(a>v){ C.t2[i]=p; C.c2[i]=c; C.s2[i]=s; } C.h2[i]+=a; } else suAdd(C,i,sl,p,c,s,a,false); suFix(C,i); C.aw=2; C.dirty=true; C.n=Math.max(C.n,1); if(C.h2[i]>0) C.n2=Math.max(C.n2,1); C.ver++; }
   SU.vol+=got; return got; }   // (v234: hasta 10 m de alto)
@@ -24439,7 +24440,9 @@ function fuSpawn(o,k,c,S,dt,real){ const rd=FU_DR[c.q]*(k===0?.8:1), vn=4.18879*
 function fuSurfY(x,z,y){ const gx=Math.floor((x-FREE.X)/SU.cs), gz=Math.floor((z-FREE.Z)/SU.cs), ci=Math.floor(gx/16), cj=Math.floor(gz/16), C=SU.ch.get(suKey(ci,cj));
   if(C){ const i=(gz-cj*16)*16+(gx-ci*16), b=suB(C,i); if(b<1e3) return b+C.h[i]+C.h2[i]; } const g=freeGround(x,z,y); return g===null?-1e9:g; }
 // cayó: se vuelve sustancia ahí (y la máquina ve qué tan hondo está, para «llenar hasta»)
-function fuLanded(P,x,z){ if(!(P.v>0)) return; suPour(x,z,P.p,P.c,P.v,Math.max(.2,P.r*2.5),P.s);   /* (al caer se aplasta: cubre más que la gotita) */ if(Math.random()<.12) suRipple(x,z,.02,P.p);
+function fuLanded(P,x,z){ if(!(P.v>0)) return;
+  for(const q of FREE.objs){ if(q.gad!=='fuentes') continue; const dx=x-q.x, dz=z-q.z, m=Math.max(Math.abs(dx),Math.abs(dz)); if(m<1.15 && P.y>q.y+1){ const k=1.3/Math.max(m,.05); x=q.x+dx*k; z=q.z+dz*k; break; } }   // (v235: lo que cae encima de una máquina resbala por su orilla; arriba no se junta)
+  suPour(x,z,P.p,P.c,P.v,Math.max(.2,P.r*2.5),P.s);   /* (al caer se aplasta: cubre más que la gotita) */ if(Math.random()<.12) suRipple(x,z,.02,P.p);
   const o=P.o; if(!o || !o.fuLv || !FREE.objs.includes(o)) return; const C=fuCfg(o); if(!C.lim || !C[P.k].on) return; const q=suCell(x,z,false), d=q?q[0].h[q[1]]+q[0].h2[q[1]]:0; o.fuLv[P.k]=o.fuLv[P.k]*.9+d*.1;
   if(o.fuLv[P.k]>=FU_LIM[C.lim]){ C[P.k].on=0; fuSet(o,C); o.fuOn&=~(1<<P.k); if(Math.hypot(o.x-player.pos.x,o.z-player.pos.z)<40) flashNote('🚰 '+FU_IC[P.k]+' '+FU_N[P.k]+': ya llenó hasta '+FU_LIMN[C.lim].toLowerCase()+' y se apagó'); } }
 function fuPtsTick(dt){ const L=FU.pts; let I=FU.pm; if(!L.length){ if(I && I.visible){ I.count=0; I.visible=false; } return; }
