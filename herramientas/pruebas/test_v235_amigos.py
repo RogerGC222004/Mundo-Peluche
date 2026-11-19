@@ -45,7 +45,7 @@ async def m():
     ra=await ev(A,"(()=>{ const C=fuCfg(%s); return [C[1].on, C.lim]; })()"%M); rb=await ev(B,"(()=>{ const C=fuCfg(%s); return [C[1].on, C.lim]; })()"%M)
     ok(ra==[1,2] and rb==[1,2], 'Beto la prende con «Llenar hasta: Rodillas» y a Ana le queda igual %s %s'%(ra,rb))
     await sync(16)
-    pa=await ev(A,"[FU.pts.length, FU.pts.some(P=>P.v>0)]"); pb=await ev(B,"[FU.pts.length, FU.pts.every(P=>!(P.v>0))]")
+    pa=await ev(A,"[FU.pts.length, FU.pts.some(P=>P.v>0)]"); pb=await ev(B,"[FU.pts.length, FU.pts.filter(P=>P.o).every(P=>!(P.v>0))]")   # (v236: las cascadas que Beto ve en su mundo sí son suyas; las de la máquina, de Ana)
     va=await ev(A,"(suRecount(), SU.vol)"); vb=await ev(B,"(suRecount(), SU.vol)")
     ok(pa[0]>0 and pa[1] and pb[0]>0 and pb[1], 'los dos ven las gotitas; las de Ana son las de verdad (las de Beto son para ver) %s %s'%(pa,pb))
     ok(va>.1 and vb>.1 and abs(va-vb)<max(.08,va*.3), 'y la sustancia que echan les llega a los dos (Ana %.2f m³, Beto %.2f m³)'%(va,vb))

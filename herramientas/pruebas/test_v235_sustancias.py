@@ -30,7 +30,7 @@ async def m():
 
     await ev("""(()=>{ window.__LAKE=(p,d,a,b)=>{ for(let ci=a;ci<=b;ci++) for(let cj=a;cj<=b;cj++){ const C=suChunk(ci,cj,true); if(C) suDec(C,'F|'+p+'|'+(p===5?'f00':'0')+'|'+Math.round(d/.003).toString(36)); } suRecount(); };
       window.__WALK=(k)=>{ const x=player.pos.x, z=player.pos.z; keys.KeyW=true; __S(k); keys.KeyW=false; return Math.hypot(player.pos.x-x,player.pos.z-z); }; return 1; })()""")
-    T="""const __VOL=()=>{ suRecount(); return SU.vol+FU.pts.reduce((a,P)=>a+(P.v||0),0)+[...SU.falls.values()].reduce((a,F)=>a+F.acc+(F.q||[]).filter((_,i)=>i%2).reduce((x,y)=>x+y,0),0); }; window.__VOL=__VOL;
+    T="""const __VOL=()=>{ suRecount(); return SU.vol+FU.pts.reduce((a,P)=>a+(P.v||0),0)+[...SU.falls.values()].reduce((a,F)=>a+F.acc+(F.q||[]).filter((_,i)=>i%2).reduce((x,y)=>x+y,0),0)+(typeof wlVol==='function'?wlVol():0); }; window.__VOL=__VOL;   // (v236: y lo que está en las paredes)
       window.__PLAT=(x0,z0,n,h)=>{ for(let a=0;a<n;a++) for(let b=0;b<n;b++) for(let y=0;y<h;y++) freeAddStatic({k:'b',a:0,b:2},FREE.X+x0+a+.5,FREE.Y+y,FREE.Z+z0+b+.5,0,true); }; 1"""
     await ev(T)
     # 1. cascada: lo que se cae de un bloque baja como chorro (se ve) y llega abajo cuando de verdad caería
