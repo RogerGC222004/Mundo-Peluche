@@ -1490,7 +1490,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='239';
+const GAME_VERSION='240';
 const SAVE_WAS_EMPTY=(()=>{ try{ return !['Monedas','Ropa','Jugador','Mascotas','Mina','Planetas','Especies','Banderas'].some(k=>localStorage.getItem('mundoPeluche'+k)!=null); }catch(e){ return false; } })();   // súbelo en cada publicación para saber si todos tienen la misma
 const canvas = document.getElementById('game');
 const EARLY_OPTS=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}')||{}; }catch(e){ return {}; } })();
@@ -5843,8 +5843,8 @@ function stClear(S){ for(const k of ['A','L','F','T']) S[k].fill(0); S.sp.length
 function stClsK(c,p){ return c==='h' ? (p===1?6:p===5?2.5:4) : c==='t' ? (p===1?.4:.55) : 1; }
 function stClsOf(key){ const id=String(key).split('|')[1]||'', it=SHOP_BY[id]; if(!it) return 'f'; const n=(it.name||'')+' '+id; if(/lluvia|imperme|charol|hule|goma|pl[aá]stic/i.test(n)) return 'h'; if(it.av==='a' || it.knit || /tejid|su[eé]ter|lana|estambre|bufanda|crochet/i.test(n)) return 't'; return 'f'; }
 function stHgt(o){ const u=o.userData; return u.petH || (u.av==='c'?2.05:u.av==='a'?2.6:1.7); }
-function stUni(S){ if(!S.U){ const V=n=>Array.from({length:n},()=>new THREE.Vector4()); S.U={uSt:{value:V(ST_N)}, uStC:{value:new THREE.Color()}, uStInv:{value:new THREE.Matrix4()}, uStH:{value:1.7}, uStD:{value:0}, uSpP:{value:V(ST_SP)}, uSpM:{value:V(ST_SP)}, uSpN:{value:0}, uStXa:{value:V(ST_XB)}, uStXb:{value:V(ST_XB)}, uStXn:{value:0}}; } return S.U; }
-const ST_VS='uniform mat4 uStInv; varying vec3 vStP; varying vec3 vStO;\n', ST_FS=`uniform vec4 uSt[8]; uniform vec3 uStC; uniform float uStH; uniform float uStD; uniform vec4 uSpP[6]; uniform vec4 uSpM[6]; uniform float uSpN; uniform vec4 uStXa[4]; uniform vec4 uStXb[4]; uniform float uStXn; varying vec3 vStP; varying vec3 vStO; float stWet=0.0;
+function stUni(S){ if(!S.U){ const V=n=>Array.from({length:n},()=>new THREE.Vector4()); S.U={uSt:{value:V(ST_N)}, uStC:{value:new THREE.Color()}, uStInv:{value:new THREE.Matrix4()}, uStH:{value:1.7}, uStD:{value:0}, uSpP:{value:V(ST_SP)}, uSpM:{value:V(ST_SP)}, uSpN:{value:0}, uStXa:{value:V(ST_XB)}, uStXb:{value:V(ST_XB)}, uStXn:{value:0}, uVx:{value:new THREE.Vector4()}, uVxM:{value:new THREE.Matrix4()}, uVxT:{value:null}}; } return S.U; }
+const ST_VS='uniform mat4 uStInv; uniform mat4 uVxM; varying vec3 vStP; varying vec3 vStO; varying vec3 vStV;\n', ST_FS=`uniform vec4 uSt[8]; uniform vec3 uStC; uniform float uStH; uniform float uStD; uniform vec4 uSpP[6]; uniform vec4 uSpM[6]; uniform float uSpN; uniform vec4 uStXa[4]; uniform vec4 uStXb[4]; uniform float uStXn; uniform vec4 uVx; uniform sampler2D uVxT; varying vec3 vStP; varying vec3 vStO; varying vec3 vStV; float stWet=0.0;
 float stHs(vec3 p){ return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453); }
 float stN(vec3 p){ vec3 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(mix(stHs(i),stHs(i+vec3(1.,0.,0.)),f.x),mix(stHs(i+vec3(0.,1.,0.)),stHs(i+vec3(1.,1.,0.)),f.x),f.y),mix(mix(stHs(i+vec3(0.,0.,1.)),stHs(i+vec3(1.,0.,1.)),f.x),mix(stHs(i+vec3(0.,1.,1.)),stHs(i+vec3(1.,1.,1.)),f.x),f.y),f.z); }
 vec3 stSc(int p, vec3 col, float n2, vec3 pc){ if(p==1) return col*.62; if(p==2) return vec3(.36,.82,.2)*(.85+.3*n2); if(p==3) return mix(vec3(.22,.14,.07),vec3(.52,.42,.3),uStD)*(.8+.4*n2);
@@ -5862,14 +5862,19 @@ float stTh(int p){ if(p==2||p==6) return .42; if(p==7) return .22; return .04; }
   for(int k=0;k<6;k++){ if(float(k)>=uSpN) break; vec4 Q=uSpP[k], M=uSpM[k]; int p=int(M.x+.5); float th=stTh(p)*.5;
     float d=distance(cp,Q.xyz)/Q.w+(n1-.5)*.5+(n2-.5)*.22, cov=(1.0-smoothstep(.55,1.0,d))*smoothstep(1.0-M.y+th,1.0-M.y+th+.2,n1*.4+n2*.3+.5); if(cov<=.003) continue;
     float cr=floor(M.z/16.0); vec3 pc=vec3(cr,M.z-cr*16.0,M.w)/15.0; col=mix(col,stSc(p,col,n2,p==5?pc*pc:uStC),cov); stWet=max(stWet,cov*stWf(p)); }
+  if(uVx.x>.5){ vec3 g=vStV+(vec3(n1,n2,stN(vStO*13.0+1.7))-.5)*uVx.y;   // v240: la cosa: su cuadrícula de manchas (justo donde tocó)
+    if(g.x>=0.0 && g.y>=0.0 && g.z>=0.0 && g.x<1.0 && g.y<1.0 && g.z<1.0){ float N=uVx.z; vec3 c=floor(g*N); vec4 t=texture2D(uVxT,vec2((c.x+c.z*N+.5)/(N*N),(c.y+.5)/N)); int p=int(t.r*255.0+.5);
+      if(p>0){ float th=stTh(p)*.5, cov=smoothstep(.02,.2,t.g)*smoothstep(1.0-t.g+th,1.0-t.g+th+.25,n1*.45+n2*.3+.4); float cr=floor(t.b*255.0/16.0+.001); vec3 pc=vec3(cr,t.b*255.0-cr*16.0,t.a*255.0/16.0)/15.0;
+        col=mix(col,stSc(p,col,n2,p==5?pc*pc:uStC),cov); stWet=max(stWet,cov*stWf(p)); } } }
   }
   diffuseColor.rgb=col; }
 `;
-function stInject(sh){ sh.vertexShader=ST_VS+sh.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\n  vStO=transformed; vStP=(uStInv*(modelMatrix*vec4(transformed,1.0))).xyz;');
+function stInject(sh){ sh.vertexShader=ST_VS+sh.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\n  vStO=transformed; vStP=(uStInv*(modelMatrix*vec4(transformed,1.0))).xyz; vStV=(uVxM*(modelMatrix*vec4(transformed,1.0))).xyz;');
   sh.fragmentShader=ST_FS+sh.fragmentShader.replace('#include <roughnessmap_fragment>',ST_COL+'#include <roughnessmap_fragment>\n  roughnessFactor=mix(roughnessFactor,.14,stWet);'); }
 function stMat(S,m){ let c=S.mats.get(m); if(c) return c; try{ c=m.clone(); }catch(e){ return null; } const U=stUni(S), ob=m.onBeforeCompile, ok=m.customProgramCacheKey?m.customProgramCacheKey.bind(m):null;
   c.userData.stOrig=m; c.onBeforeCompile=(sh,r)=>{ if(ob) ob.call(m,sh,r); Object.assign(sh.uniforms,U); stInject(sh); }; c.customProgramCacheKey=()=>'st|'+(ok?ok():''); S.mats.set(m,c); return c; }
-function stOkMesh(o,m,skip){ const M=m.material; return m.isMesh && !Array.isArray(M) && M && M.isMeshStandardMaterial && !M.transparent && M.visible!==false && M.colorWrite!==false && !skip.has(m) && !m.userData.noStain && M!==tagMat; }
+function stOkMat(M){ return M && M.isMeshStandardMaterial && !M.transparent && M.visible!==false && M.colorWrite!==false && M!==tagMat; }
+function stOkMesh(o,m,skip){ const M=m.material; if(!m.isMesh || !M || skip.has(m) || m.userData.noStain) return false; return Array.isArray(M)?M.some(stOkMat):stOkMat(M); }   // (v240: el dado tiene un material por cara)
 // los «huesos» del peluche: 0 el cuerpo, luego cada brazo y cada pierna (arriba y abajo del codo/rodilla); un manchón se pega a uno
 function stBones(o){ const u=o.userData; if(u.stBn && u.stBn.ar===u.arms && u.stBn.lg===u.legs) return u.stBn; const b=[null]; for(const L of [u.arms||[],u.legs||[]]) for(const a of L) b.push(a,(a.userData && a.userData.joint)||a); b.ar=u.arms; b.lg=u.legs; return u.stBn=b; }
 const _stV=new THREE.Vector3(), _stV2=new THREE.Vector3(), _stV3=new THREE.Vector3(), _stV4=new THREE.Vector3(), _stRc=new THREE.Raycaster();
@@ -5894,11 +5899,14 @@ function stOutfitAfter(o,old){ const u=o.userData, S=u.stn; if(!S || !old) retur
   while(S.X.length>ST_XB){ const a=S.X.pop(), z=S.X[S.X.length-1]; z.mn.min(a.mn); z.mx.max(a.mx); } }
 // pone la mancha en todo el peluche (los ojos y la etiqueta no); cada prenda con la suya; y la quita cuando ya está limpio
 function stWrap(o,S){ const u=o.userData, skip=new Set([...(u.eyes||[]), u.crease].filter(Boolean)); stUni(S);
-  o.traverseVisible(m=>{ if(!m.isMesh) return; if(m.material && m.material.userData && m.material.userData.stOrig){ return; } if(!stOkMesh(o,m,skip)) return; const c=stMat(stStateFor(o,S,m),m.material); if(!c) return; m.material=c;
+  o.traverseVisible(m=>{ if(!m.isMesh) return; if(m.material && (Array.isArray(m.material)?m.material.some(q=>q.userData && q.userData.stOrig):m.material.userData && m.material.userData.stOrig)){ return; } if(!stOkMesh(o,m,skip)) return; const T=stStateFor(o,S,m);
+    if(Array.isArray(m.material)){ m.userData.stArr=m.material; m.material=m.material.map(q=>stOkMat(q)?(stMat(T,q)||q):q); } else { const c=stMat(T,m.material); if(!c) return; m.material=c; }
     if(!m.userData.stHook){ m.userData.stHook=1; const prev=m.onBeforeRender; m.onBeforeRender=function(r,sc,cam,g,mat,gr){ if(mat && mat.userData && mat.userData.stOrig) stFrame(o); if(prev) prev.call(this,r,sc,cam,g,mat,gr); }; } }); }
-function stRestore(o){ o.traverse(m=>{ if(m.isMesh && m.material && m.material.userData && m.material.userData.stOrig) m.material=m.material.userData.stOrig; }); }
+function stRestore(o){ o.traverse(m=>{ if(!m.isMesh || !m.material) return; if(Array.isArray(m.material)){ if(m.userData.stArr){ m.material=m.userData.stArr; m.userData.stArr=null; } return; } if(m.material.userData && m.material.userData.stOrig) m.material=m.material.userData.stOrig; }); }
 // justo antes de dibujar (una vez por cuadro): dónde va cada manchón (los del brazo o la pierna se mueven con él)
-function stFrame(o){ const S=o.userData.stn; if(!S || !S.U) return; const f=renderer.info.render.frame; if(S.fr===f) return; S.fr=f; const inv=S.U.uStInv.value.copy(o.matrixWorld).invert(), B=stBones(o); stSpU(S,B,inv); for(const c of stCloths(S)){ stUni(c).uStInv.value.copy(inv); stSpU(c,B,inv); } }
+function stFrame(o){ const S=o.userData.stn; if(!S || !S.U) return; const f=renderer.info.render.frame; if(S.fr===f) return; S.fr=f; const inv=S.U.uStInv.value.copy(o.matrixWorld).invert(), B=stBones(o); stSpU(S,B,inv);
+  if(S.vx){ const U=S.U; U.uVxM.value.copy(S.vx.bone.matrixWorld).invert().premultiply(S.vx.G); U.uVx.value.set(1,.6/VX_N,VX_N,0); U.uVxT.value=S.vx.tex; }   // (v240: la cuadrícula de la cosa)
+  for(const c of stCloths(S)){ stUni(c).uStInv.value.copy(inv); stSpU(c,B,inv); } }
 function stSpU(S,B,inv){ const U=stUni(S); let n=0; for(const s of S.sp){ if(n>=ST_SP) break; if(!(s.a>.01)) continue; _stV.set(s.x,s.y,s.z); if(s.bi>0){ const b=B[s.bi]; if(!b) continue; b.localToWorld(_stV).applyMatrix4(inv); }
   U.uSpP.value[n].set(_stV.x,_stV.y,_stV.z,s.r); U.uSpM.value[n].set(s.p,Math.min(1,s.a),(s.c>>8&15)*16+(s.c>>4&15),s.c&15); n++; } U.uSpN.value=n; }
 // algo te tocó: p = sustancia; lv = hasta qué altura (m); fr = de panza (0–1); tp = encima (0–1). Le toca también a tu ropa.
@@ -5914,7 +5922,8 @@ function stSpotAdd(S,s,inc){ const L=S.sp; for(const q of L){ if(q.p===s.p && q.
       q.r=Math.min(.42,Math.max(q.r,s.r)*1.03+.003); q.a=Math.min(1,q.a+inc); if(s.c) q.c=s.c; q.ry=Math.min(q.ry,s.ry); if(S.cls==='h' && q.p===1) q.a=Math.min(q.a,.3); S.on=true; return; } }
   L.push(Object.assign({},s,{a:Math.min(1,S.cls==='h' && s.p===1?Math.min(.3,inc):inc)})); if(L.length>ST_SP){ let mi=0; for(let i=1;i<L.length;i++) if(L[i].a<L[mi].a) mi=i; L.splice(mi,1); } S.on=true; }
 const stC12=h=>((h>>20&15)<<8)|((h>>12&15)<<4)|(h>>4&15);
-function stSpotAt(o,S,p,bi,w,rw,inc,col){ if(!o || !S || !(p>0 && p<ST_N)) return; const B=stBones(o), b=bi>0?B[bi]:o; if(!b) return; const loc=b.worldToLocal(w.clone()), sc=o.matrixWorld.getMaxScaleOnAxis()||1;
+function stSpotAt(o,S,p,bi,w,rw,inc,col){ if(!o || !S || !(p>0 && p<ST_N)) return; if(S.obj) o.updateMatrixWorld(true);   // (v240: las cosas: su posición de ahorita)
+  const B=stBones(o), b=bi>0?B[bi]:o; if(!b) return; const loc=b.worldToLocal(w.clone()), sc=o.matrixWorld.getMaxScaleOnAxis()||1;
   const s={p,bi:bi>0?bi:0,x:loc.x,y:loc.y,z:loc.z,r:Math.min(.42,rw/sc),c:p===5 && col?stC12(col):0,ry:o.worldToLocal(w.clone()).y};
   stSpotAdd(S,s,inc); if(S.clm) for(const c of S.clm.values()) stSpotAdd(c,s,inc);
   if(S.X.length){ const lp=o.worldToLocal(w.clone()), r=s.r; S.X=S.X.filter(x=>!(lp.x>x.mn.x-r && lp.x<x.mx.x+r && lp.y>x.mn.y-r && lp.y<x.mx.y+r && lp.z>x.mn.z-r && lp.z<x.mx.z+r)); }
@@ -5933,7 +5942,7 @@ function stHands(o,S,dt){ if((S.hT-=dt)>0) return; S.hT=.2; if(typeof SU==='unde
   for(const a of (o.userData.arms||[])){ const t=stTip(a,_stV4), q=suCell(t.x,t.z,false); if(!q) continue; const [C,i]=q, b=suB(C,i); if(b>=1e3) continue; let lo=b;
     for(let l=0;l<2;l++){ const tt=l?C.t2[i]:C.t[i], hh=l?C.h2[i]:C.h[i], cc=l?C.c2[i]:C.c[i]; if(!tt || !(hh>0)) continue; const hi=lo+hh; if(t.y<hi+.03 && t.y>lo-.15 && !(tt===3 && cc>170)) stSpotAt(o,S,tt,B.indexOf(a.userData.joint||a),t,.14,.35,tt===5?suHex(5,cc,255):0); lo=hi; } } }
 // agarraste algo que estaba metido en la sustancia: se te pega en las manos
-function stGrabSoil(d){ if(!d || !d.root || typeof SU==='undefined' || !SU.list.length) return; const p=d.root.position, q=suCell(p.x,p.z,false); if(!q) return; const [C,i]=q, b=suB(C,i); if(b>=1e3) return; const top=b+C.h[i]+C.h2[i];
+function stGrabSoil(d){ try{ stObjToHands(d); }catch(e){} if(!d || !d.root || typeof SU==='undefined' || !SU.list.length) return; const p=d.root.position, q=suCell(p.x,p.z,false); if(!q) return; const [C,i]=q, b=suB(C,i); if(b>=1e3) return; const top=b+C.h[i]+C.h2[i];
   let lo=p.y-.2; try{ lo=new THREE.Box3().setFromObject(d.root).min.y; }catch(e){} if(top<lo+.02) return; const two=C.t2[i] && C.h2[i]>0, tt=two?C.t2[i]:C.t[i], cc=two?C.c2[i]:C.c[i]; if(!tt || (tt===3 && cc>170)) return;
   const B=stBones(plush); for(const a of (plush.userData.arms||[])) stSpotAt(plush,myStn,tt,B.indexOf(a.userData.joint||a),stTip(a,_stV4),.15,.7,tt===5?suHex(5,cc,255):0); }
 // lo que hay donde estás parado (en el Modo libre): cada capa de sustancia que te llega arriba de los pies
@@ -5996,6 +6005,84 @@ function stRemoteTick(r,dt){ const o=r.obj; if(!o) return; const S=r.stn||(r.stn
 // las mascotas: se manchan solitas según por dónde caminan
 function stPetTick(pet,dt){ if(!pet || !pet.P || !pet.P.root) return; const R=pet.P.root, u=R.userData; if(!u.petH){ try{ const b=new THREE.Box3().setFromObject(R); u.petH=Math.max(.3,b.max.y-b.min.y); }catch(e){ u.petH=.6; } }
   const S=u.stn||(u.stn=stNew()); let inW=-1; if(R.visible && FREE.on) inW=stSample(S,R.position.x,R.position.z,R.position.y,u.petH,false,false); stDecay(S,dt,inW,false,null,u.petH); stApply(R,S,dt); }
+// ======================================================================================
+// ---------------- v240: LAS COSAS SE MANCHAN Y LO PEGAJOSO SE NOTA ----------------
+// Cada cosa con física (pelotas, cajas, juguetes, bloques sueltos) lleva su mancha en una cuadrícula de 16×16×16 cuadritos pegada a
+// ella (gira con la pelota, se voltea con la caja). Se mancha justo lo que tocó y con la forma del contacto: lo que quedó debajo de la
+// superficie (raya recta si se hundió), la franja por donde rodó, el círculo donde le pegó una bola. El agua lava lo que quedó adentro.
+// La miel y el slime la hacen pegajosa (casi no rueda ni se desliza); embarrada o pintada deja rastro (y se le quita de donde tocó el
+// piso); si la agarras o te pega, te mancha. Cada quien calcula sus manchas (con la posición de la cosa y la sustancia, que ya se
+// comparten); el rastro y lo pegajoso los hace quien mueve las cosas (el anfitrión).
+// ======================================================================================
+const ST_OBJ_MAX=20, ST_OBJ=new Set(), VX_N=16, VX_N3=VX_N*VX_N*VX_N;
+function stObjCls(d){ const id=String((d.P&&d.P.id)||d.id||''); return /goma|playa|balon|basket|globo|futbol|pelota|hielo/.test(id)?'h':/tela|cojin|peluche|espuma/.test(id)?'t':'f'; }   // (hule: se limpia rápido; tela: absorbe)
+// la cuadrícula: en lo que gira (la pelota) o en la cosa misma, del tamaño de la cosa
+function stVxInit(d){ const bone=d.spin||d.root, root=d.root; root.updateMatrixWorld(true); const inv=new THREE.Matrix4().copy(bone.matrixWorld).invert(), M=new THREE.Matrix4(), bb=new THREE.Box3();
+  root.traverse(m=>{ if(!m.isMesh || !m.geometry) return; const g=m.geometry; if(!g.boundingBox) g.computeBoundingBox(); bb.union(g.boundingBox.clone().applyMatrix4(M.multiplyMatrices(inv,m.matrixWorld))); });
+  if(bb.isEmpty()){ const r=d.r||.3; bb.set(new THREE.Vector3(-r,-r,-r),new THREE.Vector3(r,r,r)); } const sz=bb.getSize(new THREE.Vector3()).multiplyScalar(1.04).max(new THREE.Vector3(.02,.02,.02)), mn=bb.getCenter(new THREE.Vector3()).addScaledVector(sz,-.5);
+  const N=VX_N, P=new Float32Array(VX_N3*3); for(let z=0;z<N;z++) for(let y=0;y<N;y++) for(let x=0;x<N;x++){ const i=(z*N+y)*N+x; P[i*3]=mn.x+(x+.5)/N*sz.x; P[i*3+1]=mn.y+(y+.5)/N*sz.y; P[i*3+2]=mn.z+(z+.5)/N*sz.z; }
+  const data=new Uint8Array(VX_N3*4), tex=new THREE.DataTexture(data,N*N,N,THREE.RGBAFormat,THREE.UnsignedByteType); tex.magFilter=tex.minFilter=THREE.NearestFilter; tex.generateMipmaps=false; tex.needsUpdate=true;
+  const G=new THREE.Matrix4().makeScale(1/sz.x,1/sz.y,1/sz.z).multiply(new THREE.Matrix4().makeTranslation(-mn.x,-mn.y,-mn.z));   // (de la cosa → de 0 a 1)
+  return {bone, root, P, t:new Uint8Array(VX_N3), a:new Float32Array(VX_N3), c:new Uint16Array(VX_N3), data, tex, G, vs:Math.max(sz.x,sz.y,sz.z)/N, n:0, dirty:true, cv:new Float32Array(ST_N), dT:0}; }
+function stObjS(d){ const u=d.root.userData; let S=u.stn; if(!S){ S=u.stn=stNew(stObjCls(d)); S.obj=true; if(!u.petH) u.petH=d.bx?d.bx.rad*1.6:(d.r||.3)*2; } if(!S.vx) S.vx=stVxInit(d); S.used=SU.T; ST_OBJ.add(d);
+  if(ST_OBJ.size>ST_OBJ_MAX){ let old=null; for(const q of ST_OBJ) if(q!==d && (!old || (q.root.userData.stn.used||0)<(old.root.userData.stn.used||0))) old=q; if(old) stObjForget(old); } return S; }
+function stObjForget(d){ const S=d.root.userData.stn; if(S){ stClear(S); if(S.vx){ S.vx.a.fill(0); S.vx.t.fill(0); S.vx.n=0; S.vx.cv.fill(0); } S.on=false; try{ stRestore(d.root); }catch(e){} S.wr=false; } ST_OBJ.delete(d); }
+function stCoat(S,p){ return S && S.vx ? S.vx.cv[p] : 0; }
+function stStick(S){ return S && S.on ? Math.max(stCoat(S,4),stCoat(S,2)*.7,stCoat(S,3)*.25) : 0; }   // qué tan pegajosa está (0–1)
+function stObjR(d){ return d.bx?d.bx.rad*.75:(d.r||.3); }
+// pinta en la cuadrícula: f(x,y,z en el mundo) dice si ese cuadrito tocó; p sustancia; inc cuánto; col (pintura)
+function stVxMark(V,f,p,inc,col){ V.root.updateMatrixWorld(true); const e=V.bone.matrixWorld.elements, P=V.P, T=V.t, A=V.a, C=V.c, c12=p===5 && col?stC12(col):0; let n=0;
+  for(let i=0;i<VX_N3;i++){ const x=P[i*3], y=P[i*3+1], z=P[i*3+2], wx=e[0]*x+e[4]*y+e[8]*z+e[12], wy=e[1]*x+e[5]*y+e[9]*z+e[13], wz=e[2]*x+e[6]*y+e[10]*z+e[14]; if(!f(wx,wy,wz)) continue;
+    if(p===1){ if(A[i]>.02 && T[i]!==1) continue; T[i]=1; A[i]=Math.min(.6,A[i]+inc); n++; continue; }   // (el agua solo moja lo limpio; lo demás lo lava aparte)
+    if(T[i]!==p && A[i]>.25 && inc<A[i]*.6){ continue; }   // (lo que ya tiene otra sustancia gruesa no se tapa con poquito)
+    if(T[i]!==p){ T[i]=p; A[i]=0; } A[i]=Math.min(1,A[i]+inc); if(p===5) C[i]=c12; if(A[i]>V.cv[p]) V.cv[p]=A[i]; n++; }
+  if(n){ V.dirty=true; V.n=Math.max(V.n,n); } return n; }
+// cada rato: se seca/se cae (según la tela), el agua lava lo que está adentro; se cuenta cuánto hay de cada sustancia
+function stVxDecay(S,dt,wl){ const V=S.vx, T=V.t, A=V.a, cv=V.cv; cv.fill(0); let n=0; const cls=S.cls, rain=weatherNow.rain>.3 && !(FREE.on && FREE.roof)?.04*weatherNow.rain:0; let e=null, P=V.P;
+  if(wl>-1e8){ V.root.updateMatrixWorld(true); e=V.bone.matrixWorld.elements; }
+  for(let i=0;i<VX_N3;i++){ let a=A[i]; if(!(a>0)) continue; const p=T[i]; let k=ST_DEC[p]*stClsK(cls,p)+(p>1?rain:0); if(p===7 && (cv[1]>.3||cv[4]>.3)) k*=.5;
+    if(e && p!==1){ const x=P[i*3], y=P[i*3+1], z=P[i*3+2]; if(e[1]*x+e[5]*y+e[9]*z+e[13]<wl) k+=.75; }   // (en el agua)
+    a-=k*dt; if(a<=.01){ A[i]=0; T[i]=0; V.dirty=true; continue; } A[i]=a; if(a>cv[p]) cv[p]=a; n++; }
+  if(n!==V.n || n) V.dirty=true; V.n=n; }
+function stVxUp(V){ if(!V.dirty) return; V.dirty=false; const D=V.data, T=V.t, A=V.a, C=V.c, N=VX_N;
+  for(let z=0;z<N;z++) for(let y=0;y<N;y++) for(let x=0;x<N;x++){ const i=(z*N+y)*N+x, o=(y*N*N+z*N+x)*4, a=A[i]; if(a>0){ D[o]=T[i]; D[o+1]=Math.round(a*255); const c=C[i]; D[o+2]=(c>>8&15)*16+(c>>4&15); D[o+3]=(c&15)*16; } else { D[o]=0; D[o+1]=0; } }
+  V.tex.needsUpdate=true; }
+// ¿está metida en sustancia? se mancha justo lo que quedó debajo de la superficie de cada capa
+function stObjSample(d,S){ const p=d.root.position, r=stObjR(d), q=suCell(p.x,p.z,false); if(!q) return -1e9; const [C,i]=q, b=suB(C,i); if(b>=1e3) return -1e9; let lo=b, wl=-1e9; const bot=p.y-r*1.05;
+  for(let l=0;l<2;l++){ const t=l?C.t2[i]:C.t[i], h=l?C.h2[i]:C.h[i], c=l?C.c2[i]:C.c[i]; if(!t || !(h>0)) continue; const hi=lo+h, lo0=lo; lo=hi; if(hi<bot || (t===3 && c>170)) continue;
+    if(t===1){ wl=Math.max(wl,hi); stVxMark(S.vx,(x,y)=>y<hi && y>lo0-.05,1,.3,0); continue; }
+    const inc=t===7?(C.s[i]>90?.35:.12):.4; stVxMark(S.vx,(x,y)=>y<hi+.004 && y>lo0-.05,t,inc,t===5?suHex(5,c,255):0); }
+  return wl; }
+// una bola o un chorro le pegó en un punto: un círculo donde pegó (del tamaño de lo que pegó)
+function stObjHit(d,p,x,y,z,rw,inc,col){ if(!d || !d.root || !(p>0 && p<ST_N) || (p===1 && inc<.3)) return; const S=stObjS(d); if((S.hitT||0)>SU.T-.06 && inc<.5) return; S.hitT=SU.T; const R2=rw*rw;
+  stVxMark(S.vx,(wx,wy,wz)=>{ const dx=wx-x, dy=wy-y, dz=wz-z; return dx*dx+dy*dy+dz*dz<R2; },p,inc,col); }
+// lo que se pega en las manos al agarrarla
+function stObjToHands(d){ const S=d && d.root && d.root.userData.stn; if(!S || !S.on || !S.vx) return; let bp=0, ba=0; for(let p=2;p<ST_N;p++) if(S.vx.cv[p]>ba){ ba=S.vx.cv[p]; bp=p; } if(!bp || ba<.15) return; let col=0;
+  if(bp===5){ for(let i=0;i<VX_N3;i++) if(S.vx.t[i]===5 && S.vx.a[i]>=ba*.9){ col=stC24(S.vx.c[i]); break; } } const B=stBones(plush);
+  for(const a of (plush.userData.arms||[])) stSpotAt(plush,myStn,bp,B.indexOf(a.userData.joint||a),stTip(a,_stV4),.15,Math.min(.8,ba),col); }
+const stC24=c=>((c>>8&15)*17<<16)|((c>>4&15)*17<<8)|((c&15)*17);   // (el color de 12 a 24 bits)
+function stObjMain(S){ let bp=0, ba=0; for(let p=2;p<ST_N;p++) if(S.vx.cv[p]>ba){ ba=S.vx.cv[p]; bp=p; } return [bp,ba]; }
+// cada cuadro: las cosas de cerca
+function stObjTick(dt){ if(!FREE.on){ if(ST_OBJ.size) for(const d of [...ST_OBJ]) stObjForget(d); return; } const host=!FNET.on || FNET.host, cx=camera.position.x, cz=camera.position.z, any=SU.list.length>0;
+  for(const d of [...ST_OBJ]) if(!FREE.dyn.includes(d)) ST_OBJ.delete(d);
+  if(any){ const L=FREE.dyn, n=L.length; if(n){ const k0=(stObjTick.k=((stObjTick.k|0)+1))%3;   // (cada cosa se revisa 1 de cada 3 cuadros)
+      for(let j=k0;j<n;j+=3){ const d=L[j]; if(d.held || !d.root || !d.root.visible) continue; const p=d.root.position; if(Math.abs(p.x-cx)>30 || Math.abs(p.z-cz)>30) continue; const q=suCell(p.x,p.z,false); if(!q) continue; const [C,i]=q; if(!(C.h[i]>0)) continue;
+        if(suB(C,i)+C.h[i]+C.h2[i]<p.y-stObjR(d)*1.05) continue; const S=stObjS(d); S.wl=stObjSample(d,S); S.wlT=SU.T; } } }
+  for(const d of ST_OBJ){ const S=d.root.userData.stn, p=d.root.position, r=stObjR(d); if(!S || !S.vx) continue; const V=S.vx;
+    if((V.dT+=dt)>=.2){ stVxDecay(S,V.dT,SU.T-(S.wlT||0)<.3?S.wl:-1e9); V.dT=0; } S.on=V.n>0;
+    if(!S.on){ stApply(d.root,S,dt); continue; } S.used=Math.max(S.used||0,SU.T-1);
+    // te pega o la empujas: te mancha
+    if(state==='play' && !player.car && (S.pT||0)<SU.T-.4){ const dx=p.x-player.pos.x, dz=p.z-player.pos.z, dd=Math.hypot(dx,dz); if(dd<r+.5 && p.y+r>player.pos.y && p.y-r<player.pos.y+stHgt(plush)){ const [bp,ba]=stObjMain(S);
+        if(bp && ba>.3){ S.pT=SU.T; const k=Math.max(.01,dd); myStn.rcT=0; let col=0; if(bp===5) for(let i=0;i<VX_N3;i++) if(V.t[i]===5 && V.a[i]>.2){ col=stC24(V.c[i]); break; }
+          stSpot(plush,myStn,bp,_stV3.set(p.x-dx/k*r,Math.max(player.pos.y+.15,Math.min(player.pos.y+stHgt(plush)*.9,p.y)),p.z-dz/k*r),.18,.35,col); } } }
+    if(host){ const st=stStick(S);
+      if(st>.08 && d.bx && !d.sleep){ const g=freeGround(p.x,p.z,p.y+.2); if(g!==null && p.y-d.bx.rad<g+.08){ const f=Math.exp(-st*6*dt); d.v.x*=f; d.v.z*=f; d.bx.w.multiplyScalar(Math.exp(-st*5*dt)); } }   // (la caja con miel se pega al piso)
+      // rueda o se arrastra por lo seco: deja rastro con lo que trae justo donde toca el piso, y ahí se le va quitando
+      const lp=S.lp||(S.lp=p.clone()), mv=Math.hypot(p.x-lp.x,p.z-lp.z); if(mv>.15){ lp.copy(p); const q=suCell(p.x,p.z,false), dry=!q || !(q[0].h[q[1]]>0), g=freeGround(p.x,p.z,p.y+.2);
+        if(dry && g!==null && p.y-r<g+.06){ V.root.updateMatrixWorld(true); const e=V.bone.matrixWorld.elements, P=V.P, low=g+Math.max(.03,V.vs*1.2), got=[0,0,0,0,0,0,0,0], gc=[0,0,0,0,0,0,0,0];
+          for(let i=0;i<VX_N3;i++){ const t=V.t[i]; if(!(t===2||t===3||t===4||t===5) || V.a[i]<.2) continue; const x=P[i*3], y=P[i*3+1], z=P[i*3+2]; if(e[1]*x+e[5]*y+e[9]*z+e[13]>low) continue; got[t]+=V.a[i]; gc[t]=V.c[i]; V.a[i]=Math.max(0,V.a[i]-.12); V.dirty=true; }
+          let bp=0; for(const t of [5,3,4,2]) if(got[t]>got[bp]) bp=t; if(bp && got[bp]>.4) suPour(p.x,p.z,bp,bp===5?(SU_F|stC24(gc[bp])):0,Math.min(.0008,.00012*got[bp]),.12); } } }
+    stVxUp(V); stApply(d.root,S,dt); } }
 function makePlush(colorIdx){
   const stains={feet:[], front:[]};
   const plushMat=plushMatFor(colorIdx);
@@ -23363,7 +23450,7 @@ function freePhys(dt){ const D=FREE.dyn; if(!D.length || (FNET.on && !FNET.host)
       if(dd<r && dd>1e-4){ const nx=dx/dd, nz=dz/dd; p.x+=nx*(r-dd); p.z+=nz*(r-dd); const vn=v.x*nx+v.z*nz; if(vn<0){ v.x-=(1+d.P.b)*vn*nx; v.z-=(1+d.P.b)*vn*nz; if(o.jelly && vn<-1) o.wob=Math.max(o.wob||0,.45); if(d.P.pop && vn<-4) d.popMe=true; } } }
     let onG=false, onS=false; let g=freeGround(p.x,p.z,p.y+.2); if(g!==null && (SU.hasSand||SU.hasCrust)){ const s7=suSandTop(p.x,p.z); if(s7>g && s7<=p.y+.8){ g=s7-Math.min(.06,.006+.012*(d.P.mass||1)); onS=true; } }   // v237: encima de la arena (un poquito hundida)
     if(g===null){ if(p.y<FREE.Y-25){ p.set(FREE.X,FREE.Y+3,FREE.Z); v.set(0,0,0); } }
-    else if(!d.P.float && p.y-r<g+.01){ onG=true; const vyIn=v.y; if(p.y-r<g) p.y=g+r; if(d.P.pop && v.y<-5) d.popMe=true; if(v.y<0){ if(v.y<-3 && d.root.userData.squash) d.sq=.25; v.y=-v.y*d.P.b; if(v.y<(d.P.toy==='saltarina'?.5:1.2)+G*dt) v.y=0; } if(d.P.toy) toyGround(d,vyIn); const k=(d.P.roll===3?2.2:d.P.roll?.7:(d.P.fric||4.5))+(onS?2.6:0), f=Math.max(0,1-k*dt); v.x*=f; v.z*=f; }   /* (v237: en la arena rueda mucho menos) */
+    else if(!d.P.float && p.y-r<g+.01){ onG=true; const vyIn=v.y; if(p.y-r<g) p.y=g+r; if(d.P.pop && v.y<-5) d.popMe=true; if(v.y<0){ if(v.y<-3 && d.root.userData.squash) d.sq=.25; v.y=-v.y*d.P.b; if(v.y<(d.P.toy==='saltarina'?.5:1.2)+G*dt) v.y=0; } if(d.P.toy) toyGround(d,vyIn); const k=(d.P.roll===3?2.2:d.P.roll?.7:(d.P.fric||4.5))+(onS?2.6:0)+(d.root.userData.stn?stStick(d.root.userData.stn)*12:0), f=Math.max(0,1-k*dt); v.x*=f; v.z*=f; }   /* (v237: en la arena rueda mucho menos) */
     // empujones de tu peluche (y de los demás)
     for(let wi=0;wi<who.length;wi++){ const w=who[wi], rr=whoR[wi], dx=p.x-w.x, dz=p.z-w.z, dd=Math.hypot(dx,dz), lim=r+.42; if(dd>=lim || p.y>w.y+PLAYER_H+r || p.y+r<w.y) continue;
       const nx=dd>1e-4?dx/dd:1, nz=dd>1e-4?dz/dd:0; p.x+=nx*(lim-dd); p.z+=nz*(lim-dd);
@@ -24899,7 +24986,7 @@ function suTick(dt){ const T=suSelT(); SU.T+=dt; SU.U.uT.value=SU.T; if(SU.U.uRi
   for(let k=SU.balls.length-1;k>=0;k--){ const B=SU.balls[k]; B.t+=dt; B.vy-=9.5*dt; const n=Math.max(1,Math.ceil(Math.hypot(B.vx,B.vy,B.vz)*dt/(B.r*.6)));
     let hit=null; for(let s=0;s<n && !hit;s++){ B.x+=B.vx*dt/n; B.y+=B.vy*dt/n; B.z+=B.vz*dt/n; hit=suHit(B.x,B.y,B.z,B.r,B.t<.35); }
     if(!freeInside(B.x,B.z,.1) || B.t>6) hit=hit||{nx:0,ny:1,nz:0};
-    if(hit){ if(hit.dyn && hit.o){ try{ freeWake(hit.o); hit.o.v.x+=B.vx*.25; hit.o.v.y+=2; hit.o.v.z+=B.vz*.25; }catch(e){} }
+    if(hit){ if(hit.dyn && hit.o){ try{ stObjHit(hit.o,B.p,B.x,B.y,B.z,B.r*1.1+.05,1,B.p===5?suHex(5,B.c,255):0); }catch(e){} try{ freeWake(hit.o); hit.o.v.x+=B.vx*.25; hit.o.v.y+=2; hit.o.v.z+=B.vz*.25; }catch(e){} }
       if(hit.pl===player.pos){ player.vel.x+=B.vx*.15; player.vel.z+=B.vz*.15; { const H=stHgt(plush), cy=Math.min(player.pos.y+H*.95,Math.max(player.pos.y+.1,B.y)); _stV3.set(player.pos.x-B.x,cy-B.y,player.pos.z-B.z); const dl=_stV3.length()||1; _stV3.multiplyScalar(Math.min(B.r,dl)/dl).add(_stV2.set(B.x,B.y,B.z)); stSpot(plush,myStn,B.p,_stV3,B.r*1.3+.1,1,B.p===5?suHex(5,B.c,255):0); }   /* v238b: el manchón queda justo donde pegó */ try{ flashNote('¡Te cayó '+SU_T[B.p].n.toLowerCase()+'!'); }catch(e){} }
       suSplat(B.p,B.c,B.s,B.v,B.x,B.y,B.z,B.vx,B.vy,B.vz,hit.nx,hit.ny,hit.nz,hit.o,B.r); B.m.parent && B.m.parent.remove(B.m); SU.balls.splice(k,1); continue; }
     B.m.position.set(B.x,B.y,B.z); const w=1+Math.sin(B.t*18)*.04; B.m.scale.set(B.r*w,B.r/w,B.r*w); }
@@ -25152,7 +25239,7 @@ function fuBody(P){ if(P.t<.25 && P.mine) return false; const tryB=(pos,me)=>{ i
   if(tryB(player.pos,true)) return true; for(const pos of FU.bodies) if(tryB(pos,false)) return true; return false; }
 // ¿pegó en algo con física? lo empuja un poquito y rebota
 function fuDyn(P,real){ for(const d of FU.dynNear){ if(d.held) continue; const c=d.root.position, rr=(d.r||.3)+P.r*.8, dx=P.x-c.x, dy=P.y-c.y, dz=P.z-c.z, l2=dx*dx+dy*dy+dz*dz; if(l2>rr*rr) continue;
-    const l=Math.sqrt(l2)||1, nx=dx/l, ny=dy/l, nz=dz/l; P.x=c.x+nx*rr; P.y=c.y+ny*rr; P.z=c.z+nz*rr; const vn=P.vx*nx+P.vy*ny+P.vz*nz;
+    const l=Math.sqrt(l2)||1, nx=dx/l, ny=dy/l, nz=dz/l; P.x=c.x+nx*rr; P.y=c.y+ny*rr; P.z=c.z+nz*rr; const vn=P.vx*nx+P.vy*ny+P.vz*nz; try{ stObjHit(d,P.p,P.x,P.y,P.z,P.r*1.6+.06,.25,P.p===5?suHex(5,P.c,255):0); }catch(e){}   // v240: la mancha
     if(real && P.v>0){ const k=Math.min(.6,P.v*600/((d.P&&d.P.mass)||.5)); d.v.x+=P.vx*k; d.v.y+=Math.max(0,P.vy*k*.3); d.v.z+=P.vz*k; d.kick=.2; freeWake(d); if(d.bx) bxWake(d); }
     if(vn<0){ P.vx-=nx*vn*1.25; P.vy-=ny*vn*1.25; P.vz-=nz*vn*1.25; } P.vx*=.45; P.vz*=.45; return true; } return false; }
 // cómo se ve cada sustancia al ir cayendo
@@ -27969,6 +28056,7 @@ function update(dt,t){ myLabelUpdate();
       : stainStep(myStain,now,player.pos.x,player.pos.y,player.pos.z,player.groundY,player.grounded,flat,player.facing,stepped,Math.floor(player.walk/Math.PI)&1);
     showStains(plush,st); decals.update(now); }
   try{ stPlayerTick(dt); }catch(e){ if(!window.__stE){ window.__stE=1; console.warn('manchas',e); } }   // v238: tu peluche se mancha
+  try{ stObjTick(dt); }catch(e){ if(!window.__soE){ window.__soE=1; console.warn('manchas cosas',e); } }   // v240: y las cosas
   const sw=player.swim?0:Math.sin(player.walk)*.7*moving;
   const air = !player.grounded && !player.swim;
   const dk = player.swim?0:player.diveAngle/DIVE_FLAT;
