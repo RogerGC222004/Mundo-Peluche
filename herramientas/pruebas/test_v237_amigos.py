@@ -97,6 +97,15 @@ async def m():
       await sync(1)
       if await ev(B,"SU.wl.size===0"): break
     rb=await ev(B,"SU.wl.size"); ok(rb==0, '🧹 Ana limpia y a Beto también se le limpian las paredes (%s hojas)'%rb)
+    # 6. la arena: Ana hace un montón de arena y Beto lo ve igual; Beto camina encima y no se hunde
+    await ev(A,"(()=>{ for(let i=0;i<80;i++){ suPour(FREE.X-12,FREE.Z+6,7,0,.02,.3); __S(1); } return 1; })()")
+    for i in range(30):
+      await sync(1)
+      if await ev(B,"SU.hasSand && suSandTop(FREE.X-12,FREE.Z+6)>FREE.Y+.4"): break
+    ta=await ev(A,"+(suSandTop(FREE.X-12,FREE.Z+6)-FREE.Y).toFixed(2)"); tb=await ev(B,"+(suSandTop(FREE.X-12,FREE.Z+6)-FREE.Y).toFixed(2)")
+    ok(tb>.3 and abs(ta-tb)<.15, '🏖️ Ana hace un montón de arena y Beto lo ve igual (Ana %s m, Beto %s m)'%(ta,tb))
+    r=await ev(B,"(()=>{ player.pos.set(FREE.X-12,FREE.Y+1.5,FREE.Z+6); player.vel.set(0,0,0); __S(25); return [+(player.pos.y-FREE.Y).toFixed(2), player.swim]; })()")
+    ok(r[0]>tb-.12 and not r[1], 'y Beto se para encima de la arena (a %s m)'%r[0])
     pb_=await ev(A,"__PB"); ok(pb_<=3700, 'lo más que mandó Ana pesa %s bytes'%pb_)
     ok(not ea and not eb,'sin errores %s %s'%(ea[:3],eb[:3])); await b.close()
 asyncio.run(m())
