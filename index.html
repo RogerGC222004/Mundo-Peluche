@@ -1658,7 +1658,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='246';
+const GAME_VERSION='247';
 // ======================================================================================
 // ---------------- v242: ÍCONOS DIBUJADOS EN LUGAR DE EMOJIS ----------------
 // Cada emoji de la lista se cambia, donde aparezca en la pantalla, por un dibujo hecho a mano con el mismo estilo de la barra
@@ -6793,6 +6793,7 @@ function zoneName(x,z){ if(typeof SP!=='undefined' && SP.on) return 'Espacio';
   for(const [I,n] of [[WI,'Isla Invierno'],[JI,'Isla Selva'],[DI,'Isla Dulce']]) if(Math.hypot(x-I.x,z-I.z)<I.E) return n;
   return Math.hypot(x,z)<1750 ? 'Isla principal' : 'Mar abierto'; }
 function locText(){ const p=player.pos; return 'X '+Math.round(p.x)+' · Y '+Math.round(p.y)+' · Z '+Math.round(p.z)+' · '+zoneName(p.x,p.z)+' · v'+GAME_VERSION; }
+if(window.__MP_APP){ ui('copyLocBtn').hidden=true; const oc=ui('optCoords'); if(oc && oc.closest('.opt')) oc.closest('.opt').hidden=true; settings.coords=false; }   // v247: herramientas de prueba solo en la web
 ui('copyLocBtn').onclick=()=>{ const t='Mundo Peluche · '+locText(); const ok=()=>flashNote('Ubicación copiada: '+locText());
   try{ navigator.clipboard.writeText(t).then(ok,()=>{ prompt('Copia tu ubicación:',t); }); }catch(e){ prompt('Copia tu ubicación:',t); } };
 ui('closeOptions').onclick=()=>{ optionsEl.hidden=true; };
@@ -11392,7 +11393,8 @@ const ADS=(()=>{
   const save=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(st)); }catch(e){} };
   const roll=()=>{ const t=day(); if(st.d!==t){ st.d=t; st.n=0; save(); } };
   let test=false; try{ test=/[?&]anuncios=prueba\b/.test(location.search) || localStorage.getItem(TKEY)==='1'; }catch(e){}
-  const real=()=>{ const m=window.MundoAds; return m && typeof m.show==='function' && !(window.__MP_APP && window.__MP_APP.pruebas) ? m : null; };   // v178: los de prueba de Google ya no
+  const appOff=()=>!!(window.__MP_APP && window.__MP_APP.pruebas);   // v247: en la app, mientras los anuncios estén apagados, no hay botones ▶
+  const real=()=>{ const m=window.MundoAds; return m && typeof m.show==='function' && !appOff() && !test ? m : null; };   // (en tu teléfono, con el modo de prueba, nunca sale un anuncio real)   // v178: los de prueba de Google ya no
   let busy=false;
   // anuncio de prueba: una pantalla con cuenta atrás (así se ve el flujo completo sin la app)
   const fake=()=>new Promise(res=>{ const s=ui('adScreen'), done=ui('adScreenDone'), txt=ui('adScreenTxt'); let n=5;
@@ -11403,7 +11405,7 @@ const ADS=(()=>{
     done.onclick=()=>end(true); ui('adScreenSkip').onclick=()=>end(false); });
   return {
     MAX,
-    ok(){ return true; },   // v178: siempre hay premio (anuncio de verdad en la app, o el ratito de juego)                                  // ¿hay anuncios? (en la app, o en modo de prueba)
+    ok(){ return !appOff(); },   // v178: siempre hay premio (anuncio de verdad en la app, o el ratito de juego)                                  // ¿hay anuncios? (en la app, o en modo de prueba)
     left(){ roll(); return Math.max(0,MAX-st.n); },                     // cuántos quedan hoy
     need(price){ return Math.min(4,Math.max(1,Math.ceil(price/100))); },  // anuncios para llevarte algo de la tienda
     seen(k){ return st.p[k]||0; },
@@ -21068,7 +21070,7 @@ function vehPreview(P){ vehClearPrev(); if(!P) return; let g; const tint=(o,bad)
   VS.scene.add(g); VE.ghost=g; }
 function vehPut(P){ const p=P.p; if(VE.parts.length+P.add.length>VMAX){ flashNote('Ya tiene muchas piezas ('+VMAX+')'); return false; }
   if(!P.ok){ flashNote('Ahí no cabe: prueba en otro lado o gírala'); return false; }
-  if(!(VE.inv[p.id]>0)){ VE.needBuy=true; vehUI(); flashNote('No tienes '+p.n+': cómprala o consíguela con un anuncio 📺'); return false; }
+  if(!(VE.inv[p.id]>0)){ VE.needBuy=true; vehUI(); flashNote('No tienes '+p.n+': cómprala'+(ADS.ok()?' o consíguela con un anuncio 📺':'')); return false; }
   const ok=vehAct({t:'set', from:VE.parts.map(q=>q.slice()), to:P.to, inv:{[p.id]:-P.add.length}}); if(!ok) return false; try{ audio.wave(); }catch(e){}
   if(P.q2 && P.add.length<2) flashNote('Para ponerla en par necesitas otra '+p.n); return true; }
 // mover una pieza ya puesta (con flechas)
@@ -21172,10 +21174,10 @@ function vehUI(){ if(!ui('vehOv')) return; if(!(VE.ren && ui('vehName'))) ui('ve
   const vNorm=x=>x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''), vq=VE.q?vNorm(VE.q.trim()):'';
   let list=stp==='pick'?[]:stp && !vq?VPARTS.filter(p=>stp.f(p,VE.vtype) && (!mine || (VE.inv[p.id]|0)>0)):mine?VPARTS.filter(p=>(VE.inv[p.id]|0)>0 && (vq?vNorm(p.n).includes(vq):(catOn==='all'||p.cat===catOn))):(vq?VPARTS.filter(p=>vNorm(p.n).includes(vq)).slice(0,80):VPARTS.filter(p=>p.cat===VE.cat));
   if(stp==='pick'){ ui('vehParts').innerHTML=Object.entries(VSTEP_T).map(([k,[ic,n]])=>'<button class="vh-type" data-vt="'+k+'"><span>'+ic+'</span>'+n+'</button>').join('')+'<button class="vh-type free" data-free="1"><span>🧩</span>Libre<small>todas las piezas</small></button>'; }
-  else ui('vehParts').innerHTML=(mine && !list.length?'<div class="vh-empty">'+(vq?'No tienes piezas con ese nombre.':'Aún no tienes piezas.')+' Cómpralas en la <b>🛒 Tienda</b> (con monedas o viendo un anuncio).</div>':'')+list.map(p=>'<button class="vh-part'+(VE.sel===p.id&&VE.tool==='put'?' on':'')+'" data-p="'+p.id+'">'+vThumbHTML(p)+'<span class="vh-tx">'+p.n+(p.d.tip?' ⚡':'')+'<small>'+((VE.inv[p.id]|0)>0?'Tienes '+VE.inv[p.id]:p.price+' 🪙')+'</small></span></button>').join('');
+  else ui('vehParts').innerHTML=(mine && !list.length?'<div class="vh-empty">'+(vq?'No tienes piezas con ese nombre.':'Aún no tienes piezas.')+' Cómpralas en la <b>🛒 Tienda</b> ('+(ADS.ok()?'con monedas o viendo un anuncio':'con monedas')+').</div>':'')+list.map(p=>'<button class="vh-part'+(VE.sel===p.id&&VE.tool==='put'?' on':'')+'" data-p="'+p.id+'">'+vThumbHTML(p)+'<span class="vh-tx">'+p.n+(p.d.tip?' ⚡':'')+'<small>'+((VE.inv[p.id]|0)>0?'Tienes '+VE.inv[p.id]:p.price+' 🪙')+'</small></span></button>').join('');
   { const B0=ui('vehBuy'); B0.hidden=stp==='pick'; ui('vehMove').hidden=ui('vehMove').hidden||stp==='pick'; }
   { const p=VP_BY[VE.sel], n=vehPack(p), have=VE.inv[p.id]|0, B=ui('vehBuy'); B.classList.toggle('need',!!VE.needBuy && !have); VE.needBuy=false;
-    B.innerHTML=mine?'<b>'+p.n+':</b> tienes '+have+' <button class="vh-btn" data-tab="shop" data-shop="'+p.id+'">🛒 Conseguir más</button>'+(p.d.tip?'<div class="vh-ptip">'+(p.d.tip[0]==='⭐'?'':'⚡ ')+p.d.tip+'</div>':''):'<b>'+p.n+':</b> tienes '+have+'<button class="vh-btn" data-buy="'+p.id+'">+'+n+' · '+(p.price*n)+' 🪙</button><button class="vh-btn ad" data-ad="'+p.id+'">📺 +'+n+' gratis</button>'+(p.d.tip?'<div class="vh-ptip">'+(p.d.tip[0]==='⭐'?'':'⚡ ')+p.d.tip+'</div>':''); }
+    B.innerHTML=mine?'<b>'+p.n+':</b> tienes '+have+' <button class="vh-btn" data-tab="shop" data-shop="'+p.id+'">🛒 Conseguir más</button>'+(p.d.tip?'<div class="vh-ptip">'+(p.d.tip[0]==='⭐'?'':'⚡ ')+p.d.tip+'</div>':''):'<b>'+p.n+':</b> tienes '+have+'<button class="vh-btn" data-buy="'+p.id+'">+'+n+' · '+(p.price*n)+' 🪙</button>'+(ADS.ok()?'<button class="vh-btn ad" data-ad="'+p.id+'">📺 +'+n+' gratis</button>':'')+(p.d.tip?'<div class="vh-ptip">'+(p.d.tip[0]==='⭐'?'':'⚡ ')+p.d.tip+'</div>':''); }
   { const M=ui('vehMove'), p=VP_BY[VE.sel]; let h='';
     if(VE.tool==='move'){ const q=VE.mv!==null && VE.mv!==undefined ? VE.parts[VE.mv] : null;
       h=q?'<b>'+VP_BY[q[0]].n+':</b><button class="vh-btn" data-mv="0,1,0">⬆ Subir</button><button class="vh-btn" data-mv="0,-1,0">⬇ Bajar</button><button class="vh-btn" data-mv="0,0,1">Adelante</button><button class="vh-btn" data-mv="0,0,-1">Atrás</button><button class="vh-btn" data-mv="1,0,0">◀ Izq.</button><button class="vh-btn" data-mv="-1,0,0">Der. ▶</button><button class="vh-btn" data-mvr="1">↻</button>'
@@ -27519,7 +27521,7 @@ const TUT_VEH=[
   tutInfo('#vehSteps .vh-steps','Estos son los <b>pasos</b>. Toca un número para ir a ese paso; la palomita ✓ quiere decir que ya está listo.'),
   tutInfo('#vehSteps [data-st="4"]','Paso 5, <b>Carrocería</b> 🚙: paredes, techo y cofre. Se acomodan solas en la orilla de tu carrito.'),
   tutInfo('#vehSteps [data-st="5"]','Paso 6, <b>Adornos</b> ✨: luces, sirena, claxon y piezas <b>⭐ especiales</b> que hacen cosas al manejar (saltar, turbo, confeti…).'),
-  tutInfo('#vehTabs [data-tab="shop"]','<b>🛒 Tienda</b>: aquí consigues piezas nuevas con monedas, o gratis viendo un anuncio 📺.'),
+  tutInfo('#vehTabs [data-tab="shop"]','<b>🛒 Tienda</b>: aquí consigues piezas nuevas con monedas'+(ADS.ok()?', o gratis viendo un anuncio 📺':'')+'.'),
   tutInfo('#vehTabs [data-tab="mine"]','<b>🎒 Mis piezas</b>: solo las piezas que ya tienes.'),
   tutInfo('#vehParts','La <b>lista de piezas</b> del paso. Toca una para escogerla. Al ponerla se gasta una; si la quitas, te la devuelven.'),
   tutInfo('#vehBuy','Aquí ves <b>cuántas tienes</b> de la pieza que escogiste y puedes conseguir más.'),
@@ -27556,7 +27558,7 @@ const TUT_CASA=[
   tutInfo('#hedInv .hed-free','🧩 <b>Modo libre</b>: ves todas las piezas juntas, sin pasos.'),
   tutInfo(tutBtn('#hedBar button','Girar'),'⟳ <b>Girar</b>: gira la pieza antes de ponerla.'),
   tutInfo(tutBtn('#hedBar button','Quitar'),'🗑️ <b>Quitar</b>: toca una pieza para quitarla; regresa a tus piezas.'),
-  tutInfo(tutBtn('#hedBar button','Tienda'),'🛒 <b>Tienda</b>: consigue más piezas con monedas o viendo un anuncio 📺.'),
+  tutInfo(tutBtn('#hedBar button','Tienda'),'🛒 <b>Tienda</b>: consigue más piezas con monedas'+(ADS.ok()?' o viendo un anuncio 📺':'')+'.'),
   tutInfo(()=>ED.bTools,'🧰 <b>Herramientas</b>: aquí hay más funciones. ¡Vamos a verlas!'),
   tutInfo(tutBtn('#hedTools button','Deshacer'),'↶ <b>Deshacer</b> y ↷ <b>Rehacer</b>: si te equivocas, regresa lo último que hiciste.',()=>{ if(!ED.toolsOpen){ ED.toolsOpen=true; edRender(); } }),
   tutInfo(tutBtn('#hedTools button','Rellenar'),'🪣 <b>Rellenar</b>: escoge un piso y toca adentro de un cuarto cerrado: ¡se llena todo de una vez!',()=>{ if(!ED.toolsOpen){ ED.toolsOpen=true; edRender(); } }),
@@ -28833,7 +28835,7 @@ try{ const gl=renderer.getContext(), ext=gl.getExtension('WEBGL_debug_renderer_i
 // botón "atrás" de Android (lo llama la app): cierra lo que esté abierto o pausa. false = estás en el menú (la app se minimiza)
 // v136: diagnóstico de conexión de las salas (solo en la versión web y la app, que usan PeerJS)
 { const pn=(typeof peerNet!=='undefined') ? peerNet : null;
-  if(pn && pn.log){ ['diagBtn','diagBtn2'].forEach(id=>{ ui(id).hidden=false; ui(id).onclick=()=>openDiag(); });
+  if(pn && pn.log && !window.__MP_APP){ ['diagBtn','diagBtn2'].forEach(id=>{ ui(id).hidden=false; ui(id).onclick=()=>openDiag(); });
     const ICE_ES={new:'nuevo', checking:'probando…', connected:'conectado', completed:'conectado', failed:'FALLÓ', disconnected:'se cortó', closed:'cerrado'}, TIPO={host:'local', srflx:'internet', prflx:'internet', relay:'relevo'};
     let relay='probando… (6 s)', diagT=0;
     const render=()=>{ const L=['Versión '+GAME_VERSION+' · '+(window.__MP_APP?'app':'web')+' · '+((/Android/i.test(navigator.userAgent)?'Android':/iPhone|iPad/i.test(navigator.userAgent)?'iPhone':'PC')), 'Relevo: '+relay, ''];
@@ -28860,7 +28862,7 @@ try{ const gl=renderer.getContext(), ext=gl.getExtension('WEBGL_debug_renderer_i
     ui('installOv').addEventListener('click',e=>{ if(e.target===ui('installOv')) ui('installOv').hidden=true; });
     ui('installLink').addEventListener('click',()=>{ flashNote&&flashNote('Descargando el juego… ábrelo cuando termine para instalarlo'); }); }
   // v147: en la app, el mismo botón sirve para actualizar (siempre está; cuando hay versión nueva lo dice y brinca)
-  else if(window.__MP_APP){ ui('installOld').hidden=true; const b=ui('installBtn'); b.hidden=false; b.textContent='Actualizar el juego'; let latest=null;
+  else if(window.__MP_APP && false){ ui('installOld').hidden=true; const b=ui('installBtn');   // v247: en la app de Play Store las actualizaciones llegan por Play (Google no permite otra forma) b.hidden=false; b.textContent='Actualizar el juego'; let latest=null;
     const check=()=>fetch('https://api.github.com/repos/RogerGC222004/Mundo-Peluche/releases/latest',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{ const v=d && String(d.tag_name||'').replace(/^app-v/,''); if(v && /^\d+$/.test(v)) latest=+v;
         const nueva=latest!==null && latest>+GAME_VERSION; b.textContent=nueva?'¡Hay versión nueva!':'Actualizar el juego'; b.classList.toggle('nuevo',nueva); }).catch(()=>{});
     const show=()=>{ const ve=ui('installVer'), nota=document.querySelector('#installOv .install-note'), chica=document.querySelector('#installOv .install-small'), nueva=latest!==null && latest>+GAME_VERSION;
@@ -28897,7 +28899,7 @@ window.mundoAtras=()=>{ const vis=id=>{ const e=ui(id); return !!e && !e.hidden;
   return false; };
 const verLabel=()=>{ ui('verMenu').textContent='Versión '+GAME_VERSION+(ADS.test?' · anuncios de prueba':''); }; verLabel();
 { let n=0, t=0; ui('verMenu').addEventListener('click',()=>{ const now=Date.now(); if(now-t>1500) n=0; t=now;
-    if(++n>=5){ n=0; ADS.setTest(!ADS.test); verLabel(); flashNote(ADS.test?'Anuncios de prueba activados: verás botones ▶ en la tienda, cofres y ventas':'Anuncios de prueba desactivados'); } }); } ui('verMp').textContent='Tu versión del juego: '+GAME_VERSION;
+    if(++n>=5){ n=0; if(!ADS.ok()) return; ADS.setTest(!ADS.test); verLabel(); flashNote(ADS.test?'Anuncios de prueba activados: verás botones ▶ en la tienda, cofres y ventas':'Anuncios de prueba desactivados'); } }); } ui('verMp').textContent='Tu versión del juego: '+GAME_VERSION;
 centerAllText();
 // Repetir cuando termine de cargar la tipografía y cuando cambie el tamaño de pantalla
 function fitTitle(){ const sv=document.getElementById('titleSvg'); if(!sv) return; try{ const b=sv.firstElementChild.getBBox(); if(b.width>10){ const p=22; sv.setAttribute('viewBox',[b.x-p, b.y-p*.6, b.width+2*p, b.height+p*1.9].map(v=>Math.round(v)).join(' ')); } }catch(e){} }
