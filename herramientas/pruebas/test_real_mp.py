@@ -4,6 +4,7 @@ exec(src.split('async def m():')[0])
 # Vestíbulo compartido entre ventanas (BroadcastChannel): cada ventana publica su presencia y recibe la de todas
 BUS = """
 (()=>{
+  localStorage.setItem('mundoPelucheEnLinea','{"on":true,"tip":true}');   // v246: juego en línea prendido
   const me='p'+Math.random().toString(36).slice(2,8), bc=new BroadcastChannel('vestibulo'); const peers=new Map(); const hs=new Set();
   let mine={};
   const snap=()=>[...peers.entries()].map(([k,pr])=>({peer:k, sameTab:k===me, isMe:k===me, kind:'viewer', guest:false, by:null, presence:pr, updatedAt:Date.now()}));

@@ -8,7 +8,7 @@ A_IDX=3
 STATE="""(()=>{ const R=window.__AR, me=R.AR.me, G=R.AR.G[%d]; const P=__P(); return JSON.stringify({me:[me.a,me.st], ph:G.ph, ms:Math.round(G.ms), pl:G.pl.length, el:G.el.length, h:G.h===R.myUid?'YO':(G.h?'otro':null), lead:R.AR.lead[%d], pos:[+P.pos.x.toFixed(1),+P.pos.y.toFixed(1),+P.pos.z.toFixed(1)], hud:document.getElementById('arTxt').textContent, res:document.getElementById('arRes').hidden?'':document.getElementById('arResTitle').textContent+' '+document.getElementById('arResCoins').textContent, removed:R.PLAT.removed.reduce((a,b)=>a+b,0)}); })()"""%(A_IDX,A_IDX)
 async def m():
   async with async_playwright() as p:
-    b=await p.chromium.launch(args=["--use-gl=swiftshader","--enable-unsafe-swiftshader"]); ctx=await b.new_context(viewport={"width":500,"height":300}); await ctx.add_init_script("window.__NOR=true;")
+    b=await p.chromium.launch(args=["--use-gl=swiftshader","--enable-unsafe-swiftshader"]); ctx=await b.new_context(viewport={"width":500,"height":300}); await ctx.add_init_script("window.__NOR=true; localStorage.setItem('mundoPelucheEnLinea','{\"on\":true,\"tip\":true}'); ")
     async def route(r):
       if r.request.url.startswith("https://test.local"): await r.fulfill(body=page_html.encode(), content_type="text/html; charset=utf-8")
       elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")

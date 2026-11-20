@@ -39,7 +39,7 @@ async def m():
     ok(not falta, '🔍 en el código, todos los emojis que se pueden ver tienen su dibujo (%s dibujos para %s emojis; sin dibujo: %s)'%(len(set(tabla.values())),len(tabla),{k:v[:3] for k,v in list(falta.items())[:8]}))
 
     ctx=await b.new_context(viewport={"width":780,"height":360}, has_touch=True); pg=await ctx.new_page(); errs=[]; pg.on("pageerror",lambda e:errs.append(str(e)))
-    await pg.add_init_script("localStorage.clear(); localStorage.setItem('mundoPelucheOpciones', JSON.stringify(%s)); localStorage.setItem('mundoPelucheEcon124','1');"%json.dumps(OPTS))
+    await pg.add_init_script("localStorage.clear(); localStorage.setItem('mundoPelucheEnLinea','{\"on\":true,\"tip\":true}'); localStorage.setItem('mundoPelucheOpciones', JSON.stringify(%s)); localStorage.setItem('mundoPelucheEcon124','1');"%json.dumps(OPTS))
     async def route(r):
       if r.request.url.startswith("https://test.local"): await r.fulfill(body=html.encode(), content_type="text/html; charset=utf-8")
       elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")

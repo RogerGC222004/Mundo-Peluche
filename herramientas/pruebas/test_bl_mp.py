@@ -3,7 +3,7 @@ exec(open('test_book_mp.py').read().split('async def m():')[0])
 page_html=page_html.replace("function frame(){","window.__B={BL, blEnter, blExit, blActions, P:()=>player, touchHold, stick, rem:()=>[...mp.remotes.values()].map(r=>[r.name, r.bl?r.bl[0]:null, +r.pos.y.toFixed(1)]), st:i=>{ const b=BL[i]; return [+b.x.toFixed(1),+b.y.toFixed(1),+b.z.toFixed(1), b.pilot, !!b.remote]; }}; function frame(){",1)
 async def m():
   async with async_playwright() as p:
-    b=await p.chromium.launch(args=["--use-gl=swiftshader","--enable-unsafe-swiftshader"]); ctx=await b.new_context(viewport={"width":500,"height":300}); await ctx.add_init_script("window.__NOR=true;")
+    b=await p.chromium.launch(args=["--use-gl=swiftshader","--enable-unsafe-swiftshader"]); ctx=await b.new_context(viewport={"width":500,"height":300}); await ctx.add_init_script("window.__NOR=true; localStorage.setItem('mundoPelucheEnLinea','{\"on\":true,\"tip\":true}'); ")
     async def route(r):
       if r.request.url.startswith("https://test.local"): await r.fulfill(body=page_html.encode(), content_type="text/html; charset=utf-8")
       elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")

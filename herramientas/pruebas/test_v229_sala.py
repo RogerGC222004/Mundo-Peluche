@@ -34,7 +34,7 @@ ok(bool(m) and L2.find('lobbyAnnounce()')>0 and (c2<0 or L2.find('lobbyAnnounce(
 async def m():
   async with async_playwright() as p:
     b=await p.chromium.launch(args=["--use-gl=swiftshader","--enable-unsafe-swiftshader"]); ctx=await b.new_context(viewport={"width":820,"height":360}, has_touch=True)
-    await ctx.add_init_script("localStorage.setItem('mundoPelucheOpciones', JSON.stringify({quality:'low', qDef:1, hints:false, weather:false})); localStorage.setItem('mundoPelucheEcon124','1'); localStorage.setItem('mundoPelucheFreeIco','1');")
+    await ctx.add_init_script("localStorage.setItem('mundoPelucheEnLinea','{\"on\":true,\"tip\":true}'); localStorage.setItem('mundoPelucheOpciones', JSON.stringify({quality:'low', qDef:1, hints:false, weather:false})); localStorage.setItem('mundoPelucheEcon124','1'); localStorage.setItem('mundoPelucheFreeIco','1');")
     async def route(r):
       if r.request.url.startswith("https://test.local"): await r.fulfill(body=html.encode(), content_type="text/html; charset=utf-8")
       elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")

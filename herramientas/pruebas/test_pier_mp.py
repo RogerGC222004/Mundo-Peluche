@@ -3,7 +3,7 @@ exec(open('test_book_mp.py').read().split('async def m():')[0])
 page_html=page_html.replace("function pierFallback(){","window.__PI={PIER, pW, CU, P:()=>player, setDoor:pierDoor, takeBucket, startFishing, rem:()=>[...mp.remotes.values()].map(r=>[r.name, r.pz, !!(r.pzBucket&&r.pzBucket.visible), r.pzHand&&r.pzHand.id]), rodPos:i=>PIER.rods[i].pos.toArray().map(v=>+v.toFixed(1)), feedCuco}; function pierFallback(){",1)
 async def m():
   async with async_playwright() as p:
-    b=await p.chromium.launch(args=["--use-gl=swiftshader","--enable-unsafe-swiftshader"]); ctx=await b.new_context(viewport={"width":500,"height":300}); await ctx.add_init_script("window.__NOR=true;")
+    b=await p.chromium.launch(args=["--use-gl=swiftshader","--enable-unsafe-swiftshader"]); ctx=await b.new_context(viewport={"width":500,"height":300}); await ctx.add_init_script("window.__NOR=true; localStorage.setItem('mundoPelucheEnLinea','{\"on\":true,\"tip\":true}'); ")
     async def route(r):
       if r.request.url.startswith("https://test.local"): await r.fulfill(body=page_html.encode(), content_type="text/html; charset=utf-8")
       elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")

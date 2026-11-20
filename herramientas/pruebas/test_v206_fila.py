@@ -7,7 +7,7 @@ page_html=page_html.replace("function wiMapDraw(g){","window.__G=s=>eval(s); fun
 async def m():
   async with async_playwright() as p:
     b=await p.chromium.launch(args=["--use-gl=swiftshader","--enable-unsafe-swiftshader"]); ctx=await b.new_context(viewport={"width":844,"height":390})
-    await ctx.add_init_script("window.__NOR=true; localStorage.setItem('mundoPelucheOpciones', JSON.stringify({quality:'min', qDef:1, hints:false, weather:false, shadows:false}));")
+    await ctx.add_init_script("window.__NOR=true; localStorage.setItem('mundoPelucheEnLinea','{\"on\":true,\"tip\":true}'); localStorage.setItem('mundoPelucheOpciones', JSON.stringify({quality:'min', qDef:1, hints:false, weather:false, shadows:false}));")
     async def route(r):
       if r.request.url.startswith("https://test.local"): await r.fulfill(body=page_html.encode(), content_type="text/html; charset=utf-8")
       elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")
