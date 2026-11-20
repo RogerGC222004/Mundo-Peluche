@@ -899,9 +899,10 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
   <div class="card free-card"><h2>Modo libre</h2><p>Una planicie solo para ti: pon bloques, muebles, plantas, pelotas y lo que quieras enfrente de tu peluche. Lo que hagas se guarda.</p>
     <div class="btns"><button class="btn primary" id="freeSolo">Empezar solo</button><button class="btn back" id="freeBack">← Volver</button></div>
     <h3 class="free-h">👥 Construir con amigos <small>hasta 6 · cada sala empieza vacía · cada quien quita solo lo suyo · al salir te llevas una copia</small></h3>
+    <div id="freeNetBox" class="net-off"><div class="net-note"><p class="online-sm">🔒 Jugar en línea está apagado. Un adulto lo puede prender.</p><button class="btn" id="freeNetOn">Prender jugar en línea</button></div>
     <div class="btns"><button class="btn" id="freePub">Crear sala pública</button><button class="btn" id="freePriv">Crear sala privada</button></div>
     <form class="free-join" id="freeJoinF"><input id="freeCode" maxlength="6" placeholder="Código de la sala" autocomplete="off" autocapitalize="characters"><button class="btn primary" id="freeJoin" type="submit">Unirse</button></form>
-    <ul class="mp-rooms free-rooms" id="freeRooms"></ul></div>
+    <ul class="mp-rooms free-rooms" id="freeRooms"></ul></div></div>
 </div>
 <!-- v206: Minijuegos con fila pública (desde el menú, sin sala) -->
 <div class="overlay" id="mgq" hidden style="background:rgba(207,231,242,.6)">
@@ -1017,6 +1018,11 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
         <div class="seg" id="optStartCam"><button data-v="third">3ª persona</button><button data-v="first">1ª persona</button></div></div>
       <div class="opt"><label for="optRun">Correr siempre<small>Shift camina en lugar de correr</small></label><button class="switch" id="optRun" role="switch" aria-checked="false" aria-label="Correr siempre"></button></div>
       <div class="opt"><label>Botones en pantalla<small>Mueve con el dedo y cambia el tamaño de cada botón</small></label><button class="btn" id="optLayout" style="padding:8px 14px;font-size:15px">Personalizar</button></div>
+    </div>
+
+    <div class="opt-group">
+      <h3>Para papás</h3>
+      <div class="opt"><label for="optOnline">Jugar en línea<small>Salas con amigos, filas de minijuegos y Construir con amigos. Viene apagado: para prenderlo, un adulto resuelve una operación.</small></label><button class="switch" id="optOnline" role="switch" aria-checked="false" aria-label="Jugar en línea"></button></div>
     </div>
 
     <div class="opt-group">
@@ -1652,7 +1658,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='245';
+const GAME_VERSION='246';
 // ======================================================================================
 // ---------------- v242: ÍCONOS DIBUJADOS EN LUGAR DE EMOJIS ----------------
 // Cada emoji de la lista se cambia, donde aparezca en la pantalla, por un dibujo hecho a mano con el mismo estilo de la barra
@@ -6805,7 +6811,7 @@ ui('soloBtn').onclick=()=>{ menuModes(false); startGame(); };   // (al regresar 
 // v205: Jugar abre los modos de juego (Un jugador, Multijugador, Minijuegos, Modo libre, Crear mapa)
 function menuModes(on){ ui('menuMain').hidden=!!on; ui('menuModes').hidden=!on; document.body.classList.toggle('menu-modes',!!on);   /* v231: al escoger modo no se ve «Instala el juego» (tapaba Volver) */ try{ centerAllText&&centerAllText(); }catch(e){} }
 ui('playBtn').onclick=()=>menuModes(true); ui('modesBack').onclick=()=>menuModes(false);
-ui('mgBtn').onclick=()=>openMgq();
+ui('mgBtn').onclick=()=>onlineGate(()=>openMgq());
 ui('freeBtn').onclick=()=>{ ui('freeStart').hidden=false; };
 ui('freeSolo').onclick=()=>freeEnter(); ui('freeBack').onclick=()=>{ ui('freeStart').hidden=true; };
 ['freePub','freePriv'].forEach(id=>{ ui(id).onclick=()=>flashNote('Construir con amigos en el modo libre llega en la siguiente parte'); });
@@ -6985,6 +6991,66 @@ addEventListener('keydown',e=>{ if(!editor.on) return; e.stopImmediatePropagatio
 // Cada jugador publica su posición en su "presencia" dentro de una sala con nombre;
 // los demás la reciben y dibujan su peluche. Nada se guarda: la sala existe mientras haya alguien dentro.
 const mp={room:null, code:'', remotes:new Map(), unsubs:[], lastSent:0, lastPayload:'', waveStamp:0, connected:false, lastErr:'', heartbeat:0};
+// ======================================================================================
+// ---------------- v246: JUGAR EN LÍNEA CON PERMISO DE UN ADULTO (control para papás) ----------------
+// El juego en línea (salas con amigos, filas de minijuegos, Construir con amigos) empieza APAGADO. Solo un adulto lo
+// prende: tiene que resolver una operación grande (suma o resta de 4 cifras, multiplicación o división de 3 cifras).
+// Apagado, el juego no se conecta a nada (ni al vestíbulo). La primera vez que se entra a una sala sale un aviso de
+// seguridad. Se guarda en este teléfono (no viaja en el código de progreso).
+// ======================================================================================
+const ONLINE_KEY='mundoPelucheEnLinea';
+const ONLINE=(()=>{ let o=null; try{ o=JSON.parse(localStorage.getItem(ONLINE_KEY)||'null'); }catch(e){} return {on:!!(o&&o.on), tip:!!(o&&o.tip)}; })();
+function onlineOn(){ return ONLINE.on; }
+function onlineSave(){ try{ localStorage.setItem(ONLINE_KEY, JSON.stringify({on:ONLINE.on, tip:ONLINE.tip})); }catch(e){} }
+// una ventanita encima de todo
+function onlineCard(html){ let ov=document.getElementById('onlineOv'); if(!ov){ ov=document.createElement('div'); ov.id='onlineOv'; ov.className='overlay';
+    ov.style.cssText='background:rgba(207,231,242,.75);z-index:9400'; ov.innerHTML='<div class="card online-card" role="dialog"></div>'; document.body.appendChild(ov); }
+  ov.querySelector('.card').innerHTML=html; ov.hidden=false; if(document.pointerLockElement) try{ document.exitPointerLock(); }catch(e){} return ov; }
+function onlineClose(){ const ov=document.getElementById('onlineOv'); if(ov) ov.hidden=true; }
+// la operación para adultos
+function onlineProblem(){ const R=(a,b)=>a+Math.floor(Math.random()*(b-a+1)), k=R(0,3); let a,b,s,r;
+  if(k===0){ a=R(1000,9999); b=R(1000,9999); s='+'; r=a+b; }
+  else if(k===1){ a=R(2000,9999); b=R(1000,a-1); s='−'; r=a-b; }
+  else if(k===2){ a=R(100,999); b=R(100,999); s='×'; r=a*b; }
+  else { b=R(100,999); r=R(100,999); a=b*r; s='÷'; }
+  const f=n=>String(n).replace(/\B(?=(\d{3})+(?!\d))/g,' ');   // (4 738, 91 476)
+  return {txt:f(a)+' '+s+' '+f(b)+' =', r}; }
+function onlineAsk(done,cancel,why){ let P=onlineProblem(), tries=0;
+  const show=(msg)=>{ const ov=onlineCard('<h2>Solo para adultos</h2><p>'+(why||'Para prender el juego en línea, resuelve esta operación:')+'</p>'
+      +'<p class="online-op">'+P.txt+'</p><input class="online-in" inputmode="numeric" autocomplete="off" aria-label="Resultado" placeholder="Resultado">'
+      +'<p class="online-err">'+(msg||'')+'</p><div class="btns"><button class="btn primary online-ok">Listo</button><button class="btn online-no">Cancelar</button></div>');
+    const inp=ov.querySelector('.online-in'); setTimeout(()=>{ try{ inp.focus(); }catch(e){} },50);
+    const ok=()=>{ const v=parseInt(String(inp.value).replace(/[^\d-]/g,''),10);
+      if(v===P.r){ onlineClose(); done(); return; }
+      tries++; P=onlineProblem(); show(String(inp.value).trim()==='' ? 'Escribe el resultado.' : 'Esa no es. Prueba con esta otra.'); };
+    ov.querySelector('.online-ok').onclick=ok; inp.onkeydown=e=>{ if(e.key==='Enter') ok(); };
+    ov.querySelector('.online-no').onclick=()=>{ onlineClose(); if(cancel) cancel(); }; };
+  show(); }
+// el aviso de seguridad
+function onlineTip(done){ const ov=onlineCard('<h2>⭐ Antes de jugar en línea</h2><ul class="online-tips">'
+    +'<li>👥 Aquí juegas con otras personas de verdad, también con gente que no conoces.</li>'
+    +'<li>🔒 Usa un apodo. Nunca digas tu nombre real, tu escuela, dónde vives ni tu teléfono.</li>'
+    +'<li>✋ Si alguien te hace sentir mal o te pide algo raro, sal de la sala y cuéntale a un adulto.</li>'
+    +'<li>🏠 Un adulto puede apagar el juego en línea cuando quiera, en Opciones.</li></ul>'
+    +'<div class="btns"><button class="btn primary online-ok">¡Entendido!</button></div>');
+  ov.querySelector('.online-ok').onclick=()=>{ ONLINE.tip=true; onlineSave(); onlineClose(); if(done) done(); }; }
+function onlineSet(on){ ONLINE.on=!!on; if(on) ONLINE.tip=false; onlineSave(); onlineSyncUI();
+  if(!on){ try{ if(mp.room) leaveRoom(); }catch(e){} try{ if(typeof closeMgq==='function' && !ui('mgq').hidden) closeMgq(); }catch(e){} try{ if(MGQ.sub) MGQ.sub(); }catch(e){} MGQ.sub=null; MGQ.L=null; try{ if(roomsSub) roomsSub(); }catch(e){} roomsSub=null; try{ lobbyOff(); }catch(e){} } }
+// la puerta: todo lo que va a internet pasa por aquí
+function onlineGate(go){
+  if(ONLINE.on){ if(ONLINE.tip) go(); else onlineTip(go); return; }
+  const ov=onlineCard('<h2>🔒 Jugar en línea está apagado</h2><p>Para jugar con otras personas por internet, un adulto tiene que prenderlo.'
+    +' Así los papás deciden si se puede jugar en línea.</p><p class="online-sm">Si antes ya jugabas en línea: desde esta versión hay que prenderlo una vez.</p>'
+    +'<div class="btns"><button class="btn primary online-ok">Soy un adulto</button><button class="btn online-no">Ahora no</button></div>');
+  ov.querySelector('.online-no').onclick=onlineClose;
+  ov.querySelector('.online-ok').onclick=()=>onlineAsk(()=>{ onlineSet(true); onlineTip(go); }); }
+function onlineSyncUI(){ const b=document.getElementById('optOnline'); if(b) b.setAttribute('aria-checked', ONLINE.on?'true':'false');
+  const fs=document.getElementById('freeNetBox'); if(fs) fs.classList.toggle('net-off', !ONLINE.on); }
+(()=>{ const st=document.createElement('style'); st.textContent='.online-card{max-width:min(460px,92vw);} .online-op{font-family:var(--display);font-size:34px;font-weight:800;text-align:center;margin:8px 0;color:var(--thread);letter-spacing:1px;}'
+  +' .online-in{display:block;width:100%;box-sizing:border-box;font:800 26px var(--body);text-align:center;padding:8px;border-radius:12px;border:3px solid #e2d6b8;background:#fffdf6;}'
+  +' .online-err{min-height:1.2em;color:#b4382f;font-weight:800;text-align:center;margin:6px 0;} .online-sm{font-size:13px;opacity:.8;} .online-tips{padding-left:4px;list-style:none;} .online-tips li{margin:8px 0;font-weight:700;}'
+  +' #freeNetBox.net-off > :not(.net-note){display:none!important;} #freeNetBox:not(.net-off) .net-note{display:none;}';
+  document.head.appendChild(st); })();
 const roomPromise = Promise.resolve(window.__fakeNet || peerNet);
 const CODE_CHARS='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const r2=v=>Math.round(v*100)/100;
@@ -7031,8 +7097,10 @@ function syncSwatches(){ ui('mpColors').querySelectorAll('.swatch').forEach(b=>b
 // Se muestra cuántos hay en cada sala y quiénes, pero nunca el código: para entrar hay que pedirlo.
 // Vestíbulo por PeerJS: todos los que abren el juego se conectan aquí y avisan en qué sala están (sin el código a la vista)
 let webLobby=null, lobbyRef=null;
-function getLobby(){ if(!webLobby){ webLobby = peerNet ? peerNet.join('LOBBY0').then(L=>{ lobbyRef=L; lobbyAnnounce(); return L; }).catch(()=>{ webLobby=null; return null; }) : Promise.resolve(null); } return webLobby; }
-function lobbyAnnounce(){ if(!lobbyRef){ getLobby(); return; } try{ lobbyRef.presence({rm:mp.code?lobbyKey(mp.code,mp.pub):null, n:cleanName(profile.name)||'Peluche', pub:mp.code&&mp.pub?1:0, fz:(typeof FNET!=='undefined'&&FNET.on&&FNET.host)?1:null}); }catch(e){} }
+// v246: con el juego en línea apagado (control para papás) no se conecta a nada
+function getLobby(){ if(!onlineOn()) return Promise.resolve(null); if(!webLobby){ webLobby = peerNet ? peerNet.join('LOBBY0').then(L=>{ if(!onlineOn()){ try{ L.leave(); }catch(e){} webLobby=null; return null; } lobbyRef=L; lobbyAnnounce(); return L; }).catch(()=>{ webLobby=null; return null; }) : Promise.resolve(null); } return webLobby; }
+function lobbyOff(){ const L=lobbyRef; lobbyRef=null; webLobby=null; if(L) try{ L.leave(); }catch(e){} }
+function lobbyAnnounce(){ if(!lobbyRef){ if(onlineOn()) getLobby(); return; } try{ lobbyRef.presence({rm:mp.code?lobbyKey(mp.code,mp.pub):null, n:cleanName(profile.name)||'Peluche', pub:mp.code&&mp.pub?1:0, fz:(typeof FNET!=='undefined'&&FNET.on&&FNET.host)?1:null}); }catch(e){} }
 setTimeout(getLobby,1200);
 function lobbyKey(code,pub){ if(pub) return code; let h=7; for(const ch of code) h=(Math.imul(h,31)+ch.charCodeAt(0))>>>0; return 'p'+h.toString(36).padStart(7,'0').slice(-7); }   // las privadas se anuncian con una clave disfrazada
 // ¿La sala con este código es pública? Se ve en el vestíbulo (si nadie está dentro, se toma como privada)
@@ -7080,7 +7148,9 @@ function openMp(){
   mpEl.scrollTop=0;
   roomPromise.then(r=>{ if(!r && !mpEl.hidden) mpMsg(UNAVAILABLE, true); });
 }
-ui('mpBtn').onclick=openMp;
+ui('mpBtn').onclick=()=>onlineGate(openMp);
+ui('optOnline').onclick=()=>{ if(ONLINE.on){ onlineSet(false); flashNote('Jugar en línea: apagado'); } else onlineAsk(()=>{ onlineSet(true); flashNote('Jugar en línea: prendido'); }); };
+onlineSyncUI();   // v246: solo con permiso de un adulto
 ui('mpBack').onclick=()=>{ mpEl.hidden=true; };
 ui('mpCreate').onclick=()=>joinRoom(newCode(), !isPrivateChoice());
 ui('mpJoinForm').addEventListener('submit',e=>{
@@ -7178,6 +7248,7 @@ function lobbyRoom(room, code){
   };
 }
 async function joinRoom(code, pub){
+  if(!onlineOn()){ mpMsg('Jugar en línea está apagado. Un adulto lo puede prender en Opciones.', true); return; }   // v246: control para papás
   if(pub===undefined) pub=await inferPub(code);   // al escribir un código: pública si así la anunciaron
   const btns=[ui('mpCreate'),ui('mpJoin')];
   btns.forEach(b=>b.disabled=true); mpMsg('Conectando a la sala '+code+'…');
@@ -26670,12 +26741,12 @@ function fnSynced(){ if(!FNET.on || FNET.host) return true; if(!FNET.fh) return 
 function fnPeersIn(code){ return Promise.race([Promise.resolve(getLobby()), new Promise(r=>setTimeout(()=>r(null),1500))]).then(L=>{ if(!L) return []; let ps=[]; try{ ps=L.peers(); }catch(e){}
   const keys=[lobbyKey(code,true),lobbyKey(code,false)]; return ps.filter(p=>!p.sameTab && p.presence && keys.includes(p.presence.rm)); }).catch(()=>[]); }
 function fnRoomErr(){ const m=ui('mpMsg').textContent; flashNote(m && /No se/.test(m) ? m : 'No se pudo conectar a la sala. Inténtalo de nuevo.'); }
-async function fnCreate(pub){ if(FNET.joining) return; FNET.joining=true; ui('freeStart').hidden=true; const code=newCode();
+async function fnCreate(pub){ if(!onlineOn()){ onlineGate(()=>{}); return; } if(FNET.joining) return; FNET.joining=true; ui('freeStart').hidden=true; const code=newCode();
   try{ await joinRoom(code,pub); }catch(e){} FNET.joining=false;
   if(!mp.room){ ui('freeStart').hidden=false; fnRoomErr(); return; }
   fnReset(); freeLimits(true); FNET.on=true; FNET.host=true; FNET.code=code; FNET.hostPid=MY_PID; FNET.hostName=cleanName(profile.name)||'Peluche'; FREE.loaded=null; freeEnter('net'); fnHostInit(); try{ lobbyAnnounce(); }catch(e){} sendPresence(true);   // v215b: cada sala empieza vacía (no se toca tu Modo libre). (v229: el aviso a los demás estaba tapado por este comentario: en la web nadie podía entrar)
   setTimeout(()=>flashNote((pub?'Sala pública':'Sala privada')+' '+code+': hasta '+(FN_MAX-1)+' amigos pueden construir contigo'+(pub?'':' (diles el código)')+' · empieza vacía; al salir te puedes llevar una copia'),700); }
-async function fnJoin(code){ code=cleanCode(code); if(code.length!==6){ flashNote('El código tiene 6 letras o números'); return; } if(FNET.joining) return;
+async function fnJoin(code){ if(!onlineOn()){ onlineGate(()=>{}); return; } code=cleanCode(code); if(code.length!==6){ flashNote('El código tiene 6 letras o números'); return; } if(FNET.joining) return;
   const ps=await fnPeersIn(code); if(ps.length>=FN_MAX){ flashNote('Esa sala ya está llena ('+FN_MAX+' de '+FN_MAX+')'); return; }
   const H=ps.find(p=>p.presence.fz===1); if(ps.length && !H){ flashNote('Esa sala no es de Modo libre: entra desde Multijugador'); return; }
   FNET.joining=true; ui('freeStart').hidden=true; try{ await joinRoom(code); }catch(e){} FNET.joining=false;
@@ -26712,7 +26783,8 @@ function fnRooms(){ Promise.resolve(getLobby()).then(L=>{ if(!L || ui('freeStart
       const right=document.createElement('span'); right.className='right'; const c=document.createElement('span'); c.className='cnt'; c.textContent=e.n+'/'+FN_MAX; right.appendChild(c);
       const full=e.n>=FN_MAX, j=document.createElement('span'); j.className=full?'lock':'join'; j.textContent=full?'Llena':'Unirse'; right.appendChild(j); b.append(who,right);
       b.onclick=()=>{ if(full){ flashNote('Esa sala ya está llena'); return; } fnJoin(e.rm); }; li.appendChild(b); ul.appendChild(li); }); }).catch(()=>{}); }
-ui('freeBtn').onclick=()=>{ ui('freeStart').hidden=false; ui('freeRooms').dataset.k=''; fnRooms(); clearInterval(fnRooms.t); fnRooms.t=setInterval(()=>{ if(ui('freeStart').hidden){ clearInterval(fnRooms.t); return; } fnRooms(); },1500); };
+ui('freeBtn').onclick=()=>{ ui('freeStart').hidden=false; onlineSyncUI(); ui('freeRooms').dataset.k=''; fnRooms(); clearInterval(fnRooms.t); fnRooms.t=setInterval(()=>{ if(ui('freeStart').hidden){ clearInterval(fnRooms.t); return; } fnRooms(); },1500); };
+ui('freeNetOn').onclick=()=>onlineGate(()=>{ ui('freeRooms').dataset.k=''; fnRooms(); });
 ui('freePub').onclick=()=>fnCreate(true); ui('freePriv').onclick=()=>fnCreate(false);
 ui('freeJoinF').addEventListener('submit',e=>{ e.preventDefault(); fnJoin(ui('freeCode').value); });
 ui('freeCode').addEventListener('input',e=>{ const v=cleanCode(e.target.value); if(v!==e.target.value) e.target.value=v; });
