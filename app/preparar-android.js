@@ -18,7 +18,10 @@ m=m.replace(/(<application[\s\S]*?>)/, `$1\n        <meta-data android:name="com
 // juego para niños y familias: sin identificador de publicidad
 // v246: tampoco «servicio en primer plano» (lo trae WorkManager por AdMob, pero el juego no lo usa; así Play no pide declararlo)
 m=m.replace('</manifest>',['com.google.android.gms.permission.AD_ID','android.permission.ACCESS_ADSERVICES_AD_ID','android.permission.ACCESS_ADSERVICES_TOPICS','android.permission.ACCESS_ADSERVICES_ATTRIBUTION','android.permission.FOREGROUND_SERVICE']
-  .map(p=>`    <uses-permission android:name="${p}" tools:node="remove"/>\n`).join('')+'</manifest>');
+  .map(p=>`    <uses-permission android:name="${p}" tools:node="remove"/>\n`).join('')
+  // v248: el juego se ve en horizontal, pero no es un requisito del aparato (Play avisaba que eso esconde la app en algunos)
+  +['android.hardware.screen.landscape','android.hardware.screen.portrait']
+  .map(f=>`    <uses-feature android:name="${f}" android:required="false"/>\n`).join('')+'</manifest>');
 must(m,/<activity[\s\S]*?android:name="[^"]*MainActivity"/,'MainActivity en el manifest');
 m=m.replace(/(<activity\b)/, `$1\n            android:screenOrientation="${cfg.orientacion||'unspecified'}"`);
 write(MF,m);

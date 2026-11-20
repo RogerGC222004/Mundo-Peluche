@@ -1011,6 +1011,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <div class="opt-group">
       <h3>Para papás</h3>
       <div class="opt"><label for="optOnline">Jugar en línea<small>Salas con amigos, filas de minijuegos y Construir con amigos. Viene apagado: para prenderlo, un adulto resuelve una operación.</small></label><button class="switch" id="optOnline" role="switch" aria-checked="false" aria-label="Jugar en línea"></button></div>
+      <div class="opt"><label for="optFeedback">Enviar comentarios<small>Escríbenos qué te gusta, qué falla o qué te gustaría. Abre tu correo, después de una operación para adultos.</small></label><button class="btn" id="optFeedback" style="padding:8px 14px;font-size:15px">Escribir</button></div>
     </div>
 
     <div class="opt-group">
@@ -1497,7 +1498,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='247';
+const GAME_VERSION='248';
 // ======================================================================================
 // ---------------- v242: ÍCONOS DIBUJADOS EN LUGAR DE EMOJIS ----------------
 // Cada emoji de la lista se cambia, donde aparezca en la pantalla, por un dibujo hecho a mano con el mismo estilo de la barra
@@ -6988,6 +6989,34 @@ function openMp(){
 ui('mpBtn').onclick=()=>onlineGate(openMp);
 ui('optOnline').onclick=()=>{ if(ONLINE.on){ onlineSet(false); flashNote('Jugar en línea: apagado'); } else onlineAsk(()=>{ onlineSet(true); flashNote('Jugar en línea: prendido'); }); };
 onlineSyncUI();   // v246: solo con permiso de un adulto
+// v248: «Enviar comentarios» (Opciones → Para papás): después de la operación para adultos abre el correo con la versión ya escrita.
+// No manda nada solo ni lleva datos del jugador: solo el número de versión y si es la app o la web.
+const FEEDBACK_MAIL='MundoPelucheTJ@gmail.com';
+function feedbackUrl(){ const sub='Comentarios Mundo Peluche v'+GAME_VERSION;
+  const body='Versión del juego: '+GAME_VERSION+' ('+(window.__MP_APP?'app':'web')+')\n\nCuéntanos qué te gusta, qué falla o qué te gustaría:\n\n';
+  return 'mailto:'+FEEDBACK_MAIL+'?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(body); }
+function feedbackOpen(){ const ov=onlineCard('<h2>Enviar comentarios</h2><p>Se abrirá tu app de correo con un mensaje para nosotros. Ya lleva la versión del juego: solo escribe lo que quieras contarnos.</p>'
+    +'<p class="online-sm">Si no se abre, escríbenos a <b>'+FEEDBACK_MAIL+'</b></p><div class="btns"><button class="btn primary fb-go">Abrir correo</button><button class="btn fb-no">Cerrar</button></div>');
+  ov.querySelector('.fb-go').onclick=()=>{ const u=feedbackUrl(); window.__fbLast=u; onlineClose(); if(!window.__fbNoNav) try{ location.href=u; }catch(e){} };
+  ov.querySelector('.fb-no').onclick=()=>onlineClose(); }
+ui('optFeedback').onclick=()=>onlineAsk(feedbackOpen, null, 'Para escribirnos un correo, resuelve esta operación:');
+// v248: «¿Qué hay de nuevo?» una sola vez al abrir una versión nueva (en el menú). La primera vez que se instala no sale:
+// solo guarda la versión, para no llenar de avisos a quien apenas empieza.
+const NEWS_KEY='mundoPelucheNovedades';
+const NEWS={
+  '248':['Para papás: en Opciones hay un botón nuevo, «Enviar comentarios», para escribirnos qué te gusta o qué falla.',
+         'El juego ahora funciona en más teléfonos y tablets.'],
+};
+function newsCheck(){ let seen=null; try{ seen=localStorage.getItem(NEWS_KEY); localStorage.setItem(NEWS_KEY,GAME_VERSION); }catch(e){ return; }
+  const L=NEWS[GAME_VERSION]; if(!seen || seen===GAME_VERSION || !L) return;
+  const ov=onlineCard('<h2>✨ ¿Qué hay de nuevo?</h2><p class="online-sm">Versión '+GAME_VERSION+'</p><ul class="news-list">'+L.map(t=>'<li>'+t+'</li>').join('')+'</ul>'
+    +'<div class="btns"><button class="btn primary news-ok">¡Genial!</button></div>');
+  ov.querySelector('.news-ok').onclick=()=>onlineClose(); }
+(()=>{ const st=document.createElement('style'); st.textContent='.news-list{padding-left:20px;margin:10px 0;} .news-list li{margin:8px 0;font-weight:700;}'; document.head.appendChild(st);
+  let n=0; const wait=()=>{ const l=document.getElementById('loader'), busy=l && !l.hidden && getComputedStyle(l).display!=='none';
+    const ov=document.getElementById('onlineOv');
+    if(!busy && state==='menu' && !(ov && !ov.hidden)){ newsCheck(); return; } if(++n<120) setTimeout(wait,500); };
+  setTimeout(wait,800); })();
 ui('mpBack').onclick=()=>{ mpEl.hidden=true; };
 ui('mpCreate').onclick=()=>joinRoom(newCode(), !isPrivateChoice());
 ui('mpJoinForm').addEventListener('submit',e=>{
