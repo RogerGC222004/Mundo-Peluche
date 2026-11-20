@@ -78,7 +78,7 @@ async def m():
     ok(abs(r['lodo'][1]-r['lodo'][0])<r['lodo'][0]*.05 and abs(r['agua'][1]-r['agua'][0])<r['agua'][0]*.06, 'lo que cae es justo lo que llevaba la bola %s'%r)
     ok(.25<r['lodo'][2]<.7, 'la bola de lodo (radio .4) deja una plasta de su tamaño (radio %s m)'%r['lodo'][2])
     # 7. cada una a su manera: ondas solo en el agua; el slime tiembla, la miel no; el lodo salpica gotas de lodo; la espuma revienta
-    r=await ev("""(()=>{ const out={}; for(const p of [1,2,3,4,6]){ __CLR(); suClear(); __AT(-20,-20); const X=FREE.X-14, Z=FREE.Z-14; suPour(X,Z,p,0,p===6?.3:.15,.7); __S(30); SU.rip.length=0; SU.U.uRipN.value=0; SU.pops.length=0; let drops=0, wb=0, pops=0; const v0=(suRecount(),SU.vol);
+    r=await ev("""(()=>{ const out={}; for(const p of [1,2,3,4,6]){ __CLR(); suClear(); __AT(-20,-20); if(typeof stClear==='function'){ stClear(myStn); SU.drops.length=0; }   /* (v238: el peluche ya no trae escurriendo lo de antes) */ const X=FREE.X-14, Z=FREE.Z-14; suPour(X,Z,p,0,p===6?.3:.15,.7); __S(30); if(typeof stClear==='function'){ stClear(myStn); SU.drops.length=0; } SU.rip.length=0; SU.U.uRipN.value=0; SU.pops.length=0; let drops=0, wb=0, pops=0; const v0=(suRecount(),SU.vol);
         player.pos.set(X-1.4,FREE.Y+.05,Z); for(let i=0;i<40;i++){ player.pos.x+=.07; player.vel.set(2.1,0,0); __S(1); drops=Math.max(drops,SU.drops.filter(d=>d.p===3).length); pops=Math.max(pops,SU.pops.length); for(const C of SU.list) for(let k=0;k<256;k++) wb=Math.max(wb,C.wb[k]); }
         suRecount(); out[SU_T[p].id]=[SU.rip.length, +wb.toFixed(2), drops, pops, +(SU.vol/v0).toFixed(2)]; } return out; })()""")
     ok(r['agua'][0]>0 and r['lodo'][0]==0 and r['slime'][0]==0 and r['miel'][0]==0, 'las ondas solo salen en el agua %s'%{k:v[0] for k,v in r.items()})

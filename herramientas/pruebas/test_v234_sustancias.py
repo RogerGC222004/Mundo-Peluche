@@ -89,7 +89,7 @@ async def m():
         player.pos.set(o.x+2,FREE.Y+.05,o.z); __S(2); const na=(fuNearActions()||[]).filter(Boolean).map(a=>a.label); fuGrab(o); const mano=fuHoldActions().filter(Boolean).map(a=>a.label);
         for(let i=0;i<70;i++){ player.pos.x+=.5; __S(1); } const A=fuReel(o), d=Math.hypot(player.pos.x-A.x,player.pos.z-A.z); const rope=!!(o.fuR && o.fuR.mesh.parent);
         let L=0; { const P=o.fuR.P; for(let i=0;i<40;i++) L+=Math.hypot(P[i*3+3]-P[i*3],P[i*3+4]-P[i*3+1],P[i*3+5]-P[i*3+2]); }
-        player.facing=0; fuDrop(); const hx=o.hose.x, hz=o.hose.z; suClear(); FU.pts.length=0; __AT(-20,-20); __S(45); suRecount(); let n=0, far=0; for(const Q of SU.list) for(let i=0;i<256;i++) if(Q.t[i]===4){ const gx=(Q.ci*16+(i&15)+.5)*SU.cs+FREE.X, gz=(Q.cj*16+(i>>4)+.5)*SU.cs+FREE.Z; if(Math.hypot(gx-hx,gz-hz)<10) n++; else far++; }
+        player.facing=0; fuDrop(); const hx=o.hose.x, hz=o.hose.z; suClear(); FU.pts.length=0; __AT(-20,-20); if(typeof stClear==='function'){ stClear(myStn); SU.drops.length=0; }   /* (v238: la miel que traía el peluche escurre por donde va) */ __S(45); suRecount(); let n=0, far=0; for(const Q of SU.list) for(let i=0;i<256;i++) if(Q.t[i]===4){ const gx=(Q.ci*16+(i&15)+.5)*SU.cs+FREE.X, gz=(Q.cj*16+(i>>4)+.5)*SU.cs+FREE.Z; if(Math.hypot(gx-hx,gz-hz)<10) n++; else far++; }
         const tip=(()=>{ player.pos.set(hx,FREE.Y+.05,hz+.5); __S(2); return (fuNearActions()||[]).filter(Boolean).map(a=>a.label); })();
         fuGrab(o); const t2=FREE.hose===o; freeSelect({k:'b',a:0,b:1}); __S(2); const auto=!FREE.hose && !!o.hose && !o.hose.held; freeSelect(null);
         player.pos.set(o.x+2,FREE.Y+.05,o.z); __S(2); const nb=(fuNearActions()||[]).filter(Boolean).map(a=>a.label); fuRoll(o); __S(2);
