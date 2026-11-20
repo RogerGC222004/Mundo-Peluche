@@ -1011,6 +1011,12 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <div class="opt-group">
       <h3>Para papás</h3>
       <div class="opt"><label for="optOnline">Jugar en línea<small>Salas con amigos, filas de minijuegos y Construir con amigos. Viene apagado: para prenderlo, un adulto resuelve una operación.</small></label><button class="switch" id="optOnline" role="switch" aria-checked="false" aria-label="Jugar en línea"></button></div>
+      <div class="opt opt-col"><label>Tiempo jugado</label><div id="papTime" style="font-weight:800;font-size:13px;color:var(--thread)">Hoy: 0 min</div></div>
+      <div class="opt opt-col"><label>Recordatorio de descanso<small>Un aviso amable para tomar agua y estirarse. Espera a que termines lo que estés haciendo.</small></label>
+        <div class="seg" id="papRest"><button data-v="0">Apagado</button><button data-v="30">30 min</button><button data-v="45">45 min</button><button data-v="60">60 min</button></div></div>
+      <div class="opt opt-col"><label>Límite de juego por día<small>Avisa 5 minutos antes. Si estás en un minijuego o manejando, te deja terminar. Se reinicia a medianoche.</small></label>
+        <div class="seg" id="papLimit"><button data-v="0">Sin límite</button><button data-v="30">30 min</button><button data-v="60">1 h</button><button data-v="90">1 h 30</button><button data-v="120">2 h</button></div></div>
+      <div class="opt"><label for="papAds">Anuncios con premio<small>Botones opcionales para ganar un premio extra viendo un anuncio. Si lo apagas, no aparece ninguno.</small></label><button class="switch" id="papAds" role="switch" aria-checked="true" aria-label="Anuncios con premio"></button></div>
       <div class="opt"><label for="optFeedback">Enviar comentarios<small>Escríbenos qué te gusta, qué falla o qué te gustaría. Abre tu correo, después de una operación para adultos.</small></label><button class="btn" id="optFeedback" style="padding:8px 14px;font-size:15px">Escribir</button></div>
     </div>
 
@@ -1498,7 +1504,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='248';
+const GAME_VERSION='249';
 // ======================================================================================
 // ---------------- v242: ÍCONOS DIBUJADOS EN LUGAR DE EMOJIS ----------------
 // Cada emoji de la lista se cambia, donde aparezca en la pantalla, por un dibujo hecho a mano con el mismo estilo de la barra
@@ -7004,6 +7010,8 @@ ui('optFeedback').onclick=()=>onlineAsk(feedbackOpen, null, 'Para escribirnos un
 // solo guarda la versión, para no llenar de avisos a quien apenas empieza.
 const NEWS_KEY='mundoPelucheNovedades';
 const NEWS={
+  '249':['Para papás: en Opciones ahora puedes ver cuánto tiempo se jugó, poner un recordatorio de descanso y un límite de juego por día.',
+         'También puedes apagar los anuncios con premio.'],
   '248':['Para papás: en Opciones hay un botón nuevo, «Enviar comentarios», para escribirnos qué te gusta o qué falla.',
          'El juego ahora funciona en más teléfonos y tablets.'],
 };
@@ -7017,6 +7025,73 @@ function newsCheck(){ let seen=null; try{ seen=localStorage.getItem(NEWS_KEY); l
     const ov=document.getElementById('onlineOv');
     if(!busy && state==='menu' && !(ov && !ov.hidden)){ newsCheck(); return; } if(++n<120) setTimeout(wait,500); };
   setTimeout(wait,800); })();
+// ---- v249: herramientas para papás (Opciones → Para papás): tiempo jugado, descanso, límite por día y anuncios ----
+// Todo se guarda solo en este aparato. Cambiar algo pide la operación para adultos.
+// Cuenta el tiempo con el juego abierto y a la vista (no con el teléfono bloqueado ni en otra app).
+// Los avisos esperan un momento tranquilo: no salen en un minijuego, manejando, volando, pescando, en globo, etc.
+const PAR_KEY='mundoPeluchePapas', TT_KEY='mundoPelucheTiempo';
+const PAR=(()=>{ let o=null; try{ o=JSON.parse(localStorage.getItem(PAR_KEY)||'null'); }catch(e){} o=o||{};
+  return {rest:[0,30,45,60].includes(+o.rest)?+o.rest:0, limit:[0,30,60,90,120].includes(+o.limit)?+o.limit:0, ads:o.ads!==false}; })();
+const parSave=()=>{ try{ localStorage.setItem(PAR_KEY, JSON.stringify(PAR)); }catch(e){} };
+const ttDay=(d)=>{ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const TT=(()=>{ let o=null; try{ o=JSON.parse(localStorage.getItem(TT_KEY)||'null'); }catch(e){} o=o||{};
+  return {d:(o.d&&typeof o.d==='object')?o.d:{}, xd:o.xd||'', x:+o.x||0, w:+o.w||0}; })();   // d: segundos por día · x: minutos extra de hoy (-1 = sin límite hoy) · w: aviso de 5 min dado para este total
+const ttSave=()=>{ try{ const keep={}, now=Date.now(); for(let i=0;i<14;i++){ const k=ttDay(new Date(now-i*864e5)); if(TT.d[k]) keep[k]=Math.round(TT.d[k]); } TT.d=keep;
+  localStorage.setItem(TT_KEY, JSON.stringify(TT)); }catch(e){} };
+const ttToday=()=>TT.d[ttDay()]||0;
+const ttWeek=()=>{ let t=0; const now=Date.now(); for(let i=0;i<7;i++) t+=TT.d[ttDay(new Date(now-i*864e5))]||0; return t; };
+const ttFmt=(sec)=>{ const m=Math.floor(sec/60), h=Math.floor(m/60); return h? h+' h'+(m%60?' '+(m%60)+' min':'') : m+' min'; };
+function ttExtra(){ if(TT.xd!==ttDay()){ TT.xd=ttDay(); TT.x=0; TT.w=0; } return TT.x; }
+function ttLeft(){ if(!PAR.limit) return Infinity; const x=ttExtra(); if(x<0) return Infinity; return (PAR.limit+x)*60-ttToday(); }   // segundos que quedan hoy
+// ¿momento tranquilo? (para no cortar nada emocionante)
+function parCalm(){
+  if(player.mg || player.car || player.ac || player.rk || player.fish || player.balloon || player.pg) return false;
+  if(AR.me.a>=0 && (AR.me.st===1 || AR.me.st===2)) return false;   // minijuego grande (esperando o jugando)
+  if(MGQ.a>=0) return false;   // en la fila de un minijuego
+  if(SP.on) return false;      // en el espacio
+  return true; }
+function parSync(){ const t=ui('papTime'); if(t) t.textContent='Hoy: '+ttFmt(ttToday())+' · Últimos 7 días: '+ttFmt(ttWeek())+(PAR.limit && isFinite(ttLeft())?' · Quedan hoy: '+ttFmt(Math.max(0,ttLeft())):'');
+  for(const [id,v] of [['papRest',PAR.rest],['papLimit',PAR.limit]]) ui(id).querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', +b.dataset.v===v?'true':'false'));
+  ui('papAds').setAttribute('aria-checked', PAR.ads?'true':'false'); }
+function parSeg(id,key,label){ ui(id).querySelectorAll('button').forEach(b=>{ b.onclick=()=>{ const v=+b.dataset.v; if(v===PAR[key]) return;
+  onlineAsk(()=>{ PAR[key]=v; parSave(); if(key==='limit'){ TT.w=0; ttSave(); } parSync(); flashNote(label+': '+b.textContent); }, null, 'Para cambiar el '+label.toLowerCase()+', resuelve esta operación:'); }; }); }
+parSeg('papRest','rest','Recordatorio de descanso'); parSeg('papLimit','limit','Límite por día');
+ui('papAds').onclick=()=>onlineAsk(()=>{ PAR.ads=!PAR.ads; parSave(); parSync(); flashNote('Anuncios con premio: '+(PAR.ads?'prendidos':'apagados')); }, null, 'Para '+(PAR.ads?'apagar':'prender')+' los anuncios con premio, resuelve esta operación:');
+// las ventanitas
+const parOv=()=>{ const o=document.getElementById('onlineOv'); return !!o && !o.hidden; };
+const PARS={rest:0, hid:0, busy:0, lim:false};   // rest: segundos jugados desde el último descanso · busy: segundos esperando un momento tranquilo
+function parPause(){ if(state==='play') try{ show('pause'); }catch(e){} }
+function parRestCard(){ parPause(); const ov=onlineCard('<h2>🧸 ¡Hora de un descanso!</h2><p>Llevas un buen rato jugando. Toma agua 💧, estírate y descansa los ojos un momento.</p><div class="btns"><button class="btn primary par-ok">¡Ok!</button></div>');
+  ov.querySelector('.par-ok').onclick=()=>onlineClose(); }
+function parWarnCard(){ const ov=onlineCard('<h2>⭐ Te quedan 5 minutos</h2><p>Ya casi se acaba el tiempo de juego de hoy. Ve terminando lo que estés haciendo.</p><div class="btns"><button class="btn primary par-ok">¡Ok!</button></div>');
+  ov.querySelector('.par-ok').onclick=()=>onlineClose(); }
+function parLimitCard(){ parPause(); PARS.lim=true;
+  const ov=onlineCard('<h2>🌙 ¡Por hoy es todo!</h2><p>Hoy jugaste '+ttFmt(ttToday())+'. ¡Mañana seguimos! 🧸</p><p class="online-sm">El tiempo de juego lo eligió un adulto en Opciones → Para papás.</p><div class="btns"><button class="btn par-more">Soy adulto: dar más tiempo</button></div>');
+  ov.querySelector('.par-more').onclick=()=>onlineAsk(()=>{
+    const c=onlineCard('<h2>Dar más tiempo hoy</h2><div class="btns"><button class="btn primary" data-x="15">+15 min</button><button class="btn primary" data-x="30">+30 min</button><button class="btn" data-x="-1">Sin límite hoy</button></div>');
+    c.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{ const x=+b.dataset.x; ttExtra(); const used=Math.max(0, Math.ceil(ttToday()/60)-PAR.limit-Math.max(0,TT.x));
+      TT.x = x<0 ? -1 : Math.max(0,TT.x)+used+x; TT.w=0; ttSave(); PARS.lim=false; onlineClose(); parSync(); flashNote(x<0?'Sin límite por hoy':'Tienes '+x+' minutos más'); }); },
+    ()=>parLimitCard(), 'Para dar más tiempo de juego, resuelve esta operación:'); }
+// cada segundo
+let parLast=performance.now(), parSaveT=0;
+function parTick(){ const now=performance.now(), dt=Math.min(2,(now-parLast)/1000); parLast=now;
+  if(document.hidden){ PARS.hid+=dt; return; }
+  const l=document.getElementById('loader'); if(l && !l.hidden && getComputedStyle(l).display!=='none') return;
+  if(PARS.hid>300) PARS.rest=0; PARS.hid=0;   // si dejó el juego 5 minutos, ya descansó
+  const k=ttDay(); TT.d[k]=(TT.d[k]||0)+dt; PARS.rest+=dt;
+  if((parSaveT+=dt)>=15){ parSaveT=0; ttSave(); }
+  if(!ui('options').hidden) parSync();
+  const left=ttLeft(), calm=parCalm();
+  if(left<=0){ if(PARS.lim){ if(!parOv()) parLimitCard(); return; }
+    if(parOv()) return; PARS.busy=calm?0:PARS.busy+dt; if(calm || PARS.busy>600){ PARS.busy=0; parLimitCard(); } return; }   // espera hasta 10 min a que termines
+  PARS.lim=false;
+  if(parOv() || !calm) return;
+  const total=(PAR.limit+Math.max(0,ttExtra()))*60;
+  if(left<=300 && TT.w!==total && left>60){ TT.w=total; ttSave(); parWarnCard(); return; }
+  if(PAR.rest && PARS.rest>=PAR.rest*60){ PARS.rest=0; parRestCard(); } }
+setInterval(parTick,1000);
+document.addEventListener('visibilitychange',()=>{ if(document.hidden) ttSave(); });
+parSync();
 ui('mpBack').onclick=()=>{ mpEl.hidden=true; };
 ui('mpCreate').onclick=()=>joinRoom(newCode(), !isPrivateChoice());
 ui('mpJoinForm').addEventListener('submit',e=>{
@@ -11269,7 +11344,8 @@ const ADS=(()=>{
     done.onclick=()=>end(true); ui('adScreenSkip').onclick=()=>end(false); });
   return {
     MAX,
-    ok(){ return !appOff(); },   // v178: siempre hay premio (anuncio de verdad en la app, o el ratito de juego)                                  // ¿hay anuncios? (en la app, o en modo de prueba)
+    ok(){ return !appOff() && PAR.ads; },   // v249: un adulto los puede apagar (Para papás)
+   // v178: siempre hay premio (anuncio de verdad en la app, o el ratito de juego)                                  // ¿hay anuncios? (en la app, o en modo de prueba)
     left(){ roll(); return Math.max(0,MAX-st.n); },                     // cuántos quedan hoy
     need(price){ return Math.min(4,Math.max(1,Math.ceil(price/100))); },  // anuncios para llevarte algo de la tienda
     seen(k){ return st.p[k]||0; },
