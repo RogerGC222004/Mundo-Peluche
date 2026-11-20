@@ -113,15 +113,16 @@ def bicho(cx,cy,s,c=PU):   # una criaturita redonda (como las que armas)
     return (f'<g transform="translate({cx} {cy}) scale({s})"><path d="M-6 9v4M6 9v4" stroke="{O}" stroke-width="4.6" stroke-linecap="round"/><path d="M-6 9v4M6 9v4" stroke="{c}" stroke-width="2.2" stroke-linecap="round"/>'
             f'<ellipse cx="0" cy="0" rx="11" ry="10" fill="{c}" {S(2.2/s)}/><circle cx="-4" cy="-2" r="1.9" fill="{O}"/><circle cx="4" cy="-2" r="1.9" fill="{O}"/><path d="M-2.4 3q2.4 2 4.8 0" fill="none" stroke="{O}" stroke-width="{1.4/s:.2f}" stroke-linecap="round"/></g>')
 SUELO=f'<path d="M3 36.5h34" stroke="{O}" stroke-width="2" stroke-linecap="round"/>'
-I['tamchico']=SUELO+bicho(20,30,.5)
-I['tamnormal']=SUELO+bicho(20,26.5,.85)
-I['tamgrande']=SUELO+bicho(20,22.6,1.25)
-I['tamgigante']=SUELO+bicho(20,19.2,1.62)+f'<path d="M3 4.5v31M1.5 4.5h3M1.5 35.5h3" stroke="{O}" stroke-width="1.4" opacity=".55"/>'
+REF=f'<path d="M3 15.5h34" stroke="{GR}" stroke-width="1.6" stroke-dasharray="2.4 2.2" stroke-linecap="round"/>'   # (la altura de "normal", para comparar)
+I['tamchico']=REF+SUELO+bicho(20,30.2,.62)
+I['tamnormal']=REF+SUELO+bicho(20,26.2,.9)
+I['tamgrande']=REF+SUELO+bicho(20,22.4,1.25)
+I['tamgigante']=REF+SUELO+bicho(20,19.4,1.58)
 def gema(cx,cy,s,c=B):
     return f'<g transform="translate({cx} {cy}) scale({s})"><path d="{star(0,0,12,5.2)}" fill="{Y}" {S(2.2/s)}/></g>'
-I['objchico']=SUELO+gema(20,30.5,.45)
-I['objnormal']=SUELO+gema(20,25,.85)
-I['objgrande']=SUELO+gema(20,19.5,1.38)
+I['objchico']=REF+SUELO+gema(20,29.8,.55)
+I['objnormal']=REF+SUELO+gema(20,25.4,.85)
+I['objgrande']=REF+SUELO+gema(20,20.2,1.3)
 I['pasea']=(bicho(23,18,.95)+f'<g fill="{O}" opacity=".55"><ellipse cx="5" cy="35" rx="1.8" ry="1.2"/><ellipse cx="10" cy="32.5" rx="1.8" ry="1.2"/><ellipse cx="15" cy="35" rx="1.8" ry="1.2"/><ellipse cx="20" cy="32.5" rx="1.8" ry="1.2"/></g>')
 I['sigue']=(bicho(13,22,.85)+f'<path d="M31 16.5c-2.6-4-8-1.4-6 2.6l6 6 6-6c2-4-3.4-6.6-6-2.6z" fill="{R}" {S(1.8)}/><path d="M24 29.5h10" stroke="{O}" stroke-width="2" stroke-linecap="round" stroke-dasharray="2 2.4"/>')
 I['huye']=(bicho(24,20,.9)+f'<path d="M3 15h7M2 21h8M4 27h6" stroke="{O}" stroke-width="2.2" stroke-linecap="round"/><path d="M6 9.5c2-1.6 4-1.6 6 0" fill="none" stroke="{B}" stroke-width="2" stroke-linecap="round" opacity=".7"/>')

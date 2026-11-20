@@ -7,4 +7,5 @@ if h in s:
   i=s.index(h); i=s.rindex('// ====',0,i); j=s.index('emiInit();\n',i)+len('emiInit();\n'); s=s[:i]+s[j:]
 m=re.search(r"const GAME_VERSION='\d+';\n",s); k=m.end()
 s=s[:k]+mod+s[k:]
-open(p,'w',encoding='utf-8').write(s); print('ok', len(mod))
+import os
+tmp=p+'.tmp'; open(tmp,'w',encoding='utf-8').write(s); os.replace(tmp,p); print('ok', len(mod))   # (de un jalón: nadie lee el archivo a medias)

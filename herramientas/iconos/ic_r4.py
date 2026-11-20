@@ -58,8 +58,9 @@ I['naranja']=(f'<circle cx="20" cy="21.5" r="13.5" fill="{N}" {S(2.2)}/><g fill=
               f'<path d="M20 8.5c3-3 7-3.4 9.6-2-1.6 3-5.6 4-9.6 2z" fill="{G}" {S(1.6)}/><path d="M12 18a8 8 0 0 1 3.4-4" {HL}/>')
 I['coco']=(f'<circle cx="20" cy="21" r="14" fill="{BR}" {S(2.2)}/><path d="M9 15c2-3 4-5 7-6M10 25c-1-3 0-6 1-8M26 9c3 1 6 4 7 7" fill="none" stroke="#5a3a1f" stroke-width="1.4" stroke-linecap="round"/>'
            f'<circle cx="16.5" cy="17" r="1.8" fill="#3a2414"/><circle cx="23.5" cy="17" r="1.8" fill="#3a2414"/><circle cx="20" cy="22.5" r="1.8" fill="#3a2414"/>')
-I['mango']=(f'<path d="M28.5 9.5c5 4 6.6 12 2.6 19-4 6.6-13 9-19 5.6C6 31 4.5 24 8 18c3-5 7-6 11-7.4 3.6-1.4 6.6-3.4 9.5-1.1z" fill="{N}" {S(2.2)}/><path d="M24 18c-4 0-9 2-12 8" fill="none" stroke="{R}" stroke-width="5" opacity=".35" stroke-linecap="round"/>'
-            f'<path d="M28.5 9.5c.4-2.6 1.6-4.4 3.4-5.6" fill="none" stroke="{O}" stroke-width="2.2" stroke-linecap="round"/><path d="M30 7c3-2 7-1.6 8.6.6-2.6 2-6 2-8.6-.6z" fill="{G}" {S(1.6)}/>')
+I['mango']=(f'<path d="M27 8.5c6 3.4 8.6 11 5.6 18.4-3 7.4-11.6 10.6-18.6 7.6C7 31.6 4.6 24 7.6 17.4 11 10 20.4 4.8 27 8.5z" fill="#f7b632" {S(2.2)}/>'
+            f'<path d="M27.6 10c4.6 3 6.4 9.4 4 15.4-1.2 3-3.2 5.2-5.6 6.4 1.6-4 1.2-9-1.4-13.4-1.6-2.8-2.4-5.6-1.4-8.4.8-.6 2.6-.6 4.4 0z" fill="{R}" opacity=".55"/>'
+            f'<path d="M27 8.5c-.2-2.4.6-4.4 2.4-5.6" fill="none" stroke="{O}" stroke-width="2.2" stroke-linecap="round"/><path d="M29.2 4.6c3-1.6 6.6-1 8 1.4-2.8 1.6-6 1.4-8-1.4z" fill="{G}" {S(1.6)}/><path d="M11 18c1.4-3 3.6-5 6.4-6.4" {HL}/>')
 I['platano']=(f'<path d="M30.5 5.5c2 9 0 17-5 22.5s-12 8-19 7.4c-1.6-.2-2-2-.6-2.6 6-2.6 11-6 14.4-11.6 3.4-5.6 4.6-10 5-15.4z" fill="{Y}" {S(2.2)}/>'
               f'<path d="M25.3 5.3l1.2-2.4 3.6.6.4 2z" fill="{BR}" {S(1.6)}/><path d="M25 12c-1 6-4 11-9 15" fill="none" stroke="#d9a52a" stroke-width="1.6" stroke-linecap="round"/><path d="M4.8 33.5l1.2 1.4" stroke="{O}" stroke-width="2.4" stroke-linecap="round"/>')
 I['chocolate']=(f'<path d="M8 6h24v28H8z" fill="#7a4a2a" {S(2.2)}/><path d="M8 15.3h24M8 24.6h24M20 6v28" stroke="#5a3418" stroke-width="1.8"/><path d="M8 22l24-6v18H8z" fill="{R}" {S(2.2)}/><path d="M11 27h18" stroke="{W}" stroke-width="2" stroke-dasharray="3 2" opacity=".8"/>')
@@ -111,8 +112,8 @@ I['repetir']=(f'<path d="M7 18a11 11 0 0 1 19-7.4M33 22a11 11 0 0 1-19 7.4" fill
 I['dado']=(f'<rect x="5" y="5" width="30" height="30" rx="7" fill="{W}" {S(2.2)}/><g fill="{R}"><circle cx="13" cy="13" r="2.6"/><circle cx="27" cy="13" r="2.6"/><circle cx="20" cy="20" r="2.6"/><circle cx="13" cy="27" r="2.6"/><circle cx="27" cy="27" r="2.6"/></g>')
 I['escoba']=(f'<path d="M30 4 19 21" stroke="{O}" stroke-width="5.6" stroke-linecap="round"/><path d="M30 4 19 21" stroke="{M}" stroke-width="2.6" stroke-linecap="round"/>'
              f'<path d="M15.5 18.5l8 5-1.6 2.6-8-5z" fill="{R}" {S(1.8)}/><path d="M13.9 21.1l8 5L15 37c-4-.4-9-3.6-11-7.4z" fill="{Y}" {S(2.2)}/><path d="M10 28l-3 4M14 30.4l-3 4.6M18 31.6l-2.6 4" stroke="#d9a52a" stroke-width="1.4" stroke-linecap="round"/>')
-I['pulgar']=(f'<path d="M12 18h5.6l3.4-8c.6-1.6 1.4-4.6 1.4-6 2.6 0 5 1.6 5 5.4 0 2.6-.6 4.6-1.4 6.6h6.6c2.4 0 3.8 2 3.4 4.4l-2 11c-.4 2-2 3.6-4 3.6H12z" fill="{SK}" {S(2.2)}/>'
-             f'<rect x="4" y="17" width="8" height="19" rx="2" fill="{B}" {S(2.2)}/><path d="M28 21h7M27.6 26h6.4M27 31h6" stroke="{O}" stroke-width="1.4" opacity=".4" stroke-linecap="round"/>')
+I['pulgar']=(f'<path d="M13.5 18h4.1l3.4-8c.6-1.6 1.4-4.6 1.4-6 2.6 0 5 1.6 5 5.4 0 2.6-.6 4.6-1.4 6.6h6.6c2.4 0 3.8 2 3.4 4.4l-2 11c-.4 2-2 3.6-4 3.6H13.5c-2 0-3.5-1.6-3.5-3.6V21.6c0-2 1.5-3.6 3.5-3.6z" fill="{SK}" {S(2.2)}/>'
+             f'<path d="M28 21h7M27.6 26h6.4M27 31h6" stroke="{O}" stroke-width="1.4" opacity=".4" stroke-linecap="round"/><path d="M13.5 22v9" {HL} opacity=".5"/>')
 I['sirena']=(f'<path d="M10 28V18a10 10 0 0 1 20 0v10" fill="{R}" {S(2.2)}/><path d="M15 18a5 5 0 0 1 5-5" {HL}/><rect x="6" y="28" width="28" height="7" rx="2" fill="{GR}" {S(2.2)}/>'
              f'<path d="M20 2.5v3.6M7 7l2.6 2.6M33 7l-2.6 2.6M2.5 18h3.6M34 18h3.6" stroke="{Y}" stroke-width="2.6" stroke-linecap="round"/>')
 I['fantasma']=(f'<path d="M8 35V17C8 10 13.4 5 20 5s12 5 12 12v18l-4-3-4 3-4-3-4 3-4-3z" fill="{W}" {S(2.2)}/><ellipse cx="15.5" cy="17" rx="2" ry="3" fill="{O}"/><ellipse cx="24.5" cy="17" rx="2" ry="3" fill="{O}"/>'
@@ -143,10 +144,12 @@ I['piso']=(f'<path d="M3 24 20 14l17 10-17 10z" fill="{M}" {S(2.2)}/><path d="M1
            f'<path d="M3 24v3l17 10 17-10v-3l-17 10z" fill="#a8743f" {S(2)}/>')
 # manos que señalan y saludan
 MANO='M8 22V18a3 3 0 0 1 3-3h13V12a3 3 0 0 1 6 0v3.6c3.6.6 6 3.4 6 7v4c0 5-4 9-9 9H17c-5 0-9-4-9-9z'
-I['manoizq']=(f'<path d="M1.5 15h19a3 3 0 0 1 0 6H12" fill="{SK}" {S(2.2)}/><path d="M12.5 18h11c4 0 7 2.8 7 7v1.4c0 4.6-3.6 8.2-8.4 8.2h-4.6c-3.4 0-6-2.6-6-6v-7.6c0-1.6 .6-3 1-3z" fill="{SK}" {S(2.2)}/>'
-              f'<path d="M11.6 25.2h7M12 29.6h6.4" stroke="{O}" stroke-width="1.6" stroke-linecap="round" opacity=".5"/><path d="M5 17.6h9" {HL} opacity=".5"/>')
-I['manoder']=f'<g transform="translate(40 0) scale(-1 1)">{I["manoizq"]}</g>'
-I['manoabajo']=f'<g transform="rotate(-90 20 20)">{I["manoizq"]}</g>'
+# manita que señala (como 👉): solo la mano, con el dedo del mismo grueso que las otras manitas, el pulgar arriba y los dedos doblados
+I['manoder']=(f'<path d="M12.5 16H33.6a2.6 2.6 0 0 1 0 5.2H25a2.2 2.2 0 0 1 0 4.4a2.2 2.2 0 0 1 0 4.4a2.2 2.2 0 0 1 -1 4.4H13.4c-3.4 0-6.2-2.8-6.2-6.2V21.3c0-2.9 2.4-5.3 5.3-5.3z" fill="{SK}" {S(2)}/>'
+              f'<path d="M15 16.2c0-2.8 1.8-4.4 4.2-4.4h2.4c1.4 0 2.2 1.4 1.4 2.6l-1.2 1.8" fill="{SK}" {S(1.8)}/>'
+              f'<path d="M17 21.2h8M19.4 25.6h5.6M19.6 30h5.4" stroke="{O}" stroke-width="1.5" stroke-linecap="round" opacity=".7"/>')
+I['manoizq']=f'<g transform="translate(40 0) scale(-1 1)">{I["manoder"]}</g>'
+I['manoabajo']=f'<g transform="rotate(90 20 20)">{I["manoder"]}</g>'
 I['saludo']=(f'<path d="M12 21V11a2.6 2.6 0 0 1 5.2 0V19V8.5a2.6 2.6 0 0 1 5.2 0V19V10a2.6 2.6 0 0 1 5.2 0v10.5V15a2.5 2.5 0 0 1 5 0v8.5c0 7.5-5 12-11.4 12-4.6 0-7.4-2.4-9.8-6l-4.2-6.3c-1.4-2.1 1-4.4 3-3l2.6 1.8z" fill="{SK}" {S(2)}/>'
              f'<path d="M3.5 9c.6-2.4 2-4 4-5M5 14c-.4-1.6 0-3 1-4.4M34 3.5c2 .6 3.4 2 4 4" fill="none" stroke="{O}" stroke-width="2" stroke-linecap="round"/>')
 

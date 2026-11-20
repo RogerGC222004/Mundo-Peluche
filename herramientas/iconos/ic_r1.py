@@ -47,8 +47,8 @@ I['llaveinglesa']=(f'<path d="M24.5 4.8a8 8 0 0 0-6.4 10.8L6 27.7a3.6 3.6 0 1 0 
                    f'<circle cx="8.6" cy="30.3" r="1.5" fill="{O}"/>')
 I['mano']=(f'<path d="M12 21V11.5a2.6 2.6 0 0 1 5.2 0V19V8.5a2.6 2.6 0 0 1 5.2 0V19V10a2.6 2.6 0 0 1 5.2 0v10.5V15a2.5 2.5 0 0 1 5 0v8.5c0 7.5-5 12-11.4 12-4.6 0-7.4-2.4-9.8-6l-4.2-6.3c-1.4-2.1 1-4.4 3-3l2.6 1.8z" fill="{SK}" {S(2)}/>'
            f'<path d="M14 26c1 1.6 2.6 2.6 4.4 3" {HL} opacity=".5"/>')
-I['empujar']=(f'<g transform="rotate(90 20 20)"><path d="M12 21V11.5a2.6 2.6 0 0 1 5.2 0V19V8.5a2.6 2.6 0 0 1 5.2 0V19V10a2.6 2.6 0 0 1 5.2 0v10.5V15a2.5 2.5 0 0 1 5 0v8.5c0 7.5-5 12-11.4 12-4.6 0-7.4-2.4-9.8-6l-4.2-6.3c-1.4-2.1 1-4.4 3-3l2.6 1.8z" fill="{SK}" {S(2)}/></g>'
-              f'<path d="M3.5 13h4M2.5 20h4M3.5 27h4" stroke="{O}" stroke-width="2.2" stroke-linecap="round"/>')
+I['empujar']=(f'<g transform="translate(5 0) rotate(12 22 22)"><path d="M12 21V11.5a2.6 2.6 0 0 1 5.2 0V19V8.5a2.6 2.6 0 0 1 5.2 0V19V10a2.6 2.6 0 0 1 5.2 0v10.5V15a2.5 2.5 0 0 1 5 0v8.5c0 7.5-5 12-11.4 12-4.6 0-7.4-2.4-9.8-6l-4.2-6.3c-1.4-2.1 1-4.4 3-3l2.6 1.8z" fill="{SK}" {S(2)}/></g>'
+              f'<path d="M2.5 14h6M1.5 20.5h7M2.5 27h6" stroke="{O}" stroke-width="2.2" stroke-linecap="round"/>')
 I['pierna']=(f'<path d="M14 4.5h9l-1 15.5 8.5 8.5-6.4 6.4L14 25z" fill="{SK}" {S(2.2)}/><path d="M21.5 27.5l9-1.5c3 0 5 2 5 4.5v3h-11z" fill="{R}" {S(2.2)}/><path d="M24.5 32.5h11" stroke="{W}" stroke-width="2" stroke-linecap="round"/>'
              f'<path d="M3.5 18h5M2.5 24h6" stroke="{O}" stroke-width="2" stroke-linecap="round" opacity=".7"/>')
 I['disco']=(f'<ellipse cx="20" cy="21" rx="16" ry="9.5" fill="{B}" {S(2.2)}/><ellipse cx="20" cy="19" rx="10.5" ry="5.2" fill="#8fcff2" {S(1.6)}/><ellipse cx="20" cy="18.5" rx="4.5" ry="2" fill="{W}" {S(1.4)}/>')
