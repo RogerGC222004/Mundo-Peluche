@@ -40,9 +40,9 @@ async def m():
     r=await ev("""(()=>{ __RES(); __POOL(5,.06,0,0,3); player.pos.set(FREE.X,FREE.Y+.05,FREE.Z); player.vel.set(0,0,0); __S(3); startDive(); let mx=0; for(let i=0;i<45;i++){ __S(1); mx=Math.max(mx,player.diveAngle||0); } const S=myStn; return [+S.F[5].toFixed(2), +S.A[5].toFixed(2), S.col===suHex(5,suCol(3),255)]; })()""")
     ok(r[0]>.5 and r[1]>.8 and r[2], '🎨 si te tiras de panza en la pintura quedas pintado de ese color (panza %s)'%r[0])
 
-    # 3. una bola de miel que te cae en la cabeza: miel arriba, gotea y te frena
+    # 3. una bola de miel que te cae en la cabeza: miel arriba, gotea y te frena (desde v238b la bola deja una mancha en el punto exacto)
     r=await ev("""(()=>{ __RES(); player.pos.set(FREE.X,FREE.Y+.05,FREE.Z); __S(2); const v=suVolOf(.3); SU.balls.push({p:4,c:0,s:0,r:.3,v,x:FREE.X,y:FREE.Y+3.6,z:FREE.Z,vx:0,vy:-2,vz:0,t:.5,m:new THREE.Mesh(_suSph,suBallMat(4,0,0))}); __S(30);
-        const T4=myStn.T[4]; const v0=SU.vol; let dr=0; for(let i=0;i<120;i++){ __S(1); dr=Math.max(dr,SU.drops.filter(d=>d.p===4).length); }
+        const T4=Math.max(myStn.T[4], (myStn.sp||[]).filter(q=>q.p===4).reduce((a,q)=>Math.max(a,q.a),0)); const v0=SU.vol; let dr=0; for(let i=0;i<120;i++){ __S(1); dr=Math.max(dr,SU.drops.filter(d=>d.p===4).length); }
         return [+T4.toFixed(2), dr]; })()""")
     ok(r[0]>.5, '🍯 si te cae una bola de miel en la cabeza, te quedas con miel arriba (%s)'%r[0])
     ok(r[1]>=1, 'y vas goteando miel de verdad (%s gotitas a la vez)'%r[1])

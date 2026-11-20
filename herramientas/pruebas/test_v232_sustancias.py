@@ -34,7 +34,7 @@ async def m():
     # 1. el menú y los botones
     r=await ev("""(()=>{ __CLR(); suClear(); __AT(-20,-20); FREE.tab='sustancias'; try{ freeRenderBox(); }catch(e){} const cards=[...document.querySelectorAll('#freeGrid .free-item, #freeBox .free-item')].map(c=>c.textContent.trim()).filter(Boolean);
       freeSelect({k:'s',a:1,b:0}); __S(2); const L=[]; for(let i=0;i<5;i++){ const A=freeActions(); L.push(A.map(a=>a&&a.label).join(' · ')); A[1].run(); } const A=freeActions(); A[2].run(); return [cards, L, FREE.sel, SU_T.filter(Boolean).map(T=>T.n)]; })()""")
-    ok(r[3]==['Agua','Slime','Lodo','Miel','Pintura','Espuma'], 'hay 6 sustancias: %s'%r[3])
+    ok(r[3][:6]==['Agua','Slime','Lodo','Miel','Pintura','Espuma'], 'hay %s sustancias (las 6 de v232 y las nuevas): %s'%(len(r[3]),r[3]))   # (v237 agregó la arena)
     ok(r[1][0]=='🪣 Echar · Chorro: chico · Listo' and r[1][1].endswith('mediano · Listo') and r[1][2].endswith('grande · Listo') and r[1][3]=='🔮 Cargar bola · Chorro: 🔮 bola · Listo' and r[1][4]==r[1][0] and r[2] is None, 'con la cubeta: «Echar · Chorro · Listo»; Chorro cambia chico → mediano → grande → 🔮 bola; «Listo» la guarda %s'%r[1])
     # 2. echar: un toque echa un chorrito; mantenerlo echa más
     r=await ev("""(()=>{ __CLR(); suClear(); __AT(-20,-20); freeSelect({k:'s',a:1,b:0}); SU.mode=0; __S(2); __LOOKAT(FREE.X-20,FREE.Z-17); suHoldStart(); suHoldEnd(); const a=SU.vol; SU.holdEnd=0;
