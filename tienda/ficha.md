@@ -53,7 +53,7 @@ PENSADO PARA TODA LA FAMILIA
 ## Imágenes
 - **Ícono (512×512):** `herramientas/web/icono-512.png`
 - **Gráfico de funciones (1024×500):** `tienda/destacado.png`
-- **Capturas de teléfono (mínimo 2, recomendado 4 a 8):** `tienda/capturas/*.png` (1920×1080)
+- **Capturas de teléfono (mínimo 2, recomendado 4 a 8):** `tienda/capturas/*.png` (8 capturas, 1920×1080, versión 246)
 
 ## Cuestionarios de Play Console (respuestas sugeridas)
 
