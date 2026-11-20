@@ -1,5 +1,5 @@
 import asyncio, re, sys
-src0=open('test_real_mp.py').read()
+import os; src0=open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'test_real_mp.py')).read()   # (el de esta carpeta, no una copia vieja)
 exec(src0.split('async def open_game')[0])
 STUB2=STUB2.replace("setScalar(s){return this.set(s,s,s)}}","setScalar(s){return this.set(s,s,s)} sub(v){this.x-=v.x;this.y-=v.y;this.z-=v.z;return this} normalize(){const l=this.length()||1;return this.multiplyScalar(1/l)} distanceTo(v){return Math.hypot(this.x-v.x,this.y-v.y,this.z-v.z)} divideScalar(s){return this.multiplyScalar(1/s)} dot(v){return this.x*v.x+this.y*v.y+this.z*v.z} applyMatrix4(){return this} applyQuaternion(){return this} negate(){return this.multiplyScalar(-1)} setLength(l){return this.normalize().multiplyScalar(l)}}")
 src=open('/home/claude/mundo-peluche.html').read()
