@@ -62,7 +62,7 @@ async def m():
     ev=lambda s: asyncio.wait_for(pg.evaluate("s=>__T.ev(s)", s), 600)
     await pg.wait_for_timeout(3500)
     n=await ev(NEWS)
-    ok(bool(n) and 'Versión '+VER in n and 'Para papás' in n, '✨ si tenías otra versión sale «¿Qué hay de nuevo?» con las novedades')
+    ok(bool(n) and 'Versión '+VER in n and 'Genial' in n, '✨ si tenías otra versión sale «¿Qué hay de nuevo?» con las novedades')
     r=await ev("(()=>{ document.querySelector('#onlineOv .news-ok').click(); return [document.getElementById('onlineOv').hidden, localStorage.getItem('mundoPelucheNovedades'), state]; })()")
     ok(r[0] and r[1]==VER and r[2]=='menu', '👍 «¡Genial!» la cierra y queda guardada la versión')
     ok(not errs, '🚫 sin errores (%s)'%errs[:3]); await ctx.close()
