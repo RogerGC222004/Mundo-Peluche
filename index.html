@@ -734,6 +734,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       <button class="btn primary" id="playBtn"><span class="ico-row" aria-hidden="true"><svg class="pl-ico" aria-hidden="true"><use href="#icoPeluche"/></svg></span>Jugar</button>
       <button class="btn" id="shopBtn">Personalizar</button>
       <button class="btn" id="saveBtn">Mi progreso <i class="save-dot" id="menuSaveDot" hidden></i></button>
+      <button class="btn" id="lgBtn">Logros <i class="lg-dot" id="lgDot" hidden></i></button>
       <button class="btn" id="optionsBtn">Opciones</button>
       <button class="btn" id="controlsBtn">Controles</button>
     </div>
@@ -838,6 +839,14 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
   </div>
 </div>
 
+<div class="overlay" id="lgOv" hidden style="background:rgba(207,231,242,.7)">
+  <div class="card lg-card" role="dialog" aria-labelledby="lgTitle">
+    <h2 id="lgTitle">🏆 Logros</h2>
+    <p class="online-sm" id="lgSum"></p>
+    <div class="lg-list" id="lgList"></div>
+    <button class="btn" id="lgClose">Volver al menú</button>
+  </div>
+</div>
 <div class="overlay" id="saveOv" hidden style="background:rgba(207,231,242,.7)">
   <div class="card save-card" role="dialog" aria-labelledby="saveTitle">
     <h2 id="saveTitle">Mi progreso</h2>
@@ -1023,6 +1032,8 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
     <div class="opt-group">
       <h3>Para papás</h3>
       <div class="opt"><label for="optOnline">Jugar en línea<small>Salas con amigos, filas de minijuegos y Construir con amigos. Viene apagado: para prenderlo, un adulto resuelve una operación.</small></label><button class="switch" id="optOnline" role="switch" aria-checked="false" aria-label="Jugar en línea"></button></div>
+      <div class="opt"><label for="papPriv">Solo salas privadas<small>Esconde las salas públicas y las filas de minijuegos con desconocidos: solo se entra con el código de un amigo.</small></label><button class="switch" id="papPriv" role="switch" aria-checked="false" aria-label="Solo salas privadas"></button></div>
+      <div class="opt"><label for="papNames">Ocultar apodos de otros<small>Los demás jugadores se ven como «Peluche 1», «Peluche 2»…</small></label><button class="switch" id="papNames" role="switch" aria-checked="false" aria-label="Ocultar apodos de otros"></button></div>
       <div class="opt opt-col"><label>Tiempo jugado</label><div id="papTime" style="font-weight:800;font-size:13px;color:var(--thread)">Hoy: 0 min</div></div>
       <div class="opt opt-col"><label>Recordatorio de descanso<small>Un aviso amable para tomar agua y estirarse. Espera a que termines lo que estés haciendo.</small></label>
         <div class="seg" id="papRest"><button data-v="0">Apagado</button><button data-v="30">30 min</button><button data-v="45">45 min</button><button data-v="60">60 min</button></div></div>
@@ -1665,7 +1676,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='249';
+const GAME_VERSION='250';
 // ======================================================================================
 // ---------------- v242: ÍCONOS DIBUJADOS EN LUGAR DE EMOJIS ----------------
 // Cada emoji de la lista se cambia, donde aparezca en la pantalla, por un dibujo hecho a mano con el mismo estilo de la barra
@@ -6819,7 +6830,7 @@ ui('soloBtn').onclick=()=>{ menuModes(false); startGame(); };   // (al regresar 
 // v205: Jugar abre los modos de juego (Un jugador, Multijugador, Minijuegos, Modo libre, Crear mapa)
 function menuModes(on){ ui('menuMain').hidden=!!on; ui('menuModes').hidden=!on; document.body.classList.toggle('menu-modes',!!on);   /* v231: al escoger modo no se ve «Instala el juego» (tapaba Volver) */ try{ centerAllText&&centerAllText(); }catch(e){} }
 ui('playBtn').onclick=()=>menuModes(true); ui('modesBack').onclick=()=>menuModes(false);
-ui('mgBtn').onclick=()=>onlineGate(()=>openMgq());
+ui('mgBtn').onclick=()=>onlineGate(()=>{ if(PAR.priv){ flashNote('Un adulto dejó solo salas privadas: las filas de minijuegos con desconocidos no están disponibles'); return; } openMgq(); });
 ui('freeBtn').onclick=()=>{ ui('freeStart').hidden=false; };
 ui('freeSolo').onclick=()=>freeEnter(); ui('freeBack').onclick=()=>{ ui('freeStart').hidden=true; };
 ['freePub','freePriv'].forEach(id=>{ ui(id).onclick=()=>flashNote('Construir con amigos en el modo libre llega en la siguiente parte'); });
@@ -7115,13 +7126,13 @@ function lobbyKey(code,pub){ if(pub) return code; let h=7; for(const ch of code)
 function inferPub(code){ return Promise.race([Promise.resolve(getLobby()), new Promise(r=>setTimeout(()=>r(null),1500))]).then(L=>{ if(!L) return false; let ps=[]; try{ ps=L.peers(); }catch(e){}
   for(const p of ps){ const pr=p.presence||{}; if(pr.rm===lobbyKey(code,true) && pr.pub===1) return true; } return false; }).catch(()=>false); }
 const isPrivateChoice=()=>ui('mpPrivate').getAttribute('aria-checked')==='true';
-ui('mpPrivate').onclick=()=>{ const on=!isPrivateChoice(); ui('mpPrivate').setAttribute('aria-checked',String(on));
+ui('mpPrivate').onclick=()=>{ if(PAR.priv){ flashNote('Un adulto dejó solo salas privadas (Opciones → Para papás)'); return; } const on=!isPrivateChoice(); ui('mpPrivate').setAttribute('aria-checked',String(on));
   ui('mpPrivNote').textContent = on ? 'Privada: no se puede entrar sin el código' : 'Pública: cualquiera la ve en Salas activas y entra con un toque'; };
 let roomsSub=null, roomsLast=0, roomsTimer=0;
 function roomsFromPeers(peers){
   const g=new Map();
   for(const p of peers||[]){ if(p.kind==='agent') continue; const pr=p.presence||{}, rm=typeof pr.rm==='string'?pr.rm:''; if(!/^[A-Za-z0-9]{6,8}$/.test(rm)) continue;
-    let e=g.get(rm); if(!e){ e={n:0, names:[], mine:mp.code && rm===lobbyKey(mp.code,mp.pub), pub:false, code:rm}; g.set(rm,e); } e.n++; if(pr.pub===1) e.pub=true; if(pr.fz===1) e.free=true; if(e.names.length<3) e.names.push(cleanName(pr.n)||'Peluche'); }
+    let e=g.get(rm); if(!e){ e={n:0, names:[], mine:mp.code && rm===lobbyKey(mp.code,mp.pub), pub:false, code:rm}; g.set(rm,e); } e.n++; if(pr.pub===1) e.pub=true; if(pr.fz===1) e.free=true; if(e.names.length<3) e.names.push(PAR.hideN?'Peluche':(cleanName(pr.n)||'Peluche')); }
   return [...g.values()].sort((a,b)=>(b.mine-a.mine)||(b.n-a.n));
 }
 function renderRooms(list){
@@ -7152,7 +7163,7 @@ function watchRooms(){
 }
 function openMp(){
   watchRooms();
-  mpEl.hidden=false; ui('mpName').value=profile.name; syncSwatches(); mpMsg('');
+  mpEl.hidden=false; ui('mpName').value=profile.name; syncSwatches(); mpMsg(''); parPrivSync();
   mpEl.scrollTop=0;
   roomPromise.then(r=>{ if(!r && !mpEl.hidden) mpMsg(UNAVAILABLE, true); });
 }
@@ -7174,6 +7185,9 @@ ui('optFeedback').onclick=()=>onlineAsk(feedbackOpen, null, 'Para escribirnos un
 // solo guarda la versión, para no llenar de avisos a quien apenas empieza.
 const NEWS_KEY='mundoPelucheNovedades';
 const NEWS={
+  '250':['¡Nuevo! Botón «Logros» en el menú: gana medallas de bronce, plata y oro y reclama monedas.',
+         'Misiones del día: búscalas en el cartel dentro del castillo. Cada día hay 3 nuevas.',
+         'Para papás: ahora puedes dejar solo salas privadas y ocultar los apodos de otros jugadores.'],
   '249':['Para papás: en Opciones ahora puedes ver cuánto tiempo se jugó, poner un recordatorio de descanso y un límite de juego por día.',
          'También puedes apagar los anuncios con premio.'],
   '248':['Para papás: en Opciones hay un botón nuevo, «Enviar comentarios», para escribirnos qué te gusta o qué falla.',
@@ -7195,7 +7209,7 @@ function newsCheck(){ let seen=null; try{ seen=localStorage.getItem(NEWS_KEY); l
 // Los avisos esperan un momento tranquilo: no salen en un minijuego, manejando, volando, pescando, en globo, etc.
 const PAR_KEY='mundoPeluchePapas', TT_KEY='mundoPelucheTiempo';
 const PAR=(()=>{ let o=null; try{ o=JSON.parse(localStorage.getItem(PAR_KEY)||'null'); }catch(e){} o=o||{};
-  return {rest:[0,30,45,60].includes(+o.rest)?+o.rest:0, limit:[0,30,60,90,120].includes(+o.limit)?+o.limit:0, ads:o.ads!==false}; })();
+  return {rest:[0,30,45,60].includes(+o.rest)?+o.rest:0, limit:[0,30,60,90,120].includes(+o.limit)?+o.limit:0, ads:o.ads!==false, priv:o.priv===true, hideN:o.hideN===true}; })();
 const parSave=()=>{ try{ localStorage.setItem(PAR_KEY, JSON.stringify(PAR)); }catch(e){} };
 const ttDay=(d)=>{ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 const TT=(()=>{ let o=null; try{ o=JSON.parse(localStorage.getItem(TT_KEY)||'null'); }catch(e){} o=o||{};
@@ -7216,7 +7230,7 @@ function parCalm(){
   return true; }
 function parSync(){ const t=ui('papTime'); if(t) t.textContent='Hoy: '+ttFmt(ttToday())+' · Últimos 7 días: '+ttFmt(ttWeek())+(PAR.limit && isFinite(ttLeft())?' · Quedan hoy: '+ttFmt(Math.max(0,ttLeft())):'');
   for(const [id,v] of [['papRest',PAR.rest],['papLimit',PAR.limit]]) ui(id).querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', +b.dataset.v===v?'true':'false'));
-  ui('papAds').setAttribute('aria-checked', PAR.ads?'true':'false'); }
+  ui('papAds').setAttribute('aria-checked', PAR.ads?'true':'false'); ui('papPriv').setAttribute('aria-checked', PAR.priv?'true':'false'); ui('papNames').setAttribute('aria-checked', PAR.hideN?'true':'false'); }
 function parSeg(id,key,label){ ui(id).querySelectorAll('button').forEach(b=>{ b.onclick=()=>{ const v=+b.dataset.v; if(v===PAR[key]) return;
   onlineAsk(()=>{ PAR[key]=v; parSave(); if(key==='limit'){ TT.w=0; ttSave(); } parSync(); flashNote(label+': '+b.textContent); }, null, 'Para cambiar el '+label.toLowerCase()+', resuelve esta operación:'); }; }); }
 parSeg('papRest','rest','Recordatorio de descanso'); parSeg('papLimit','limit','Límite por día');
@@ -7256,8 +7270,177 @@ function parTick(){ const now=performance.now(), dt=Math.min(2,(now-parLast)/100
 setInterval(parTick,1000);
 document.addEventListener('visibilitychange',()=>{ if(document.hidden) ttSave(); });
 parSync();
+// v250: «Solo salas privadas» y «Ocultar apodos de otros» (Para papás)
+const PAR_ALIAS=new Map();
+function parAlias(key){ key=key||'?'; if(!PAR_ALIAS.has(key)) PAR_ALIAS.set(key, PAR_ALIAS.size+1); return 'Peluche '+PAR_ALIAS.get(key); }
+const parName=(raw,key)=>PAR.hideN ? (key?parAlias(key):'Peluche') : raw;   // el apodo que se ve de otro jugador
+function parPrivSync(){ const on=PAR.priv;
+  const box=document.querySelector('#mp .mp-rooms'); if(box) box.hidden=on;
+  if(on){ ui('mpPrivate').setAttribute('aria-checked','true'); ui('mpPrivNote').textContent='Un adulto dejó solo salas privadas: se entra con el código'; }
+  ui('freePub').hidden=on; }
+function parRelabel(){ try{ for(const r of mp.remotes.values()) if(!r.cpu && r.rawName) setLabel(r, parName(r.rawName, r.uid||r.rawName)); }catch(e){} }
+ui('papPriv').onclick=()=>onlineAsk(()=>{ PAR.priv=!PAR.priv; parSave(); parSync(); parPrivSync(); flashNote('Solo salas privadas: '+(PAR.priv?'prendido':'apagado')); }, null, 'Para '+(PAR.priv?'permitir':'esconder')+' las salas públicas, resuelve esta operación:');
+ui('papNames').onclick=()=>onlineAsk(()=>{ PAR.hideN=!PAR.hideN; parSave(); parSync(); parRelabel(); flashNote('Ocultar apodos de otros: '+(PAR.hideN?'prendido':'apagado')); }, null, 'Para cambiar cómo se ven los apodos de otros, resuelve esta operación:');
+parPrivSync();
+// ---- v250: LOGROS (botón en el menú principal) y MISIONES DEL DÍA (cartel dentro del castillo) ----
+// Contadores: algunos vienen de lo que ya tenías guardado (peces, mascotas, ropa, planetas…: cuentan desde el inicio)
+// y otros se cuentan desde esta versión (minerales, cosechas, rebotes, minijuegos, metros…). Todo vive en este aparato
+// y viaja con el código de «Mi progreso» (clave Logros).
+const LG_KEY='mundoPelucheLogros', LG_PAY=[50,150,400], LG_TIER=['bronce','plata','oro'], LG_MED=['🥉','🥈','🥇'];
+var LG=null;   // (var: así lgAdd no truena si algo cuenta antes de que esto cargue)
+LG=(()=>{ let o=null; try{ o=JSON.parse(localStorage.getItem(LG_KEY)||'null'); }catch(e){} const fresh=!o; o=o&&typeof o==='object'?o:{};
+  const obj=x=>x&&typeof x==='object'&&!Array.isArray(x)?x:{};
+  return {s:obj(o.s), m:obj(o.m), c:obj(o.c), nt:obj(o.nt), fi:Array.isArray(o.fi)?o.fi.slice(0,20):[], dd:obj(o.dd), fresh}; })();
+let lgDirty=false;
+const lgSave=()=>{ lgDirty=false; try{ const {fresh,...o}=LG; localStorage.setItem(LG_KEY, JSON.stringify(o)); }catch(e){} };
+let lgNoCoins=false;   // los premios de logros y misiones no cuentan como «monedas ganadas»
+function lgAdd(k,n){ if(!LG) return; n=n==null?1:+n; if(!(n>0)) return; if(k==='monedas' && lgNoCoins) return;
+  LG.s[k]=(LG.s[k]||0)+n; qDay(); LG.dd.k[k]=(LG.dd.k[k]||0)+n; lgDirty=true; }
+function lgMark(k,id){ if(!LG) return; if(k==='fi' && !LG.fi.includes(id)){ LG.fi.push(id); lgDirty=true; } }
+// lo que ya estaba guardado (se queda el máximo: si borras una creación no pierdes el logro)
+const lgJ=(k,d)=>{ try{ const v=JSON.parse(localStorage.getItem('mundoPeluche'+k)||'null'); return v==null?d:v; }catch(e){ return d; } };
+const LG_DER={
+  peces:()=>Object.keys(FDEX).reduce((t,k)=>t+(FISH[+k]?(+FDEX[k]||0):0),0),
+  pecesSp:()=>fishDexCount(),
+  pico:()=>mine.pick|0,
+  islasG:()=>{ const o=lgJ('Islas',{})||{}; return ['inv','selva','dulce'].filter(k=>o[k]).length; },
+  planetas:()=>Object.keys(lgJ('Planetas',{})||{}).length,
+  especies:()=>(lgJ('Especies',[])||[]).length,
+  mascotas:()=>pets.own.length,
+  ropa:()=>wardrobe.own.length,
+  creaciones:()=>{ const n=(k,f)=>{ const x=lgJ(k,null); return x&&Array.isArray(x[f])?x[f].length:0; }; return n('Mapas','maps')+n('Criaturas','list')+n('Objetos','list'); },
+  piezas:()=>{ const x=lgJ('Libre',null)||{}; return (Array.isArray(x.s)?x.s.length:0)+(Array.isArray(x.d)?x.d.length:0); },
+};
+function lgDerive(){ for(const k in LG_DER){ let v=0; try{ v=+LG_DER[k]()||0; }catch(e){} if(v>(LG.m[k]||0)){ LG.m[k]=v; lgDirty=true; } } }
+const lgVal=k=>k==='fi'?LG.fi.length : (k in LG_DER ? (LG.m[k]||0) : (LG.s[k]||0));
+// [id, nombre, contador, [bronce, plata, oro], texto ({n} = la meta)]
+const LOGROS=[
+  ['pesca','Pescador','peces',[10,50,200],'Pesca {n} peces'],
+  ['acuario','Acuario','pecesSp',[10,40,100],'Atrapa {n} tipos de peces distintos'],
+  ['minero','Minero','mineral',[10,60,250],'Saca {n} minerales en la mina'],
+  ['pico','Pico de oro','pico',[1,2,4],'Mejora tu pico {n} veces'],
+  ['huerto','Hortelano','cosecha',[5,30,100],'Cosecha {n} plantas en el huerto de Fresita'],
+  ['salto','Saltarín','rebote',[20,150,600],'Rebota {n} veces en el trampolín'],
+  ['feria','Rey de la feria','feria',[5,25,100],'Juega {n} minijuegos de la feria'],
+  ['campeon','Campeón','gana',[1,5,20],'Gana {n} minijuegos grandes'],
+  ['flotantes','Islas en el cielo','fi',[2,4,6],'Llega a {n} islas flotantes distintas'],
+  ['viajero','Viajero','islasG',[1,2,3],'Visita {n} de las islas grandes (Invierno, Selva y Dulce)'],
+  ['cohete','Astronauta','cohete',[1,5,20],'Viaja al espacio {n} veces en el cohete'],
+  ['planetas','Explorador del espacio','planetas',[1,5,15],'Visita {n} planetas'],
+  ['especies','Naturalista','especies',[5,25,100],'Descubre {n} especies en los planetas'],
+  ['mascotas','Amigo de las mascotas','mascotas',[1,5,12],'Ten {n} mascotas'],
+  ['moda','A la moda','ropa',[5,30,100],'Consigue {n} prendas'],
+  ['inventor','Inventor','creaciones',[1,5,15],'Crea {n} criaturas, objetos o mapas'],
+  ['constructor','Constructor','piezas',[10,100,500],'Pon {n} piezas en tu planicie del Modo libre'],
+  ['ahorrador','Ahorrador','monedas',[500,5000,25000],'Gana {n} monedas jugando'],
+  ['caminante','Caminante','pie',[1000,10000,50000],'Camina {n}'],
+  ['conductor','Conductor','maneja',[2000,20000,100000],'Recorre {n} en coches, aviones y vehículos'],
+  ['globo','Globero','globo',[1,10,30],'Sube {n} veces a un globo'],
+  ['cuco','Amigo de Cuco','cuco',[1,5,20],'Pasea {n} veces sobre Cuco, la tortuga gigante'],
+  ['arquero','Arquero','arco',[3,20,80],'Llega {n} veces a una isla flotante con el arco'],
+  ['constante','Constante','dias',[3,15,50],'Juega {n} días distintos'],
+  ['misiones','Cumplidor','mision',[1,10,50],'Reclama {n} misiones del día'],
+];
+const lgFmtN=(c,n)=>c==='pie'||c==='maneja' ? (n>=1000?(n/1000)+' km':n+' m') : String(n);
+const lgFmtV=(c,v)=>c==='pie'||c==='maneja' ? (v>=1000?(Math.floor(v/100)/10)+' km':Math.floor(v)+' m') : String(Math.floor(v));
+const lgTierOf=L=>{ const v=lgVal(L[2]); let t=0; while(t<3 && v>=L[3][t]) t++; return t; };   // cuántas medallas alcanzaste (0-3)
+const lgClaimable=()=>LOGROS.reduce((n,L)=>n+Math.max(0,lgTierOf(L)-(LG.c[L[0]]|0)),0);
+function lgBadge(){ const d=ui('lgDot'); if(!d) return; const n=lgClaimable(); d.hidden=!n; d.textContent=n>9?'9+':String(n); }
+function lgClaim(id){ const L=LOGROS.find(x=>x[0]===id); if(!L) return; const got=lgTierOf(L), have=LG.c[id]|0; if(got<=have) return;
+  let pay=0; for(let t=have;t<got;t++) pay+=LG_PAY[t]; LG.c[id]=got; lgSave(); lgNoCoins=true; try{ addCoins(pay); }finally{ lgNoCoins=false; }
+  try{ coinSound(3); }catch(e){} lgRender(); lgBadge(); }
+// la ventana de logros (solo desde el menú principal)
+function lgRender(){ const box=ui('lgList'); if(!box) return; box.textContent='';
+  let med=0; for(const L of LOGROS) med+=LG.c[L[0]]|0; ui('lgSum').textContent='Medallas: '+med+' de '+LOGROS.length*3+' · Las de bronce dan '+LG_PAY[0]+', las de plata '+LG_PAY[1]+' y las de oro '+LG_PAY[2]+' monedas';
+  const rows=LOGROS.map(L=>({L, got:lgTierOf(L), have:LG.c[L[0]]|0})).sort((a,b)=>((b.got>b.have)-(a.got>a.have)) || ((a.have===3)-(b.have===3)));
+  for(const {L,got,have} of rows){ const [id,name,c,T,txt]=L, v=lgVal(c), next=Math.min(got,2), goal=T[next], full=have===3;
+    const row=document.createElement('div'); row.className='lg-row'+(full?' full':'');
+    const md=document.createElement('div'); md.className='lg-med t'+have; md.textContent=have?LG_MED[have-1]:'·'; row.appendChild(md);
+    const mid=document.createElement('div'); mid.className='lg-mid';
+    const h=document.createElement('b'); h.textContent=name+(have?' · '+LG_TIER[have-1]:''); const p=document.createElement('small'); p.textContent=full?'¡Completo! Tienes las 3 medallas':txt.replace('{n}',lgFmtN(c,goal));
+    const bar=document.createElement('div'); bar.className='lg-bar'; const fill=document.createElement('i'); fill.style.width=(full?100:Math.min(100,v/goal*100))+'%'; bar.appendChild(fill);
+    const num=document.createElement('small'); num.className='lg-num'; num.textContent=full?lgFmtV(c,v):lgFmtV(c,Math.min(v,goal))+' / '+lgFmtN(c,goal);
+    mid.append(h,p,bar,num); row.appendChild(mid);
+    if(got>have){ let pay=0; for(let t=have;t<got;t++) pay+=LG_PAY[t]; const b=document.createElement('button'); b.className='btn primary lg-claim'; b.dataset.id=id; b.textContent='Reclamar +'+pay; b.onclick=()=>lgClaim(id); row.appendChild(b); }
+    box.appendChild(row); } }
+function lgOpen(){ lgFirst(); lgDerive(); lgSave(); ui('lgOv').hidden=false; lgRender(); ui('lgList').scrollTop=0; }
+// avisito al alcanzar una medalla mientras juegas (sin interrumpir)
+function lgNotify(){ for(const L of LOGROS){ const t=lgTierOf(L), n=LG.nt[L[0]]|0; if(t>n){ LG.nt[L[0]]=t; lgDirty=true; flashNote('🏆 ¡Logro listo: '+L[1]+' ('+LG_TIER[t-1]+')! Reclámalo en Logros, en el menú'); } } }
+
+// ---- misiones del día: las mismas 3 para todos (salen de la fecha), cada quien con su progreso ----
+const QPOOL=[
+  ['pez',[3,5],'Pesca {n} peces',[50,80]],
+  ['mineral',[4,8],'Saca {n} minerales en la mina',[50,80]],
+  ['cosecha',[2,4],'Cosecha {n} plantas en el huerto',[50,80]],
+  ['feria',[2,4],'Juega {n} minijuegos de la feria',[50,80]],
+  ['rebote',[15,30],'Rebota {n} veces en el trampolín',[40,60]],
+  ['pie',[500,1000],'Camina {n}',[40,60]],
+  ['maneja',[1000,2000],'Recorre {n} en un vehículo',[50,80]],
+  ['globo',[1,2],'Sube {n} veces a un globo',[50,80]],
+  ['monedas',[150,300],'Gana {n} monedas',[50,90]],
+  ['arco',[1,3],'Llega {n} veces a una isla flotante con el arco',[50,80]],
+  ['cuco',[1,1],'Pasea sobre Cuco, la tortuga gigante',[60,60]],
+  ['cohete',[1,1],'Viaja al espacio en el cohete',[70,70]],
+];
+function qToday(day){ let h=2166136261; for(const ch of 'mp'+day){ h^=ch.charCodeAt(0); h=Math.imul(h,16777619)>>>0; }
+  const rnd=()=>{ h=(Math.imul(h^(h>>>15),2246822519)+374761393)>>>0; return h/4294967296; };
+  const pool=QPOOL.slice(), out=[]; while(out.length<3){ const i=Math.floor(rnd()*pool.length), [k,n,t,r]=pool.splice(i,1)[0], hard=rnd()<.5;
+    out.push({k, n:hard?n[1]:n[0], t:t.replace('{n}',lgFmtN(k,hard?n[1]:n[0])), r:hard?r[1]:r[0]}); } return out; }
+function qDay(){ const d=ttDay(); if(LG.dd.day!==d){ LG.dd={day:d, k:{}, cl:[0,0,0], nt:[0,0,0]}; LG.s.dias=(LG.s.dias||0)+1; lgDirty=true; } if(!LG.dd.k) LG.dd.k={}; if(!LG.dd.cl) LG.dd.cl=[0,0,0]; if(!LG.dd.nt) LG.dd.nt=[0,0,0]; return d; }
+const qList=()=>qToday(qDay());
+const qProg=q=>Math.min(q.n, LG.dd.k[q.k]||0);
+function qClaim(i){ const Q=qList()[i]; if(!Q || LG.dd.cl[i] || qProg(Q)<Q.n) return; LG.dd.cl[i]=1; lgAdd('mision'); lgSave(); lgNoCoins=true; try{ addCoins(Q.r); }finally{ lgNoCoins=false; } try{ coinSound(3); }catch(e){} qOpen(); }
+function qOpen(){ const Q=qList(); const ov=onlineCard('<h2>⭐ Misiones del día</h2><p class="online-sm">Son las mismas para todos hoy. Cambian a medianoche.</p><div class="q-list">'
+    +Q.map((q,i)=>{ const p=qProg(q), done=p>=q.n, cl=LG.dd.cl[i];
+      return '<div class="q-row'+(cl?' full':'')+'"><div class="lg-mid"><b>'+q.t+'</b><div class="lg-bar"><i style="width:'+(p/q.n*100)+'%"></i></div><small class="lg-num">'+lgFmtV(q.k,p)+' / '+lgFmtN(q.k,q.n)+' · premio '+q.r+' monedas</small></div>'
+        +(cl?'<span class="q-ok">✅ Reclamada</span>':done?'<button class="btn primary q-claim" data-i="'+i+'">Reclamar +'+q.r+'</button>':'')+'</div>'; }).join('')
+    +'</div><div class="btns"><button class="btn q-close">Listo</button></div>');
+  ov.querySelectorAll('.q-claim').forEach(b=>b.onclick=()=>qClaim(+b.dataset.i)); ov.querySelector('.q-close').onclick=()=>onlineClose(); }
+function qNotify(){ const Q=qList(); Q.forEach((q,i)=>{ if(!LG.dd.nt[i] && qProg(q)>=q.n){ LG.dd.nt[i]=1; lgDirty=true; flashNote('⭐ ¡Misión cumplida: '+q.t+'! Reclámala en el cartel del castillo'); } }); }
+// el cartel: adentro de la muralla del castillo, frente al centro
+const QB={a:-Math.PI/4, g:null, tex:null, cv:null, day:'', x:0, z:0, y:0};
+function qBoardDraw(){ const c=QB.cv, g=c.getContext('2d'), Q=qList(); QB.day=LG.dd.day;
+  g.fillStyle='#fff3d6'; g.fillRect(0,0,512,384); g.strokeStyle='#c79a6a'; g.lineWidth=16; g.strokeRect(8,8,496,368); g.setLineDash([12,9]); g.lineWidth=3; g.strokeStyle='#d9b98d'; g.strokeRect(26,26,460,332); g.setLineDash([]);
+  g.textAlign='center'; g.textBaseline='middle'; g.fillStyle='#3a2a1a'; g.font='800 44px Sniglet, Nunito, sans-serif'; g.fillText('⭐ Misiones del día',256,70);
+  g.textAlign='left'; Q.forEach((q,i)=>{ let fs=27; do{ g.font='800 '+fs+'px Nunito, sans-serif'; fs-=1; }while(g.measureText(q.t).width>420 && fs>16); g.fillStyle='#5b4630'; g.fillText((i+1)+'. '+q.t,46,140+i*62); });
+  g.textAlign='center'; g.font='700 24px Nunito, sans-serif'; g.fillStyle='#8a6a3e'; g.fillText('Acércate para ver tu progreso',256,334);
+  if(QB.tex) QB.tex.needsUpdate=true; }
+function qBoardBuild(){ if(QB.g) return; const r=CAKE_ST.r0-1.1, a=QB.a; QB.x=Math.cos(a)*r; QB.z=Math.sin(a)*r; let y=0; try{ y=groundAt(QB.x,QB.z,5); }catch(e){} if(!Number.isFinite(y)) y=0; QB.y=y;
+  const G=new THREE.Group(); G.position.set(QB.x,y,QB.z); G.rotation.y=Math.atan2(-Math.cos(a),-Math.sin(a));
+  const wood=feltM('#8a5a34'); for(const sx of [-1.45,1.45]){ const p=new THREE.Mesh(new THREE.CylinderGeometry(.11,.13,2.9,8),wood); p.position.set(sx,1.45,-.06); p.castShadow=true; G.add(p); }
+  const back=new THREE.Mesh(new THREE.BoxGeometry(3.2,2.4,.12),wood); back.position.set(0,1.75,-.08); back.castShadow=true; G.add(back);
+  QB.cv=document.createElement('canvas'); QB.cv.width=512; QB.cv.height=384; QB.tex=new THREE.CanvasTexture(QB.cv); QB.tex.encoding=THREE.sRGBEncoding;
+  const face=new THREE.Mesh(new THREE.PlaneGeometry(3,2.25),new THREE.MeshStandardMaterial({map:QB.tex, roughness:1})); face.position.set(0,1.75,0); G.add(face);
+  G.scale.setScalar(1.3); try{ mergeStatic(G); }catch(e){}   // postes y tabla: una sola pieza
+  scene.add(G); QB.g=G; qBoardDraw(); try{ document.fonts.ready.then(qBoardDraw); }catch(e){} }
+function questActions(){ if(!QB.g || player.car || player.ac || player.pg || player.mg || player.balloon || player.rk || SP.on) return null;
+  const fx=QB.x-Math.cos(QB.a)*1.4, fz=QB.z-Math.sin(QB.a)*1.4; if(Math.hypot(player.pos.x-fx,player.pos.z-fz)>2.6 || Math.abs(player.pos.y-QB.y)>1.6) return null;
+  const Q=qList(), n=Q.filter((q,i)=>!LG.dd.cl[i] && qProg(q)>=q.n).length;
+  return [{label:n?'⭐ Reclamar misiones ('+n+')':'⭐ Misiones del día', run:qOpen}, null]; }
+// cada segundo: metros a pie y en vehículo, lo guardado, avisos y el cartel
+let lgLP=null, lgT=0, lgInit=false;
+function lgFirst(){ if(lgInit) return; lgInit=true; lgDerive(); if(LG.fresh) for(const L of LOGROS) LG.nt[L[0]]=lgTierOf(L); LG.fresh=false; lgSave(); lgBadge(); }   // (lo de antes cuenta, pero sin llenarte de avisos)
+function lgTick(){ if(!LG) return; lgFirst(); if(document.hidden) return; qDay();
+  if(!QB.g){ try{ qBoardBuild(); }catch(e){} } else if(QB.day!==LG.dd.day) qBoardDraw();
+  const P=player.pos; if(state==='play' && !SP.on && !player.rk && !player.balloon && !player.mg){ if(lgLP){ const d=Math.hypot(P.x-lgLP.x,P.z-lgLP.z);
+      const veh=!!(player.car || player.ac || (player.pg && /^(veh|vehp|dcar)$/.test(player.pg.k)));
+      if(veh){ if(d>.5 && d<150) lgAdd('maneja',d); } else if(!player.pg && d>.3 && d<15) lgAdd('pie',d); }
+    lgLP={x:P.x,z:P.z}; } else lgLP=null;
+  if(++lgT%5===0){ lgDerive(); lgNotify(); qNotify(); lgBadge(); }
+  if(lgDirty && lgT%10===0) lgSave(); }
+setInterval(lgTick,1000);
+document.addEventListener('visibilitychange',()=>{ if(document.hidden && LG) lgSave(); });
+(()=>{ const st=document.createElement('style'); st.textContent='.lg-card{max-width:min(560px,95vw);max-height:calc(100vh - 20px);display:flex;flex-direction:column;gap:8px;}'
+  +' .lg-list{overflow:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px;} .lg-row,.q-row{display:flex;align-items:center;gap:10px;background:#fbf3df;border-radius:14px;padding:8px 10px;}'
+  +' .lg-row.full,.q-row.full{background:#eef6dc;} .lg-med{flex:0 0 40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;background:#e8dfcc;color:#a8987a;font-weight:800;}'
+  +' .lg-med.t1{background:#f3d9bf;} .lg-med.t2{background:#e6e8ee;} .lg-med.t3{background:#fbe7a6;} .lg-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;} .lg-mid small{font-weight:700;opacity:.8;font-size:12px;}'
+  +' .lg-bar{height:9px;border-radius:6px;background:#e3d6bb;overflow:hidden;} .lg-bar i{display:block;height:100%;background:var(--felt);border-radius:6px;} .lg-claim,.q-claim{padding:6px 10px;font-size:14px;white-space:nowrap;}'
+  +' .q-list{display:flex;flex-direction:column;gap:6px;margin:8px 0;} .q-ok{font-weight:800;color:#3d8a2c;white-space:nowrap;} .lg-dot{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#e5534b;color:#fff;font-size:12px;font-weight:800;margin-left:6px;font-style:normal;vertical-align:middle;}';
+  document.head.appendChild(st);
+  ui('lgBtn').onclick=lgOpen; ui('lgClose').onclick=()=>{ ui('lgOv').hidden=true; };
+  qDay(); })();
 ui('mpBack').onclick=()=>{ mpEl.hidden=true; };
-ui('mpCreate').onclick=()=>joinRoom(newCode(), !isPrivateChoice());
+ui('mpCreate').onclick=()=>joinRoom(newCode(), !isPrivateChoice() && !PAR.priv);
 ui('mpJoinForm').addEventListener('submit',e=>{
   e.preventDefault();
   const code=cleanCode(ui('mpCode').value);
@@ -7331,7 +7514,7 @@ function mgqRender(){ const wait=MGQ.a>=0; ui('mgqList').hidden=wait; ui('mgqWai
   const A=AR_SPOTS[MGQ.a], ps=mgqIn(MGQ.a), me=mgqMyId(), n=Math.min(ps.length,MGQ_MAX), key='W'+MGQ.a+'|'+ps.map(p=>p.peer+(p.presence.n||'')).join(','); if(key===mgqKey) return; mgqKey=key;
   ui('mgqName').textContent=(MGQ_EMO[A.id]||'🎮')+' '+A.name; ui('mgqPic').style.backgroundImage=MGQ_PIC[A.id]?`url(${MGQ_PIC[A.id]})`:''; ui('mgqCount').textContent=n+'/'+MGQ_MAX+' jugadores';
   if(ui('mgqHow').dataset.g!==A.id) mgqHowRender(A.id);
-  const ul=ui('mgqWho'); ul.textContent=''; ps.slice(0,MGQ_MAX).forEach(p=>{ const li=document.createElement('li'); li.textContent=(cleanName(p.presence.n)||'Peluche')+(p.peer===me?' (tú)':''); if(p.peer===me) li.className='me'; ul.appendChild(li); });
+  const ul=ui('mgqWho'); ul.textContent=''; ps.slice(0,MGQ_MAX).forEach(p=>{ const li=document.createElement('li'); li.textContent=(PAR.hideN&&p.peer!==me?'Peluche':(cleanName(p.presence.n)||'Peluche'))+(p.peer===me?' (tú)':''); if(p.peer===me) li.className='me'; ul.appendChild(li); });
   const go=ui('mgqGo'); go.disabled=n<2; go.textContent=n<2?'Esperando a otro jugador…':'¡Todo listo!'; }
 const MGQ_HOWID={laberinto:'lab', carritos:'carros'};   // (los carteles usan otros nombres para estos dos)
 function mgqHowRender(id){ const box=ui('mgqHow'); box.dataset.g=id; box.textContent=''; let cs=null; try{ cs=window.__howtoCanvases && window.__howtoCanvases(MGQ_HOWID[id]||id); }catch(e){} if(!cs) return;
@@ -7478,7 +7661,7 @@ function onPeers({peers}){
     if(!Array.isArray(pos) || pos.length!==3) continue;
     const x=clampN(pos[0],-5000,9100,0), y=clampN(pos[1],-420,100,0), z=clampN(pos[2],-5000,5000,0);   // (v215: hasta la planicie del Modo libre, que está en x=9000)
     const color=Number.isInteger(pr.c)&&pr.c>=0&&pr.c<PLUSH_COLORS.length ? pr.c : 0;
-    const name=cleanName(pr.n)||'Peluche';
+    const rawName=cleanName(pr.n)||'Peluche', name=parName(rawName, typeof pr.id==='string'&&pr.id?pr.id.slice(0,12):p.peer);   // v250: Para papás puede ocultar apodos
     seen.add(p.peer);
     let r=mp.remotes.get(p.peer); if(r) r.goneAt=0;
     // ¿es alguien que ya veíamos y solo se reconectó (llega con otra conexión)? se reusa su peluche en vez de duplicarlo
@@ -7486,7 +7669,7 @@ function onPeers({peers}){
     if(!r){ r=makeRemote(color,name); r.pos.set(x,y,z); mp.remotes.set(p.peer,r); audio.join(); }
     if(r.color!==color){ recolor(r.obj,color); r.color=color; }
     { const ou=parseOutfit(pr.ou), k=JSON.stringify(ou); if(k!==r.ouKey){ r.ouKey=k; applyOutfit(r.obj,ou); } }   // su ropa y accesorios
-    if(r.name!==name) setLabel(r,name);
+    r.rawName=rawName; if(r.name!==name) setLabel(r,name);
     r.target.set(x,y,z);
     r.facing=clampN(pr.f,-4,4,0); r.moving=clampN(pr.m,0,1,0); r.air=pr.a===true; r.swim=pr.s===true;
     const nd=clampN(pr.d,0,DIVE_FLAT,0);
@@ -8817,6 +9000,7 @@ function scanActions(){
   { const ra=rocketActions(); if(ra){ setActions(ra[0],ra[1]); return; } }
   { const la=blActions(); if(la){ setActions(la[0],la[1]); return; } }
   { const mv=mineActions(); if(mv){ setActions(mv[0],mv[1]); return; } }
+  { const qa=questActions(); if(qa){ setActions(qa[0],qa[1]); return; } }   // v250: cartel de misiones del día
   { const rv=reliefActions(); if(rv){ setActions(rv[0],rv[1]); return; } }
   { const ha=houseActions(); if(ha){ setActions(ha[0],ha[1]); return; } }   // v165: placas de los terrenos
   { const aa=arenaActions(); if(aa){ setActions(aa[0],aa[1]); return; } }
@@ -9733,6 +9917,7 @@ function trampLand(g){ if(!trOnMat(player.pos.x,player.pos.z,g)) return false; c
   if(impact<2.6 && !boost) return false;
   const vy=Math.min(15.5, boost ? Math.max(8.5,impact*.92+3.2) : impact*.78);
   if(vy<2.6) return false;
+  lgAdd('rebote');
   player.pos.y=g; player.vy=vy; player.grounded=false; player.squash=Math.min(1,impact/10);
   TR.dipV=(TR.dipV||0)+impact*.9;
   try{ const R=audio.raw(), t0=R.ctx.currentTime; R.tone('sine',150,330+vy*25,t0,.22,.12); }catch(e){}
@@ -9761,7 +9946,7 @@ function pgOccupied(k,i){ if(player.pg && player.pg.k===k && player.pg.i===i) re
 const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled','zip','vine','icsl','dwheel','dcar','veh','vehp','surf','fmv'];   // v182: + carrusel de dulces
 function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars' && k!=='cart' && k!=='veh' && k!=='vehp' && k!=='surf') return;   // v182: cada quien tiene su vehículo
   holding=false; applyHeld(); renderHotbar();
-  player.pg={k,i,t0:performance.now()/1000, from:[player.pos.x,player.pos.y,player.pos.z]};
+  player.pg={k,i,t0:performance.now()/1000, from:[player.pos.x,player.pos.y,player.pos.z]}; if(k==='cuco') lgAdd('cuco');
   player.vel.set(0,0,0); player.vy=0; player.dive=null; player.diveAngle=0;
   if(k==='swing') flashNote(isTouch?'Mueve el joystick para columpiarte':'Mantén W o S para columpiarte');
   if(k==='ride') flashNote(isTouch?'Mueve el joystick para mecerte':'Mantén W o S para mecerte');
@@ -10684,7 +10869,7 @@ function reelFish(){ const F=player.fish; if(!F || F.ph!=='bite') return; F.got+
   if(F.got>=F.N){ F.ph='catch'; F.t=0; F.sp=pickFish(F.cls); const b=PIER.buckets[F.b]; F.from=r.pos.clone(); F.mesh=fishMesh(F.sp,[.45,.7,1.1][F.cls]); scene.add(F.mesh); audio.splash(1); try{ splashBurst(r.pos.x,SEA_Y,r.pos.z,.4); }catch(e){} try{ sendPresence(true); }catch(e){} } }
 function fishCaught(F){ const b=PIER.buckets[F.b], f=FISH[F.sp]; scene.remove(F.mesh);
   if(b && bucketUsed(b)+FISH_SPACE[f.s]<=BUCKET_CAP){ b.items.push(f.id); bucketVisual(b); } else { flashNote('¡No cupo en el balde! '+f.n+' regresó al mar'); stopFishing(); return; }
-  const isNew=!(FDEX[f.id]>0); FDEX[f.id]=(FDEX[f.id]||0)+1; saveFish();
+  const isNew=!(FDEX[f.id]>0); FDEX[f.id]=(FDEX[f.id]||0)+1; saveFish(); lgAdd('pez');
   flashNote((isNew?'¡Nuevo! ':'')+`Atrapaste: ${f.n} (${FISH_SIZE_N[f.s]}${f.r>=2?', '+FISH_RAR_N[f.r]:''})`);
   try{ coinSound(isNew?4:2); }catch(e){}
   player.fish=null; player.busy=false; try{ sendPresence(true); }catch(e){} }
@@ -11401,7 +11586,7 @@ function makeCoin(){ const m=new THREE.Mesh(coinGeo,coinMats); m.rotation.x=Math
 const coinFx=[];
 function addCoins(n, from){
   n=Math.max(0,Math.round(n)); if(!n) return;
-  coins+=n; saveCoins(); renderCoins();
+  coins+=n; saveCoins(); renderCoins(); lgAdd('monedas',n);
   const chip=document.getElementById('coinChip'); if(chip){ chip.classList.remove('bump'); void chip.offsetWidth; chip.classList.add('bump'); }
   const k=Math.min(14,2+n);
   for(let i=0;i<k;i++){ const c=makeCoin(); scene.add(c); const p=from?from.clone():player.pos.clone().add(new THREE.Vector3(0,2.2,0));
@@ -13475,8 +13660,8 @@ function fiHit(p){ for(const T of FI_TARGETS){ const dx=p.x-T.c.x, dy=p.y-T.c.y,
   for(const I of FI){ const dx=p.x-I.x, dz=p.z-I.z; if(Math.abs(dx)>I.R+1 || Math.abs(dz)>I.R+1) continue; const r=fiRadAt(I,p.y); if(r>0 && dx*dx+dz*dz<r*r && p.y<I.top(p.x,p.z)-.2) return {kind:'solid'}; }
   return null; }
 const fiSeen=new Set();
-function fiArrive(T){ player.pos.copy(T.land); player.vel.set(0,0,0); player.vy=4; player.grounded=false; player.facing=Math.atan2(T.I.x-T.land.x, T.I.z-T.land.z); audio.land(.7);
-  if(!fiSeen.has(T.I.id)){ fiSeen.add(T.I.id); flashNote('¡Llegaste a la '+T.I.name+'!'); } }
+function fiArrive(T){ lgAdd('arco'); player.pos.copy(T.land); player.vel.set(0,0,0); player.vy=4; player.grounded=false; player.facing=Math.atan2(T.I.x-T.land.x, T.I.z-T.land.z); audio.land(.7);
+  lgMark('fi',T.I.id); if(!fiSeen.has(T.I.id)){ fiSeen.add(T.I.id); flashNote('¡Llegaste a la '+T.I.name+'!'); } }
 function fiUpdate(dt,t){
   fallU.t.value+=dt; const tm=fallU.t.value;
   const cx=camera.position.x, cz=camera.position.z;
@@ -13487,7 +13672,7 @@ function fiUpdate(dt,t){
     S.t-=dt; if(S.t<=0 && d<60){ S.t=1.1; waterRipple(S.x+(Math.random()-.5)*1.4, S.z+(Math.random()-.5)*1.4, d<45?.13:.06); } }
   if(FI_CHEST.lid){ const want=chestDone()?1:0; FI_CHEST.open+=(want-FI_CHEST.open)*Math.min(1,dt*4); FI_CHEST.lid.rotation.x=-FI_CHEST.open*1.7; FI_CHEST.coins.visible=FI_CHEST.open<.5; }
   // ¿en qué isla estoy? (para el aviso de bienvenida al llegar caminando o en globo)
-  for(const I of FI){ if(fiSeen.has(I.id)) continue; const dx=player.pos.x-I.x, dz=player.pos.z-I.z; if(dx*dx+dz*dz<I.R*I.R && Math.abs(player.pos.y-I.y)<2){ fiSeen.add(I.id); flashNote('¡Llegaste a la '+I.name+'!'); } }
+  for(const I of FI){ if(fiSeen.has(I.id)) continue; const dx=player.pos.x-I.x, dz=player.pos.z-I.z; if(dx*dx+dz*dz<I.R*I.R && Math.abs(player.pos.y-I.y)<2){ fiSeen.add(I.id); lgMark('fi',I.id); flashNote('¡Llegaste a la '+I.name+'!'); } }
 }
 function fiActions(){ if(player.car||player.ac||player.pg||player.mg||player.balloon) return null;
   if(FI_CHEST.o && Math.hypot(player.pos.x-FI_CHEST.x,player.pos.z-FI_CHEST.z)<2.3 && Math.abs(player.pos.y-FI_CHEST.y)<2) return chestDone() ? [{label:'Cofre vacío: vuelve mañana', disabled:true, run:()=>{}}, null] : [{label:'Abrir el cofre', run:openChest}, null];
@@ -13574,7 +13759,7 @@ function blNear(){ let best=null, bd=2.5; for(const b of BL){ if(b.pilot||b.remo
 function blButtons(on){ try{ centerText(ui('tJump'), on?'Subir':'Saltar'); centerText(ui('tDive'), on?'Bajar':'Tirarse'); }catch(e){} }
 let blHint=false;
 function blEnter(b){ if(b.pilot||b.remote||player.busy) return; if(hook.mode) bowRelease(true); holding=false; applyHeld(); renderHotbar();
-  b.pilot='me'; b.vx=b.vz=b.vy=0; player.balloon={i:b.i}; player.busy=true; player.dive=null; player.diveAngle=0; blButtons(true); audio.jump(); setActions(null,null);
+  b.pilot='me'; b.vx=b.vz=b.vy=0; player.balloon={i:b.i}; lgAdd('globo'); player.busy=true; player.dive=null; player.diveAngle=0; blButtons(true); audio.jump(); setActions(null,null);
   if(!blHint){ blHint=true; flashNote(isTouch ? 'Globo: mueve el joystick para avanzar · Subir y Bajar para la altura' : 'Globo: WASD para avanzar · Espacio sube, Q baja'); }
   try{ sendPresence(true); }catch(e){} }
 function blExit(quiet){ const B=player.balloon; if(!B) return; const b=BL[B.i]; b.pilot=null; b.t=now1(); player.balloon=null; player.busy=false; blButtons(false);
@@ -13698,7 +13883,7 @@ function farmPlant(i,id){ if(farm.plots[i] || !(farm.seeds[id]>0)) return; farm.
 function farmWater(i){ const p=farm.plots[i]; if(!p) return; const now=Date.now(); farmGrow(now); p.w=now+WET_MS; p.u=now; saveFarm(); farmVisual(true);
   const V=FARM.plots[i]; for(let k=0;k<10;k++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:dropTex, transparent:true, depthWrite:false})); s.scale.set(.18,.18,1); s.position.set(V.x+(Math.random()-.5)*1.2, V.y+1.6+Math.random()*.6, V.z+(Math.random()-.5)*1.2); scene.add(s); farmFx.push({s,t:-Math.random()*.3}); }
   player.facing=Math.atan2(V.x-player.pos.x,V.z-player.pos.z); try{ audio.splash(.4); }catch(e){} scanActions(); }
-function farmHarvest(i){ const p=farm.plots[i]; if(!p || p.g<1) return; farm.crop[p.c]=(farm.crop[p.c]||0)+1; const n=CROP_BY[p.c].n; farm.plots[i]=null; saveFarm(); farmVisual(true); try{ audio.wave(); }catch(e){} flashNote(`¡Cosechaste ${n}! Véndela con Fresita`); scanActions(); }
+function farmHarvest(i){ const p=farm.plots[i]; if(!p || p.g<1) return; farm.crop[p.c]=(farm.crop[p.c]||0)+1; lgAdd('cosecha'); const n=CROP_BY[p.c].n; farm.plots[i]=null; saveFarm(); farmVisual(true); try{ audio.wave(); }catch(e){} flashNote(`¡Cosechaste ${n}! Véndela con Fresita`); scanActions(); }
 // la tienda de Fresita (usa la misma ventana que Tortu)
 let farmTab='seeds';
 function farmRow(c,txt,btns){ const row=document.createElement('div'); row.className='fish-row'; const ic=document.createElement('span'); ic.className='farm-ic'; ic.textContent=c.ic; row.appendChild(ic);
@@ -14230,7 +14415,7 @@ function mineImpact(T){ if(T.rock){ const B=T.rock; B.hits++; mineSound(true, B.
   const v=T.vein; if(!v.g.visible) return; v.hits++; v.shake=1; const o=ORE_BY[v.ore], need=veinNeed(v), last=v.hits>=need;
   mineSound(!!o.gem, last); mineBits(v.x,v.y+.2,v.z,cvStoneM,4,false); mineBits(v.x,v.y+.2,v.z,oreMat(o,(Math.random()*5)|0),2,false);
   if(last){ const n=o.id==='arcoiris'?1 : o.gem ? 1+(Math.random()<.4?1:0) : 1+(Math.random()<.6?1:0)+(Math.random()<.25?1:0);
-    mine.ores[o.id]=(mine.ores[o.id]||0)+n; mine.veins[v.id]=Date.now()+veinRespawn(v.k); saveMine(); v.g.visible=false; v.hits=0;
+    mine.ores[o.id]=(mine.ores[o.id]||0)+n; mine.veins[v.id]=Date.now()+veinRespawn(v.k); saveMine(); lgAdd('mineral',n); v.g.visible=false; v.hits=0;
     for(let i=0;i<n*2;i++) mineBits(v.x,v.y+.3,v.z,oreMat(o,i),1,true);
     flashNote(`+${n} ${o.n}${n>1&&!o.n.endsWith('s')?'':''} · llevas ${mine.ores[o.id]}`); }
   scanActions(); }
@@ -14416,7 +14601,7 @@ function startMini(def){
   try{ sendPresence(true); }catch(e){}
 }
 function endMini(M, res){   // res: {title, lines:[], coins}
-  if(!M || M.over) return; M.over=true;
+  if(!M || M.over) return; M.over=true; lgAdd('feria');
   const coinsWon=res&&res.coins||0;
   mgEl('mgCtl').hidden=true;
   if(res){ mgEl('mgResTitle').textContent=res.title||'¡Terminaste!'; mgEl('mgResText').innerHTML=(res.lines||[]).map(s=>'<div>'+s+'</div>').join('');
@@ -19271,7 +19456,7 @@ const arFrozen=()=>AR.me.st===2 && AR.me.a>=0 && (AR.G[AR.me.a].ph===1 || AR.G[A
 let bigT=0;
 function bigText(s,ms=900,sub){ const el=ui('arBig'); if(sub){ const sp=document.createElement('span'); sp.className='sub'; sp.textContent=sub; el.replaceChildren(sp,document.createTextNode(s)); } else el.textContent=s; el.classList.toggle('long',!!sub || s.length>12); el.hidden=false; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); clearTimeout(bigT); bigT=setTimeout(()=>el.hidden=true,ms); }
 function arResult(a,G){ const me=AR.me; if(me.awarded===G.gid) return; me.awarded=G.gid;
-  const i=G.rk.indexOf(myUid), place=i<0?G.pl.length:(i<G.tie?0:i), N=G.pl.length;
+  const i=G.rk.indexOf(myUid), place=i<0?G.pl.length:(i<G.tie?0:i), N=G.pl.length; lgAdd('arena'); if(place===0) lgAdd('gana');
   let coins=2*(place===0?14+N*3:[0,10,7][place]||4);   // v124: el doble (jugar con amigos vale la pena)
   if(CPU.on && CPU.a===a) coins=Math.max(3,Math.round(coins*cpuCoinK()));   // v195: contra la CPU
   const names=['¡1er lugar!','2º lugar','3er lugar']; const title=place===0?(G.tie>1?'¡Ganaron juntos!':'¡Ganaste!'):(names[place]||(place+1)+'º lugar');
@@ -23121,7 +23306,7 @@ function rocketCamera(dt){ const rk=player.rk; if(!rk || (rk.ph!=='seat' && rk.p
   camera.position.lerp(want,1-Math.exp(-dt*4)); if(rk.ph==='launch' && rk.t>1.2) camera.position.x+=(Math.random()-.5)*.3; camera.lookAt(_rt); plush.visible=false; return true; }
 
 // ---- entrar y salir del espacio ----
-function enterSpace(mode,o={}){ const was=SP.on; SP.on=true; fade(true,10); spaceScene.add(plush); if(player.mg) stopMini(); if(AR.me.a>=0) arLeave();
+function enterSpace(mode,o={}){ const was=SP.on; SP.on=true; if(!was) lgAdd('cohete'); fade(true,10); spaceScene.add(plush); if(player.mg) stopMini(); if(AR.me.a>=0) arLeave();
   camera.far=90000; camera.updateProjectionMatrix(); player.rk=null; SP.arrived=''; SP.anim=null; holding=false; try{ applyHeld(); renderHotbar(); }catch(e){}
   SP.seat=null; SP.dive=null; player.diveAngle=0; if(mode!=='ride' && !o.crew) SP.crew=null;
   if(mode!=='walk') clearSurface();
@@ -26783,7 +26968,7 @@ function fnPresence(){ if(typeof FNET==='undefined' || !FNET.on || !FREE.on) ret
     if(SU.list.length || SU.balls.length || SU.wl.size || performance.now()-(SU.fqT||0)<7000){ if(SU.list.length || SU.balls.length || SU.wl.size) SU.fqT=performance.now(); const used=JSON.stringify(o).length; if(used<2900){ const q=suNetPack(Math.min(1100,3100-used)); if(q) o.fq=q; } } }   // (al quedar vacío se sigue avisando un rato, para que a los invitados también se les quite)   // v232: las sustancias (unos trozos cada vez)
   else o.fo=FNET.ops.slice(-12);
   return o; }
-function fnetParse(r,pr){ if(typeof FNET==='undefined') return; r.fs=pr.fs===1||pr.fs===2?pr.fs:0; r.fw=Number.isInteger(pr.fw)&&pr.fw>=0&&pr.fw<=24?pr.fw:0;   /* (v229: la burbuja va en fw; fb es la lista de bloques del dueño) */ r.fz=pr.fz===1?1:pr.fz===2?2:0; r.fg=Array.isArray(pr.fg) && pr.fg.length===7 && typeof pr.fg[0]==='string' && /^[a-z0-9]{2,16}$/.test(pr.fg[0]) && pr.fg.slice(1).every(v=>Number.isFinite(v) && Math.abs(v)<1e5) ? pr.fg : null; r.fpid=typeof pr.pi==='string' && /^[a-z0-9]{8}$/.test(pr.pi) ? pr.pi : null; r.fm=typeof pr.fm==='string' && /^[a-z0-9]{2,16}$/.test(pr.fm) ? pr.fm : null; const nm=cleanName(pr.n)||'Peluche';
+function fnetParse(r,pr){ if(typeof FNET==='undefined') return; r.fs=pr.fs===1||pr.fs===2?pr.fs:0; r.fw=Number.isInteger(pr.fw)&&pr.fw>=0&&pr.fw<=24?pr.fw:0;   /* (v229: la burbuja va en fw; fb es la lista de bloques del dueño) */ r.fz=pr.fz===1?1:pr.fz===2?2:0; r.fg=Array.isArray(pr.fg) && pr.fg.length===7 && typeof pr.fg[0]==='string' && /^[a-z0-9]{2,16}$/.test(pr.fg[0]) && pr.fg.slice(1).every(v=>Number.isFinite(v) && Math.abs(v)<1e5) ? pr.fg : null; r.fpid=typeof pr.pi==='string' && /^[a-z0-9]{8}$/.test(pr.pi) ? pr.pi : null; r.fm=typeof pr.fm==='string' && /^[a-z0-9]{2,16}$/.test(pr.fm) ? pr.fm : null; const nm=PAR.hideN?'El dueño':(cleanName(pr.n)||'Peluche');
   if(r.fpid) FNET.names[r.fpid]=nm;
   if(r.fz===2) r.fo=Array.isArray(pr.fo)?pr.fo.slice(-12):null;
   if(r.fz===1 && r.fpid){
@@ -26858,7 +27043,7 @@ async function fnJoin(code){ if(!onlineOn()){ onlineGate(()=>{}); return; } code
   const H=ps.find(p=>p.presence.fz===1); if(ps.length && !H){ flashNote('Esa sala no es de Modo libre: entra desde Multijugador'); return; }
   FNET.joining=true; ui('freeStart').hidden=true; try{ await joinRoom(code); }catch(e){} FNET.joining=false;
   if(!mp.room){ ui('freeStart').hidden=false; fnRoomErr(); return; }
-  fnStartGuest(H?H.presence.pi:'', H?cleanName(H.presence.n):''); }
+  fnStartGuest(H?H.presence.pi:'', H?(PAR.hideN?'El dueño':cleanName(H.presence.n)):''); }
 function fnStartGuest(pid,name){ fnReset(); freeLimits(true); FNET.on=true; FNET.host=false; FNET.code=mp.code; FNET.hostSeen=performance.now(); FNET.hostPid=pid||''; FNET.hostName=name||'';
   FREE.loaded=null; freeEnter('net'); const a=Math.random()*Math.PI*2; player.pos.set(FREE.X+Math.cos(a)*3,FREE.Y+.05,FREE.Z+Math.sin(a)*3); try{ lobbyAnnounce(); }catch(e){} sendPresence(true);
   setTimeout(()=>flashNote('Construyes con '+(FNET.hostName||'tu amigo')+' · solo puedes quitar lo tuyo · al salir te puedes llevar una copia'),700); }
@@ -26881,9 +27066,10 @@ function fnEnded(){ FNET.ended=true; const go=()=>{ try{ _fnToMenu(); }catch(e){
 const _fnToMenu=ui('toMenuBtn').onclick;
 ui('toMenuBtn').onclick=e=>{ if(FNET.on && !FNET.copied && !FNET.ended && FREE.on && (FREE.objs.length || FREE.dyn.length)){ fnAsk('¿Te llevas una copia de lo que construyeron?', ()=>_fnToMenu(e)); return; } _fnToMenu(e); };
 // ---- la pantalla del Modo libre: crear, unirse y las salas abiertas ----
-function fnRooms(){ Promise.resolve(getLobby()).then(L=>{ if(!L || ui('freeStart').hidden) return; let ps=[]; try{ ps=L.peers(); }catch(e){} const g=new Map();
+function fnRooms(){ parPrivSync(); if(PAR.priv){ const ul=ui('freeRooms'); if(ul.dataset.k!=='priv'){ ul.dataset.k='priv'; ul.textContent=''; const li=document.createElement('li'); li.className='room-empty'; li.textContent='Un adulto dejó solo salas privadas: entra con el código de un amigo.'; ul.appendChild(li); } return; }
+  Promise.resolve(getLobby()).then(L=>{ if(!L || ui('freeStart').hidden) return; let ps=[]; try{ ps=L.peers(); }catch(e){} const g=new Map();
     for(const p of ps){ const pr=p.presence||{}, rm=typeof pr.rm==='string'?pr.rm:''; if(!rm || p.sameTab || p.kind==='agent') continue; let e=g.get(rm); if(!e){ e={rm, n:0, host:'', free:false, pub:false}; g.set(rm,e); }
-      e.n++; if(pr.fz===1){ e.free=true; e.host=cleanName(pr.n)||'Peluche'; } if(pr.pub===1) e.pub=true; }
+      e.n++; if(pr.fz===1){ e.free=true; e.host=PAR.hideN?'Peluche':(cleanName(pr.n)||'Peluche'); } if(pr.pub===1) e.pub=true; }
     const list=[...g.values()].filter(e=>e.free && e.pub && /^[A-Z0-9]{6}$/.test(e.rm)).sort((a,b)=>b.n-a.n), ul=ui('freeRooms'), key=JSON.stringify(list); if(ul.dataset.k===key) return; ul.dataset.k=key; ul.textContent='';
     if(!list.length){ const li=document.createElement('li'); li.className='room-empty'; li.textContent='No hay salas de Modo libre abiertas. ¡Crea una!'; ul.appendChild(li); return; }
     list.forEach(e=>{ const li=document.createElement('li'), b=document.createElement('button'); b.type='button'; b.className='room-item'; const who=document.createElement('span'); who.textContent='🏗️ Sala de '+e.host;
@@ -26892,7 +27078,7 @@ function fnRooms(){ Promise.resolve(getLobby()).then(L=>{ if(!L || ui('freeStart
       b.onclick=()=>{ if(full){ flashNote('Esa sala ya está llena'); return; } fnJoin(e.rm); }; li.appendChild(b); ul.appendChild(li); }); }).catch(()=>{}); }
 ui('freeBtn').onclick=()=>{ ui('freeStart').hidden=false; onlineSyncUI(); ui('freeRooms').dataset.k=''; fnRooms(); clearInterval(fnRooms.t); fnRooms.t=setInterval(()=>{ if(ui('freeStart').hidden){ clearInterval(fnRooms.t); return; } fnRooms(); },1500); };
 ui('freeNetOn').onclick=()=>onlineGate(()=>{ ui('freeRooms').dataset.k=''; fnRooms(); });
-ui('freePub').onclick=()=>fnCreate(true); ui('freePriv').onclick=()=>fnCreate(false);
+ui('freePub').onclick=()=>fnCreate(!PAR.priv); ui('freePriv').onclick=()=>fnCreate(false);
 ui('freeJoinF').addEventListener('submit',e=>{ e.preventDefault(); fnJoin(ui('freeCode').value); });
 ui('freeCode').addEventListener('input',e=>{ const v=cleanCode(e.target.value); if(v!==e.target.value) e.target.value=v; });
 ui('freeCopy').onclick=()=>fnCopy();
@@ -27721,7 +27907,7 @@ function tutTick(){ const T=TUT; if(!T.on) return; const E=T.el, S=T.steps&&T.st
   const [dir,ax,ay]=pick;
   E.arrow.hidden=false; E.arrow.className=dir; E.arrow.style.left=Math.max(2,Math.min(innerWidth-42,ax))+'px'; E.arrow.style.top=Math.max(2,Math.min(innerHeight-50,ay))+'px'; }
 
-const SAVE_KEYS=['Monedas','Ropa','Banderas','Especies','Planetas','Jugador','MejorVuelta','Opciones','Peces','Mascotas','Mina','Huerto','Casa','Islas','Baldes','Vehiculo','Tutorial','Surf','Libre','Mapas','MapFav','Criaturas','Objetos','Barra','Id'];   // v214: + tus creaciones (Modo libre, mapas, favoritas, criaturas, objetos y la barra)   // v188: + tutoriales vistos   // v182: + islas y baldes   // v166: + tu casita   // v125: + mascotas, mina y huerto
+const SAVE_KEYS=['Monedas','Ropa','Banderas','Especies','Planetas','Jugador','MejorVuelta','Opciones','Peces','Mascotas','Mina','Huerto','Casa','Islas','Baldes','Vehiculo','Tutorial','Surf','Libre','Mapas','MapFav','Criaturas','Objetos','Barra','Id','Logros'];   // v214: + tus creaciones (Modo libre, mapas, favoritas, criaturas, objetos y la barra)   // v188: + tutoriales vistos   // v182: + islas y baldes   // v166: + tu casita   // v125: + mascotas, mina y huerto
 function saveSnapshot(){ const o={v:1, e:124}; /* e: versión de la economía (v124: precios ×5) */ for(const k of SAVE_KEYS){ try{ const v=localStorage.getItem('mundoPeluche'+k); if(v!=null) o[k]=v; }catch(e){} } return o; }
 const jparse=(s,d)=>{ try{ const v=JSON.parse(s); return v==null?d:v; }catch(e){ return d; } };
 function saveSummary(o){ const own=(jparse(o.Ropa,{}).own||[]).length, pl=Object.keys(jparse(o.Planetas,{})).length, sp=(jparse(o.Especies,[])||[]).length, pe=(jparse(o.Mascotas,{}).own||[]).length;
@@ -27769,6 +27955,9 @@ function mergeSaves(a,b){ const o={v:1, e:124};
   { const la=jparse(a.Libre,null), used=x=>x && ((x.s||[]).length || (x.d||[]).length); const L=used(la)?a.Libre:(used(jparse(b.Libre,null))?b.Libre:(a.Libre||b.Libre)); if(L) o.Libre=L; }
   { const fa=jparse(a.MapFav,[]), fb=jparse(b.MapFav,[]); const F=[...new Set([...(Array.isArray(fb)?fb:[]),...(Array.isArray(fa)?fa:[])])].filter(x=>typeof x==='string').slice(-40); if(F.length) o.MapFav=JSON.stringify(F); }
   if(a.Barra||b.Barra) o.Barra=a.Barra||b.Barra;
+  { const la=jparse(a.Logros,null), lb=jparse(b.Logros,null);   // v250: logros: lo mayor de cada contador y medalla
+    if(la||lb){ const A=la||{}, B=lb||{}, mx=(x,y)=>{ const r={...(y||{})}; for(const k in (x||{})) r[k]=Math.max(+x[k]||0,+r[k]||0); return r; };
+      o.Logros=JSON.stringify({s:mx(A.s,B.s), m:mx(A.m,B.m), c:mx(A.c,B.c), nt:mx(A.nt,B.nt), fi:[...new Set([...(A.fi||[]),...(B.fi||[])])].slice(0,20), dd:A.dd||B.dd||{}}); } }
   if(a.Id||b.Id) o.Id=b.Id||a.Id;   // v215: tu número de jugador (el que llega, para que sigas siendo tú en otro teléfono)
   return o; }
 function applySave(o){ for(const k of SAVE_KEYS){ try{ if(o[k]!=null) localStorage.setItem('mundoPeluche'+k,o[k]); }catch(e){} } }
