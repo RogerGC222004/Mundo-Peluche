@@ -73,11 +73,12 @@ async def m():
     ok(r[5]>100 and r[4]==r[5], '🏰 toda la muralla del castillo tapa la luz (%d de %d pedacitos)'%(r[4],r[5]))
 
     # D) lluvia y nieve en el castillo (aquí se revisa que quede bien; lo rápido que se arma el mapa se ve aparte)
+    #    (el mapa va en cuadritos de medio metro: junto al hueco de la escalera, a menos de medio metro, puede caer una gotita)
     r=await ev("[ROOF.per, ROOF.ttl]")
     ok(r[0]==1800 and r[1]==30, '⏱️ el mapa de techos revisa unos %d cuadritos por segundo y cada uno dura %d s'%(r[0],r[1]))
     await ev("settings.weather=true; weatherOfSlot=()=>'rain'; ROOF.per=60000; 1")
     await ir(-8,7,'first',3.14159,0); await pg.wait_for_timeout(3500)
-    BAJO="(g=>{ let bajo=0, afuera=0; for(const [x,y,z] of g){ if(y<-9000) continue; const d=Math.hypot(x,z); if(d<CAKE_ST.r0-.6 && !cakeHole(x,z) && y<CAKE.H-.1) bajo++; else afuera++; } return [bajo,afuera,g.length]; })(%s)"
+    BAJO="(g=>{ let bajo=0, afuera=0; for(const [x,y,z] of g){ if(y<-9000) continue; const d=Math.hypot(x,z); if(d<CAKE_ST.r0-.6 && ![[0,0],[.5,.5],[.5,-.5],[-.5,.5],[-.5,-.5]].some(([a,c])=>cakeHole(x+a,z+c)) && y<CAKE.H-.1) bajo++; else afuera++; } return [bajo,afuera,g.length]; })(%s)"
     r=await ev(BAJO%GOTAS)
     ok(r[2]>100 and r[0]==0 and r[1]>40, '🌧️ lloviendo, en el primer piso del castillo no cae lluvia (%d gotitas abajo del segundo piso; %d sí caen afuera o arriba, de %d)'%(r[0],r[1],r[2]))
     await ev("weatherOfSlot=()=>'snow'; 1"); await pg.wait_for_timeout(3500)
