@@ -36,11 +36,11 @@ async def m():
     pg,errs,ctx=await abrir(b,'en-US')
     ev=lambda s: asyncio.wait_for(pg.evaluate("s=>__T.ev(s)", s), 600)
     r=await ev("""({lang:I18N.lang, chosen:I18N.chosen, title:document.title, h:document.documentElement.lang, play:ui('playBtn').textContent.trim(), shop:ui('shopBtn').textContent.trim(),
-      opt:ui('optionsBtn').textContent.trim(), tw:[...document.querySelectorAll('#menu .title text')].map(t=>t.textContent).join('|'), aria:document.querySelector('#menu .title').getAttribute('aria-label'),
+      opt:ui('optionsBtn').textContent.trim(), tw:[...document.querySelectorAll('#menu .title text')].map(t=>t.textContent).join('|'), tw3:document.querySelectorAll('.tw3').length, aria:document.querySelector('#menu .title').getAttribute('aria-label'),
       full:document.querySelector('label[for=optFull]').firstChild.nodeValue, copy:document.querySelector('.copy-tag').textContent, ph:ui('mpName').placeholder, tl:ui('stIn').title})""")
     print(r)
     ok(r['lang']=='en' and not r['chosen'] and r['h']=='en', 'A1 teléfono en inglés → el juego arranca en inglés (sin escoger nada)')
-    ok(r['title']=="Plush'N'Play" and r['aria']=="Plush'N'Play" and "Plush'N'" in r['tw'] and 'Play' in r['tw'], "A2 el título es Plush'N'Play (pestaña, logo y lector de pantalla)")
+    ok(r['title']=="Plush'N'Play" and r['aria']=="Plush'N'Play" and r['tw'].startswith("Plush|Plush|Plush|'N'|'N'|'N'|Play"), "A2 el título es Plush'N'Play (pestaña, logo y lector de pantalla)")
     ok(r['play']=='Play' and r['shop']=='Customize' and r['opt']=='Options', 'A3 menú principal en inglés')
     ok(r['full']=='Fullscreen' and 'All rights reserved' in r['copy'], 'A4 opciones y pie del menú en inglés')
     ok(r['ph']=='Plushie' and r['tl']=='Zoom in', 'A5 textos de ayuda (placeholder y title) en inglés')
@@ -75,7 +75,7 @@ async def m():
         pressed:document.querySelector('#optLang [data-v=es]').getAttribute('aria-pressed'), stored:localStorage.getItem('mundoPelucheIdioma'), ph:ui('mpName').placeholder, langRow:document.querySelector('#optLang').closest('.opt').textContent}; })()""")
     print(r)
     ok(r['lang']=='es' and r['stored']=='es' and r['pressed']=='true', 'C1 Opciones → Español cambia el idioma y lo guarda')
-    ok(r['title']=='Mundo Peluche' and 'Mundo|' in r['tw'] and r['play']=='Jugar' and r['full']=='Pantalla completa' and r['ph']=='Peluchito', 'C2 todo regresa a español al momento (menú, opciones, título)')
+    ok(r['title']=='Mundo Peluche' and r['tw']=='Mundo|Mundo|Mundo|Peluche|Peluche|Peluche' and r['play']=='Jugar' and r['full']=='Pantalla completa' and r['ph']=='Peluchito', 'C2 todo regresa a español al momento (menú, opciones, título)')
     ok('Idioma · Language' in r['langRow'] and 'English' in r['langRow'], 'C3 la fila del idioma se lee en los dos idiomas')
     r=await ev("""(async()=>{ const T=()=>new Promise(r=>setTimeout(r,80)); flashNote('Sonido silenciado'); await T(); const a=ui('toast').textContent;
       document.querySelector('#optLang [data-v=en]').click(); await T(); const b=ui('playBtn').textContent.trim(); document.querySelector('#optLang [data-v=es]').click(); await T();
