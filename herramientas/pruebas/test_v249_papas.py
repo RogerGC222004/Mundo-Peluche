@@ -7,17 +7,18 @@
 #  F) a medianoche empieza de cero; si abres el juego con el límite ya cumplido, sale en el menú
 #  G) recordatorio de descanso (y si dejaste el juego 5 minutos, cuenta como descanso)
 #  H) anuncios apagados: ningún botón ▶ (tienda, «¿el doble?»)
-import asyncio, json
+import asyncio, json, re
 from playwright.async_api import async_playwright
 JUEGO='/home/claude/mundo-peluche.html'
 REAL=open('threerepo/build/three.min.js').read()
 SRC=open(JUEGO, encoding='utf-8').read()
+VER=re.search(r"const GAME_VERSION='(\d+)'",SRC).group(1)
 html='<!doctype html><meta charset=utf-8><style>[hidden]{display:none!important}</style>'+SRC.replace("function frame(){","window.__T={ev(s){return eval(s);}}; function frame(){",1)
 OPTS={"quality":"low","qDef":1,"hints":False,"weather":False}
 async def abrir(b, pre):
   ctx=await b.new_context(viewport={"width":780,"height":360}, has_touch=True, user_agent="Mozilla/5.0 (Linux; Android 10) Chrome/120 Mobile")
   pg=await ctx.new_page(); errs=[]; pg.on("pageerror",lambda e:errs.append(str(e)))
-  await pg.add_init_script("localStorage.clear(); localStorage.setItem('mundoPelucheOpciones', JSON.stringify(%s)); localStorage.setItem('mundoPelucheEcon124','1'); localStorage.setItem('mundoPelucheNovedades','249');\n%s"%(json.dumps(OPTS),pre))
+  await pg.add_init_script("localStorage.clear(); localStorage.setItem('mundoPelucheOpciones', JSON.stringify(%s)); localStorage.setItem('mundoPelucheEcon124','1'); localStorage.setItem('mundoPelucheNovedades','%s');\n%s"%(json.dumps(OPTS),VER,pre))
   async def route(r):
     u=r.request.url
     if u.startswith("https://test.local"): await r.fulfill(body=html.encode(), content_type="text/html; charset=utf-8")
