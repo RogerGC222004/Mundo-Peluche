@@ -64,6 +64,17 @@ async def m():
     ok(r['b1'].startswith('Pull! (1/3)') and r['b2'].startswith('Waiting for a bite…') and r['b3'].startswith('Sell 4 fruits (+12 coins)'), 'B3 acciones con signos y números')
     ok(r['dyn']=="Active roomsPepe's room · 3 players" and r['dynT']=='Close', 'B4 lo que se agrega a la página se traduce solo (texto y title)')
     ok(r['txl'].startswith('Tip: Fish at the pier') and r['news'].startswith('The game is now in English'), 'B5 consejos de la carga y novedades en inglés')
+    # ---------- R2) tienda, diálogos, logros, letreros dibujados ----------
+    r=await ev("""(()=>{ const c=document.createElement('canvas').getContext('2d'); let drawn=''; const f=CanvasRenderingContext2D.prototype.fillText;
+      return {shop:txl(SHOP.find(i=>i.name==='Sudadera roja').name), pet:txl('Pollito'), fish:txl('Pez payaso'), house:txl('Puerta de granero roja'), part:txl('Llanta de monstruo'),
+        tortu:txl('¡Hola! Trae tu balde con peces y te los compro. Las cañas están en el muelle.'), lg:txl('Rebota 150 veces en el trampolín'), tpl:txl('¡Qué buena pesca! Te doy 35 monedas por todo.'),
+        comp:txl('¡Le diste me gusta a la casa de Ana!'), sign:(()=>{ const t=document.createElement('canvas').getContext('2d'); t.font='20px sans-serif'; return Math.round(t.measureText('Cueva de Hielo').width)===Math.round(t.measureText('Ice Cave').width); })(),
+        medals:txl('Medallas: 3 de 75 · Las de bronce dan 50, las de plata 150 y las de oro 400 monedas') }; })()""")
+    print(r)
+    ok(r['shop']=='Red hoodie' and r['pet']=='Chick' and r['fish']=='Clownfish' and r['house']=='Red barn door' and r['part']=='Monster tire', 'R1 tienda, mascotas, peces, casita y taller en inglés')
+    ok(r['tortu'].startswith('Hi! Bring your bucket') and r['lg']=='Bounce 150 times on the trampoline' and r['tpl']=="What a great catch! I'll give you 35 coins for everything.", 'R2 diálogos, logros y textos con números')
+    ok(r['comp']=="You liked Ana's house!" and r['medals'].startswith('Medals: 3 of 75'), 'R3 frases con nombres y con « · »')
+    ok(r['sign'], 'R4 los letreros dibujados también se traducen (mide el texto en inglés)')
     # ---------- E) pendientes en pantallas principales ----------
     await ev("(()=>{ openOptions(); return 1; })()")
     rest=await ev(RESTOS+"('#options,#menu')"); print('PENDIENTES (opciones y menú):', rest)
