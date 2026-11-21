@@ -1,0 +1,10 @@
+[/^Medallas: (\d+) de (\d+) · Las de bronce dan (\d+), las de plata (\d+) y las de oro (\d+) monedas$/, 'Medals: $1 of $2 · Bronze ones give $3, silver $4 and gold $5 coins'],
+[/^Hora en la isla: (\d+:\d+) · (.+)$/, m=>'Island time: '+m[1]+' · '+txl(m[2])],
+[/^Vender (\d+) (frutas|dulces) \(\+(\d+) monedas\)$/, m=>'Sell '+m[1]+(m[2]==='frutas'?' fruits':' candies')+' (+'+m[3]+' coins)'],
+[/^¡Le diste me gusta a la casa de (.+)!$/, 'You liked $1\'s house!'],
+[/^(.+) le gustó tu casa! \+5 monedas$/, '$1 liked your house! +5 coins'],
+[/^¡(.+) tocó el timbre de tu casa!$/, '$1 rang your doorbell!'],
+[/^¡Llevas (\d+) de (\d+)! (?:Uno más|Faltan (\d+)) y es tuyo$/, m=>'You have '+m[1]+' of '+m[2]+'! '+(m[3]?m[3]+' more':'One more')+' and it\'s yours'],
+[/^(\d+)º lugar$/, m=>m[1]+(m[1]==='2'?'nd':m[1]==='3'?'rd':'th')+' place'],
+[/^(\d+) a (\d+) jugadores$/, '$1 to $2 players'],
+[/^([\d.,]+) (monedas|prendas|planetas|especies|piezas|peces|minutos|mascotas|criaturas|objetos|mapas|cosas)$/, m=>m[1]+' '+({monedas:'coins',prendas:'clothes',planetas:'planets',especies:'species',piezas:'pieces',peces:'fish',minutos:'minutes',mascotas:'pets',criaturas:'creatures',objetos:'items',mapas:'maps',cosas:'things'})[m[2]]]
