@@ -984,6 +984,11 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
   <div class="card opts" role="dialog" aria-labelledby="optTitle">
     <h2 id="optTitle">Opciones</h2>
 
+    <div class="opt-group" data-noi18n>
+      <div class="opt"><label>🌐 Idioma · Language</label>
+        <div class="seg" id="optLang"><button data-v="es">Español</button><button data-v="en">English</button></div></div>
+    </div>
+
     <div class="opt-group">
       <h3>Pantalla</h3>
       <div class="opt"><label for="optFull">Pantalla completa<small>También con la tecla F</small></label><button class="switch" id="optFull" role="switch" aria-checked="false" aria-label="Pantalla completa"></button></div>
@@ -1481,6 +1486,341 @@ window.LC_BG2=Object.assign(window.LC_BG2||{}, {castillo, espacio, isla});
 window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 </script>
 <script>
+// ---------- v255: idiomas (español / inglés) ----------
+// El juego está escrito en español. En inglés, cada texto que sale en la pantalla se busca en el diccionario de abajo
+// y se cambia en ese momento (también lo que el juego escribe después). Lo que no está en el diccionario se queda en español.
+// La primera vez se escoge solo con el idioma del teléfono (español → español; cualquier otro → inglés); luego manda lo
+// que escojas en Opciones. En español no se revisa nada: cero trabajo extra.
+(function(){
+  const KEY='mundoPelucheIdioma';
+  let lang=null, chosen=false;
+  try{ const v=localStorage.getItem(KEY); if(v==='es'||v==='en'){ lang=v; chosen=true; } }catch(e){}
+  if(!lang){ let l=''; try{ l=String((navigator.languages&&navigator.languages[0])||navigator.language||''); }catch(e){} lang=(!l || /^es\b/i.test(l)) ? 'es' : 'en'; }
+  const EN=Object.create(null), RX=[], LET=/\p{L}/u, MEMO=new Map(), HOOKS=[];
+  const SVGNS='http://www.w3.org/2000/svg', ATTRS=['title','aria-label','placeholder'];
+  const SKIP={SCRIPT:1,STYLE:1,TEXTAREA:1,NOSCRIPT:1,TITLE:1};
+  const rx=c=>{ for(const [re,f] of RX){ const m=re.exec(c); if(m) return typeof f==='function' ? f(m) : c.replace(re,f); } return null; };
+  function core(c){
+    let r=EN[c]; if(r!==undefined) return r;
+    // partes separadas con « · » se traducen cada una («Sala de Ana · 3 jugadores»)
+    if(c.indexOf(' · ')>0){ let any=false; const p=c.split(' · ').map(x=>{ const y=T(x); if(y!==x) any=true; return y; }); if(any) return p.join(' · '); }
+    r=rx(c); if(r!==null) return r;
+    // emojis, números o signos a los lados («🔔 Tocar timbre», «Bombear (3)», «Esperando que pique…»)
+    const m=/^([^\p{L}¡¿]*)([\s\S]*?)([^\p{L}]*)$/u.exec(c);
+    if(m && (m[1]||m[3]) && LET.test(m[2])){ const k=m[2];
+      r=EN[k]; if(r===undefined) r=rx(k);
+      if(r==null && /^¡/.test(k) && /^!/.test(m[3])){ const k2=k.slice(1); r=EN[k2]; if(r===undefined) r=rx(k2); if(r!=null) return m[1]+r+m[3]; }
+      if(r!=null) return m[1]+r+m[3]; }
+    return null;
+  }
+  function T(s){
+    if(lang!=='en' || s==null) return s; s=String(s);
+    let r=EN[s]; if(r!==undefined) return r;
+    if(!LET.test(s)) return s;
+    r=MEMO.get(s); if(r!==undefined) return r;
+    const m=/^(\s*)([\s\S]*?)(\s*)$/.exec(s), c=core(m[2]);
+    r = c==null ? s : m[1]+c+m[3];
+    if(MEMO.size>4000) MEMO.clear(); MEMO.set(s,r); return r;
+  }
+  // ---- recorrer la página ----
+  function skipEl(p){ for(; p && p.nodeType===1; p=p.parentNode){ if(SKIP[p.tagName] || p.namespaceURI===SVGNS || p.hasAttribute('data-noi18n')) return true; } return false; }
+  function trNode(n){ const v=n.nodeValue; if(!v || n.__en===v) return; const r=T(v); if(r!==v){ n.__es=v; n.__en=r; n.nodeValue=r; } }
+  function trAttr(el,a){ const v=el.getAttribute(a); if(!v || el['__en_'+a]===v) return; const r=T(v); if(r!==v){ el['__es_'+a]=v; el['__en_'+a]=r; el.setAttribute(a,r); } }
+  const FILT={acceptNode(n){ if(n.nodeType===1) return (SKIP[n.tagName] || n.namespaceURI===SVGNS || n.hasAttribute('data-noi18n')) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT; return NodeFilter.FILTER_ACCEPT; }};
+  function apply(root){ if(!root) return;
+    if(root.nodeType===3){ if(!skipEl(root.parentNode)) trNode(root); return; }
+    if(root.nodeType!==1 || skipEl(root)) return;
+    const w=document.createTreeWalker(root,NodeFilter.SHOW_ELEMENT|NodeFilter.SHOW_TEXT,FILT); let n=root;
+    do{ if(n.nodeType===3) trNode(n); else for(const a of ATTRS) if(n.hasAttribute(a)) trAttr(n,a); } while((n=w.nextNode()));
+  }
+  function restore(root){ const w=document.createTreeWalker(root,NodeFilter.SHOW_ELEMENT|NodeFilter.SHOW_TEXT); let n=root;
+    do{ if(n.nodeType===3){ if(n.__es!==undefined && n.nodeValue===n.__en) n.nodeValue=n.__es; n.__en=undefined; }
+      else for(const a of ATTRS){ if(n['__es_'+a]!==undefined && n.getAttribute(a)===n['__en_'+a]) n.setAttribute(a,n['__es_'+a]); n['__en_'+a]=undefined; } } while((n=w.nextNode())); }
+  const OB=new MutationObserver(R=>{ if(lang!=='en') return;
+    for(const r of R){ if(r.type==='characterData'){ const n=r.target; if(n.isConnected && !skipEl(n.parentNode)) trNode(n); }
+      else if(r.type==='attributes'){ if(!skipEl(r.target)) trAttr(r.target,r.attributeName); }
+      else for(const n of r.addedNodes) if(n.isConnected) apply(n); } });
+  const watch=()=>OB.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:ATTRS});
+  // el título del juego (en inglés: Plush'N'Play)
+  function title(){ const en=lang==='en'; document.title=en?"Plush'N'Play":'Mundo Peluche';
+    document.querySelectorAll('.title').forEach(h=>{ if(h.hasAttribute('aria-label')) h.setAttribute('aria-label',en?"Plush'N'Play":'Mundo Peluche');
+      h.querySelectorAll('.tw1 text').forEach(t=>{ t.textContent=en?"Plush'N'":'Mundo'; t.setAttribute('x',en?'-8':'0'); });
+      h.querySelectorAll('.tw2 text').forEach(t=>{ t.textContent=en?'Play':'Peluche'; t.setAttribute('x',en?'150':'52'); }); }); }
+  function set(l){ if(l!=='es' && l!=='en') return; chosen=true; try{ localStorage.setItem(KEY,l); }catch(e){} if(l===lang) return;
+    lang=l; MEMO.clear(); document.documentElement.lang=l;
+    if(l==='en'){ apply(document.body); watch(); } else { OB.disconnect(); restore(document.body); }
+    title(); for(const f of HOOKS) try{ f(l); }catch(e){ console.error(e); } }
+  window.txl=T;
+  window.I18N={ get lang(){ return lang; }, get chosen(){ return chosen; }, t:T, set, apply, title,
+    add(o){ for(const k in o) EN[k]=o[k]; MEMO.clear(); },
+    rx(list){ for(const x of list) RX.push(x); MEMO.clear(); },
+    onChange(f){ HOOKS.push(f); },
+    start(){ document.documentElement.lang=lang; title(); if(lang==='en'){ apply(document.body); watch(); } } };
+})();
+</script>
+<script>
+// ---------- v255: diccionario español → inglés (ronda 1: menús, botones, acciones, opciones y privacidad) ----------
+I18N.add({
+// --- nombre y menú principal ---
+"Mundo Peluche":"Plush'N'Play","¡Instala el juego!":"Install the game!","Todos los derechos reservados":"All rights reserved",
+"Jugar":"Play","Personalizar":"Customize","Mi progreso":"My progress","Logros":"Achievements","Opciones":"Options","Controles":"Controls",
+"Un jugador":"Single player","Multijugador":"Multiplayer","Minijuegos":"Minigames","Modo libre":"Free mode","Crear mapa":"Create map",
+"← Volver":"← Back","Volver":"Back","Volver al menú":"Back to menu","Volver al menú principal":"Back to main menu","← Menú":"← Menu","Menú principal":"Main menu",
+// --- Personalizar (tienda) ---
+"Arrastra para girar · pellizca o usa la rueda para acercar":"Drag to rotate · pinch or use the wheel to zoom",
+"Alejar":"Zoom out","Acercar":"Zoom in","De frente":"Front view","Ver de frente":"Front view","Ver de noche (los neones brillan)":"Night view (neons glow)",
+"Tus monedas":"Your coins","Toca algo para probártelo. Lo que compres lo verán todos en la sala.":"Tap something to try it on. Everyone in the room will see what you buy.",
+"Buscar color o nombre…":"Search color or name…","Buscar en la tienda":"Search the shop","Nuevo":"New","Lo mío":"Mine","Me alcanza":"Affordable",
+"Comprar":"Buy","Nombre de tu mascota":"Your pet's name","Guardar":"Save","Hay cosas nuevas":"There are new things",
+"Cuerpo":"Body","Tono de piel":"Skin tone","Ojos":"Eyes","Peinado":"Hairstyle","Color de cabello":"Hair color","Cejas":"Eyebrows","Boca":"Mouth","Mejillas":"Cheeks","Orejitas":"Ears",
+"Arriba":"Tops","Abajo":"Bottoms","Zapatos":"Shoes","Gorros":"Hats","Accesorios":"Accessories","Mascotas":"Pets","Sudaderas":"Hoodies","Camisas":"Shirts","Suéteres":"Sweaters",
+"Gorras":"Caps","Guantes":"Gloves","Calcetines":"Socks","Gafas":"Glasses","Colores especiales":"Special colors","Texturas":"Textures",
+"Todos":"All","Cabeza":"Head","Cara":"Face","Cuello":"Neck","Espalda":"Back","Mano":"Hand",
+"Puesto ✓":"Wearing ✓","Escogida ✓":"Chosen ✓","En tu ruedita ✓":"In your wheel ✓","Muy pronto":"Coming soon","Tuyo · a la ruedita":"Yours · add to wheel","Tuya · escogerla":"Yours · choose it",
+"Gratis · ponértelo":"Free · wear it","Tuyo · ponértelo":"Yours · wear it",
+// --- diálogos varios ---
+"Diagnóstico de conexión":"Connection diagnostics","Copiar":"Copy","Cerrar":"Close","¿Borrar todo?":"Delete everything?","Sí, borrar":"Yes, delete","Cancelar":"Cancel",
+"Haz clic en el ícono para instalar":"Click the icon to install","Descargar e instalar Mundo Peluche":"Download and install Plush'N'Play",
+"Para actualizar, solo instálalo encima: no pierdes tu progreso.":"To update, just install it on top: you won't lose your progress.",
+"La primera vez, Android puede pedirte permiso para instalar apps que no vienen de la tienda.":"The first time, Android may ask permission to install apps that don't come from the store.",
+"¿Tenías la app desde antes de la versión 148? Esta vez hay que":"Did you have the app from before version 148? This time you need to",
+"desinstalarla primero":"uninstall it first",
+", porque ahora la app viene con una firma nueva y más segura. Antes, copia tu código en «Mi progreso» para no perder nada.":", because the app now has a new, more secure signature. Before that, copy your code in “My progress” so you don't lose anything.",
+// --- controles ---
+"Palanca":"Stick","Caminar (abajo a la izquierda)":"Walk (bottom left)","Deslizar":"Swipe","Mirar alrededor: desliza el dedo en la mitad derecha":"Look around: swipe on the right half",
+"Saltar":"Jump","Saltar · en el mar, subir":"Jump · in the sea, go up","Tirarse":"Dive","Tirarse al suelo hacia adelante · en el mar, bajar":"Dive forward to the ground · in the sea, go down",
+"Gestos":"Emotes","Abre la ruedita: tus gestos y tus globos de pintura (los escoges en Personalizar)":"Opens the wheel: your emotes and paint balloons (choose them in Customize)",
+"Saludar":"Wave","Atajo: hace el gesto que escojas en Personalizar → Gestos (con el Chibi, al principio: sentarse)":"Shortcut: does the emote you choose in Customize → Emotes (with the Chibi, at first: sit)",
+"Botones de acción":"Action buttons","Aparecen al acercarte a algo: abrir puertas, subir al coche, jugar, hablar…":"They appear when you get close to something: open doors, get in the car, play, talk…",
+"Acelerar":"Gas","Frenar":"Brake","En el coche: avanzar y frenar (o reversa); la palanca gira ·":"In the car: go and brake (or reverse); the stick steers ·","Luces":"Lights",
+"En el avión y el helicóptero: más potencia o subir, y menos potencia o bajar; la palanca dirige":"In the plane and helicopter: more power or go up, and less power or go down; the stick steers",
+"Barra de objetos":"Item bar","Toca un espacio para usar ese objeto (el primero es el mapa) · la mochila abre el inventario":"Tap a slot to use that item (the first one is the map) · the backpack opens the inventory",
+"3ª persona":"3rd person","1ª persona":"1st person","Cambiar entre primera y tercera persona":"Switch between first and third person","Pausa":"Pause","Pausar el juego":"Pause the game",
+"Puedes mover y cambiar el tamaño de los botones en Opciones → Botones en pantalla.":"You can move and resize the buttons in Options → On-screen buttons.",
+"Caminar (también flechas)":"Walk (also arrow keys)","Shift":"Shift","Correr":"Run","Espacio":"Space","Ratón":"Mouse","Mirar alrededor (clic para fijar el cursor, o arrastra)":"Look around (click to lock the cursor, or drag)",
+"Abre la ruedita de gestos y pinturas (luego 1-5 para escoger)":"Opens the emote and paint wheel (then 1-5 to choose)",
+"Acciones: abrir o cerrar puertas, subir y bajar del coche":"Actions: open or close doors, get in and out of the car","En el coche: acelerar y frenar (o reversa)":"In the car: accelerate and brake (or reverse)",
+"En el coche: girar ·":"In the car: steer ·","claxon ·":"horn ·","luces":"lights","Usar o guardar el objeto de ese espacio (el 1 es el mapa)":"Use or put away the item in that slot (1 is the map)",
+"Abrir el inventario":"Open the inventory","Silenciar o activar el sonido":"Mute or unmute the sound","Rueda":"Wheel","Acercar o alejar la cámara":"Zoom the camera in or out",
+"En el celular: joystick a la izquierda, desliza a la derecha para mirar.":"On a phone: joystick on the left, swipe on the right to look.",
+// --- logros y progreso ---
+"🏆 Logros":"🏆 Achievements","☁️ En la nube":"☁️ In the cloud","Unir con este dispositivo":"Merge with this device","Guardar ahora":"Save now","🔑 Tu código":"🔑 Your code",
+"Cópialo y guárdalo (en tus notas o mándatelo). En otro celular o computadora, pégalo abajo para recuperar todo.":"Copy it and keep it (in your notes or send it to yourself). On another phone or computer, paste it below to get everything back.",
+"Tu código de progreso":"Your progress code","Copiar código":"Copy code","📥 Cargar un código":"📥 Load a code","Se une con lo que ya tienes: no pierdes nada.":"It merges with what you already have: you lose nothing.",
+"Pega aquí tu código (empieza con MP1-)":"Paste your code here (it starts with MP1-)","Pegar código de progreso":"Paste progress code","Cargar":"Load",
+"¡Completo! Tienes las 3 medallas":"Complete! You have all 3 medals",
+// --- pausa ---
+"Continuar":"Continue","📍 Copiar ubicación":"📍 Copy location","Salir de la sala":"Leave the room","Ver diagnóstico de conexión":"View connection diagnostics",
+// --- crear criatura / mapas / modo libre ---
+"Crear criatura":"Create creature","✓ Listo":"✓ Done","Nombre de tu criatura":"Your creature's name","Mis creaciones":"My creations","Qué vas a hacer":"What are you making",
+"Nombre del mapa nuevo":"New map name","Crear":"Create",
+"Una planicie solo para ti: pon bloques, muebles, plantas, pelotas y lo que quieras enfrente de tu peluche. Lo que hagas se guarda.":"A flat land just for you: place blocks, furniture, plants, balls and anything you like in front of your plushie. What you build is saved.",
+"Empezar solo":"Start alone","👥 Construir con amigos":"👥 Build with friends","hasta 6 · cada sala empieza vacía · cada quien quita solo lo suyo · al salir te llevas una copia":"up to 6 · each room starts empty · everyone removes only their own · when you leave you take a copy",
+"🔒 Jugar en línea está apagado. Un adulto lo puede prender.":"🔒 Online play is off. An adult can turn it on.","Prender jugar en línea":"Turn on online play",
+"Crear sala pública":"Create public room","Crear sala privada":"Create private room","Código de la sala":"Room code","Unirse":"Join",
+// --- filas de minijuegos ---
+"Escoge un minijuego para entrar a su fila. Cuando haya al menos 2, cualquiera puede tocar «¡Todo listo!».":"Pick a minigame to join its queue. When there are at least 2, anyone can tap “All set!”.",
+"¡Todo listo!":"All set!","Salir de la fila":"Leave the queue","Conectando…":"Connecting…","Todavía no hay conexión con las filas":"No connection to the queues yet",
+"Primero sal de tu sala de multijugador":"First leave your multiplayer room","Falta otro jugador":"One more player needed","Esperando a otro jugador…":"Waiting for another player…","nadie en la fila":"nobody in the queue",
+"Plataformas flotantes":"Floating platforms","Papa caliente":"Hot potato","Rebote sobre pelotas":"Ball bounce","Carrera de obstáculos":"Obstacle race","Laberinto":"Maze","Carritos chocones":"Bumper cars",
+"Banda en el aire":"Sky conveyor","Canasta de frutas":"Fruit basket","Pinta el piso":"Paint the floor","Cazadores de perlas":"Pearl hunters","Cojines musicales":"Musical cushions","Escondidas":"Hide and seek","¡A dibujar!":"Let's draw!",
+"Las baldosas se ponen rojas y se caen: brinca a las que no estén rojas. Gana quien aguante arriba.":"Tiles turn red and fall: jump onto the ones that aren't red. Whoever stays up wins.",
+"Si te toca la papa, pásasela a alguien antes de que se acabe el tiempo. El último que quede gana.":"If you get the potato, pass it to someone before time runs out. The last one left wins.",
+"Rebota sobre las pelotas y empuja a los demás al agua sin caerte tú.":"Bounce on the balls and push the others into the water without falling yourself.",
+"Corre por el camino de piezas sobre el agua y llega primero a la meta.":"Run along the path over the water and reach the finish first.",
+"Cada partida es un laberinto nuevo de setos: encuentra la salida antes que nadie.":"Every match is a new hedge maze: find the exit before anyone else.",
+"Llégales por detrás a los demás para picarles sus globos. Gana quien conserve globos.":"Sneak up behind the others to pop their balloons. Whoever keeps balloons wins.",
+"Camina contra la banda, esquiva los huecos y pasa por las aberturas de los muros.":"Walk against the conveyor, dodge the gaps and go through the openings in the walls.",
+"Junta más frutas que nadie en el huerto antes de que se acabe el tiempo.":"Collect more fruit than anyone in the orchard before time runs out.",
+"Pinta la pista de tu color: gana quien pinte más piso.":"Paint the arena your color: whoever paints the most floor wins.",
+"Bucea en el mar y junta más perlas que los demás.":"Dive in the sea and collect more pearls than the others.",
+"Camina por la alfombra con la música y siéntate en un cojín cuando pare.":"Walk around the rug with the music and sit on a cushion when it stops.",
+"Uno cuenta y busca; los demás se esconden entre arbustos, setos y cajas.":"One counts and seeks; the others hide among bushes, hedges and boxes.",
+"Te toca una figura: dibújala lo más parecido posible.":"You get a shape: draw it as close as you can.",
+// --- multijugador ---
+"Crea una sala y comparte su código, o escribe el código que te pasaron. Todos deben tener la misma versión.":"Create a room and share its code, or type the code you were given. Everyone must have the same version.",
+"Tu apodo":"Your nickname","Peluchito":"Plushie","Tu color":"Your color","Color del peluche":"Plushie color","Nueva sala":"New room","Sala privada":"Private room",
+"Pública: cualquiera la ve en Salas activas y entra con un toque":"Public: anyone sees it in Active rooms and joins with one tap","Privada: no se puede entrar sin el código":"Private: no one can join without the code",
+"Crear sala":"Create room","Salas activas":"Active rooms","Buscando salas…":"Looking for rooms…","Unirse con código":"Join with code","Entrar":"Enter",
+"No hay salas activas por ahora. ¡Crea una!":"No active rooms right now. Create one!","No se pueden ver las salas desde aquí.":"Rooms can't be seen from here.",
+"Ese apodo no se puede usar: elige otro":"That nickname can't be used: choose another","Un adulto dejó solo salas privadas (Opciones → Para papás)":"An adult allowed private rooms only (Options → For parents)",
+"Jugar en línea está apagado. Un adulto lo puede prender en Opciones.":"Online play is off. An adult can turn it on in Options.",
+"Sala pública: aparece en Salas activas para que cualquiera entre. El código está en la pausa.":"Public room: it shows in Active rooms so anyone can join. The code is in the pause menu.",
+"No se pudo abrir la sala ahora mismo. Inténtalo en un momento.":"Couldn't open the room right now. Try again in a moment.","Tu cuenta no puede usar salas en esta página.":"Your account can't use rooms on this page.",
+"No se pudo conectar a la sala. Revisa tu conexión e inténtalo de nuevo.":"Couldn't connect to the room. Check your connection and try again.","Se perdió la conexión con la sala.":"Lost the connection to the room.",
+"El código tiene 6 letras o números. Revísalo e inténtalo de nuevo.":"The code has 6 letters or numbers. Check it and try again.",
+"Tortu":"Tortu","Vender peces":"Sell fish","Catálogo de peces":"Fish catalog","🏄 Tablas de surf":"🏄 Surfboards",
+"🤖 Jugar contra la CPU":"🤖 Play against the CPU","¿Cuántos peluches de la CPU?":"How many CPU plushies?","Dificultad":"Difficulty","Fácil":"Easy","Normal":"Normal","Difícil":"Hard","¡A jugar!":"Let's play!",
+"Inventario":"Inventory","Elige un espacio de la barra de abajo y luego toca un objeto para ponerlo ahí.":"Choose a slot in the bar below, then tap an item to put it there.",
+// --- en línea / para adultos ---
+"Solo para adultos":"Adults only","Para prender el juego en línea, resuelve esta operación:":"To turn on online play, solve this math problem:","Escribe el resultado.":"Type the answer.",
+"Esa no es. Prueba con esta otra.":"That's not it. Try this one.","Listo":"Done","⭐ Antes de jugar en línea":"⭐ Before playing online",
+"👥 Aquí juegas con otras personas de verdad, también con gente que no conoces.":"👥 Here you play with real people, including people you don't know.",
+"🔒 Usa un apodo. Nunca digas tu nombre real, tu escuela, dónde vives ni tu teléfono.":"🔒 Use a nickname. Never share your real name, your school, where you live or your phone number.",
+"✋ Si alguien te hace sentir mal o te pide algo raro, sal de la sala y cuéntale a un adulto.":"✋ If someone makes you feel bad or asks you for something weird, leave the room and tell an adult.",
+"🏠 Un adulto puede apagar el juego en línea cuando quiera, en Opciones.":"🏠 An adult can turn off online play anytime, in Options.","¡Entendido!":"Got it!",
+"🔒 Jugar en línea está apagado":"🔒 Online play is off","Para jugar con otras personas por internet, un adulto tiene que prenderlo.":"To play with other people over the internet, an adult has to turn it on.",
+"Así los papás deciden si se puede jugar en línea.":"This way parents decide whether online play is allowed.","Si antes ya jugabas en línea: desde esta versión hay que prenderlo una vez.":"If you already played online before: since this version it has to be turned on once.",
+"Soy un adulto":"I'm an adult","Ahora no":"Not now","Jugar en línea: apagado":"Online play: off","Jugar en línea: prendido":"Online play: on",
+"Enviar comentarios":"Send feedback","Se abrirá tu app de correo con un mensaje para nosotros. Ya lleva la versión del juego: solo escribe lo que quieras contarnos.":"Your email app will open with a message for us. It already includes the game version: just write what you want to tell us.",
+"Si no se abre, escríbenos a":"If it doesn't open, write to us at","Abrir correo":"Open email","Para escribirnos un correo, resuelve esta operación:":"To send us an email, solve this math problem:",
+"🔒 Privacidad y anuncios":"🔒 Privacy and ads","Un anuncio solo sale si alguien toca un botón ▶ para ganar un premio. Máximo 10 al día.":"An ad only shows if someone taps a ▶ button to win a reward. At most 10 a day.",
+"Son anuncios para todo público y":"They are ads for all ages and","nunca personalizados":"never personalized",": el juego está marcado para niños y no usa el identificador de publicidad.":": the game is marked for children and doesn't use the advertising ID.",
+"No pedimos cuenta, nombre real, correo ni fotos. Tu progreso se guarda en este dispositivo.":"We don't ask for an account, real name, email or photos. Your progress is saved on this device.",
+"Puedes apagar los anuncios en «Anuncios con premio».":"You can turn off ads in “Reward ads”.","Opciones de privacidad de anuncios":"Ad privacy options","Leer la política":"Read the policy",
+"En esta versión (web) no hay anuncios de verdad.":"In this (web) version there are no real ads.","Por ahora la app todavía no muestra anuncios.":"For now the app doesn't show ads yet.",
+"Ahora: prendidos (solo salen si alguien toca ▶).":"Now: on (they only show if someone taps ▶).","Ahora: apagados por un adulto.":"Now: turned off by an adult.",
+"No se pudieron abrir las opciones de privacidad. Intenta más tarde.":"Couldn't open the privacy options. Try later.","Para ver la privacidad y los anuncios, resuelve esta operación:":"To see privacy and ads, solve this math problem:",
+// --- misiones del día ---
+"⭐ Misiones del día":"⭐ Daily missions","Son las mismas para todos hoy. Cambian a medianoche.":"They're the same for everyone today. They change at midnight.","✅ Reclamada":"✅ Claimed",
+"⭐ Misiones del día ⭐":"⭐ Daily missions ⭐","Acércate para ver tu progreso":"Come closer to see your progress",
+// --- opciones ---
+"Pantalla":"Screen","Pantalla completa":"Fullscreen","También con la tecla F":"Also with the F key","Campo de visión":"Field of view","Calidad gráfica":"Graphics quality",
+"Baja va mejor en equipos lentos · Máxima es para equipos potentes":"Low runs better on slow devices · Max is for powerful devices",
+"Mínima":"Minimum","Baja":"Low","Media":"Medium","Alta":"High","Máxima":"Max","Modo ultra ligero":"Ultra light mode",
+"Para teléfonos lentos: más sencillo y sin adornos que se mueven de fondo. Al cambiarlo el juego se vuelve a abrir.":"For slow phones: simpler and without moving background decorations. Changing it restarts the game.",
+"Resolución automática":"Automatic resolution","Baja un poco la nitidez si hace falta para ir fluido":"Lowers sharpness a little when needed to stay smooth","Límite de FPS":"FPS limit",
+"Libre = al ritmo de tu pantalla · 30 da un ritmo parejo en equipos lentos · 60 ahorra batería en pantallas rápidas":"Free = your screen's rate · 30 gives a steady pace on slow devices · 60 saves battery on fast screens",
+"Libre":"Free","Sombras":"Shadows","Clima":"Weather","Lluvia, nieve, tormentas y niebla de vez en cuando":"Rain, snow, storms and fog from time to time","Distancia de visión":"View distance",
+"Audio":"Audio","Silenciar todo":"Mute all","También con la tecla M":"Also with the M key","Volumen general":"Master volume","Música":"Music","Efectos de sonido":"Sound effects",
+"Sensibilidad de la cámara":"Camera sensitivity","Invertir eje vertical":"Invert vertical axis","Cámara al empezar":"Starting camera","Correr siempre":"Always run","Shift camina en lugar de correr":"Shift walks instead of running",
+"Botones en pantalla":"On-screen buttons","Mueve con el dedo y cambia el tamaño de cada botón":"Move each button with your finger and change its size",
+"Para papás":"For parents","Jugar en línea":"Online play","Salas con amigos, filas de minijuegos y Construir con amigos. Viene apagado: para prenderlo, un adulto resuelve una operación.":"Rooms with friends, minigame queues and Build with friends. It starts off: to turn it on, an adult solves a math problem.",
+"Solo salas privadas":"Private rooms only","Esconde las salas públicas y las filas de minijuegos con desconocidos: solo se entra con el código de un amigo.":"Hides public rooms and minigame queues with strangers: you can only join with a friend's code.",
+"Ocultar apodos de otros":"Hide others' nicknames","Los demás jugadores se ven como «Peluche 1», «Peluche 2»…":"Other players appear as “Plushie 1”, “Plushie 2”…","Tiempo jugado":"Time played",
+"Recordatorio de descanso":"Break reminder","Un aviso amable para tomar agua y estirarse. Espera a que termines lo que estés haciendo.":"A friendly reminder to drink water and stretch. It waits until you finish what you're doing.",
+"Apagado":"Off","Límite de juego por día":"Daily play limit","Avisa 5 minutos antes. Si estás en un minijuego o manejando, te deja terminar. Se reinicia a medianoche.":"Warns 5 minutes before. If you're in a minigame or driving, it lets you finish. Resets at midnight.",
+"Sin límite":"No limit","Anuncios con premio":"Reward ads","Botones opcionales para ganar un premio extra viendo un anuncio. Si lo apagas, no aparece ninguno.":"Optional buttons to win an extra reward by watching an ad. If you turn it off, none appear.",
+"Privacidad y anuncios":"Privacy and ads","Cómo funcionan los anuncios, qué datos se usan y la política de privacidad completa.":"How ads work, what data is used and the full privacy policy.","Ver":"View",
+"Escríbenos qué te gusta, qué falla o qué te gustaría. Abre tu correo, después de una operación para adultos.":"Tell us what you like, what's broken or what you'd like. Opens your email, after a math problem for adults.","Escribir":"Write",
+"Interfaz":"Interface","Balanceo al caminar":"Walking sway","Movimiento de la cámara en 1ª persona":"Camera movement in 1st person","Ver mi nombre":"Show my name","Tu nombre encima de tu peluche, como lo ven los demás":"Your name above your plushie, as others see it",
+"Mostrar coordenadas":"Show coordinates","Para mandar capturas cuando algo falle":"To send screenshots when something goes wrong","Mostrar FPS":"Show FPS","Empezar en pantalla completa":"Start in fullscreen",
+"Y en horizontal en el celular, al tocar la pantalla":"And in landscape on phones, when you tap the screen","Mostrar ayudas en pantalla":"Show on-screen tips","Mostrar ayudas":"Show tips","Restablecer":"Reset",
+"Sonido silenciado":"Sound muted","Sonido activado":"Sound on","Tu navegador no permitió la pantalla completa aquí.":"Your browser didn't allow fullscreen here.","Gira tu teléfono para jugar en horizontal":"Turn your phone to play in landscape",
+"Tu equipo no permite los efectos de luz de Máxima; lo demás sí se aplica":"Your device doesn't support Max lighting effects; everything else is applied","Algunos detalles de la calidad nueva se aplican al volver a abrir el juego":"Some details of the new quality apply when you reopen the game",
+"Modo ultra ligero activado":"Ultra light mode on","Modo ultra ligero desactivado":"Ultra light mode off",
+"Isla Invierno":"Winter Island","Isla Selva":"Jungle Island","Isla Dulce":"Candy Island","Isla principal":"Main island","Mar abierto":"Open sea",
+// --- HUD y botones en pantalla ---
+"Ocultar botones":"Hide buttons","Mostrar botones":"Show buttons","Qué tan hondo vas":"How deep you are","Monedas de peluche":"Plush coins","Copiar el código de la sala":"Copy the room code","Sala":"Room",
+"Salir (X)":"Exit (X)","Salir":"Exit","Volver a la isla":"Back to the island","Objetos":"Items","Quitar":"Remove","Pintar":"Paint","Piso, hora y clima":"Floor, time and weather","Borrar todo":"Delete all",
+"Soltar":"Drop","Probar":"Test","Editar":"Edit","Otra vez":"Again","Llevarte una copia":"Take a copy","Salir del juego":"Exit the game",
+"V cambia la cámara · Clic para mirar con el ratón":"V changes the camera · Click to look with the mouse","V cambia la cámara · Esc para pausar":"V changes the camera · Esc to pause",
+"Con la cámara fija, mover la cámara gira tu cabeza":"With the camera locked, moving the camera turns your head","Fijar cámara":"Lock camera",
+"Espacio 1":"Slot 1","Espacio 2":"Slot 2","Espacio 3":"Slot 3","Espacio 4":"Slot 4","Espacio 5":"Slot 5","Abrir inventario":"Open inventory","Inventario (I)":"Inventory (I)",
+"Mapa de la isla":"Island map","Guardar mapa":"Close map","Mapa de la isla. Arrastra para moverlo, pellizca o usa los botones para acercar, y toca un lugar marcado para viajar ahí.":"Island map. Drag to move it, pinch or use the buttons to zoom, and tap a marked place to travel there.",
+"Centrar en mí":"Center on me","Arrastra para mover · pellizca para acercar":"Drag to move · pinch to zoom","Tú":"You","Otros jugadores":"Other players","Toca un lugar para viajar":"Tap a place to travel","Mis banderas":"My flags",
+"← Planetas":"← Planets","Libro de planetas":"Planet book","Guardar libro":"Close book","Sirena":"Siren","Claxon":"Horn",
+"Personalizar botones":"Customize buttons","Arrastra cada botón para moverlo. Toca uno y usa el deslizador para cambiar su tamaño.":"Drag each button to move it. Tap one and use the slider to change its size.",
+"Toca un botón":"Tap a button","Tamaño":"Size","Ver botones del coche":"Show car buttons","Ver botones a pie":"Show on-foot buttons","Acción":"Action","Otra acción":"Other action","Botones en su lugar original":"Buttons back to their original place",
+"Saludar (atajo)":"Wave (shortcut)","Especial ⭐ (vehículo)":"Special ⭐ (vehicle)","Sirena (vehículo)":"Siren (vehicle)","Luces (vehículo)":"Lights (vehicle)","Claxon (vehículo)":"Horn (vehicle)","Cambiar cámara":"Change camera",
+"En el laberinto solo se juega en primera persona":"In the maze you can only play in first person",
+"¿El doble?":"Double it?","No, gracias":"No, thanks","Anuncio de prueba":"Test ad","Aquí va un anuncio":"An ad goes here","Cerrar sin premio":"Close without reward","¡Listo!":"Done!",
+// --- pantalla de carga ---
+"Cosiendo la isla…":"Sewing the island…","¡Ups! Algo se descosió":"Oops! Something came unstitched","Volver a intentar":"Try again",
+"No se pudo descargar el motor 3D del juego. Revisa tu conexión a internet y vuelve a intentar.":"Couldn't download the game's 3D engine. Check your internet connection and try again.",
+"Tu navegador no deja usar gráficos 3D (WebGL). Prueba con Chrome actualizado o activa la aceleración por hardware.":"Your browser doesn't allow 3D graphics (WebGL). Try an updated Chrome or turn on hardware acceleration.",
+"El juego no pudo terminar de cargar. Vuelve a intentar; si sigue pasando, avísanos qué dice abajo.":"The game couldn't finish loading. Try again; if it keeps happening, tell us what it says below.",
+"Adopta una mascota en Personalizar → Mascotas y ponle nombre.":"Adopt a pet in Customize → Pets and give it a name.","En la feria ganas monedas para comprar ropa y mascotas.":"At the fair you earn coins to buy clothes and pets.",
+"Pesca en el muelle y véndele tus peces a Tortu.":"Fish at the pier and sell your fish to Tortu.","Súbete a Cuco, la tortuga gigante: caben hasta 5 peluches.":"Ride Cuco, the giant turtle: up to 5 plushies fit.",
+"Crea una sala en Multijugador y comparte el código con tus amigos.":"Create a room in Multiplayer and share the code with your friends.","Si tu teléfono va lento, prueba el Modo ultra ligero en Opciones.":"If your phone is slow, try Ultra light mode in Options.",
+"De noche las luces de la feria se ven preciosas.":"At night the fair lights look beautiful.","En el trampolín puedes rebotar tan alto que pasas por encima de la red.":"On the trampoline you can bounce so high you go over the net.",
+"Con el cohete puedes visitar planetas… ¡y darles una mordida!":"With the rocket you can visit planets… and take a bite out of them!","En Personalizar puedes probarte la ropa antes de comprarla.":"In Customize you can try on clothes before buying them.",
+"Dispárale con el arco a las dianas rojas y blancas para subir a las islas flotantes.":"Shoot the red and white targets with the bow to reach the floating islands.","En la Isla Granja, Fresita te vende semillas: siembra, riega y cosecha.":"On Farm Island, Fresita sells you seeds: plant, water and harvest.",
+"Junto al lago hay 6 globos aerostáticos para volar a las islas.":"By the lake there are 6 hot-air balloons to fly to the islands.",
+// --- Modo libre ---
+"🧱 Bloques":"🧱 Blocks","⚽ Física":"⚽ Physics","🎡 Parque":"🎡 Park","🌳 Naturaleza":"🌳 Nature","🐾 Criaturas":"🐾 Creatures","🏠 Construir":"🏠 Build","🛋️ Casa":"🛋️ Home","🌳 Jardín":"🌳 Garden",
+"💡 Luces y botones":"💡 Lights and buttons","🪣 Sustancias":"🪣 Substances","Bloques":"Blocks","Física":"Physics","Parque":"Park","Naturaleza":"Nature","Criaturas":"Creatures","Construir":"Build","Casa":"Home","Jardín":"Garden","Luces y botones":"Lights and buttons","Sustancias":"Substances",
+"Cubo":"Cube","Medio bloque":"Half block","Losa":"Slab","Rampa":"Ramp","Columna":"Column","Arco":"Arch","Escalón":"Step","Pared delgada":"Thin wall","Esquina de rampa":"Ramp corner","Techo triangular":"Triangular roof",
+"Cilindro":"Cylinder","Cúpula":"Dome","Cuarto de bloque":"Quarter block","Bloque de vidrio":"Glass block","Bloque que brilla":"Glowing block",
+"Fieltro":"Felt","Madera":"Wood","Piedra":"Stone","Ladrillo":"Brick","Galleta":"Cookie","Dulce":"Candy",
+"Pelota de playa":"Beach ball","Pelota de goma":"Rubber ball","Pelota de tela":"Cloth ball","Bola de boliche":"Bowling ball","Caja que se cae":"Falling box","Barril que rueda":"Rolling barrel","Resorte (te avienta)":"Spring (launches you)",
+"Balón de fútbol":"Soccer ball","Canica gigante":"Giant marble","Dado gigante":"Giant die","Cilindro de espuma":"Foam cylinder","Bloque de hielo (resbala)":"Ice block (slippery)","Globo (flota)":"Balloon (floats)","Cojín":"Cushion","Tabla larga":"Long plank",
+"Gelatina (rebota)":"Jelly (bouncy)","Cañón (tú disparas)":"Cannon (you fire)","Cañón automático":"Automatic cannon","Ventilador (empuja)":"Fan (pushes)","Imán (jala)":"Magnet (pulls)","Botón (activa tubos y cañones)":"Button (triggers tubes and cannons)",
+"Tubo de pelotas":"Ball tube","Piñata":"Piñata","Balón de básquet":"Basketball","Globo de agua":"Water balloon","Canasta de básquet":"Basketball hoop","Portería":"Soccer goal","Banda transportadora":"Conveyor belt","Teletransportador (pon 2)":"Teleporter (place 2)",
+"Molino giratorio":"Spinning windmill","Piano de piso":"Floor piano","Caja sorpresa (pollito)":"Surprise box (chick)","Máquina de burbujas":"Bubble machine","Máquina de sustancias":"Substance machine","Saco de boxeo":"Punching bag",
+"Dominó":"Domino","Fila de 8 dominós":"Row of 8 dominoes","Bolos (10)":"Bowling pins (10)","Torre de bloques":"Block tower","Pelota saltarina":"Bouncy ball","Resorte (baja escalones)":"Slinky (goes down stairs)","Carrito de cuerda":"Wind-up car",
+"Avioncito de papel":"Paper plane","Bumerán":"Boomerang","Globo con helio":"Helium balloon","Cohete de agua":"Water rocket","Lanzadora de discos":"Disc launcher","Disco volador":"Flying disc","Farol":"Lantern","Foco de color":"Colored light","Tira de luces":"String lights",
+"Botón":"Button","Palanca":"Lever","Placa para pisar":"Pressure plate","Temporizador":"Timer","Bola de nieve":"Snowball","Muñeco de nieve":"Snowman","Sin canal":"No channel",
+"Rojo":"Red","Azul":"Blue","Verde":"Green","Amarillo":"Yellow","Morado":"Purple","Naranja":"Orange","rojo":"red","azul":"blue","verde":"green","amarillo":"yellow","morado":"purple","naranja":"orange",
+"Para conectar: acércate y toca «⚪ Sin canal» hasta escoger un color. Ponle el mismo color a una puerta, elevador, luz, cañón o tubo":"To connect: get close and tap “⚪ No channel” until you pick a color. Give the same color to a door, elevator, light, cannon or tube",
+"Todavía no tienes criaturas: hazlas en Jugar → Crear mapa → 🐾 Criatura":"You don't have creatures yet: make them in Play → Create map → 🐾 Creature",
+"Bandera de control":"Checkpoint flag","Plataforma que se mueve":"Moving platform","Bloque que se cae":"Falling block","🎯 Minijuego":"🎯 Minigame","🏝️ Mundo completo":"🏝️ Full world","🐾 Criatura":"🐾 Creature","🎒 Objeto para tu inventario":"🎒 Item for your inventory",
+"Pistas de obstáculos: inicio, meta, lava, estrellas, plataformas, bloques y cosas con física":"Obstacle courses: start, finish, lava, stars, platforms, blocks and physics things",
+"Todo: piezas de juego, bloques, física, 📦 tus creaciones (minijuegos, criaturas y objetos) y todas las piezas del Taller":"Everything: game pieces, blocks, physics, 📦 your creations (minigames, creatures and items) and all the Workshop pieces",
+"Nombre de la criatura nueva":"New creature's name","Todavía no tienes criaturas. Ponle nombre a una y tócale «Crear».":"You don't have creatures yet. Name one and tap “Create”.","✏️ Editar":"✏️ Edit","🎮 Juego":"🎮 Game","📦 Mis creaciones":"📦 My creations",
+"No se pudo guardar el mapa (¿poco espacio?)":"Couldn't save the map (low storage?)","¡A jugar! Llega a la meta":"Let's play! Reach the finish","¡A jugar! (pon una Meta para que tenga final)":"Let's play! (place a Finish so it has an end)",
+"¡Uy, lava! Vuelves a empezar":"Oops, lava! Back to the start","¡Bandera! Si te caes, regresas aquí":"Flag! If you fall, you come back here","¡Te caíste!":"You fell!",
+"Construir con amigos en el modo libre llega en la siguiente parte":"Build with friends in free mode comes in the next part",
+"Un adulto dejó solo salas privadas: las filas de minijuegos con desconocidos no están disponibles":"An adult allowed private rooms only: minigame queues with strangers aren't available",
+// --- acciones (botones según lo que tengas cerca) ---
+"Lanzar bola de nieve":"Throw snowball","Hacer bola de nieve":"Make a snowball","Hacer muñeco de nieve":"Build a snowman","Derribar mi muñeco":"Knock down my snowman","Pinturas":"Paints","Plantar bandera":"Plant flag",
+"Frena para bajar":"Brake to get off","Bajar":"Get off","Subir a la superficie":"Go up to the surface","Abrir puerta":"Open door","Cerrar puerta":"Close door","No hay lugar":"No room",
+"Aterriza para levantarte":"Land to stand up","Frena para levantarte":"Brake to stand up","Levantarse":"Stand up","Alguien más pilota":"Someone else is flying","Pilotar":"Fly","Sentarse de copiloto":"Sit as copilot","Sentarse":"Sit",
+"Salir del avión":"Get out of the plane","Aterriza para bajar":"Land to get off","Abrir la puerta y entrar":"Open the door and go in","Guardar escalera":"Put the ladder away","Bajar la escalera":"Lower the ladder","Subir al helicóptero":"Board the helicopter",
+"Cerrar la red":"Close the net","Abrir la red":"Open the net","Bajarse del trampolín":"Get off the trampoline","Subirse al trampolín":"Get on the trampoline","La red está cerrada":"The net is closed",
+"Bajarse de Cuco":"Get off Cuco","Guiar a Cuco":"Steer Cuco","Cuco está lleno":"Cuco is full","Subirse a Cuco":"Ride Cuco","Subir al carrito":"Get in the cart",
+"Bajarse del trineo":"Get off the sled","Soltar el timón":"Let go of the wheel","Bajar del carrito":"Get out of the cart","Bajarse del columpio":"Get off the swing","Bajarse":"Get off","Bajarse del sube y baja":"Get off the seesaw",
+"Empujar":"Push","Columpiarse":"Swing","Subir a la resbaladilla":"Climb the slide","Colgarse del pasamanos":"Hang from the monkey bars","Montar el patito":"Ride the duckling","Montar el caballito":"Ride the pony","Montar la ranita":"Ride the froggy",
+"Subir al sube y baja":"Get on the seesaw","Tomar el timón":"Take the wheel","Bajar del barco":"Get off the boat","Subir al barco":"Board the boat",
+"Jalar":"Pull","Esperando que pique":"Waiting for a bite","Dejar de pescar":"Stop fishing","Guardar el pez":"Keep the fish","Soltar el pez":"Release the fish","Darle el pez a Cuco":"Give the fish to Cuco",
+"Cerrar la puerta":"Close the door","Abrir la puerta":"Open the door","Dejar el balde":"Put down the bucket","Hablar con Tortu":"Talk to Tortu","Tomar el balde":"Take the bucket","Ver el balde":"Check the bucket",
+"Alguien está pescando aquí":"Someone is fishing here","Pescar (falta un balde)":"Fish (you need a bucket)","Balde lleno":"Bucket full","Sacar un pez":"Reel in a fish","Disparar":"Shoot","Subir a la isla":"Go up to the island","Ir hacia allá":"Go there",
+"Cofre vacío: vuelve mañana":"Empty chest: come back tomorrow","Abrir el cofre":"Open the chest","Saltar del globo":"Jump off the balloon","Bajarse del globo":"Get off the balloon","Subir al globo":"Board the balloon",
+"Hablar con Fresita":"Talk to Fresita","No tienes semillas: ve con Fresita":"You have no seeds: go see Fresita","Otra semilla":"Other seed","Regar":"Water",
+"Abrir el cofre del cañón":"Open the canyon chest","Hablar con el topo":"Talk to the mole","Entrar a la mina":"Enter the mine","Salir de la mina":"Leave the mine","Usar el elevador":"Use the elevator","Abrir el cofre escondido":"Open the hidden chest",
+"Romper la roca":"Break the rock","Alguien":"Someone","Lanzar":"Throw","Batear":"Swing the bat","Subirse a la tabla":"Get on the board","Tomar tabla":"Take a board","Lanzar tabla":"Throw the board","Colgarte la tabla":"Carry the board on your back","Dejar tabla":"Put the board down",
+"Quitar mi casita":"Remove my house","Editar mi casita":"Edit my house","Mostrar casa":"Show house","Ocultar casa":"Hide house","Me gusta":"Like","Ya te gustó hoy":"You liked it today","Cargar mi casita aquí":"Load my house here","Mover mi casita aquí":"Move my house here",
+"Cerrado con candado":"Locked","Tocar timbre":"Ring the doorbell","Quitar candado":"Unlock","Poner candado":"Lock","Cerrar ventana":"Close window","Abrir ventana":"Open window","Apagar pantalla":"Turn off screen","Prender pantalla":"Turn on screen",
+"Apagar fuego":"Put out the fire","Prender fuego":"Light the fire","Apagar foquitos":"Turn off string lights","Prender foquitos":"Turn on string lights","Quitar música":"Stop music","Poner música":"Play music","Tocar":"Play",
+"Apagar lámpara":"Turn off lamp","Prender lámpara":"Turn on lamp","Apagar cocina":"Turn off stove","Cocinar":"Cook","Cerrar refri":"Close fridge","Abrir refri":"Open fridge","Acostarse":"Lie down","Bañarse":"Take a bath","Leer un libro":"Read a book",
+"Apagar luz":"Turn off light","Prender luz":"Turn on light","Entra a una sala para jugar":"Join a room to play","Hay una partida en curso":"A match is in progress",
+"¡Qué rico chocolate!":"Yummy hot chocolate!","Tomar chocolate caliente":"Drink hot chocolate","Cristal: vuelve mañana":"Crystal: come back tomorrow","Tomar el cristal mágico":"Take the magic crystal","Bajar en trineo":"Sled down",
+"Subir a la cima (telesquí)":"Go to the top (ski lift)","Soltar la liana":"Let go of the vine","Bajar en tirolesa":"Ride the zip line","Subir al mirador (tirolesa)":"Climb to the lookout (zip line)","Agarrar la liana":"Grab the vine",
+"La puerta ya está abierta":"The door is already open","Jalar la palanca":"Pull the lever","Abrir el cofre del templo":"Open the temple chest","Gema: vuelve mañana":"Gem: come back tomorrow","Tomar la gema de la cueva":"Take the cave gem",
+"Junta frutas para vender":"Collect fruit to sell","Junta dulces de los árboles para vender":"Collect candy from the trees to sell","Estacionar en mi casita":"Park at my house","Subir a mi vehículo":"Get in my vehicle","Entrar al taller":"Enter the workshop",
+"Sacar mi vehículo":"Take out my vehicle","Bajarse del carrusel":"Get off the carousel","Bajar por el tobogán de helado":"Go down the ice-cream slide","Subir a la rueda de dona":"Ride the donut wheel",
+"Entrar a la Dulcería (ropa y gorros)":"Enter the Candy Shop (clothes and hats)","Subir al carrusel de dulces":"Ride the candy carousel","Tomar el dulce escondido":"Take the hidden candy",
+"¡Despegar!":"Lift off!","Subir al cohete":"Board the rocket","Cohete lleno":"Rocket full","Lleno":"Full","Aterrizar en la isla":"Land on the island","Morder":"Bite","Ir al cohete":"Go to the rocket","Llamar a mi cohete":"Call my rocket",
+"Prender":"Turn on","Apagar":"Turn off","Mover palanca":"Pull the lever","Agarrar":"Grab","Lanzar disco":"Throw disc","Girando":"Spinning","Hacer girar":"Spin it","Bajando":"Going down","Empujar resorte":"Push the slinky","Darle cuerda":"Wind it up",
+"Volando":"Flying","Bombear":"Pump","¡Lanzar!":"Launch!","Jalar el hilo":"Pull the string","esto":"this","Poner":"Place","Girar":"Rotate","Reventar burbuja":"Pop bubble","Golpear":"Punch","Dejar el palo":"Put down the stick","Comer dulce":"Eat candy",
+"Tomar el palo":"Take the stick","Tomar un palo":"Take a stick","Configurar burbujas":"Set up bubbles","Echar":"Pour","Poner molde":"Place mold","Cargar bola":"Load ball","Cerrar manguera":"Turn off hose","Abrir manguera":"Turn on hose",
+"Recoger":"Pick up","Agarrar manguera":"Grab hose","Recoger manguera":"Put away hose","Configurar máquina":"Set up machine","Presumir":"Show off","Impulsarse":"Pump your legs","Empujar el columpio":"Push the swing","Volver a pararlos":"Set them up again",
+"Reclamar misiones":"Claim missions","molde":"mold","bola":"ball","chico":"small","mediano":"medium","grande":"big","lombriz":"worm","pez pequeño":"small fish","pez mediano":"medium fish",
+"cocos":"coconuts","mangos":"mangoes","plátanos":"bananas","paletas":"lollipops","chicles":"gumballs","algodones":"cotton candies","Espacio ":"Space ",
+"¡Ahora el juego también está en inglés! Se escoge solo con el idioma de tu teléfono, y lo puedes cambiar en Opciones → 🌐 Idioma.":"The game is now in English too! It is picked automatically from your phone's language, and you can change it in Options → 🌐 Language.",
+"En inglés el juego se llama Plush'N'Play. Esta primera parte traduce menús, botones, acciones y opciones; lo demás llega pronto.":"In English the game is called Plush'N'Play. This first part translates menus, buttons, actions and options; the rest is coming soon.",
+"Esperando las letras…":"Waiting for the letters…","Juntando las piezas…":"Putting the pieces together…","Preparando los colores…":"Getting the colors ready…","Probando tu equipo…":"Testing your device…","Revisando tu progreso…":"Checking your progress…",
+"Tu equipo va algo lento: prueba el Modo ultra ligero en Opciones":"Your device is a bit slow: try Ultra light mode in Options","✨ ¿Qué hay de nuevo?":"✨ What's new?","¡Genial!":"Great!",
+"Inicio":"Start","Feria":"Fair","Pista":"Track","Aeropuerto":"Airport","Espacio":"Space"
+});
+I18N.rx([
+  [/^Consejo: ([\s\S]+)$/, m=>'Tip: '+txl(m[1])],
+  [/^Subir con (.+)$/, 'Ride with $1'], [/^Piloto: (.+)$/, 'Pilot: $1'], [/^Unirse: (.+)$/, m=>'Join: '+txl(m[1])], [/^Tú: (.+)$/, 'You: $1'],
+  [/^Juntar (.+)$/, m=>'Pick '+txl(m[1])], [/^Ya no hay (.+) \(vuelven pronto\)$/, m=>'No more '+txl(m[1])+' (back soon)'],
+  [/^Vender (\d+) frutas \(\+(\d+) monedas\)$/, 'Sell $1 fruits (+$2 coins)'], [/^Vender (\d+) dulces \(\+(\d+) monedas\)$/, 'Sell $1 candies (+$2 coins)'],
+  [/^Amarrar a (.+)$/, m=>'Tie to '+txl(m[1])], [/^Agarrar (.+)$/, m=>'Grab '+txl(m[1])], [/^Cada (\d+) s$/, 'Every $1 s'], [/^Récord: (.+)$/, 'Record: $1'],
+  [/^Presumir (.+)$/, m=>'Show off '+txl(m[1])], [/^Lanzar (.+)$/, m=>'Throw '+txl(m[1])], [/^Carnada: (.+)$/, m=>'Bait: '+txl(m[1])], [/^Aterrizar en (.+)$/, m=>'Land on '+txl(m[1])],
+  [/^El vehículo de (.+) va lleno$/, "$1's vehicle is full"], [/^El vehículo de (.+) es de un asiento$/, "$1's vehicle has one seat"], [/^(.+) está jugando$/, m=>txl(m[1])+' is playing'],
+  [/^Jugar (.+)$/, m=>'Play '+txl(m[1])], [/^Subir a (.+) y manejar$/, m=>'Get in '+txl(m[1])+' and drive'], [/^Subir \((.+)\)$/, m=>'Get in ('+txl(m[1])+')'],
+  [/^Pescar con (.+)$/, m=>'Fish with '+txl(m[1])], [/^Plantar (.+) \((\d+)\)$/, m=>'Plant '+txl(m[1])+' ('+m[2]+')'], [/^Cosechar (.+)$/, m=>'Harvest '+txl(m[1])],
+  [/^(.+): faltan ~(\d+) min$/, m=>txl(m[1])+': ~'+m[2]+' min left'], [/^Mojada (\d+) min más$/, 'Wet for $1 more min'],
+  [/^Necesitas el (.+) \(cómpralo al topo\)$/, m=>'You need the '+txl(m[1])+' (buy it from the mole)'], [/^Necesitas el (.+)$/, m=>'You need the '+txl(m[1])],
+  [/^Picar (.+?) \((\d+)\/(\d+)\)$/, m=>'Mine '+txl(m[1])+' ('+m[2]+'/'+m[3]+')'], [/^¡Despegar! \((\d+) a bordo\)$/, 'Lift off! ($1 aboard)'],
+  [/^Canal (.+)$/, m=>txl(m[1])+' channel'], [/^Chorro: (.+)$/, m=>'Stream: '+txl(m[1])],
+  [/^Sala de (.+)$/, "$1's room"], [/^Tu sala$/, 'Your room'], [/^(\d+) jugador$/, '$1 player'], [/^(\d+) jugadores$/, '$1 players'], [/^(\d+) esperando$/, '$1 waiting'],
+  [/^Hoy: (.+)$/, 'Today: $1'], [/^Últimos 7 días: (.+)$/, 'Last 7 days: $1'], [/^Quedan hoy: (.+)$/, 'Left today: $1'],
+  [/^Ubicación copiada: (.+)$/, 'Location copied: $1'], [/^Ya estás en esta sala\. Tu código: (.+)$/, 'You are already in this room. Your code: $1'],
+  [/^Es una sala privada: pide el código a (.+) y escríbelo arriba\.$/, "It's a private room: ask $1 for the code and type it above."],
+  [/^Conectando a la sala (.+)$/, 'Connecting to room $1'], [/^Sala privada (.+): comparte el código para que entren\.$/, 'Private room $1: share the code so others can join.'],
+  [/^Reclamar \+(\d+)$/, 'Claim +$1'], [/^Color (.+)$/, m=>'Color '+txl(m[1])], [/^Color de la pintura (.+)$/, m=>'Paint color '+txl(m[1])],
+  [/^¡A jugar! Junta las (\d+) estrellas y llega a la meta$/, "Let's play! Collect the $1 stars and reach the finish"], [/^Te faltan (\d+) estrellas$/, 'You still need $1 stars'],
+  [/^¡Uy, lava! Vuelves a tu bandera$/, 'Oops, lava! Back to your flag'], [/^¡Llegaste! (.*)$/, m=>'You made it! '+m[1].replace('¡Récord!','New record!')],
+  [/^¡A jugar (.+)! Espera a que lleguen los demás$/, m=>"Let's play "+txl(m[1])+'! Wait for the others to arrive'],
+  [/^Versión (\d+)$/, 'Version $1'], [/^Tu versión del juego: (.+)$/, 'Your game version: $1'], [/^Comentarios Mundo Peluche v(.+)$/, "Plush'N'Play feedback v$1"]
+]);
+I18N.start();
+</script>
+<script>
 // Pantalla de carga: aparece antes que todo. Mientras se arma el juego la barra avanza sola; luego el juego hace
 // sus revisiones (colores, tu equipo, tu progreso) y la barra muestra cada paso. Si algo falla, lo dice aquí en vez
 // de dejar la pantalla en blanco.
@@ -1516,7 +1856,7 @@ window.LC_BG=Object.assign({},window.LC_BG1,window.LC_BG2);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='254';
+const GAME_VERSION='255';
 // ======================================================================================
 // ---------------- v242: ÍCONOS DIBUJADOS EN LUGAR DE EMOJIS ----------------
 // Cada emoji de la lista se cambia, donde aparezca en la pantalla, por un dibujo hecho a mano con el mismo estilo de la barra
@@ -6460,7 +6800,7 @@ const stick={x:0,y:0};
 const inkCtx=document.createElement('canvas').getContext('2d');
 function centerText(el, text){
   if(text===undefined) text=el.textContent;
-  text=String(text).trim();
+  text=txl(String(text).trim());   // v255: ya traducido (para medirlo bien)
   const cs=getComputedStyle(el);
   inkCtx.font=`${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
   inkCtx.textAlign='left';
@@ -6765,6 +7105,7 @@ function syncOptionsUI(){
     .forEach(([id,k])=>ui(id).setAttribute('aria-checked', String(settings[k])));
   [['optQuality','quality'],['optStartCam','startCam'],['optFpsCap','fpsCap']].forEach(([id,k])=>
     ui(id).querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.v===settings[k]))));
+  ui('optLang').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.v===I18N.lang)));   // v255
 }
 function set(k,v){ settings[k]=v; saveSettings(); applySettings(); }
 
@@ -6781,6 +7122,7 @@ ui('optDraw').oninput=e=>set('draw',+e.target.value);
 ui('optSens').oninput=e=>set('sens',+e.target.value);
 [['optQuality','quality'],['optStartCam','startCam'],['optFpsCap','fpsCap']].forEach(([id,k])=>
   ui(id).querySelectorAll('button').forEach(b=>b.onclick=()=>set(k,b.dataset.v)));
+ui('optLang').querySelectorAll('button').forEach(b=>b.onclick=()=>{ I18N.set(b.dataset.v); syncOptionsUI(); });   // v255: idioma (cambia al momento)
 ui('resetOptions').onclick=()=>{ settings={...DEFAULTS}; saveSettings(); applySettings(); };
 ui('optUltra').onclick=()=>{ const on=!ULTRA; settings.ultra=on;
   if(on){ settings.quality='min'; settings.shadows=false; settings.weather=false; settings.fpsCap='30'; settings.autoRes=true; settings.draw=Math.min(settings.draw,80); }
@@ -7184,6 +7526,8 @@ ui('papPrivacy').onclick=()=>onlineAsk(privacyOpen, null, 'Para ver la privacida
 // solo guarda la versión, para no llenar de avisos a quien apenas empieza.
 const NEWS_KEY='mundoPelucheNovedades';
 const NEWS={
+  '255':['¡Ahora el juego también está en inglés! Se escoge solo con el idioma de tu teléfono, y lo puedes cambiar en Opciones → 🌐 Idioma.',
+         "En inglés el juego se llama Plush'N'Play. Esta primera parte traduce menús, botones, acciones y opciones; lo demás llega pronto."],
   '254':['Modo libre: 9 bloques nuevos (escalón, pared, techo, cúpula, vidrio, bloque que brilla y más) y materiales: madera, piedra, ladrillo, galleta y dulce.',
          'Modo libre: luces que alumbran de noche y botones, palancas, placas y temporizadores que abren puertas, suben el elevador, prenden luces y disparan cañones.',
          'Con nieve todo se va poniendo blanco (pasto, techos y árboles): haz bolas y muñecos de nieve. Con lluvia el piso se moja y salen charquitos.'],
@@ -9011,6 +9355,7 @@ function setActions(a,b,c){
   label(act1,a,'E'); label(act2,b,'R'); label(act3,actC,'Y');   // v230: un tercer botón (al construir: Poner · Girar · Listo)
   actEl.hidden=!a && !b && !actC;
 }
+I18N.onChange(()=>{ actKey=''; try{ centerAllText(); }catch(e){} });   // v255: al cambiar de idioma se vuelven a escribir los botones
 tap(act1,()=>{ if(actA && !actA.disabled) actA.run(); });
 tap(act2,()=>{ if(actB && !actB.disabled) actB.run(); });
 tap(act3,()=>{ if(actC && !actC.disabled) actC.run(); });
@@ -28089,7 +28434,7 @@ function tutGiftCasa(){ if(TUT.seen.gc) return; let n=0;
   [[0,8],[1,8],[2,1],[3,6]].forEach(([i,c])=>{ const L=HK.filter(K=>HSTEPS[i].f(K) && K.mats && K.mats.length); if(!L.length || L.some(K=>K.mats.some(m=>(HS.inv[K.id+':'+m]|0)>0))) return;
     const K=L[0]; HS.inv[K.id+':'+K.mats[0]]=(HS.inv[K.id+':'+K.mats[0]]|0)+c; n+=c; });
   TUT.seen.gc=1; tutSave(); if(n){ hSave(); edRender(); flashNote('🎁 Almohadita te regaló piezas para empezar'); } }
-const tutBtn=(sel,txt)=>()=>[...document.querySelectorAll(sel)].find(b=>b.textContent.includes(txt))||null;
+const tutBtn=(sel,txt)=>()=>[...document.querySelectorAll(sel)].find(b=>b.textContent.includes(txt)||b.textContent.includes(txl(txt)))||null;
 const tutInfo=(t,say,start,opt=true)=>({t, say, next:true, start, opt});
 // ---- los pasos ----
 const tutVehPick=(i,what)=>({say:()=>'Paso '+(i+1)+': <b>'+VSTEPS[i].n(VE.vtype)+'</b>. Toca '+what+' en la lista 👈', t:()=>document.querySelector('#vehParts [data-p="'+VE.sel+'"]')||document.querySelector('#vehParts [data-p]'), start:()=>{ TUT.picked=false; if(!vehStepDone(i) && (VE.vstep|0)!==i) vehStepGo(i); }, done:()=>TUT.picked||vehStepDone(i)});

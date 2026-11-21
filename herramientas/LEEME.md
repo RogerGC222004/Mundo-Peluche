@@ -12,6 +12,8 @@
   `window.MundoAds = { show: () => Promise<boolean> }` (true = el anuncio terminó y se da el premio).
   Para probarlos sin la app: `?anuncios=prueba` en la dirección, o tocar 5 veces la versión en el menú.
 - `pruebas/` — pruebas automáticas con Playwright (Chromium con SwiftShader, sin tarjeta de video).
+  Desde la v255 el juego arranca en el idioma del navegador: corre las pruebas con `LANG=es_MX.UTF-8 LANGUAGE=es_MX`
+  (si no, Chromium sale en inglés y las pruebas que buscan textos en español fallan). `test_v255_idioma.py` prueba el inglés.
   - Necesitan three.js r128 en `threerepo/build/three.min.js` junto a los scripts
     (`npm pack three@0.128.0` y copiar `build/three.min.js`).
   - Leen el juego desde `/home/claude/mundo-peluche.html` (cambiar la ruta si hace falta).

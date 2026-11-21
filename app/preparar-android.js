@@ -28,10 +28,13 @@ write(MF,m);
 
 // ---- textos ----
 const SF=path.join(RES,'values','strings.xml'); let s=read(SF);
-s=s.replace(/<string name="app_name">[^<]*<\/string>/,'<string name="app_name">Mundo Peluche</string>')
-   .replace(/<string name="title_activity_main">[^<]*<\/string>/,'<string name="title_activity_main">Mundo Peluche</string>')
+// v255: el nombre de la app según el idioma del teléfono: en español «Mundo Peluche»; en cualquier otro idioma «Plush'N'Play»
+s=s.replace(/<string name="app_name">[^<]*<\/string>/,'<string name="app_name">Plush\\\'N\\\'Play</string>')
+   .replace(/<string name="title_activity_main">[^<]*<\/string>/,'<string name="title_activity_main">Plush\\\'N\\\'Play</string>')
    .replace('</resources>',`    <string name="admob_app_id">${cfg.admobAppId}</string>\n</resources>`);
 write(SF,s);
+{ const ES=path.join(RES,'values-es'); fs.mkdirSync(ES,{recursive:true});
+  write(path.join(ES,'strings.xml'),'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <string name="app_name">Mundo Peluche</string>\n    <string name="title_activity_main">Mundo Peluche</string>\n</resources>\n'); }
 
 // ---- MainActivity: pantalla completa y pantalla encendida mientras juegas ----
 const pkg=cap.appId, JD=path.join(MAIN,'java',...pkg.split('.')); fs.mkdirSync(JD,{recursive:true});
