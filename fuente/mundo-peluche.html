@@ -1603,6 +1603,20 @@ const WL={V:Array.from({length:8},()=>new THREE.Vector4(0,0,0,0)), C:Array.from(
     L.uniforms.wlV={value:WL.V}; L.uniforms.wlC={value:WL.C};
     L.vertexShader='varying vec3 vWlP;\n'+L.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\n\tvWlP=mvPosition.xyz;');
     L.fragmentShader=dec+L.fragmentShader.replace('#include <aomap_fragment>',code(nrm)); } })();
+// ---------------- v254: LA NIEVE Y LO MOJADO EN LOS MATERIALES ----------------
+// Lo que ve hacia arriba se pinta blanco con la nieve (con manchitas mientras se junta) y lo mojado se oscurece un poco (y brilla, en
+// Media o más). wxV[0] = (nieve, mojado), wxV[1] = (x, z, tamaño, alto base) del mapa de techos, wxV[2] = (abajo de esto no, rango).
+// Arreglos de uniformes: así todos los materiales comparten los mismos valores. Los peluches llevan NO_WX (no se cubren).
+const WXU={V:[new THREE.Vector4(0,0,0,0),new THREE.Vector4(0,0,64,-1e4),new THREE.Vector4(-1e4,80,0,0)], T:[null]};
+(function wxPatch(){ if(ULTRA) return; const vd='varying vec3 vWxP;\nvarying vec3 vWxN;\n';
+  const vcode='\n{ vec4 wxq=vec4(transformed,1.0); vec3 wxn=objectNormal;\n#ifdef USE_INSTANCING\nwxq=instanceMatrix*wxq; wxn=mat3(instanceMatrix)*wxn;\n#endif\nvWxP=(modelMatrix*wxq).xyz; vWxN=normalize(mat3(modelMatrix)*wxn); }';
+  const fcode='\n#ifndef NO_WX\nfloat wxK=0.0;\nif(wxV[0].x+wxV[0].y>0.002 && vWxP.y>wxV[2].x){ float up=clamp(vWxN.y,0.0,1.0); float cov=1.0;\n vec2 ruv=(vWxP.xz-wxV[1].xy)/wxV[1].z;\n if(ruv.x>0.0 && ruv.y>0.0 && ruv.x<1.0 && ruv.y<1.0){ float rh=wxV[1].w+texture2D(wxT[0],ruv).r*wxV[2].y; if(vWxP.y<rh-0.25) cov=0.0; }\n float wxn=fract(sin(dot(floor(vWxP.xz*1.6),vec2(12.9898,78.233)))*43758.5453);\n float sk=smoothstep(0.42,0.8,up)*clamp((wxV[0].x*1.3-wxn*0.3)*2.4,0.0,1.0)*cov;\n diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.9,0.93,0.98),sk);\n wxK=wxV[0].y*cov*(1.0-sk); diffuseColor.rgb*=1.0-0.4*wxK*(0.45+0.55*up); wxK*=up; }\n#endif\n';
+  for(const [k,std] of [['lambert',0],['phong',0],['standard',1],['physical',1],['toon',0]]){ const L=THREE.ShaderLib[k]; if(!L || !L.fragmentShader.includes('#include <color_fragment>') || !L.vertexShader.includes('#include <project_vertex>')) continue;
+    L.uniforms.wxV={value:WXU.V}; L.uniforms.wxT={value:WXU.T};
+    L.vertexShader=vd+L.vertexShader.replace('#include <project_vertex>','#include <project_vertex>'+vcode);
+    L.fragmentShader='uniform vec4 wxV[3];\nuniform sampler2D wxT[1];\n'+vd+L.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>'+fcode);
+    if(std) L.fragmentShader=L.fragmentShader.replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\n#ifndef NO_WX\nroughnessFactor=mix(roughnessFactor,0.2,wxK);\n#endif'); }
+  const d=new THREE.DataTexture(new Uint8Array([0,0,0,255]),1,1,THREE.RGBAFormat); d.needsUpdate=true; WXU.T[0]=d; })();
 const renderer = new THREE.WebGLRenderer({canvas, antialias:!MIN_Q, powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
@@ -4400,7 +4414,7 @@ function groundAt(x,z,y){
 }
 
 // Nubes de algodón en posiciones fijas (espiral alrededor de la isla)
-const clouds=[]; const cloudMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,emissive:0xffffff,emissiveIntensity:.25});
+const clouds=[]; const cloudMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,emissive:0xffffff,emissiveIntensity:.25}); wxNo(cloudMat);   // (v254: las nubes no se mojan)
 for(let i=0;i<40;i++){
   const g=new THREE.Group(), a=i*2.39996, d=60+i*27;   // repartidas por toda la isla (v119: la isla es el doble)
   for(let k=0;k<5;k++){const b=new THREE.Mesh(sphereG,cloudMat); b.scale.setScalar(2.6+((i*7+k*3)%5)*.45); b.position.set(k*3-6, ((k*5+i)%3-1)*.8, ((k*3+i)%3-1)*1.2); g.add(b);}
@@ -4494,6 +4508,8 @@ function wrap(v,box){ return ((v+box)%(2*box)+2*box)%(2*box)-box; }
 // por segundo (para no cansar al celular).
 const ROOF={C:.5, N:128, ix:new Int32Array(128*128).fill(-2147483648), iz:new Int32Array(128*128), h:new Float32Array(128*128), t:new Float64Array(128*128), g:new Int32Array(128*128), gen:1, bud:0, now:0, last:0, ttl:30, fo:null, per:1800};
 function roofCalc(x,z){ let r=groundAt(x,z,1e4); const d=Math.hypot(x,z);
+  if(typeof HS!=='undefined' && HS && HS.shown && HS.shown.size) for(const b of HS.shown.values()){ if(!b.cover) continue; const L=b.L, [lx,lz]=lotL(L,x,z), i=Math.floor((lx+HZ.H)/HZ.C), j=Math.floor((lz+HZ.H)/HZ.C); if(i<0||j<0||i>=HZ.N||j>=HZ.N) continue; const c=b.cover[j*HZ.N+i]; if(c>0) r=Math.max(r,L.y+c); }   // v254: los techos de las casitas
+  if(typeof PIER!=='undefined' && PIER && Math.hypot(PIER.bx-x,PIER.bz-z)<40 && inHouse(x,z,PIER.Y)) r=Math.max(r,PIER.Y+PIER.HW+1);   // y la casita de Tortu
   if(d<CAKE.towerR+2.2*CS){ if(d>CAKE.wallR-CAKE.wallT-.1 && d<CAKE.wallR+CAKE.wallT+.1) r=Math.max(r,CAKE.H);   // la muralla (también arriba de las puertas)
     for(let k=0;k<4;k++){ const ta=Math.PI/4+k*Math.PI/2; if(Math.hypot(x-Math.cos(ta)*CAKE.towerR,z-Math.sin(ta)*CAKE.towerR)<1.9*CS) r=Math.max(r,9.4*CS); } }   // las torres
   return r; }
@@ -4516,6 +4532,106 @@ function precipHidden(cov,x,y,z){ if(cov==='all') return true;
   for(const b of cov.list){ const L=b.L, [lx,lz]=lotL(L,x,z), i=Math.floor((lx+HZ.H)/HZ.C), j=Math.floor((lz+HZ.H)/HZ.C); if(i<0||j<0||i>=HZ.N||j>=HZ.N) continue;
     if(y<L.y+b.cover[j*HZ.N+i]) return true; }
   return cov.pier && inHouse(x,z,y); }
+// ================= v254: LA LLUVIA MOJA Y LA NIEVE SE JUNTA (en la isla y en el Modo libre) =================
+// WX.s = qué tanta nieve hay en el suelo (0–1) y WX.w = qué tan mojado está (0–1). En la isla se calculan con el clima de las últimas
+// horas (el mismo para todos: así todos ven lo mismo); en tu planicie con clima fijo, se van juntando mientras juegas.
+// Los materiales pintan blanco lo que ve hacia arriba (pasto, techos, copas de los árboles, bloques) y oscurecen/abrillantan lo mojado.
+// Bajo techo no: el «mapa de techos» (ROOF) se pasa como una textura de 64×64 m alrededor de la cámara.
+const WX={s:0, w:0, fs:null, fw:null, rT:0, cx:1e9, cz:1e9, nwT:0, prints:null, pud:null, sm:[], fwVol:0, rainT:0, evT:0};
+const WX_SUP=150, WX_SDOWN=420, WX_WUP=70, WX_WDOWN=300;   // segundos para que se cubra de nieve / se derrita; para mojarse / secarse
+function wxDet(now){ const slot=Math.floor(now/WEATHER_SLOT); let s=0, w=0;
+  for(let k=slot-3;k<=slot;k++){ const W=WEATHERS[weatherOfSlot(k)], t0=k*WEATHER_SLOT, d=Math.max(0,Math.min(now,(k+1)*WEATHER_SLOT)-t0);
+    if(W.snow>.05) s=Math.min(1,s+d*W.snow/WX_SUP); else s=Math.max(0,s-d/WX_SDOWN);
+    if(W.rain>.05) w=Math.min(1,w+d*W.rain/WX_WUP); else w=Math.max(0,w-d/(W.snow>.05?WX_WDOWN*.5:WX_WDOWN)); }
+  return [s,w]; }
+// el mapa de techos como textura (alto relativo a la cámara: 0 = sin techo, 255 = techo muy alto o todavía no se sabe)
+const WX_N=64, WX_RANGE=80;
+const WX_TEX=(()=>{ const d=new Uint8Array(WX_N*WX_N*4); const t=new THREE.DataTexture(d,WX_N,WX_N,THREE.RGBAFormat); t.magFilter=t.minFilter=THREE.NearestFilter; t.generateMipmaps=false; t.needsUpdate=true; return t; })();
+WXU.T[0]=WX_TEX;
+function wxRoofTex(){ const c=camera.position, x0=Math.floor(c.x)-WX_N/2, z0=Math.floor(c.z)-WX_N/2, base=c.y-40, D=WX_TEX.image.data;
+  for(let j=0;j<WX_N;j++) for(let i=0;i<WX_N;i++){ const h=roofTopAt(x0+i+.5,z0+j+.5), v=h>=1e8?255:Math.max(0,Math.min(255,Math.round((h-base)/WX_RANGE*255))), k=(j*WX_N+i)*4; D[k]=v; D[k+1]=v; D[k+2]=v; D[k+3]=255; }
+  WX_TEX.needsUpdate=true; WXU.V[1].set(x0,z0,WX_N,base); WXU.V[2].y=WX_RANGE; }
+// cada cuadro (desde updateSky): cuánta nieve y agua hay ahora
+function wxTick(dt,fe,now,W){ let s, w;
+  if(fe && fe.w){ const T=WEATHERS[fe.w]; s=WX.fs===null?WX.s:WX.fs; w=WX.fw===null?WX.w:WX.fw;   // tu planicie con clima fijo: se va juntando
+    if(T.snow>.05) s=Math.min(1,s+dt*T.snow/WX_SUP); else s=Math.max(0,s-dt/WX_SDOWN*(fe.w==='clear'?2:1));
+    if(T.rain>.05) w=Math.min(1,w+dt*T.rain/WX_WUP); else w=Math.max(0,w-dt/WX_WDOWN); WX.fs=s; WX.fw=w; }
+  else { [s,w]=wxDet(now); WX.fs=WX.fw=null; }
+  const k=Math.min(1,dt*.6); WX.s+=(s-WX.s)*k; WX.w+=(w-WX.w)*k; if(WX.s<.002) WX.s=0; if(WX.w<.002) WX.w=0;
+  const off=(typeof SP!=='undefined' && SP.on) || state==='menu' || ULTRA || settings.quality==='min';   /* (en Mínima no: lo más ligero posible) */ WXU.V[0].set(off?0:WX.s, off?0:WX.w, 0, 0); WXU.V[2].x=FREE.on?FREE.Y-1:SEA_Y+.05;
+  if(!off && (WX.s>0 || WX.w>0) && ((WX.rT-=dt)<=0 || Math.abs(camera.position.x-WX.cx)>4 || Math.abs(camera.position.z-WX.cz)>4)){ WX.rT=.45; WX.cx=camera.position.x; WX.cz=camera.position.z; wxRoofTex(); }
+  try{ wxNoWxTick(dt); }catch(e){}
+  if(!off) try{ wxGround(dt); }catch(e){ if(!WX.err){ WX.err=1; console.warn('clima suelo',e); } } }
+// los peluches (el tuyo, los de los demás y tu mascota) no se cubren de nieve ni se mojan
+function wxNo(M){ if(!M || !M.isMaterial || M.userData.noWx) return; M.userData.noWx=true; M.defines=Object.assign({},M.defines||{},{NO_WX:''}); M.needsUpdate=true; }
+function wxNoObj(o){ if(o) o.traverse(m=>{ if(m.isMesh || m.isSkinnedMesh) [].concat(m.material).forEach(wxNo); }); }
+function wxNoWxTick(dt){ if((WX.nwT-=dt)>0) return; WX.nwT=1.5; wxNoObj(plush); for(const r of mp.remotes.values()) if(r.obj) wxNoObj(r.obj); if(myPet.inst && myPet.inst.P) wxNoObj(myPet.inst.P.root); }
+// ¿aquí cae nieve o lluvia? (no bajo techo, no en el agua)
+function wxOpen(x,z,y){ const r=roofTopAt(x,z); return r<1e8 && r<=y+.15; }
+// ---- huellas en la nieve ----
+function wxPrintsInit(){ const c=document.createElement('canvas'); c.width=32; c.height=64; const g=c.getContext('2d'), gr=g.createRadialGradient(16,30,2,16,30,16);
+  gr.addColorStop(0,'rgba(150,170,200,.75)'); gr.addColorStop(.7,'rgba(170,190,215,.45)'); gr.addColorStop(1,'rgba(200,215,235,0)'); g.fillStyle=gr; g.beginPath(); g.ellipse(16,30,13,26,0,0,6.3); g.fill();
+  const t=new THREE.CanvasTexture(c), N=70, m=new THREE.InstancedMesh(new THREE.PlaneGeometry(.2,.32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({map:t, transparent:true, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2}),N);
+  m.count=0; m.frustumCulled=false; m.userData.noBatch=true; m.renderOrder=3; scene.add(m); WX.prints={m, L:[], N, d:0, side:1, lx:0, lz:0}; }
+const _wxM=new THREE.Matrix4(), _wxQ=new THREE.Quaternion(), _wxS=new THREE.Vector3(), _wxP=new THREE.Vector3(), _wxY=new THREE.Vector3(0,1,0);
+function wxPrintsTick(dt){ const P=WX.prints; if(!P) return; const p=player.pos, L=P.L;
+  if(WX.s>.3 && player.grounded && !player.swim && !player.car && !player.pg && !player.ac && plush.visible){ const d=Math.hypot(p.x-P.lx,p.z-P.lz); if(d>2){ P.lx=p.x; P.lz=p.z; }
+    else if(d>.42){ P.lx=p.x; P.lz=p.z; const g=groundAt(p.x,p.z,p.y+.3); if(Math.abs(g-p.y)<.12 && wxOpen(p.x,p.z,g)){ P.side=-P.side; const f=player.facing, c=Math.cos(f), s=Math.sin(f); L.push({x:p.x+c*.11*P.side, y:g+.015, z:p.z-s*.11*P.side, f, t:0}); if(L.length>P.N) L.shift(); } } }
+  let n=0; for(let i=L.length-1;i>=0;i--){ const q=L[i]; q.t+=dt; const life=24*(.3+WX.s); if(q.t>life || WX.s<.15){ L.splice(i,1); continue; } }
+  for(const q of L){ const life=24*(.3+WX.s), sc=Math.min(1,(life-q.t)/4); _wxQ.setFromAxisAngle(_wxY,q.f); _wxS.set(sc,1,sc); _wxP.set(q.x,q.y,q.z); _wxM.compose(_wxP,_wxQ,_wxS); P.m.setMatrixAt(n++,_wxM); }
+  P.m.count=n; P.m.visible=n>0; if(n) P.m.instanceMatrix.needsUpdate=true; }
+// ---- charquitos en la isla (en tu planicie el agua es de verdad: se junta en lo bajito) ----
+function wxPudInit(){ const c=document.createElement('canvas'); c.width=c.height=64; const g=c.getContext('2d'), gr=g.createRadialGradient(32,32,4,32,32,31);
+  gr.addColorStop(0,'rgba(255,255,255,.9)'); gr.addColorStop(.62,'rgba(235,242,250,.82)'); gr.addColorStop(.8,'rgba(70,82,104,.55)'); gr.addColorStop(1,'rgba(70,82,104,0)'); g.fillStyle=gr; g.fillRect(0,0,64,64);   // (orillita oscura: se ve el charco)
+  g.strokeStyle='rgba(255,255,255,.95)'; g.lineWidth=2; g.beginPath(); g.ellipse(26,24,12,5,-.5,Math.PI*1.1,Math.PI*1.6); g.stroke();
+  const t=new THREE.CanvasTexture(c), N=26, mat=new THREE.MeshBasicMaterial({map:t, color:0x8fa8c4, transparent:true, opacity:.78, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-3});
+  const m=new THREE.InstancedMesh(new THREE.CircleGeometry(1,20).rotateX(-Math.PI/2),mat,N); m.count=0; m.frustumCulled=false; m.userData.noBatch=true; m.renderOrder=3; scene.add(m);
+  WX.pud={m, L:[], N, spT:0}; }
+function wxPudSpot(){ const p=player.pos; for(let tries=0;tries<6;tries++){ const a=Math.random()*6.283, d=3+Math.random()*16, x=p.x+Math.cos(a)*d, z=p.z+Math.sin(a)*d, g=groundAt(x,z,p.y+4);
+    if(!(g>SEA_Y+.15) || Math.abs(g-p.y)>6) continue; let flat=true; for(const [dx,dz] of [[.8,0],[-.8,0],[0,.8],[0,-.8]]) if(Math.abs(groundAt(x+dx,z+dz,g+.5)-g)>.06){ flat=false; break; } if(!flat || !wxOpen(x,z,g)) continue;
+    return {x, y:g+.012, z, r:.45+Math.random()*.9, sx:.7+Math.random()*.5, a:Math.random()*6.283}; } return null; }
+function wxPudTick(dt){ const U=WX.pud; if(!U) return; const p=player.pos, L=U.L, show=Math.max(0,Math.min(1,(WX.w-.3)/.45));
+  if(FREE.on || show<=0 || player.pos.y<CAVE_TOP){ U.m.visible=false; U.m.count=0; if(!show) L.length=0; return; }
+  for(let i=L.length-1;i>=0;i--){ const q=L[i]; if(Math.hypot(q.x-p.x,q.z-p.z)>28) L.splice(i,1); }
+  if(L.length<U.N && (U.addT=(U.addT||0)-dt)<=0){ U.addT=.12; for(let k=0;k<(L.length<U.N/2?3:1);k++){ const q=wxPudSpot(); if(q) L.push(q); } }
+  let n=0; for(const q of L){ const r=q.r*show; _wxQ.setFromAxisAngle(_wxY,q.a); _wxS.set(r*q.sx,1,r); _wxP.set(q.x,q.y,q.z); _wxM.compose(_wxP,_wxQ,_wxS); U.m.setMatrixAt(n++,_wxM);
+    if(player.grounded && Math.hypot(p.x-q.x,p.z-q.z)<r*.9 && Math.abs(p.y-q.y)<.2 && Math.hypot(player.vel.x,player.vel.z)>1.5 && (U.spT-=dt)<=0){ U.spT=.32; try{ splashBurst(p.x,q.y,p.z,.28); audio.splash(.3); }catch(e){} } }
+  U.m.count=n; U.m.visible=n>0; if(n) U.m.instanceMatrix.needsUpdate=true; U.m.material.color.copy(skyNow).lerp(_c1.set(0xd8e6f2),.35); }
+// ---- muñecos de nieve (en la isla: tuyos, se derriten cuando se va la nieve) ----
+const WX_SNOWM=new THREE.MeshStandardMaterial({color:'#f6f9ff', roughness:.95});
+function wxSnowmanMesh(scarf){ const g=new THREE.Group(), add=(geo,m,x,y,z,s)=>{ const q=new THREE.Mesh(geo,m); q.position.set(x,y,z); if(s) q.scale.setScalar(s); g.add(q); return q; };
+  add(_freeSph,WX_SNOWM,0,.42,0,.42); add(_freeSph,WX_SNOWM,0,.98,0,.3); add(_freeSph,WX_SNOWM,0,1.42,0,.22);
+  const coal=FM('#26262e'); for(const x of [-.07,.07]) add(_freeSph,coal,x,1.47,.19,.032); for(const y of [.86,1.0,1.12]) add(_freeSph,coal,0,y,.29,.03);
+  const nose=add(new THREE.ConeGeometry(.04,.18,10),FM('#f39c4a'),0,1.42,.28); nose.rotation.x=Math.PI/2;
+  const sc=add(new THREE.TorusGeometry(.2,.055,8,18),FM(scarf||'#e5534b'),0,1.24,0); sc.rotation.x=Math.PI/2;
+  for(const s of [-1,1]){ const a=add(_freeCyl,FM('#7a5232'),s*.36,1.08,0); a.scale.set(.05,.2,.05); a.rotation.z=s*-1.0; }
+  g.traverse(q=>{ if(q.isMesh){ q.castShadow=true; q.receiveShadow=true; } }); return g; }
+function wxMakeSnowman(){ const f=player.facing, x=player.pos.x+Math.sin(f)*1.4, z=player.pos.z+Math.cos(f)*1.4, g=groundAt(x,z,player.pos.y+1);
+  if(Math.abs(g-player.pos.y)>.8 || !wxOpen(x,z,g)){ flashNote('Aquí no: busca un lugar plano con nieve'); return; }
+  if(WX.sm.length>=4){ const o=WX.sm.shift(); scene.remove(o.m); }
+  const m=wxSnowmanMesh(FREE_COLS[(Math.random()*12)|0]); m.position.set(x,g,z); m.rotation.y=f+Math.PI; m.userData.noBatch=true; m.traverse(q=>q.userData.noBatch=true); scene.add(m); WX.sm.push({m, x, z});
+  try{ wiPuff(x,g+.6,z,2); audio.slide(); }catch(e){} try{ lgAdd('muneco'); }catch(e){} }
+function wxSnowmenTick(dt){ for(let i=WX.sm.length-1;i>=0;i--){ const o=WX.sm[i], k=Math.max(0,Math.min(1,WX.s/.3)); o.m.scale.set(1,Math.max(.02,k),1); if(k<=.02){ scene.remove(o.m); WX.sm.splice(i,1); } } }
+// ---- en tu planicie: el agua de la lluvia se junta de verdad y se seca poco a poco; los muñecos se derriten ----
+function wxFreeTick(dt){ if(!FREE.on || typeof SU==='undefined') return; const host=!(FNET.on && !FNET.host), rain=weatherNow.rain||0;
+  if(!host) return;
+  if(rain>.3 && WX.w>.25){ if((WX.rainT-=dt)<=0){ WX.rainT=.5; for(let k=0;k<3 && WX.fwVol<1.2 && SU.vol<SU.max-6;k++){ const a=Math.random()*6.283, d=Math.sqrt(Math.random())*11, x=player.pos.x+Math.cos(a)*d, z=player.pos.z+Math.sin(a)*d;
+      if(!freeInside(x,z,.5)) continue; const g=freeGround(x,z,1e4); if(g===null || !wxOpen(x,z,g)) continue; WX.fwVol+=suPour(x,z,1,0,.004*rain,.3)||0; } } }
+  else if(WX.fwVol>0 && (WX.evT-=dt)<=0){ WX.evT=1; let got=0; for(const C of SU.list){ let ch=false; for(let i=0;i<256;i++){ if(C.t[i]!==1 || C.t2[i] || !(C.h[i]>0) || C.h[i]>.04 || C.c[i]) continue; const a=Math.min(C.h[i],.0025); C.h[i]-=a; got+=a*SU.cs*SU.cs; if(C.h[i]<.002){ got+=C.h[i]*SU.cs*SU.cs; C.h[i]=0; C.t[i]=0; } ch=true; }
+      if(ch){ C.aw=2; C.dirty=true; C.ver++; } } SU.vol=Math.max(0,SU.vol-got); WX.fwVol=Math.max(0,WX.fwVol-got); if(got<1e-5) WX.fwVol=0; }
+  if(WX.s<.05 && (WX.meltT=(WX.meltT||0)-dt)<=0){ WX.meltT=1; const o=FREE.objs.find(q=>q.sel.k==='p' && q.sel.a==='muneco' && !q.par); if(o){ const p=o.root.position; try{ wiPuff(p.x,p.y+.6,p.z,2); }catch(e){} freeDrop(o); freeSaveSoon(); } } }
+// cada cuadro
+function wxGround(dt){ if(!WX.prints) wxPrintsInit(); if(!WX.pud) wxPudInit(); wxPrintsTick(dt); wxPudTick(dt); wxSnowmenTick(dt); wxFreeTick(dt); }
+// ---- botones: hacer bola y muñeco de nieve (donde hay nieve), y lanzar la bola ----
+function wxCanSnow(){ if(WX.s<.35 || !player.grounded || player.swim || player.car || player.pg || player.ac || player.pos.y<CAVE_TOP || state!=='play') return false; const p=player.pos, g=groundAt(p.x,p.z,p.y+.3); return Math.abs(g-p.y)<.25 && wxOpen(p.x,p.z,g); }
+function wxThrowActions(){ if(!WI2.ball || FREE.on || (typeof wiOnIsland==='function' && wiOnIsland(player.pos.x,player.pos.z))) return null; return [{label:'❄️ Lanzar bola de nieve', run:wiThrow}, null]; }
+function wxActions(){ if(!wxCanSnow()) return null;
+  if(FREE.on){ if(FREE.sel || FREE.del || FREE.paint || FREE.play || FREE.hold) return null;
+    return [{label:'❄️ Hacer bola de nieve', run:()=>{ const f=player.facing, d=freeAddDyn('bolanieve',player.pos.x+Math.sin(f)*.6,player.pos.y+.2,player.pos.z+Math.cos(f)*.6); if(d){ fnLocalAdd(d); freeGrab(d); try{ audio.slide(); }catch(e){} } }},
+            {label:'❄️ Hacer muñeco de nieve', run:()=>{ const f=player.facing, x=player.pos.x+Math.sin(f)*1.5, z=player.pos.z+Math.cos(f)*1.5, g=freeGround(x,z,player.pos.y+1); if(g===null || !freeInside(x,z,.5)){ flashNote('Aquí no se puede'); return; }
+              const o=freeAddStatic({k:'p',a:'muneco',b:(Math.random()*12)|0},x,g,z,((Math.round(f/(Math.PI/2))%4)+6)%4); if(o){ fnLocalAdd(o); try{ wiPuff(x,g+.6,z,2); audio.slide(); }catch(e){} freeSaveSoon(); } }}]; }
+  if(typeof wiOnIsland==='function' && wiOnIsland(player.pos.x,player.pos.z)) return null;   // (la Isla Invierno tiene los suyos)
+  return [WI2.ball?{label:'❄️ Lanzar bola de nieve', run:wiThrow}:{label:'❄️ Hacer bola de nieve', run:()=>{ WI2.ball=true; try{ audio.slide(); }catch(e){} }}, {label:'❄️ Hacer muñeco de nieve', run:wxMakeSnowman}]; }
 // Rayos
 const bolt=(()=>{ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(16*3),3));
   const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xf4f6ff, fog:false, transparent:true, opacity:1})); l.frustumCulled=false; l.visible=false; scene.add(l); return l; })();
@@ -4614,6 +4730,7 @@ function updateSky(dt){
       if(cov && precipHidden(cov,a[i*3],a[i*3+1],a[i*3+2])) a[i*3+1]=-9999; }   // v186: bajo techo no nieva
     snowFx.mesh.geometry.setDrawRange(0,ns); snowFx.mesh.geometry.attributes.position.needsUpdate=true;
     snowFx.mesh.material.color.copy(_c1.set(0x8a93a8).lerp(_c2.set(0xffffff),day)); }
+  try{ wxTick(dt,fe,now,W); }catch(e){ if(!WX.err2){ WX.err2=1; console.warn('clima',e); } }   // v254: la nieve se junta y lo mojado se moja
   // Rayos y truenos
   if(W.storm>.6){ sky.nextBolt-=dt; if(sky.nextBolt<=0){ sky.nextBolt=5+Math.random()*12; strikeLightning(); } } else sky.nextBolt=3+Math.random()*5;
   if(sky.boltT>0){ sky.boltT-=dt; bolt.material.opacity=Math.min(1,sky.boltT*8); if(sky.boltT<=0) bolt.visible=false; }
@@ -7063,7 +7180,8 @@ ui('papPrivacy').onclick=()=>onlineAsk(privacyOpen, null, 'Para ver la privacida
 const NEWS_KEY='mundoPelucheNovedades';
 const NEWS={
   '254':['Modo libre: 9 bloques nuevos (escalón, pared, techo, cúpula, vidrio, bloque que brilla y más) y materiales: madera, piedra, ladrillo, galleta y dulce.',
-         'Modo libre: luces que alumbran de noche y botones, palancas, placas y temporizadores que abren puertas, suben el elevador, prenden luces y disparan cañones.'],
+         'Modo libre: luces que alumbran de noche y botones, palancas, placas y temporizadores que abren puertas, suben el elevador, prenden luces y disparan cañones.',
+         'Con nieve todo se va poniendo blanco (pasto, techos y árboles): haz bolas y muñecos de nieve. Con lluvia el piso se moja y salen charquitos.'],
   '253':['Para papás: nueva sección «Privacidad y anuncios», con palabras simples y la política de privacidad completa.'],
   '252':['La linterna ahora alumbra las paredes y lo que tengas enfrente (ya no las atraviesa).',
          'Ya no llueve ni nieva debajo de techos: ni en el primer piso del castillo, ni bajo bloques del Modo libre o islas flotantes.'],
@@ -8913,6 +9031,7 @@ function scanActions(){
   if(iSteer() || (player.pg && player.pg.k==='sled')){ const [x,y]=pgActions(); setActions(x,y); return; }   // v138: en el timón · v140: en el trineo
   { const va=vehActions(); if(va){ setActions(va[0],va[1]); return; } }   // v182: el vehículo y el taller
   { const wa=wiActions(); if(wa){ setActions(wa[0],wa[1]); return; } }   // v140: Isla Invierno
+  { const wt=wxThrowActions(); if(wt){ setActions(wt[0],wt[1]); return; } }   // v254: la bola de nieve en la mano (en toda la isla)
   { const ja=jiActions(); if(ja){ setActions(ja[0],ja[1]); return; } }   // v142: Isla Selva
   { const da=diActions(); if(da){ setActions(da[0],da[1]); return; } }   // v144: Isla Dulce
   { const ra=rocketActions(); if(ra){ setActions(ra[0],ra[1]); return; } }
@@ -8946,7 +9065,7 @@ function scanActions(){
     if(Math.abs(c.v)>1.5 || Math.hypot(c.x-player.pos.x,c.z-player.pos.z)>9) continue;
     for(let d=0;d<4;d++){ const w=carLocalToWorld(c,...doorOutside(c,d)), dd=Math.hypot(w.x-player.pos.x,w.z-player.pos.z); if(dd<bd && Math.abs(w.y-player.pos.y)<2){ bd=dd; best={c,d}; } }
   }
-  if(!best){ const fb=pierFallback()||tblBackActions()||obActions(); setActions(fb?fb[0]:null, fb?fb[1]:null); return; }   // v212: tu objeto en la mano
+  if(!best){ const fb=pierFallback()||tblBackActions()||obActions()||wxActions(); setActions(fb?fb[0]:null, fb?fb[1]:null); return; }   // (v254: con nieve: bola y muñeco)   // v212: tu objeto en la mano
   const {c,d}=best, open=(c.doorMask>>d)&1, nm=c.T.name;
   if(!open){ setActions({label:'Abrir puerta', run:()=>setDoor(c,d,true)}, null); return; }
   const s=freeSeatForDoor(c.i,d);
@@ -20174,7 +20293,7 @@ function wi2Tick(dt,t){ if(!WI.done) return;
     if(hit){ scene.remove(m); WI2.balls.splice(i,1); } }
   for(let i=WI2.puffs.length-1;i>=0;i--){ const q=WI2.puffs[i]; q.t+=dt; q.sp.scale.setScalar(q.s*(.4+q.t*1.6)); q.sp.material.opacity=Math.max(0,.9-q.t*1.8); q.sp.position.y+=dt*.4; if(q.t>.5){ scene.remove(q.sp); q.sp.material.dispose(); WI2.puffs.splice(i,1); } }
   // la bola en la mano
-  if(WI2.ball && !(state==='play' && wiOnIsland(player.pos.x,player.pos.z) && !player.pg && !player.swim)) { if(!wiOnIsland(player.pos.x,player.pos.z) || player.swim) WI2.ball=false; }
+  if(WI2.ball && !(state==='play' && wiOnIsland(player.pos.x,player.pos.z) && !player.pg && !player.swim)) { if((!wiOnIsland(player.pos.x,player.pos.z) && !(WX.s>.2 && !FREE.on && state==='play')) || player.swim) WI2.ball=false; }   // (v254: con nieve en la isla también)
   if(!WI2.hand){ WI2.hand=new THREE.Mesh(WI_BALLG,WI_BALLM); WI2.hand.userData.noBatch=true; scene.add(WI2.hand); }
   WI2.hand.visible=WI2.ball && plush.visible; if(WI2.hand.visible){ const f=player.facing, c=Math.cos(f), s=Math.sin(f); WI2.hand.position.set(player.pos.x+s*.35-c*.42, player.pos.y+1.05, player.pos.z+c*.35+s*.42); }
   // la taza de chocolate
@@ -23633,10 +23752,11 @@ const FREE_PHYS=[{id:'playa',n:'Pelota de playa',r:.45,b:.72,mass:.35,roll:1},{i
   {id:'lanzadora',n:'Lanzadora de discos',st:1,gad:'lanzadora',toy:'lanzadora'},{id:'disco',n:'Disco volador',r:.22,b:.3,mass:.15,roll:0,hid:1,toy:'disco'},
   // v254: luces y mecanismos (en «💡 Luces y botones»)
   {id:'farol',n:'Farol',st:1,mec:1,solid:1},{id:'foco',n:'Foco de color',st:1,mec:1},{id:'tira',n:'Tira de luces',st:1,mec:1},
-  {id:'palanca',n:'Palanca',st:1,mec:1},{id:'placa',n:'Placa para pisar',st:1,mec:1},{id:'timer',n:'Temporizador',st:1,mec:1}];
+  {id:'palanca',n:'Palanca',st:1,mec:1},
+  {id:'bolanieve',n:'Bola de nieve',r:.17,b:.06,mass:.35,roll:1,pop:1,hid:1,snow:1},{id:'muneco',n:'Muñeco de nieve',st:1,hid:1,solid:1},{id:'placa',n:'Placa para pisar',st:1,mec:1},{id:'timer',n:'Temporizador',st:1,mec:1}];
 const FREE_PHYS_BY={}; FREE_PHYS.forEach(p=>FREE_PHYS_BY[p.id]=p);
 // v237: qué tan pesada es cada cosa para su tamaño (comparada con el agua = 1): menos que la sustancia, flota; más, se hunde despacito
-const FREE_DN={playa:.06, goma:.6, tela:.35, boliche:2.4, caja:.55, barril:.6, balon:.12, canica:2.5, rueda:.85, dado:.55, espuma:.08, hielo:.92, globo:.03, cojin:.3, basket:.15, agua:1.02, dulce:1.4,
+const FREE_DN={bolanieve:.6, playa:.06, goma:.6, tela:.35, boliche:2.4, caja:.55, barril:.6, balon:.12, canica:2.5, rueda:.85, dado:.55, espuma:.08, hielo:.92, globo:.03, cojin:.3, basket:.15, agua:1.02, dulce:1.4,
   domino:.65, bolo:.7, bloque:.6, trompo:.8, saltarina:.5, slinky:2.2, carrito:1.3, avion:.4, papalote:.3, bumeran:.7, helio:.02, cohete:.9, disco:.9};
 function freeDn(d){ return FREE_DN[d.P.id]||1; }
 // ---- v237: LA ARENA ----
@@ -23890,6 +24010,7 @@ function freeBallMat(id){ if(_freeBallTex[id]) return _freeBallTex[id]; let m;
     cs.forEach((col,i)=>{ q.fillStyle=col; q.fillRect(i*256/6,0,256/6+1,128); }); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; m=new THREE.MeshStandardMaterial({map:t,roughness:.45}); }
   else if(id==='goma') m=new THREE.MeshStandardMaterial({color:new THREE.Color('#ff3d6e').convertSRGBToLinear(),roughness:.3,metalness:.05});
   else if(id==='tela') m=FM('#9a6ad6');
+  else if(id==='bolanieve') m=WX_SNOWM;   // v254
   else if(id==='boliche') m=new THREE.MeshStandardMaterial({color:new THREE.Color('#2b3a8f').convertSRGBToLinear(),roughness:.15,metalness:.2});
   else m=FM('#c79a6a');
   return _freeBallTex[id]=m; }
@@ -24168,6 +24289,7 @@ function freeMake(sel){ const root=new THREE.Group(); if(sel.k==='s'){ if(!SU_T[
       for(const y of [-.3,.3]){ const h=new THREE.Mesh(new THREE.TorusGeometry(.355,.035,6,18),new THREE.MeshStandardMaterial({color:0x6b6f78,metalness:.5,roughness:.4})); h.rotation.x=Math.PI/2; h.position.y=y; inner.add(h); }
       inner.rotation.z=Math.PI/2; const spin=new THREE.Group(); spin.add(inner); root.add(spin); root.userData.spin=spin; }
     else if(P.mec && mecMakeX(P,root,sel.b|0)){}   // v254: luces y mecanismos
+    else if(P.id==='muneco'){ root.add(wxSnowmanMesh(FREE_COLS[(sel.b|0)%12])); }   // v254: muñeco de nieve
     else if(freeMakeX(P,root)){}   // v224: las cosas nuevas
     else { const m=new THREE.Mesh(_freeSph,freeBallMat(P.id)); m.scale.setScalar(P.r); root.add(m); root.userData.spin=m; } }
   else if(sel.k==='g'){ if(!FREE_GAME_BY[sel.a]) return null; fgMake(sel.a,root); }   // v209: piezas de juego (Crear mapa)
@@ -24788,7 +24910,7 @@ function freeBagHit(o,dx,dz,k){ o.bvx=(o.bvx||0)+dx*k; o.bvz=(o.bvz||0)+dz*k; tr
 function freeCatFire(o){ if(o.catT>0) return; o.catT=1; try{ audio.flop(.7); }catch(e){} const [cx,cz]=freeW(o,0,.78), cy=o.y+.65, a=o.r*Math.PI/2, fx=Math.sin(a), fz=Math.cos(a);
   if(!(FNET.on && !FNET.host)) for(const d of FREE.dyn){ if(d.held) continue; const p=d.root.position; if(Math.hypot(p.x-cx,p.z-cz)<.75 && Math.abs(p.y-cy)<1){ d.v.set(fx*8,11,fz*8); d.kick=.4; freeWake(d); } }
   const P=player.pos; if(Math.hypot(P.x-cx,P.z-cz)<.8 && Math.abs(P.y-cy)<1.2){ player.vy=16; player.grounded=false; FREE.fling={fx,fz,t:.9}; } }
-function freeSplash(d){ const p=d.root.position; try{ splashBurst(p.x,p.y,p.z,.9); }catch(e){ try{ dustBurst(p.x,p.y,p.z,20,2.5,'#7fc8ff',.18); }catch(_){} } freeTone(500,.2,'sine',.12,180); freeDrop(d); }
+function freeSplash(d){ const p=d.root.position; if(d.P.snow){ try{ wiPuff(p.x,p.y,p.z,1.3); audio.flop(.3); }catch(e){} freeDrop(d); return; }   /* v254: la bola de nieve se deshace */ try{ splashBurst(p.x,p.y,p.z,.9); }catch(e){ try{ dustBurst(p.x,p.y,p.z,20,2.5,'#7fc8ff',.18); }catch(_){} } freeTone(500,.2,'sine',.12,180); freeDrop(d); }
 function freeGadgets2(dt){ const host=!(FNET.on && !FNET.host), T=clock.elapsedTime, W=freeWho(), P=player.pos; let teles=null;
   if(FREE.fling){ const F=FREE.fling; F.t-=dt; P.x+=F.fx*9*dt; P.z+=F.fz*9*dt; if(F.t<=0 || (player.grounded && F.t<.7)) FREE.fling=null; }
   if(FREE.soft>0){ FREE.soft-=dt; if(player.vy<-4.5) player.vy=-4.5; if(player.grounded && !FREE.ride) FREE.soft=0; }   // al salir de la burbuja caes suavecito
@@ -24974,6 +25096,7 @@ function freeActions(){ if(!FREE.on) return null; if(FREE.play || (player.pg && 
   { const pn=freePinataNear(); if(pn) return [{label:'🪅 Tomar un palo', run:()=>freeStickTake()}, null]; }   // la cajita: un palo para pegarle
   { const fa=fuNearActions(); if(fa) return fa; }   // v234: la máquina de sustancias
   { const bm=freeBubNear(); if(bm) return [{label:'⚙️ Configurar burbujas', run:()=>freeBubOpen(bm)}, null]; }   // v226
+  { const xa=wxActions(); if(xa) return xa; }   // v254: con nieve: bola y muñeco
   return pqActions(); }
 // ================= v232: 🪣 SUSTANCIAS (agua, slime, lodo, miel, pintura y espuma) =================
 // El piso se parte en cuadritos de 20 cm (en trozos de 16×16 que solo existen donde hay algo). Cada cuadrito sabe qué sustancia
@@ -25223,7 +25346,7 @@ function suMat(key){ if(SU.mats[key]) return SU.mats[key]; const p=key>SU_NT?key
   }
   gl_FragColor = vec4( outgoingLight, diffuseColor.a );`); }; m.customProgramCacheKey=()=>'su'+p; }
   else { m.onBeforeCompile=sh=>{ sh.vertexShader=sh.vertexShader.replace('#include <shadowmap_vertex>',SU_SHV); }; m.customProgramCacheKey=()=>'sus'+p; }
-  return SU.mats[key]=m; }
+  wxNo(m); return SU.mats[key]=m; }
 // v233: ondas solo en el agua (y chiquitas y rápidas en la pintura); el slime tiembla, la miel se hunde, el lodo se marca, la espuma revienta
 // v237: la espuma de la cortina: una tira blanca a lo largo de donde pega el agua (se dibuja en el agua; no cuesta sustancia ni cálculo)
 SU.fo=[]; function suFoAdd(P,x,z){ const L=SU.fo, F=P.fF||null; let e=F?L.find(q=>q.F===F):null; if(!e){ e=L.find(q=>Math.hypot(q.x-x,q.z-z)<.5); }
@@ -27726,7 +27849,7 @@ let _pqWaterM=null;
 function pqWaterMat(){ if(_pqWaterM) return _pqWaterM; const c=document.createElement('canvas'); c.width=c.height=128; const q=c.getContext('2d'); q.fillStyle='#4fb8ef'; q.fillRect(0,0,128,128);
   q.strokeStyle='rgba(255,255,255,.35)'; q.lineWidth=2; const R=pqRnd(5); for(let i=0;i<22;i++){ q.beginPath(); const x=R()*128, y=R()*128; q.moveTo(x,y); q.quadraticCurveTo(x+8,y-6,x+18,y+2); q.stroke(); }
   const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(2,2);
-  return _pqWaterM=new THREE.MeshStandardMaterial({map:t, transparent:true, opacity:.78, roughness:.12, metalness:.05, depthWrite:false}); }
+  _pqWaterM=new THREE.MeshStandardMaterial({map:t, transparent:true, opacity:.78, roughness:.12, metalness:.05, depthWrite:false}); wxNo(_pqWaterM); return _pqWaterM; }
 // ---- el tobogán de agua, el carrito y la patineta (se agregan a pqMakeV) ----
 function pqSlideCurve(s){ return [0, .38+2.62*Math.pow(1-s,1.6), -1.8+5.3*s]; }
 function pqMakeV2(V,sel,root,U,add,rod,seat,col){ const wood=FM('#c79a6a'), dark=FM('#3a3a44'), cream=FM('#fff6e3'), water=FM('#8fe0ff');
