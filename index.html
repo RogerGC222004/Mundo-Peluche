@@ -1040,6 +1040,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
       <div class="opt opt-col"><label>Límite de juego por día<small>Avisa 5 minutos antes. Si estás en un minijuego o manejando, te deja terminar. Se reinicia a medianoche.</small></label>
         <div class="seg" id="papLimit"><button data-v="0">Sin límite</button><button data-v="30">30 min</button><button data-v="60">1 h</button><button data-v="90">1 h 30</button><button data-v="120">2 h</button></div></div>
       <div class="opt"><label for="papAds">Anuncios con premio<small>Botones opcionales para ganar un premio extra viendo un anuncio. Si lo apagas, no aparece ninguno.</small></label><button class="switch" id="papAds" role="switch" aria-checked="true" aria-label="Anuncios con premio"></button></div>
+      <div class="opt"><label for="papPrivacy">Privacidad y anuncios<small>Cómo funcionan los anuncios, qué datos se usan y la política de privacidad completa.</small></label><button class="btn" id="papPrivacy" style="padding:8px 14px;font-size:15px">Ver</button></div>
       <div class="opt"><label for="optFeedback">Enviar comentarios<small>Escríbenos qué te gusta, qué falla o qué te gustaría. Abre tu correo, después de una operación para adultos.</small></label><button class="btn" id="optFeedback" style="padding:8px 14px;font-size:15px">Escribir</button></div>
     </div>
 
@@ -1676,7 +1677,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='252';
+const GAME_VERSION='253';
 // ======================================================================================
 // ---------------- v242: ÍCONOS DIBUJADOS EN LUGAR DE EMOJIS ----------------
 // Cada emoji de la lista se cambia, donde aparezca en la pantalla, por un dibujo hecho a mano con el mismo estilo de la barra
@@ -7087,7 +7088,7 @@ function onlineSyncUI(){ const b=document.getElementById('optOnline'); if(b) b.s
   const fs=document.getElementById('freeNetBox'); if(fs) fs.classList.toggle('net-off', !ONLINE.on); }
 (()=>{ const st=document.createElement('style'); st.textContent='.online-card{max-width:min(460px,92vw);} .online-op{font-family:var(--display);font-size:34px;font-weight:800;text-align:center;margin:8px 0;color:var(--thread);letter-spacing:1px;}'
   +' .online-in{display:block;width:100%;box-sizing:border-box;font:800 26px var(--body);text-align:center;padding:8px;border-radius:12px;border:3px solid #e2d6b8;background:#fffdf6;}'
-  +' .online-err{min-height:1.2em;color:#b4382f;font-weight:800;text-align:center;margin:6px 0;} .online-sm{font-size:13px;opacity:.8;} .online-tips{padding-left:4px;list-style:none;} .online-tips li{margin:8px 0;font-weight:700;}'
+  +' .online-err{min-height:1.2em;color:#b4382f;font-weight:800;text-align:center;margin:6px 0;} .online-sm{font-size:13px;opacity:.8;} .online-tips{padding-left:4px;list-style:none;} .online-tips li{margin:8px 0;font-weight:700;} .online-list{padding-left:20px;margin:6px 0;text-align:left;} .online-list li{margin:6px 0;font-size:14px;line-height:1.35;}'
   +' #freeNetBox.net-off > :not(.net-note){display:none!important;} #freeNetBox:not(.net-off) .net-note{display:none;}';
   document.head.appendChild(st); })();
 const roomPromise = Promise.resolve(window.__fakeNet || peerNet);
@@ -7201,10 +7202,31 @@ function feedbackOpen(){ const ov=onlineCard('<h2>Enviar comentarios</h2><p>Se a
   ov.querySelector('.fb-go').onclick=()=>{ const u=feedbackUrl(); window.__fbLast=u; onlineClose(); if(!window.__fbNoNav) try{ location.href=u; }catch(e){} };
   ov.querySelector('.fb-no').onclick=()=>onlineClose(); }
 ui('optFeedback').onclick=()=>onlineAsk(feedbackOpen, null, 'Para escribirnos un correo, resuelve esta operación:');
+// v253: «Privacidad y anuncios» (Para papás): explica los anuncios con palabras simples, enlaza la política de privacidad y, si Google
+// dice que hace falta (window.MundoPriv, solo en la app con anuncios prendidos), abre sus «Opciones de privacidad de anuncios».
+const PRIVACY_URL='https://rogergc222004.github.io/Mundo-Peluche/privacidad.html';
+function privacyState(){ const app=!!window.__MP_APP;
+  if(!app) return 'En esta versión (web) no hay anuncios de verdad.';
+  if(window.__MP_APP.pruebas) return 'Por ahora la app todavía no muestra anuncios.';
+  return PAR.ads ? 'Ahora: prendidos (solo salen si alguien toca ▶).' : 'Ahora: apagados por un adulto.'; }
+function privacyOpen(){ const P=window.MundoPriv, need=!!(P && P.need);
+  const ov=onlineCard('<h2>🔒 Privacidad y anuncios</h2>'
+    +'<ul class="online-list"><li>Un anuncio solo sale si alguien toca un botón ▶ para ganar un premio. Máximo 10 al día.</li>'
+    +'<li>Son anuncios para todo público y <b>nunca personalizados</b>: el juego está marcado para niños y no usa el identificador de publicidad.</li>'
+    +'<li>No pedimos cuenta, nombre real, correo ni fotos. Tu progreso se guarda en este dispositivo.</li>'
+    +'<li>Puedes apagar los anuncios en «Anuncios con premio».</li></ul>'
+    +'<p class="online-sm">'+privacyState()+'</p>'
+    +'<div class="btns">'+(need?'<button class="btn pv-opt">Opciones de privacidad de anuncios</button>':'')+'<button class="btn primary pv-go">Leer la política</button><button class="btn pv-no">Cerrar</button></div>');
+  ov.querySelector('.pv-no').onclick=()=>onlineClose();
+  ov.querySelector('.pv-go').onclick=()=>{ window.__pvLast=PRIVACY_URL; onlineClose(); if(window.__fbNoNav) return;
+    try{ if(window.__MP_APP) location.href=PRIVACY_URL; else window.open(PRIVACY_URL,'_blank','noopener'); }catch(e){} };
+  const o=ov.querySelector('.pv-opt'); if(o) o.onclick=()=>{ onlineClose(); try{ P.open().catch(()=>flashNote('No se pudieron abrir las opciones de privacidad. Intenta más tarde.')); }catch(e){} }; }
+ui('papPrivacy').onclick=()=>onlineAsk(privacyOpen, null, 'Para ver la privacidad y los anuncios, resuelve esta operación:');
 // v248: «¿Qué hay de nuevo?» una sola vez al abrir una versión nueva (en el menú). La primera vez que se instala no sale:
 // solo guarda la versión, para no llenar de avisos a quien apenas empieza.
 const NEWS_KEY='mundoPelucheNovedades';
 const NEWS={
+  '253':['Para papás: nueva sección «Privacidad y anuncios», con palabras simples y la política de privacidad completa.'],
   '252':['La linterna ahora alumbra las paredes y lo que tengas enfrente (ya no las atraviesa).',
          'Ya no llueve ni nieva debajo de techos: ni en el primer piso del castillo, ni bajo bloques del Modo libre o islas flotantes.'],
   '251':['En primera persona la linterna ahora alumbra hacia donde miras, y tu peluche hace sombra.',
