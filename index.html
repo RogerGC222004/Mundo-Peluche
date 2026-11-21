@@ -1676,7 +1676,7 @@ const peerNet = makePeerNet('mundopeluche-v1-');
 </script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='251';
+const GAME_VERSION='252';
 // ======================================================================================
 // ---------------- v242: ÍCONOS DIBUJADOS EN LUGAR DE EMOJIS ----------------
 // Cada emoji de la lista se cambia, donde aparezca en la pantalla, por un dibujo hecho a mano con el mismo estilo de la barra
@@ -4648,12 +4648,31 @@ function buildPrecip(){
 }
 function wrap(v,box){ return ((v+box)%(2*box)+2*box)%(2*box)-box; }
 // v186: lo que tiene techo (las casitas, la casita de Tortu y la mina): ahí adentro no llueve ni nieva
-const _pcov=[];
+// v252: y en general, si hay algo encima (el segundo piso y la muralla del castillo, bloques del Modo libre, islas flotantes, muelles…),
+// la lluvia y la nieve no pasan hacia abajo. Se guarda un «mapa de techos» por cuadritos de medio metro alrededor de la cámara;
+// cada cuadrito se revisa una vez y se vuelve a revisar cada medio minuto (o al poner o quitar algo en el Modo libre), y solo unos cuantos
+// por segundo (para no cansar al celular).
+const ROOF={C:.5, N:128, ix:new Int32Array(128*128).fill(-2147483648), iz:new Int32Array(128*128), h:new Float32Array(128*128), t:new Float64Array(128*128), g:new Int32Array(128*128), gen:1, bud:0, now:0, last:0, ttl:30, fo:null, per:1800};
+function roofCalc(x,z){ let r=groundAt(x,z,1e4); const d=Math.hypot(x,z);
+  if(d<CAKE.towerR+2.2*CS){ if(d>CAKE.wallR-CAKE.wallT-.1 && d<CAKE.wallR+CAKE.wallT+.1) r=Math.max(r,CAKE.H);   // la muralla (también arriba de las puertas)
+    for(let k=0;k<4;k++){ const ta=Math.PI/4+k*Math.PI/2; if(Math.hypot(x-Math.cos(ta)*CAKE.towerR,z-Math.sin(ta)*CAKE.towerR)<1.9*CS) r=Math.max(r,9.4*CS); } }   // las torres
+  return r; }
+function roofTopAt(x,z){ const C=ROOF.C, ix=Math.floor(x/C), iz=Math.floor(z/C), k=((ix&127)<<7)|(iz&127);
+  const known=ROOF.ix[k]===ix && ROOF.iz[k]===iz && ROOF.g[k]===ROOF.gen;
+  if(known && ROOF.now-ROOF.t[k]<ROOF.ttl) return ROOF.h[k];
+  if(ROOF.bud<1) return known ? ROOF.h[k] : 1e9;   // (si aún no se sabe, mejor no dibujar la gotita que dibujarla bajo techo)
+  ROOF.bud--; const gh=groundAt.hint, h=roofCalc((ix+.5)*C,(iz+.5)*C); groundAt.hint=gh;
+  ROOF.ix[k]=ix; ROOF.iz[k]=iz; ROOF.h[k]=h; ROOF.g[k]=ROOF.gen; ROOF.t[k]=ROOF.now-Math.random()*ROOF.ttl*.5; return h; }
+function roofFrame(now){ const dt=Math.min(.1,Math.max(0,now-ROOF.last)); ROOF.last=ROOF.now=now; ROOF.bud=Math.min(ROOF.bud,0)+Math.max(16,ROOF.per*dt);   // unos 1800 cuadritos por segundo, vaya rápido o lento el juego
+  const fo=!!(FREE && FREE.on); if(fo!==ROOF.fo){ ROOF.fo=fo; ROOF.gen++; }
+  ROOF.ttl=fo && FREE.mov && FREE.mov.length ? 3 : 30; }   // (en el Modo libre con cosas que se mueven, más seguido)
+const _pcov=[], _pcovO={list:_pcov, pier:false};
 function precipCovers(cx,cy,cz,box){ if(cy<CAVE_TOP) return 'all'; _pcov.length=0;
   if(typeof HS!=='undefined' && HS && HS.shown) for(const b of HS.shown.values()){ if(!b.cover) continue; const L=b.L; if(Math.abs(L.x-cx)>HZ.H*1.5+box || Math.abs(L.z-cz)>HZ.H*1.5+box) continue; _pcov.push(b); }
-  const pier=typeof PIER!=='undefined' && Math.hypot(PIER.bx-cx,PIER.bz-cz)<box+30;
-  return _pcov.length||pier ? {list:_pcov, pier} : null; }
+  _pcovO.pier=typeof PIER!=='undefined' && Math.hypot(PIER.bx-cx,PIER.bz-cz)<box+30;
+  return _pcovO; }
 function precipHidden(cov,x,y,z){ if(cov==='all') return true;
+  if(y<roofTopAt(x,z)) return true;
   for(const b of cov.list){ const L=b.L, [lx,lz]=lotL(L,x,z), i=Math.floor((lx+HZ.H)/HZ.C), j=Math.floor((lz+HZ.H)/HZ.C); if(i<0||j<0||i>=HZ.N||j>=HZ.N) continue;
     if(y<L.y+b.cover[j*HZ.N+i]) return true; }
   return cov.pier && inHouse(x,z,y); }
@@ -4736,6 +4755,7 @@ function updateSky(dt){
   // Lluvia y nieve
   if(!rainFx || rainFx.q!==settings.quality){ if(rainFx){ scene.remove(rainFx.mesh, snowFx.mesh); rainFx.mesh.geometry.dispose(); snowFx.mesh.geometry.dispose(); } buildPrecip(); }
   const cx=camera.position.x, cy=camera.position.y, cz=camera.position.z, windX=W.wind*4, windZ=W.wind*1.5;
+  roofFrame(now);
   const nr=Math.round(rainFx.n*W.rain); rainFx.mesh.visible=nr>0 && !under;
   if(rainFx.mesh.visible){ const d=rainFx.d, a=rainFx.pos, vy=22, len=.9;
     const cov=precipCovers(cx,cy,cz,PRECIP_BOX);
@@ -7185,6 +7205,8 @@ ui('optFeedback').onclick=()=>onlineAsk(feedbackOpen, null, 'Para escribirnos un
 // solo guarda la versión, para no llenar de avisos a quien apenas empieza.
 const NEWS_KEY='mundoPelucheNovedades';
 const NEWS={
+  '252':['La linterna ahora alumbra las paredes y lo que tengas enfrente (ya no las atraviesa).',
+         'Ya no llueve ni nieva debajo de techos: ni en el primer piso del castillo, ni bajo bloques del Modo libre o islas flotantes.'],
   '251':['En primera persona la linterna ahora alumbra hacia donde miras, y tu peluche hace sombra.',
          'El cartel de las misiones del día ahora es de chocolate y galleta.'],
   '250':['¡Nuevo! Botón «Logros» en el menú: gana medallas de bronce, plata y oro y reclama monedas.',
@@ -14397,11 +14419,51 @@ function gearPose(M,dt){ const ease=(o,p,v,k)=>{ o[p]+=(v-o[p])*k; };
   if(M.lamp.visible){ const a=M.armL, j=a.userData.joint; a.rotation.x=-1.32; a.rotation.z=.16; a.rotation.y=0; j.rotation.x=-.18; j.rotation.z=-.22; j.rotation.y=0; } }   // linterna al frente, alumbrando hacia donde camina (se fija después de la animación de caminar)
 // la luz de la linterna: dónde pega (suelo o pared) y el círculo de luz en el piso
 const _lv=new THREE.Vector3(), _lw=new THREE.Vector3();
+// v252: ¿la luz de la linterna choca aquí? El piso (o un escalón), las paredes, torres y el segundo piso del castillo, árboles, rocas y cosas
+// (lo que es gordito: se revisa a pasitos; lo delgado, como los muros y pisos de las casitas y las piezas del Modo libre, se revisa exacto en lampBoxT)
+// el piso: ¿este punto está adentro de la tierra (un cerro, un escalón)? (un piso con aire abajo, como el de arriba de una casita, no cuenta: ese es techo)
+function lampGround(x,y,z){ const g=groundAt(x,z,y+.05); return y<=g && groundAt(x,z,y-.8)>=g-.01; }
+function lampBlocked(x,y,z){
+  if(cakeSolid(x,y,z)) return true;
+  for(const o of obsNear(x,z)){ const ex=x-o.x, ez=z-o.z; if(ex*ex+ez*ez>o.r*o.r || y>o.top) continue;
+    if(o._lb===undefined) o._lb=o.bot!==undefined ? o.bot : groundAt(o.x,o.z,o.top-.5)-.05;   // dónde empieza (lo que está en un segundo piso no tapa el de abajo)
+    if(y>=o._lb) return true; }
+  return false; }
+// dónde entra un rayo (origen o, dirección d, hasta tMax) a una caja; -1 si no entra (o si empieza adentro)
+function rayBoxT(ox,oy,oz,dx,dy,dz,x0,y0,z0,x1,y1,z1,tMax){ let t0=0, t1=tMax, p, q, r;
+  p=1/(dx||1e-9); q=(x0-ox)*p; r=(x1-ox)*p; if(q>r){ const w=q; q=r; r=w; } if(q>t0) t0=q; if(r<t1) t1=r; if(t0>t1) return -1;
+  p=1/(dy||1e-9); q=(y0-oy)*p; r=(y1-oy)*p; if(q>r){ const w=q; q=r; r=w; } if(q>t0) t0=q; if(r<t1) t1=r; if(t0>t1) return -1;
+  p=1/(dz||1e-9); q=(z0-oz)*p; r=(z1-oz)*p; if(q>r){ const w=q; q=r; r=w; } if(q>t0) t0=q; if(r<t1) t1=r; if(t0>t1) return -1;
+  return t0>1e-4 ? t0 : -1; }
+// lo primero que toca la luz entre los muros y puertas cerradas de las casitas y las piezas del Modo libre (o -1)
+function lampBoxT(ox,oy,oz,dx,dy,dz,tMax){ let best=-1; const take=t=>{ if(t>0 && (best<0 || t<best)){ best=t; tMax=t; } };
+  if(HS && HS.shown && HS.shown.size){ const mx=ox+dx*tMax*.5, mz=oz+dz*tMax*.5, reach=HZ.H*1.42+tMax*Math.hypot(dx,dz)*.5+1;
+    for(const b of HS.shown.values()){ const L=b.L; if(Math.abs(L.x-mx)>reach || Math.abs(L.z-mz)>reach) continue;
+      const [lx,lz]=lotL(L,ox,oz), ux=dx*L.c-dz*L.s, uz=dx*L.s+dz*L.c, ly=oy-L.y;
+      for(const c of b.cols) take(rayBoxT(lx,ly,lz,ux,dy,uz,c[0],c[1],c[2],c[3],c[4],c[5],tMax));
+      if(!b._lf){ b._lf=[]; for(const [k,a] of b.floors){ const [i,j]=k.split(',').map(Number), x0=-HZ.H+i*HZ.C, z0=-HZ.H+j*HZ.C; for(const fy of a) if(fy>.5) b._lf.push([x0,fy-.18,z0,x0+HZ.C,fy,z0+HZ.C]); } }   // los pisos de arriba (techo del de abajo)
+      for(const c of b._lf) take(rayBoxT(lx,ly,lz,ux,dy,uz,c[0],c[1],c[2],c[3],c[4],c[5],tMax));
+      if(b.doors) for(const d of b.doors){ const c=d.col; if(c && d.open<.5) take(rayBoxT(lx,ly,lz,ux,dy,uz,c[0],c[1],c[2],c[3],c[4],c[5],tMax)); } } }
+  if(FREE && FREE.on){ const ex=ox+dx*tMax, ez=oz+dz*tMax;
+    for(const o of fgQuery(Math.min(ox,ex),Math.min(oz,ez),Math.max(ox,ex),Math.max(oz,ez))){ const bx=o.cols||(o.solid && !o.hf ? [o.box] : null); if(!bx) continue;
+      for(const c of bx) take(rayBoxT(ox,oy,oz,dx,dy,dz,c.min.x,c.min.y,c.min.z,c.max.x,c.max.y,c.max.z,tMax)); } }
+  return best; }
 function lampAim(M,night){ const L=M.lamp; L.updateMatrixWorld(true); let a=L.localToWorld(_lv.set(0,-.25,0)), b=L.localToWorld(_lw.set(0,-1.25,0));
   if(M===plush.userData.mg && camMode==='first' && !player.mg){ camera.updateMatrixWorld(); camera.getWorldDirection(_lw); a=_lv.copy(camera.position).addScaledVector(_lw,.35); a.y-=.3; b=_lw.add(a); }   // v251: en 1ª persona alumbra hacia donde miras
-  const dx=b.x-a.x, dy=b.y-a.y, dz=b.z-a.z;
-  let x=a.x, y=a.y, z=a.z, hit=false; const inC=a.y<CAVE_TOP;
-  for(let i=0;i<20;i++){ x+=dx*.5; y+=dy*.5; z+=dz*.5; if(inC){ const f=cvField(x-CV.x,z-CV.z); if(f.d>-.2 || y<f.bot || y>f.top){ hit=true; break; } } else { const g=groundAt(x,z,y+1); if(y<=g){ y=g; hit=true; break; } } }
+  const dx=b.x-a.x, dy=b.y-a.y, dz=b.z-a.z, S=.35, NS=28;
+  let t=0, hit=false; const inC=a.y<CAVE_TOP, gh=groundAt.hint;
+  // v252: la luz avanza a pasitos y se detiene en el piso o en lo primero sólido que encuentre (antes solo veía el piso y atravesaba paredes)
+  const fine=(lo,hi,f)=>{ for(let k=0;k<3;k++){ const m=(lo+hi)/2; if(f(a.x+dx*m,a.y+dy*m,a.z+dz*m)) hi=m; else lo=m; } return lo; };   // se afina dónde empieza lo que tapó la luz
+  for(let i=1;i<=NS;i++){ const tt=i*S, x=a.x+dx*tt, y=a.y+dy*tt, z=a.z+dz*tt; t=tt;
+    if(inC){ const f=cvField(x-CV.x,z-CV.z); if(f.d>-.2 || y<f.bot || y>f.top){ hit=true; break; } continue; }
+    const g=groundAt(x,z,y+.05);
+    if(y<=g){ const py=y-dy*S;
+      if(py>=g-.02){ t=tt-S+(py-g)/Math.max(1e-6,py-y)*S; hit=true; break; }   // bajando: cae en el piso (o arriba de algo)
+      if(groundAt(x,z,y-.8)>=g-.01){ t=fine(tt-S,tt,lampGround); hit=true; break; } }   // de frente: un cerro o un escalón
+    if(lampBlocked(x,y,z)){ t=fine(tt-S,tt,lampBlocked); hit=true; break; } }
+  if(!inC){ const tb=lampBoxT(a.x,a.y,a.z,dx,dy,dz,t); if(tb>0){ t=tb; hit=true; } }
+  groundAt.hint=gh;
+  const x=a.x+dx*t, y=a.y+dy*t, z=a.z+dz*t;
   M.spot.set(x-dx*.4,y-dy*.4,z-dz*.4);
   const vis=(night>.25 || inC); const beam=L.userData.beam; beam.visible=vis; beam.material.opacity=(inC?.07:.1*Math.min(1,(night-.25)*2.5));
   (M.org=M.org||new THREE.Vector3()).copy(a); const P=M.pool; if(false && vis && hit && !inC){ const g=groundAt(x,z,y+1), dist=Math.hypot(x-a.x,z-a.z); P.visible=true; P.position.set(x,g+.06,z); const s=1.1+dist*.18; P.scale.set(s,s,1); P.material.opacity=.55*Math.min(1,(night-.25)*2.5); } else P.visible=false; }
@@ -18503,7 +18565,7 @@ function wlUpdate(){ const V=WL.V, C=WL.C; for(const v of V) v.w=0; if(state==='
     let p=carLocalToWorld(c,0,1.3,CAR_L/2+7); add(p.x,p.y,p.z,9.5,[1,.95,.82],3.4); p=carLocalToWorld(c,0,1.6,CAR_L/2+16); add(p.x,p.y,p.z,11.5,[1,.95,.82],3.0); }
   // linterna (la mía y la de los demás), fuera de la cueva
   const lamp=M=>{ if(!(M && M.lamp && M.lamp.visible && M.spot && M.org) || inCave(M.spot.y)) return; const o=M.org, s2=M.spot;
-    for(const [f,r,i] of [[.3,3.6,1.6],[.65,5,2.1],[1,6.5,2.6]]){ const x=o.x+(s2.x-o.x)*f, z=o.z+(s2.z-o.z)*f, y=o.y+(s2.y-o.y)*f, g=groundAt(x,z,y+1); add(x,Math.max(y,g+.7),z,r,[.95,.97,1],i); } };
+    for(const [f,r,i] of [[.3,3.6,1.6],[.65,5,2.1],[1,6.5,2.6]]){ const x=o.x+(s2.x-o.x)*f, z=o.z+(s2.z-o.z)*f, y=o.y+(s2.y-o.y)*f, g=groundAt(x,z,y); add(x,g>y+.02?y:Math.max(y,g+.7),z,r,[.95,.97,1],i); } };   // v252: debajo de un techo (el segundo piso) la luz se queda abajo
   lamp(plush.userData.mg); for(const r of mp.remotes.values()) if(r.obj) lamp(r.obj.userData.mg);
   if(!cand.length) return; cand.sort((a,b)=>a[0]-b[0]); camera.updateMatrixWorld(); const M=camera.matrixWorldInverse;
   for(let i=0;i<8 && i<cand.length;i++){ const c=cand[i]; _wlv.set(c[1],c[2],c[3]).applyMatrix4(M); V[i].set(_wlv.x,_wlv.y,_wlv.z,c[4]); C[i].set(c[5][0],c[5][1],c[5][2]).multiplyScalar(c[6]*k); } }
@@ -27144,12 +27206,12 @@ function freeLimits(net){ [FREE_MAX,FREE_DYN]=net?FREE_NET:FREE_SOLO; }
 // ---- la rejilla: qué hay en cada cuadrito de 4 m ----
 const FG=4, _fgQ=[];
 function fgKey(ix,iz){ return (ix+512)*1024+(iz+512); }
-function fgAdd(o){ if(o.inst || o.dyn) return; if(!FREE.grid) FREE.grid=new Map(); if(!FREE.mov) FREE.mov=[];
+function fgAdd(o){ if(o.inst || o.dyn) return; ROOF.gen++; if(!FREE.grid) FREE.grid=new Map(); if(!FREE.mov) FREE.mov=[];
   if(o.game==='mover' || o.mv){ FREE.mov.push(o); return; }   // (las que se mueven se revisan siempre)
   const b=o.box, x0=Math.floor((b.min.x-FREE.X)/FG), x1=Math.floor((b.max.x-FREE.X)/FG), z0=Math.floor((b.min.z-FREE.Z)/FG), z1=Math.floor((b.max.z-FREE.Z)/FG);
   if(!(x1>=x0 && z1>=z0) || (x1-x0+1)*(z1-z0+1)>100){ FREE.mov.push(o); return; }
   o.cells=[]; for(let ix=x0;ix<=x1;ix++) for(let iz=z0;iz<=z1;iz++){ const k=fgKey(ix,iz); let s=FREE.grid.get(k); if(!s) FREE.grid.set(k,s=[]); s.push(o); o.cells.push(k); } }
-function fgDel(o){ if(o.cells){ for(const k of o.cells){ const s=FREE.grid.get(k); if(s){ const i=s.indexOf(o); if(i>=0) s.splice(i,1); } } o.cells=null; }
+function fgDel(o){ ROOF.gen++; if(o.cells){ for(const k of o.cells){ const s=FREE.grid.get(k); if(s){ const i=s.indexOf(o); if(i>=0) s.splice(i,1); } } o.cells=null; }
   if(FREE.mov){ const i=FREE.mov.indexOf(o); if(i>=0) FREE.mov.splice(i,1); } }
 // lo que hay entre (x0,z0) y (x1,z1) (cada cosa una sola vez)
 function fgQuery(x0,z0,x1,z1){ const out=_fgQ; out.length=0; const q=FREE.qs=(FREE.qs||0)+1, G=FREE.grid;
