@@ -27,7 +27,7 @@ async def m():
     await pg.wait_for_function("(()=>{const l=document.getElementById('loader'); return !l || l.hidden || getComputedStyle(l).display==='none';})()", polling=250, timeout=120000)
     ev=lambda s: asyncio.wait_for(pg.evaluate("s=>__T.ev(s)", s), 300)
     await ev("(()=>{ freeEnter(); return 1; })()"); await ev(STEP)
-    r=await ev("(()=>{ __CLR(); const ids=['basket','agua','canasta','porteria','campana','banda','tele','catapulta','molino','piano','sorpresa','burbujas','saco']; const bad=ids.filter(id=>{ const m=freeMake({k:'p',a:id,b:0}); return !m || !m.children.length; }); const th=ids.filter(id=>{ const u=freeThumbRender('p:'+id+':0'); return !u || u==='x'; }); return [bad.concat(th), FREE_PHYS.filter(P=>!P.hid && !P.toy).length]; })()")
+    r=await ev("(()=>{ __CLR(); const ids=['basket','agua','canasta','porteria','campana','banda','tele','catapulta','molino','piano','sorpresa','burbujas','saco']; const bad=ids.filter(id=>{ const m=freeMake({k:'p',a:id,b:0}); return !m || !m.children.length; }); const th=ids.filter(id=>{ const u=freeThumbRender('p:'+id+':0'); return !u || u==='x'; }); return [bad.concat(th), FREE_PHYS.filter(P=>!P.hid && !P.toy && !P.mec).length]; })()")
     ok(not r[0] and r[1]==42, 'las 13 cosas nuevas se arman y tienen su fotito; en «Física» hay %s %s'%(r[1],r[0]))
     # canasta y portería
     r=await ev("""(()=>{ __CLR(); __AT(-10,-10); const c=__ST('canasta',0,0,0); const [hx,hz]=freeW(c,0,.3); const d=freeAddDyn('basket',hx,FREE.Y+4,hz); d.root.position.set(hx,FREE.Y+3.6,hz); d.v.set(0,0,0); __S(20); const can=(c.cT||0)>0;

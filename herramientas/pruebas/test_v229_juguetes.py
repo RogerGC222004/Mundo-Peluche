@@ -27,7 +27,7 @@ async def m():
     ev=lambda s: asyncio.wait_for(pg.evaluate("s=>__T.ev(s)", s), 600)
     await ev("(()=>{ freeEnter(); return 1; })()"); await ev(STEP)
     # 1. dónde están en el menú
-    r=await ev("""(()=>{ const fis=FREE_PHYS.filter(P=>!P.hid && !P.toy).map(P=>P.n), jug=FREE_PHYS.filter(P=>P.toy && !P.hid).map(P=>P.n); FREE.tab='parque'; FREE.sub='juguetes'; let menu=''; try{ freeInvOpen && freeInvOpen(); }catch(e){}
+    r=await ev("""(()=>{ const fis=FREE_PHYS.filter(P=>!P.hid && !P.toy && !P.mec).map(P=>P.n), jug=FREE_PHYS.filter(P=>P.toy && !P.hid).map(P=>P.n); FREE.tab='parque'; FREE.sub='juguetes'; let menu=''; try{ freeInvOpen && freeInvOpen(); }catch(e){}
       const bad=FREE_PHYS.filter(P=>P.toy||P.box||P.multi).filter(P=>{ const m=freeMake({k:'p',a:P.id,b:0}); return !m || !m.children.length; }).map(P=>P.id);
       return [fis.includes('Dominó') && fis.includes('Fila de 8 dominós') && fis.includes('Bolos (10)') && fis.includes('Torre de bloques'), jug, bad]; })()""")
     ok(r[0] and len(r[1])==10 and not r[2], 'menú: dominó, fila, bolos y torre están en «Física»; en Parque → Juguetes hay 10 juguetes %s'%r[1])
