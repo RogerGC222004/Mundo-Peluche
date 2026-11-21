@@ -1615,7 +1615,7 @@ const WXU={V:[new THREE.Vector4(0,0,0,0),new THREE.Vector4(0,0,64,-1e4),new THRE
     L.uniforms.wxV={value:WXU.V}; L.uniforms.wxT={value:WXU.T};
     L.vertexShader=vd+L.vertexShader.replace('#include <project_vertex>','#include <project_vertex>'+vcode);
     L.fragmentShader='uniform vec4 wxV[3];\nuniform sampler2D wxT[1];\n'+vd+L.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>'+fcode);
-    if(std) L.fragmentShader=L.fragmentShader.replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\n#ifndef NO_WX\nroughnessFactor=mix(roughnessFactor,0.2,wxK);\n#endif'); }
+    if(std) L.fragmentShader=L.fragmentShader.replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\n#ifndef NO_WX\nroughnessFactor=mix(roughnessFactor,0.34,wxK);\n#endif'); }
   const d=new THREE.DataTexture(new Uint8Array([0,0,0,255]),1,1,THREE.RGBAFormat); d.needsUpdate=true; WXU.T[0]=d; })();
 const renderer = new THREE.WebGLRenderer({canvas, antialias:!MIN_Q, powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -4573,7 +4573,7 @@ function wxPrintsInit(){ const c=document.createElement('canvas'); c.width=32; c
   gr.addColorStop(0,'rgba(150,170,200,.75)'); gr.addColorStop(.7,'rgba(170,190,215,.45)'); gr.addColorStop(1,'rgba(200,215,235,0)'); g.fillStyle=gr; g.beginPath(); g.ellipse(16,30,13,26,0,0,6.3); g.fill();
   const t=new THREE.CanvasTexture(c), N=70, m=new THREE.InstancedMesh(new THREE.PlaneGeometry(.2,.32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({map:t, transparent:true, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2}),N);
   m.count=0; m.frustumCulled=false; m.userData.noBatch=true; m.renderOrder=3; scene.add(m); WX.prints={m, L:[], N, d:0, side:1, lx:0, lz:0}; }
-const _wxM=new THREE.Matrix4(), _wxQ=new THREE.Quaternion(), _wxS=new THREE.Vector3(), _wxP=new THREE.Vector3(), _wxY=new THREE.Vector3(0,1,0);
+const _wxM=new THREE.Matrix4(), _wxQ=new THREE.Quaternion(), _wxQ2=new THREE.Quaternion(), _wxN=new THREE.Vector3(), _wxS=new THREE.Vector3(), _wxP=new THREE.Vector3(), _wxY=new THREE.Vector3(0,1,0);
 function wxPrintsTick(dt){ const P=WX.prints; if(!P) return; const p=player.pos, L=P.L;
   if(WX.s>.3 && player.grounded && !player.swim && !player.car && !player.pg && !player.ac && plush.visible){ const d=Math.hypot(p.x-P.lx,p.z-P.lz); if(d>2){ P.lx=p.x; P.lz=p.z; }
     else if(d>.42){ P.lx=p.x; P.lz=p.z; const g=groundAt(p.x,p.z,p.y+.3); if(Math.abs(g-p.y)<.12 && wxOpen(p.x,p.z,g)){ P.side=-P.side; const f=player.facing, c=Math.cos(f), s=Math.sin(f); L.push({x:p.x+c*.11*P.side, y:g+.015, z:p.z-s*.11*P.side, f, t:0}); if(L.length>P.N) L.shift(); } } }
@@ -4584,17 +4584,22 @@ function wxPrintsTick(dt){ const P=WX.prints; if(!P) return; const p=player.pos,
 function wxPudInit(){ const c=document.createElement('canvas'); c.width=c.height=64; const g=c.getContext('2d'), gr=g.createRadialGradient(32,32,4,32,32,31);
   gr.addColorStop(0,'rgba(255,255,255,.9)'); gr.addColorStop(.62,'rgba(235,242,250,.82)'); gr.addColorStop(.8,'rgba(70,82,104,.55)'); gr.addColorStop(1,'rgba(70,82,104,0)'); g.fillStyle=gr; g.fillRect(0,0,64,64);   // (orillita oscura: se ve el charco)
   g.strokeStyle='rgba(255,255,255,.95)'; g.lineWidth=2; g.beginPath(); g.ellipse(26,24,12,5,-.5,Math.PI*1.1,Math.PI*1.6); g.stroke();
-  const t=new THREE.CanvasTexture(c), N=26, mat=new THREE.MeshBasicMaterial({map:t, color:0x8fa8c4, transparent:true, opacity:.78, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-3});
+  const t=new THREE.CanvasTexture(c), N=26, mat=new THREE.MeshBasicMaterial({map:t, color:0x8fa8c4, transparent:true, opacity:.78, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-4, polygonOffsetUnits:-8});
   const m=new THREE.InstancedMesh(new THREE.CircleGeometry(1,20).rotateX(-Math.PI/2),mat,N); m.count=0; m.frustumCulled=false; m.userData.noBatch=true; m.renderOrder=3; scene.add(m);
   WX.pud={m, L:[], N, spT:0}; }
 function wxPudSpot(){ const p=player.pos; for(let tries=0;tries<6;tries++){ const a=Math.random()*6.283, d=3+Math.random()*16, x=p.x+Math.cos(a)*d, z=p.z+Math.sin(a)*d, g=groundAt(x,z,p.y+4);
-    if(!(g>SEA_Y+.15) || Math.abs(g-p.y)>6) continue; let flat=true; for(const [dx,dz] of [[.8,0],[-.8,0],[0,.8],[0,-.8]]) if(Math.abs(groundAt(x+dx,z+dz,g+.5)-g)>.06){ flat=false; break; } if(!flat || !wxOpen(x,z,g)) continue;
-    return {x, y:g+.012, z, r:.45+Math.random()*.9, sx:.7+Math.random()*.5, a:Math.random()*6.283}; } return null; }
+    if(!(g>SEA_Y+.15) || Math.abs(g-p.y)>6 || !wxOpen(x,z,g)) continue;
+    // v254b: el charco sigue la inclinación del piso (un plano) y se revisa todo (orilla y mitad, en 8 direcciones): si el piso se dobla, ahí no va
+    const r=.4+Math.random()*.6, sx=.75+Math.random()*.4, R=r*Math.max(1,sx)+.15, H=(dx,dz)=>groundAt(x+dx,z+dz,g+.6);
+    const hx=(H(R,0)-H(-R,0))/(2*R), hz=(H(0,R)-H(0,-R))/(2*R); if(Math.hypot(hx,hz)>.09) continue; let ok=true, top=0;
+    for(let k=0;k<8 && ok;k++){ const c=Math.cos(k*.785), s=Math.sin(k*.785); for(const f of [.5,1]){ const dx=c*R*f, dz=s*R*f, e=H(dx,dz)-(g+hx*dx+hz*dz); if(Math.abs(e)>.035){ ok=false; break; } if(e>top) top=e; } }
+    if(!ok) continue;
+    return {x, y:g+top+.025, z, r, sx, a:Math.random()*6.283, hx, hz}; } return null; }
 function wxPudTick(dt){ const U=WX.pud; if(!U) return; const p=player.pos, L=U.L, show=Math.max(0,Math.min(1,(WX.w-.3)/.45));
   if(FREE.on || show<=0 || player.pos.y<CAVE_TOP){ U.m.visible=false; U.m.count=0; if(!show) L.length=0; return; }
   for(let i=L.length-1;i>=0;i--){ const q=L[i]; if(Math.hypot(q.x-p.x,q.z-p.z)>28) L.splice(i,1); }
   if(L.length<U.N && (U.addT=(U.addT||0)-dt)<=0){ U.addT=.12; for(let k=0;k<(L.length<U.N/2?3:1);k++){ const q=wxPudSpot(); if(q) L.push(q); } }
-  let n=0; for(const q of L){ const r=q.r*show; _wxQ.setFromAxisAngle(_wxY,q.a); _wxS.set(r*q.sx,1,r); _wxP.set(q.x,q.y,q.z); _wxM.compose(_wxP,_wxQ,_wxS); U.m.setMatrixAt(n++,_wxM);
+  let n=0; for(const q of L){ const r=q.r*show; _wxN.set(-q.hx,1,-q.hz).normalize(); _wxQ2.setFromUnitVectors(_wxY,_wxN); _wxQ.setFromAxisAngle(_wxY,q.a).premultiply(_wxQ2); _wxS.set(r*q.sx,1,r); _wxP.set(q.x,q.y,q.z); _wxM.compose(_wxP,_wxQ,_wxS); U.m.setMatrixAt(n++,_wxM);   /* (inclinado como el piso) */
     if(player.grounded && Math.hypot(p.x-q.x,p.z-q.z)<r*.9 && Math.abs(p.y-q.y)<.2 && Math.hypot(player.vel.x,player.vel.z)>1.5 && (U.spT-=dt)<=0){ U.spT=.32; try{ splashBurst(p.x,q.y,p.z,.28); audio.splash(.3); }catch(e){} } }
   U.m.count=n; U.m.visible=n>0; if(n) U.m.instanceMatrix.needsUpdate=true; U.m.material.color.copy(skyNow).lerp(_c1.set(0xd8e6f2),.35); }
 // ---- muñecos de nieve (en la isla: tuyos, se derriten cuando se va la nieve) ----
@@ -28445,10 +28450,10 @@ function matInfo(m){ let I=BMAT.info.get(m); if(I && I.t===BMAT.tick) return I;
   if(I && I.q && !matChanged(m,I)){ I.t=BMAT.tick; return I; }
   let props=null;
   const isFelt=m.userData.feltPQ && m.customProgramCacheKey && m.customProgramCacheKey()==='feltPQ' && m.map && !MAPS.some(k=>k!=='map' && m[k]);
-  if((m.type==='MeshStandardMaterial'||m.isLite) && !m.vertexColors && (isFelt || m.onBeforeCompile===THREE.Material.prototype.onBeforeCompile && !MAPS.some(k=>m[k])) && !(m.defines && Object.keys(m.defines).some(k=>k!=='STANDARD')))
+  if((m.type==='MeshStandardMaterial'||m.isLite) && !m.vertexColors && (isFelt || m.onBeforeCompile===THREE.Material.prototype.onBeforeCompile && !MAPS.some(k=>m[k])) && !(m.defines && Object.keys(m.defines).some(k=>k!=='STANDARD' && k!=='NO_WX')))
     props=[isFelt?'F'+m.map.uuid:'S',m.roughness,m.metalness,m.emissive.getHex(),m.emissiveIntensity,m.flatShading,m.side,m.opacity,m.wireframe,m.fog,m.depthWrite,m.depthTest,m.colorWrite,m.toneMapped,m.envMapIntensity,m.polygonOffset,m.polygonOffsetFactor,m.polygonOffsetUnits,m.visible].join(',');
   let isTex=false;
-  if(!props && (m.type==='MeshStandardMaterial'||m.isLite) && m.map && m.map.image && !m.vertexColors && m.onBeforeCompile===THREE.Material.prototype.onBeforeCompile && !MAPS.some(k=>k!=='map' && m[k]) && m.map.rotation===0 && m.map.matrixAutoUpdate!==false && !(m.defines && Object.keys(m.defines).some(k=>k!=='STANDARD'))){
+  if(!props && (m.type==='MeshStandardMaterial'||m.isLite) && m.map && m.map.image && !m.vertexColors && m.onBeforeCompile===THREE.Material.prototype.onBeforeCompile && !MAPS.some(k=>k!=='map' && m[k]) && m.map.rotation===0 && m.map.matrixAutoUpdate!==false && !(m.defines && Object.keys(m.defines).some(k=>k!=='STANDARD' && k!=='NO_WX'))){
     const t=m.map; isTex=true;
     props=['X',imgId(t.image),t.encoding,t.wrapS,t.wrapT,t.magFilter,t.minFilter,t.anisotropy,t.flipY,m.color.getHex(),m.roughness,m.metalness,m.emissive.getHex(),m.emissiveIntensity,m.flatShading,m.side,m.opacity,m.fog,m.depthWrite,m.depthTest,m.toneMapped,m.envMap?m.envMap.uuid:'',m.envMapIntensity,m.polygonOffset,m.visible].join(','); }
   const raw=props?props+'#'+m.color.getHex()+(isFelt?'#'+m.userData.feltSpk.join(','):'')+(isTex?'#'+[m.map.repeat.x,m.map.repeat.y,m.map.offset.x,m.map.offset.y,m.map.center.x,m.map.center.y].join(','):''):'';
@@ -28456,8 +28461,8 @@ function matInfo(m){ let I=BMAT.info.get(m); if(I && I.t===BMAT.tick) return I;
   else if(I.raw!==raw){ I.vol=true; I.raw=raw; }
   I.t=BMAT.tick; I.felt=!!isFelt; I.key=(props && !I.vol)?(isTex?'X|':'C|')+props:'M|'+m.uuid; I.chk=I.key+'#'+raw; matChanged(m,I); return I; }
 const _imgIds=new WeakMap(); let _imgN=0; const imgId=im=>{ let k=_imgIds.get(im); if(!k){ k=++_imgN; _imgIds.set(im,k); } return k; };
-function sharedTexMat(m,props){ let s=BMAT.shared.get(props); if(!s){ s=m.clone(); const t=m.map.clone(); t.repeat.set(1,1); t.offset.set(0,0); t.center.set(0,0); t.needsUpdate=true; s.map=t; s.userData={batchShared:true}; BMAT.shared.set(props,s); } return s; }
-function sharedMat(m,props){ let s=BMAT.shared.get(props); if(!s){ s=m.clone(); s.color.setRGB(1,1,1); s.vertexColors=true; s.userData={batchShared:true}; if(m.userData.feltPQ){ s.onBeforeCompile=m.onBeforeCompile; s.customProgramCacheKey=m.customProgramCacheKey; s.defines={STANDARD:'', FELT_VA:''}; } BMAT.shared.set(props,s); } return s; }
+function sharedTexMat(m,props){ let s=BMAT.shared.get(props); if(!s){ s=m.clone(); if(s.defines && 'NO_WX' in s.defines){ s.defines=Object.assign({},s.defines); delete s.defines.NO_WX; } const t=m.map.clone(); t.repeat.set(1,1); t.offset.set(0,0); t.center.set(0,0); t.needsUpdate=true; s.map=t; s.userData={batchShared:true}; BMAT.shared.set(props,s); } return s; }
+function sharedMat(m,props){ let s=BMAT.shared.get(props); if(!s){ s=m.clone(); if(s.defines && 'NO_WX' in s.defines){ s.defines=Object.assign({},s.defines); delete s.defines.NO_WX; }   /* (v254: lo juntado es del mundo: sí lleva nieve) */ s.color.setRGB(1,1,1); s.vertexColors=true; s.userData={batchShared:true}; if(m.userData.feltPQ){ s.onBeforeCompile=m.onBeforeCompile; s.customProgramCacheKey=m.customProgramCacheKey; s.defines={STANDARD:'', FELT_VA:''}; } BMAT.shared.set(props,s); } return s; }
 function effVisible(o){ for(let p=o;p;p=p.parent){ if(!p.visible) return false; if(p===scene) return true; } return false; }
 function batchSig(o){ const g=o.geometry; return Object.keys(g.attributes).sort().map(k=>k+g.attributes[k].itemSize).join(',')+(g.index?'i':'n'); }
 const batchNear=(a,e)=>{ for(let i=0;i<16;i++) if(Math.abs(a[i]-e[i])>(i>=12?2e-3:5e-4)) return false; return true; };   // cambios diminutos (algo que casi terminó de acomodarse) no cuentan
