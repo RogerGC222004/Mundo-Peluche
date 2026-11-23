@@ -60,13 +60,24 @@ async def m():
     ok(r[3][1][0]==2 and r[3][3][0]==2 and r[3][5][0]==3 and r[3][5][1]<1.5 and r[4], 'aciertas 2 rondas (sigues arriba), en la 3ª fallas y caes a las pelotitas (y te quedas en la piscina) %s'%r[3])
     ok('🔢' in r[3][0] and 'Aciertos: 0' in r[3][0] and 'Aciertos: 2' in r[3][4], 'el letrero de arriba enseña la operación y tus aciertos «%s» · «%s»'%(r[3][0],r[3][4]))
     ok(r[5][0]=='¡Récord nuevo!' and 'Aciertos: 2' in r[5][1] and r[5][2]=='+4' and r[6]=='2' and r[7]==-1, 'al final: %s · «%s» · %s monedas; se guarda el récord (%s) y sales de la partida'%(r[5][0],r[5][1],r[5][2],r[6]))
-    # 4. desde la piscina nadie llega a las casillas; y se pueden lanzar pelotitas (no suben más que las casillas)
+    # 4. desde la piscina nadie llega a las casillas; agarrar y lanzar pelotitas (no suben más que las casillas)
     r=await ev("""(()=>{ const A=AR_SPOTS[NUMI], w=arW(A,2,-3,0); player.pos.set(w.x,NUMG.h+.05,w.z); player.vel.set(0,0,0); __run(.5); let top=0;
-      __run(3,i=>{ if(i%6===0){ player.vy=14; player.grounded=false; } top=Math.max(top,player.pos.y); });
-      __run(1.5); const lab=(numActions()||[])[0]; const t0=NUM.balls.out.reduce((a,b)=>a+b,0); let hi=0; camera.position.set(w.x,1,w.z); camera.lookAt(w.x+.3,30,w.z+.3); camera.updateMatrixWorld(); numThrow(); const t1=NUM.balls.out.reduce((a,b)=>a+b,0);
-      __run(4,()=>{ for(const f of NUM.fly) hi=Math.max(hi,f.m.position.y); }); const t2=NUM.balls.out.reduce((a,b)=>a+b,0);
-      return [+top.toFixed(2), lab&&lab.label, t0, t1, +hi.toFixed(2), t2, NUM.fly.length]; })()""")
-    ok(r[0]<5-1.9 and r[1]=='🔴 Lanzar pelotita' and r[3]==1 and r[4]<5-.7 and r[5]==0, 'en la piscina: brincando llegas máximo a %s m (las casillas están a 5 m); «Lanzar pelotita» la avienta hacia arriba (hasta %s m) y cae de nuevo a la piscina %s'%(r[0],r[4],r))
+      __run(3,i=>{ if(i%6===0){ player.vy=14; player.grounded=false; } top=Math.max(top,player.pos.y); }); __run(1.5);
+      const out=()=>NUM.balls.out.reduce((a,b)=>a+b,0); const lab1=((numActions()||[])[0]||{}).label; numGrab(); const held=NUM.held, o1=out(); __run(.3); const hand=!!(NUM.hand && NUM.hand.visible);
+      const lab2=((numActions()||[])[0]||{}).label, pres=numPresence(); let hi=0; camera.position.set(w.x,1,w.z); camera.lookAt(w.x+.3,30,w.z+.3); camera.updateMatrixWorld(); numThrow(); const pres2=numPresence();
+      __run(4,()=>{ for(const f of NUM.fly) hi=Math.max(hi,f.m.position.y); });
+      return [+top.toFixed(2), lab1, held>=0, o1, hand, lab2, pres.nbh===held, Array.isArray(pres2.nbt) && pres2.nbt[1]===held && pres2.nbh===null, +hi.toFixed(2), out(), NUM.fly.length]; })()""")
+    ok(r[0]<5-1.9, 'en la piscina: brincando llegas máximo a %s m (las casillas están a 5 m)'%r[0])
+    ok(r[1]=='🔴 Agarrar pelotita' and r[2] and r[3]==1 and r[4] and r[5]=='🔴 Lanzar pelotita' and r[6] and r[7] and r[8]<5-.7 and r[9]==0 and r[10]==0, 'pelotitas: «Agarrar» la toma de la piscina (se ve en tu mano y se avisa a la sala), «Lanzar» la avienta (hasta %s m, nunca a las casillas) y cae de nuevo a la piscina %s'%(r[8],r))
+    # 4b. lo que lanza otro jugador: se ve en su mano, vuela igual, rebota en ti y cae
+    r=await ev("""(()=>{ const A=AR_SPOTS[NUMI], w=arW(A,0,0,0), me=arW(A,4,0,0); player.pos.set(me.x,NUMG.h+.05,me.z); player.vel.set(0,0,0); __run(.3);
+      const fake={uid:'~otro', name:'Ana', pos:new THREE.Vector3(w.x,NUMG.h+.05,w.z), obj:new THREE.Object3D(), facing:0}; mp.remotes.set('~otro',fake);
+      numParse(fake,{nbh:7}); const hid=NUM.balls.out[7]===1; numHands(); const hand=!!(NUM.rHand.get(fake) && NUM.rHand.get(fake).visible);
+      const dx=player.pos.x-w.x, dz=player.pos.z-w.z, d=Math.hypot(dx,dz), vx=dx/d*9, vz=dz/d*9;
+      numParse(fake,{nbh:null, nbt:[555,7,w.x+dx/d*.6,NUMG.h+1.3,w.z+dz/d*.6,vx,2,vz]}); const fl=NUM.fly.find(f=>f.i===7); let back=false;
+      __run(1.2,()=>{ if(fl && (fl.vx*dx+fl.vz*dz)<0) back=true; }); __run(6); mp.remotes.delete('~otro'); __run(2.5);
+      return [hid, hand, !!fl, back, NUM.balls.out[7], NUM.fly.length]; })()""")
+    ok(r[0] and r[1] and r[2] and r[3] and r[4]==0 and r[5]==0, 'lo que lanza otro de la sala: la pelotita desaparece de la piscina y se ve en su mano; vuela, rebota en tu peluche y cae de nuevo %s'%r)
     # 5. paredes invisibles: durante una partida solo arriba (la piscina es de todos)
     r=await ev("""(()=>{ const A=AR_SPOTS[NUMI], c=arW(A,0,0,0); return [arInZone(NUMI,c.x,NUMG.Y+.1,c.z), arInZone(NUMI,c.x,NUMG.h+.1,c.z), arInZone(NUMI,c.x,NUMG.h+2.5,c.z)]; })()""")
     ok(r==[True,False,False], 'paredes invisibles de la partida: arriba sí, en la piscina no %s'%r)
@@ -79,8 +90,8 @@ async def m():
     ok(all(float(x.split(':')[-1])<1.5 for x in r[3]), 'los de la CPU que caen se quedan en las pelotitas %s'%r[3])
     await ev("__until(()=>__G().ph===0,20); arLeave(); 1")
     # 7. inglés
-    r=await ev("""(()=>{ I18N.set('en'); const t=[I18N.t('¡Al número!'), I18N.t('Ronda 3 de 12'), I18N.t('Aciertos: 4'), I18N.t('Quedan 2 · 🔢 7 × 8 = ? · 6 s'), I18N.t('🔴 Lanzar pelotita'), I18N.t('¡A las pelotitas! 🎈'), I18N.t('Solo yo'), I18N.t(NEWS['256'][0])]; I18N.set('es'); return t; })()""")
-    ok(r[0]=='Number Jump' and r[1]=='Round 3 of 12' and r[2]=='Correct: 4' and r[3].startswith('2 left') and 'Throw' in r[4] and 'ball pit' in r[5] and r[6]=='Just me' and 'Number Jump' in r[7], 'en inglés: %s'%r)
+    r=await ev("""(()=>{ I18N.set('en'); const t=[I18N.t('¡Al número!'), I18N.t('Ronda 3 de 12'), I18N.t('Aciertos: 4'), I18N.t('Quedan 2 · 🔢 7 × 8 = ? · 6 s'), I18N.t('🔴 Agarrar pelotita'), I18N.t('¡A las pelotitas! 🎈'), I18N.t('Solo yo'), I18N.t(NEWS['256'][0])]; I18N.set('es'); return t; })()""")
+    ok(r[0]=='Number Jump' and r[1]=='Round 3 of 12' and r[2]=='Correct: 4' and r[3].startswith('2 left') and 'Grab' in r[4] and 'ball pit' in r[5] and r[6]=='Just me' and 'Number Jump' in r[7], 'en inglés: %s'%r)
     # 8. dibujos cerca (de lejos se salta todo)
     r=await ev("""(()=>{ const tp=TELEPORTS.find(t=>t.id==='ar_numero'); teleportTo(tp); __run(2); renderer.render(scene,camera); const near=renderer.info.render.calls, tri=renderer.info.render.triangles;
       teleportTo(TELEPORTS.find(t=>t.id==='inicio')); __run(2); return [near, tri]; })()""")

@@ -1836,6 +1836,7 @@ I18N.add({
 "¡Ups!":"Oops!",
 "¡A las pelotitas!":"Into the ball pit!",
 "Lanzar pelotita":"Throw a ball",
+"Agarrar pelotita":"Grab a ball",
 "¡Récord nuevo!":"New record!",
 "Fuera":"Out",
 "Ya puedes jugar «¡Al número!»: resuelve la operación de la pantalla y párate en una casilla con la respuesta antes de que las demás desaparezcan.":"You can now play «Number Jump»: solve the problem on the screen and stand on a tile with the answer before the others disappear.",
@@ -13515,7 +13516,7 @@ function sendPresence(force){
     sd: aircraft.map(a=>[a.stairs, a.door, a.sdT]),
     id: myUid, bw: bowPresence(), ...mgPresence(), ou: outfitList(wardrobe.eq), ...arenaPresence(), ...housePresence(), ...spacePresence(), ...vehPresence(), tb: tblPresence(),
     pl: player.pg ? [PG_KINDS.indexOf(player.pg.k), player.pg.i, r2(player.pg.v||0)] : null,
-    pu: myPush.i>=0 ? [myPush.i, myPush.t] : null, cu: cucoPresence(), sh: shipPresence(), dk: deckPresence(), ...wiPresence(), pz: pierPresence(), tz: trPresence(), pt: petPresence(), sn: stPresence(), sx: stPresenceX(), bl: blPresence(), bs: blStates(), ...minePresence(),
+    pu: myPush.i>=0 ? [myPush.i, myPush.t] : null, cu: cucoPresence(), sh: shipPresence(), dk: deckPresence(), ...wiPresence(), ...numPresence(), pz: pierPresence(), tz: trPresence(), pt: petPresence(), sn: stPresence(), sx: stPresenceX(), bl: blPresence(), bs: blStates(), ...minePresence(),
     ai: player.ac && player.acPose ? (A=>[A.i, A.mode==='seated'||A.mode==='sitting'?A.seat:-1, r2(player.acPose.l[0]), r2(player.acPose.l[1]), r2(player.acPose.l[2]), r2(player.acPose.f||0), r2(player.acPose.sit||0), r2(player.acPose.walk?(player.acPose.mv||1):0), r2(player.acPose.armsUp||0), player.acPose.air?1:0])(player.ac) : null
   };
   const key=presFit(payload);
@@ -13626,7 +13627,7 @@ function onPeers({peers}){
     // aviones y helicópteros: quién pilota, dónde quedaron, escaleras y puertas, y quién va a bordo
     { const pl=pr.pl; r.pl = Array.isArray(pl) && pl.length===3 && pl.every(Number.isFinite) && pl[0]>=0 && pl[0]<PG_KINDS.length && Number.isInteger(pl[1]) && pl[1]>=0 && pl[1]<(PG_KINDS[pl[0]]==='bench'?BENCHES.length:PG_KINDS[pl[0]]==='cuco'?5:PG_KINDS[pl[0]]==='dwheel'?DI_WHEEL.N:PG_KINDS[pl[0]]==='dcar'?DI_CAR.N:PG_KINDS[pl[0]]==='vehp'?9:PG_KINDS[pl[0]]==='fmv'?4:3) ? pl : null;
       if(pr.pu) pgCheckPush(r,pr.pu); }
-    parseCuco(r,pr,cuDrv); parseShip(r,pr,cuDrv); wiParse(r,pr); parsePier(r,pr); trParse(r,pr); parsePet(r,pr); r.snStr=typeof pr.sn==='string'?pr.sn:undefined; r.sxStr=typeof pr.sx==='string'?pr.sx:undefined; blParse(r,pr,p.peer,blSeen);   // Cuco: dónde está y si lo guía esta persona
+    parseCuco(r,pr,cuDrv); parseShip(r,pr,cuDrv); wiParse(r,pr); numParse(r,pr); parsePier(r,pr); trParse(r,pr); parsePet(r,pr); r.snStr=typeof pr.sn==='string'?pr.sn:undefined; r.sxStr=typeof pr.sx==='string'?pr.sx:undefined; blParse(r,pr,p.peer,blSeen);   // Cuco: dónde está y si lo guía esta persona
     const ai=pr.ai;
     r.ai = Array.isArray(ai) && ai.length===10 && ai.every(Number.isFinite) && aircraft[ai[0]] && Math.abs(ai[2])<20 && Math.abs(ai[4])<20 ? ai : null;
     const ap=pr.ap;
@@ -22604,7 +22605,7 @@ function dwBot(r,dt,G){ const P=DW_BOT[CPU.diff]||DW_BOT[1]; let b=r.cb; if(!b |
 // La piscina es de todos: cualquiera entra por su escalerita aunque haya partida, pero desde abajo nadie llega a las casillas.
 const NUMI=AR_SPOTS.findIndex(A=>A.id==='numero');
 const NUM={A:null, rd:new Map(), key:'', gone:new Uint8Array(100), sc:new Float32Array(100).fill(1), anim:false, geo:null, base:null, cen:null, col:null,
-  atlas:null, atlasKey:'', scr:null, scrKey:'', balls:null, fly:[], inPool:false, beepS:-1};
+  atlas:null, atlasKey:'', scr:null, scrKey:'', balls:null, fly:[], inPool:false, beepS:-1, held:-1, myThrow:null, hand:null, rHand:new Map(), fixT:0};
 const NUM_COLS=['#ff8fab','#ffd34d','#7ed957','#6fc3ff','#c79bff','#ffb27a','#7fe0e0','#f7a8ff'];
 // ---- la ronda r: operación, respuestas incorrectas parecidas y el piso repartido en bloques ----
 function numRound(sd,r){ const key=(sd|0)+'|'+r; let D=NUM.rd.get(key); if(D) return D; if(NUM.rd.size>40) NUM.rd.clear();
@@ -22774,6 +22775,8 @@ function numUpdate(dt){ const A=NUM.A; if(!A) return; const G=AR.G[NUMI], me=AR.
     if(inBox && P.y<NUMG.Y-1.5) NUM.inPool=true; else if(!inBox) NUM.inPool=false;
     if(NUM.inPool){ const top=NUMG.Y-2; if(P.y>top){ P.y=top; if(player.vy>0) player.vy=0; } else if(player.vy>0) player.vy=Math.min(player.vy,(top-P.y)/Math.max(dt,.016)); } }
   numFlyTick(dt);
+  if(NUM.held>=0 && (state!=='play' || player.car || player.ac || player.pg || Math.hypot(P.x-NUMG.x,P.z-NUMG.z)>45)){ numHome(NUM.held); NUM.held=-1; sendPresence(true); }   // te fuiste con ella: regresa a la piscina
+  if(near){ numHands(); if((NUM.fixT-=dt)<=0){ NUM.fixT=2; numFix(); } }
   const S=G && G.ph===3 ? numStage(G) : null, key=S ? S.k+S.r+'|'+G.sd : 'w'+(G?G.ph:0);
   if(key!==NUM.key){ NUM.key=key;
     if(S){ const D=numRound(G.sd,S.r);
@@ -22795,28 +22798,65 @@ function numUpdate(dt){ const A=NUM.A; if(!A) return; const G=AR.G[NUMI], me=AR.
 // jugando y arriba: no salirse de las casillas
 function numPlay(dt,G){ const P=player.pos; if(P.y<NUMG.Y-1) return; const [du,dv]=arL(NUM.A,P.x,P.z), L=NUMG.N*NUMG.T/2-.3;
   if(Math.abs(du)>L || Math.abs(dv)>L){ const w=arW(NUM.A,Math.max(-L,Math.min(L,du)),Math.max(-L,Math.min(L,dv)),P.y); P.x=w.x; P.z=w.z; } }
-// ---- lanzar pelotitas (cualquiera que esté en la piscina) ----
+// ---- agarrar y lanzar pelotitas (cualquiera que esté en la piscina; todos en la sala ven lo mismo) ----
+// Agarras la más cercana (se ve en tu mano) y la lanzas hacia donde miras. Cada lanzamiento se manda una sola vez (como las
+// bolas de nieve: nbt = [id, pelotita, x, y, z, vx, vy, vz]) y cada quien la ve volar igual: choca con los peluches y rebota,
+// nunca sube hasta las casillas, y donde cae en la piscina ahí se queda. Si cae afuera, al ratito regresa sola a su lugar.
 function numInPool(){ const A=NUM.A, P=player.pos; if(!A || Math.abs(P.x-NUMG.x)>12 || Math.abs(P.z-NUMG.z)>12 || P.y>NUMG.h+1.4) return false; const [du,dv]=arL(A,P.x,P.z), H=NUMG.N*NUMG.T/2+.2; return Math.abs(du)<H && Math.abs(dv)<H; }
-function numActions(){ if(player.car || player.ac || player.pg || player.mg || !numInPool()) return null; return [{label:'🔴 Lanzar pelotita', run:numThrow}, null]; }
-function numThrow(){ const B=NUM.balls; if(!B) return; const P=player.pos; let bi=-1, bd=2.4;
+function numActions(){ if(player.car || player.ac || player.pg || player.mg || !NUM.balls) return null;
+  if(NUM.held>=0) return [{label:'🔴 Lanzar pelotita', run:numThrow}, null];
+  return numInPool() ? [{label:'🔴 Agarrar pelotita', run:numGrab}, null] : null; }
+function numBallM(i,x,y,z){ const B=NUM.balls; if(x===undefined) B.M.makeScale(0,0,0); else B.M.makeTranslation(x-NUM.A.center[0],y,z-NUM.A.center[1]); B.im.setMatrixAt(i,B.M); B.im.instanceMatrix.needsUpdate=true; }
+function numHide(i){ const B=NUM.balls; if(!B || i<0 || i>=B.n) return; B.out[i]=1; numBallM(i); }
+function numHome(i){ const B=NUM.balls; if(!B || i<0 || i>=B.n) return; const e=B.home[i]; B.base[i]=e.slice(); B.out[i]=0; numBallM(i,e[0],e[1],e[2]); }
+function numGrab(){ const B=NUM.balls; if(!B || NUM.held>=0) return; const P=player.pos; let bi=-1, bd=2.4;
   for(let i=0;i<B.n;i++){ if(B.out[i]) continue; const e=B.base[i], d=Math.abs(e[0]-P.x)+Math.abs(e[2]-P.z); if(d<bd){ bd=d; bi=i; } } if(bi<0) return;
-  if(NUM.fly.length>=6) numSettle(NUM.fly[0],true);
+  numHide(bi); NUM.held=bi; try{ audio.slide(); }catch(e){} sendPresence(true); }
+function numThrow(){ const B=NUM.balls, i=NUM.held; if(!B || i<0) return; NUM.held=-1;
   const d=new THREE.Vector3(); camera.getWorldDirection(d); d.y=Math.max(d.y,.1); d.normalize(); player.facing=Math.atan2(d.x,d.z);
+  const r2=v=>Math.round(v*100)/100, x=r2(player.pos.x+d.x*.5), y=r2(player.pos.y+1.3), z=r2(player.pos.z+d.z*.5), vx=r2(d.x*10), vy=r2(d.y*10+4), vz=r2(d.z*10);
+  NUM.myThrow=[now1(), i, x, y, z, vx, vy, vz]; numLaunch(i,x,y,z,vx,vy,vz,myUid); try{ audio.jump(); }catch(e){} sendPresence(true); }
+function numLaunch(i,x,y,z,vx,vy,vz,uid){ const B=NUM.balls; if(!B || i<0 || i>=B.n) return; const old=NUM.fly.find(f=>f.i===i); if(old) numSettle(old,true);
+  if(NUM.fly.length>=10) numSettle(NUM.fly[0],true);
   let m=NUM.flyPool && NUM.flyPool.pop(); if(!m){ m=new THREE.Mesh(B.im.geometry,new THREE.MeshStandardMaterial({roughness:.3})); m.userData.noBatch=true; m.userData.noCol=true; m.castShadow=true; scene.add(m); }
-  m.material.color.copy(B.cols[bi]); m.visible=true; m.position.set(P.x+d.x*.5,P.y+1.3,P.z+d.z*.5);
-  B.out[bi]=1; B.M.makeScale(0,0,0); B.im.setMatrixAt(bi,B.M); B.im.instanceMatrix.needsUpdate=true;
-  NUM.fly.push({m, i:bi, vx:d.x*10, vy:d.y*10+4, vz:d.z*10, rest:0}); try{ audio.jump(); }catch(e){} }
-function numSettle(f,home){ const B=NUM.balls, p=f.m.position; let e=B.home[f.i]; if(!home){ e=[p.x,NUMG.h+.6+Math.random()*.24,p.z]; } B.base[f.i]=e;
-  B.M.makeTranslation(e[0]-NUM.A.center[0],e[1],e[2]-NUM.A.center[1]); B.im.setMatrixAt(f.i,B.M); B.im.instanceMatrix.needsUpdate=true; B.out[f.i]=0; f.m.visible=false; (NUM.flyPool||(NUM.flyPool=[])).push(f.m); NUM.fly.splice(NUM.fly.indexOf(f),1); }
-function numFlyTick(dt){ if(!NUM.fly.length) return; const A=NUM.A, H=NUMG.N*NUMG.T/2+.2, Y=NUMG.Y;
-  for(const f of NUM.fly.slice()){ const p=f.m.position; f.vy-=16*dt; p.x+=f.vx*dt; p.y+=f.vy*dt; p.z+=f.vz*dt;
+  m.material.color.copy(B.cols[i]); m.visible=true; m.position.set(x,y,z); numHide(i);
+  NUM.fly.push({m, i, vx, vy, vz, rest:0, uid, t:0}); }
+function numSettle(f,home){ const B=NUM.balls, p=f.m.position; let e=B.home[f.i]; if(!home) e=[p.x,NUMG.h+.6+Math.random()*.24,p.z];
+  B.base[f.i]=e; B.out[f.i]=0; numBallM(f.i,e[0],e[1],e[2]); f.m.visible=false; (NUM.flyPool||(NUM.flyPool=[])).push(f.m); NUM.fly.splice(NUM.fly.indexOf(f),1); }
+// los peluches con los que chocan (tú y los demás de la sala, también los de la CPU)
+function numBodies(){ const L=[]; if(plush.visible && state==='play') L.push([player.pos,myUid]); for(const r of mp.remotes.values()) if(r.pos && r.obj && r.obj.visible!==false) L.push([r.pos,uidOf(r)]); return L; }
+const _nbn=new THREE.Vector3();
+function numFlyTick(dt){ if(!NUM.fly.length) return; const A=NUM.A, H=NUMG.N*NUMG.T/2+.2, Y=NUMG.Y, bodies=numBodies();
+  for(const f of NUM.fly.slice()){ const p=f.m.position; f.t+=dt; f.vy-=16*dt; p.x+=f.vx*dt; p.y+=f.vy*dt; p.z+=f.vz*dt;
+    // choca con un peluche: rebota (el peluche no se mueve)
+    for(const [q,u] of bodies){ if(u===f.uid && f.t<.35) continue; _nbn.set(p.x-q.x,p.y-(q.y+.75),p.z-q.z); const d=_nbn.length(); if(d>.88 || d<1e-4) continue; _nbn.multiplyScalar(1/d);
+      const vn=f.vx*_nbn.x+f.vy*_nbn.y+f.vz*_nbn.z; if(vn<0){ const k=1.55*vn; f.vx-=k*_nbn.x; f.vy-=k*_nbn.y; f.vz-=k*_nbn.z; if(Math.hypot(p.x-player.pos.x,p.z-player.pos.z)<25) try{ const R=audio.raw(); R.tone('sine',320,170,R.ctx.currentTime,.09,.07); }catch(e){} }
+      p.set(q.x+_nbn.x*.89,q.y+.75+_nbn.y*.89,q.z+_nbn.z*.89); }
     const [du,dv]=arL(A,p.x,p.z), inBox=Math.abs(du)<H && Math.abs(dv)<H;
     if(inBox && p.y>Y-.75 && p.y<Y+.6){ p.y=Y-.75; f.vy=-Math.abs(f.vy)*.3; }   // las casillas: ninguna pelotita llega arriba
     if(!inBox && p.y<NUMG.h+1.15 && Math.abs(du)<H+1 && Math.abs(dv)<H+1){ const w=arW(A,Math.max(-H+.1,Math.min(H-.1,du)),Math.max(-H+.1,Math.min(H-.1,dv)),p.y); p.x=w.x; p.z=w.z; f.vx*=-.4; f.vz*=-.4; }   // rebota en las paredes
     const g=inBox ? NUMG.h+.6 : groundAt(p.x,p.z,p.y)+.34;
-    if(p.y<g){ p.y=g; if(inBox){ numSettle(f,false); continue; } f.vy=Math.abs(f.vy)>2?-f.vy*.45:0; f.vx*=.7; f.vz*=.7; }
-    if(Math.hypot(f.vx,f.vy,f.vz)<.6){ f.rest+=dt; if(f.rest>5) numSettle(f,true); } } }
-
+    if(p.y<g){ p.y=g; if(inBox && f.t>.2){ numSettle(f,false); continue; } f.vy=Math.abs(f.vy)>2?-f.vy*.45:0; f.vx*=.7; f.vz*=.7; }
+    if(Math.hypot(f.vx,f.vy,f.vz)<.6 || f.t>20){ f.rest+=dt; if(f.rest>5 || f.t>20) numSettle(f,true); } } }
+// en la mano: la mía y la de los demás
+function numHands(){ const B=NUM.balls; if(!B) return;
+  const put=(m,pos,fc)=>{ const c=Math.cos(fc), s=Math.sin(fc); m.position.set(pos.x+s*.35-c*.42, pos.y+1.05, pos.z+c*.35+s*.42); };
+  const mk=()=>{ const m=new THREE.Mesh(B.im.geometry,new THREE.MeshStandardMaterial({roughness:.3})); m.scale.setScalar(.85); m.userData.noBatch=true; m.userData.noCol=true; scene.add(m); return m; };
+  if(NUM.held>=0 && plush.visible){ if(!NUM.hand) NUM.hand=mk(); NUM.hand.visible=true; NUM.hand.material.color.copy(B.cols[NUM.held]); put(NUM.hand,player.pos,player.facing); } else if(NUM.hand) NUM.hand.visible=false;
+  const seen=new Set();
+  for(const r of mp.remotes.values()){ const h=r.nbHeld; if(!(h>=0) || !r.pos) continue; let m=NUM.rHand.get(r); if(!m){ m=mk(); NUM.rHand.set(r,m); } seen.add(r); m.visible=true; m.material.color.copy(B.cols[h]); put(m,r.pos,r.facing||0); }
+  NUM.rHand.forEach((m,r)=>{ if(!seen.has(r)){ m.visible=false; if(!mp.remotes.has(r.uid) && ![...mp.remotes.values()].includes(r)){ scene.remove(m); NUM.rHand.delete(r); } } }); }
+// cada 2 s: las que ya nadie tiene en la mano ni van volando (alguien se fue de la sala con una) regresan a su lugar
+function numFix(){ const B=NUM.balls; if(!B) return; const keep=new Set(NUM.fly.map(f=>f.i)); if(NUM.held>=0) keep.add(NUM.held); for(const r of mp.remotes.values()) if(r.nbHeld>=0) keep.add(r.nbHeld);
+  for(let i=0;i<B.n;i++) if(B.out[i] && !keep.has(i)) numHome(i); }
+// lo que se manda y lo que llega
+function numPresence(){ return {nbh: NUM.held>=0 ? NUM.held : null, nbt: NUM.myThrow}; }
+function numParse(r,pr){ const B=NUM.balls; if(!B) return;
+  const h=Number.isInteger(pr.nbh) && pr.nbh>=0 && pr.nbh<B.n ? pr.nbh : -1, t=pr.nbt;
+  const okT=Array.isArray(t) && t.length===8 && t.every(Number.isFinite) && Number.isInteger(t[1]) && t[1]>=0 && t[1]<B.n && Math.hypot(t[5],t[6],t[7])<40;
+  if(r.nbtId===undefined) r.nbtId=okT?t[0]:null;   // (lo que ya había lanzado antes de que llegaras no se repite)
+  else if(okT && t[0]!==r.nbtId){ r.nbtId=t[0]; if(Math.hypot(t[2]-NUMG.x,t[4]-NUMG.z)<90) numLaunch(t[1],t[2],t[3],t[4],t[5],t[6],t[7],uidOf(r)); }
+  const prev=r.nbHeld>=0 ? r.nbHeld : -1; if(h!==prev){ if(h>=0) numHide(h); r.nbHeld=h; } }
 // ---------- la CPU para ¡Al número! ----------
 // Esperan un momento (los fáciles más), escogen la casilla correcta más cercana y van; a veces se equivocan (los fáciles más seguido).
 const NUM_BOT=[{v:4.2, re:[2.5,6.5], oops:.35}, {v:5.4, re:[1.4,4], oops:.15}, {v:6.6, re:[.7,2.2], oops:.04}];
