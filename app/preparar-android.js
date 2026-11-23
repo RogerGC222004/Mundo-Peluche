@@ -43,6 +43,7 @@ write(path.join(JD,'MainActivity.java'),`package ${pkg};
 
 import android.os.Bundle;
 import android.view.WindowManager;
+import androidx.activity.EdgeToEdge;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -51,6 +52,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        EdgeToEdge.enable(this);   // v256: Android 15 dibuja la app de borde a borde; así también se ve igual en versiones anteriores
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         hideBars();
