@@ -1839,6 +1839,8 @@ I18N.add({
 "Agarrar pelotita":"Grab a ball",
 "¡Nuevo tipo de cuerpo: el Cubito! Todo hecho de cubitos: cabello, ropa y zapatos en relieve. Escógelo gratis en Personalizar → Cuerpo.":"New body type: the Cubie! Made entirely of little cubes: hair, clothes and shoes in 3D. Pick it for free in Customize → Body.",
 "Escoge su estilo (redondeado o cuadrado), tono de piel, 8 caras, 6 peinados, color de cabello, playera, pantalón o short y tenis.":"Choose its style (rounded or square), skin tone, 8 faces, 6 hairstyles, hair color, T-shirt, pants or shorts and sneakers.",
+"El Cubito ya tiene toda la ropa del catálogo, hecha de cubitos: 100 prendas de arriba, 100 de abajo y 100 zapatos (sudaderas con capucha, vestidos, overoles, tutús, botas, pantuflas de animalito y más).":"The Cubie now has the whole clothing catalog, made of little cubes: 100 tops, 100 bottoms and 100 pairs of shoes (hoodies, dresses, overalls, tutus, boots, animal slippers and more).",
+"Las faldas y los vestidos se mueven con las piernas al caminar, y debajo llevan un short.":"Skirts and dresses move with the legs as you walk, and have shorts underneath.",
 "Estilo":"Style",
 "Estilo 1: redondeado":"Style 1: rounded",
 "Estilo 2: cuadrado":"Style 2: square",
@@ -7410,7 +7412,7 @@ I18N.start();
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='257';
+const GAME_VERSION='258';
 // ======================================================================================
 // ---------------- v242: ÍCONOS DIBUJADOS EN LUGAR DE EMOJIS ----------------
 // Cada emoji de la lista se cambia, donde aparezca en la pantalla, por un dibujo hecho a mano con el mismo estilo de la barra
@@ -10883,26 +10885,27 @@ class CbVG{ constructor(s){ this.s=s||CB.S; this.m=new Map(); }
 const CB_LIN=new Map(); const cbLin=h=>{ let c=CB_LIN.get(h); if(!c){ const q=new THREE.Color(h).convertSRGBToLinear(); c=[q.r,q.g,q.b]; CB_LIN.set(h,c); } return c; };
 const cbShade=(h,k)=>{ const c=new THREE.Color(h); c.r=Math.min(1,c.r*k); c.g=Math.min(1,c.g*k); c.b=Math.min(1,c.b*k); return '#'+c.getHexString(); };
 // figura de una rejilla: caras visibles juntas en rectángulos (o una por cubito, para poder redondear)
-function cbMesh(vg,org,round){   /* (en el estilo 1 solo las caras de la orilla van una por cubito; las de en medio se juntan) */ if(!vg.m.size) return new THREE.BufferGeometry(); const [mn,mx]=vg.bounds(), D=[mx[0]-mn[0]+1,mx[1]-mn[1]+1,mx[2]-mn[2]+1], s=vg.s;
+function cbMesh(vg,org,round,split){   /* (en el estilo 1 solo las caras de la orilla van una por cubito; las de en medio se juntan) */ if(!vg.m.size) return new THREE.BufferGeometry(); const [mn,mx]=vg.bounds(), D=[mx[0]-mn[0]+1,mx[1]-mn[1]+1,mx[2]-mn[2]+1], s=vg.s;
   const ids=new Map(), cols=[]; const id=c=>{ let i=ids.get(c); if(!i){ i=cols.length+1; ids.set(c,i); cols.push(c); } return i; };
   const G=(x,y,z)=>{ if(x<0||y<0||z<0||x>=D[0]||y>=D[1]||z>=D[2]) return 0; const c=vg.get(x+mn[0],y+mn[1],z+mn[2]); return c?id(c):0; };
-  const pos=[], nor=[], col=[], uv=[], idx=[];
+  const pos=[], nor=[], col=[], uv=[], idx=[], idg=[];
   const nearE=(ax,a0)=>{ if(!round) return false; const lo=round[0][ax], hi=round[1][ax], w=a0+mn[ax]+org[ax]; return w<lo+2.5 && w+1>lo-.5 || w+1>hi-2.5 && w<hi+.5; };
   for(let d=0;d<3;d++){ const u=(d+1)%3, v=(d+2)%3, x=[0,0,0], q=[0,0,0]; q[d]=1; const mask=new Int32Array(D[u]*D[v]), nm=new Uint8Array(D[u]*D[v]); if(round) for(let j=0;j<D[v];j++) for(let i=0;i<D[u];i++) nm[j*D[u]+i]=(nearE(u,i)||nearE(v,j))?1:0;
     for(x[d]=-1;x[d]<D[d];){ let n=0;
       for(x[v]=0;x[v]<D[v];x[v]++) for(x[u]=0;x[u]<D[u];x[u]++){ const a=x[d]>=0?G(x[0],x[1],x[2]):0, b=x[d]<D[d]-1?G(x[0]+q[0],x[1]+q[1],x[2]+q[2]):0; mask[n++]=(!a===!b)?0:(a?a:-b); }
       x[d]++; n=0;
       for(let j=0;j<D[v];j++) for(let i=0;i<D[u];){ const c=mask[n]; if(!c){ i++; n++; continue; }
-        let w=1; if(!nm[n]) while(i+w<D[u] && mask[n+w]===c && !nm[n+w]) w++;
-        let h=1; if(!nm[n]) outer: while(j+h<D[v]){ for(let k=0;k<w;k++) if(mask[n+k+h*D[u]]!==c || nm[n+k+h*D[u]]) break outer; h++; }
+        let w=1; if(!nm[n] && !(split && u)) while(i+w<D[u] && mask[n+w]===c && !nm[n+w]) w++;
+        let h=1; if(!nm[n] && !(split && v)) outer: while(j+h<D[v]){ for(let k=0;k<w;k++) if(mask[n+k+h*D[u]]!==c || nm[n+k+h*D[u]]) break outer; h++; }
         const b=[0,0,0]; b[d]=x[d]; b[u]=i; b[v]=j; const du=[0,0,0], dv=[0,0,0]; du[u]=w; dv[v]=h;
         const P=[[b[0],b[1],b[2]],[b[0]+du[0],b[1]+du[1],b[2]+du[2]],[b[0]+du[0]+dv[0],b[1]+du[1]+dv[1],b[2]+du[2]+dv[2]],[b[0]+dv[0],b[1]+dv[1],b[2]+dv[2]]];
-        const UV=[[i,j],[i+w,j],[i+w,j+h],[i,j+h]], o=pos.length/3, sg=c>0?1:-1, nn=[0,0,0]; nn[d]=sg; const cc=cbLin(cols[Math.abs(c)-1]);
+        const UV=[[i,j],[i+w,j],[i+w,j+h],[i,j+h]], o=pos.length/3, sg=c>0?1:-1, nn=[0,0,0]; nn[d]=sg; const cs=cols[Math.abs(c)-1], gl=cs[0]==='*', cc=cbLin(gl?cs.slice(1):cs), I=gl?idg:idx;
         for(let t=0;t<4;t++){ pos.push((P[t][0]+mn[0]+org[0])*s,(P[t][1]+mn[1]+org[1])*s,(P[t][2]+mn[2]+org[2])*s); nor.push(nn[0],nn[1],nn[2]); col.push(cc[0],cc[1],cc[2]); uv.push(UV[t][0]/16,UV[t][1]/16); }
-        if(sg>0) idx.push(o,o+1,o+2,o,o+2,o+3); else idx.push(o,o+2,o+1,o,o+3,o+2);
+        if(sg>0) I.push(o,o+1,o+2,o,o+2,o+3); else I.push(o,o+2,o+1,o,o+3,o+2);
         for(let l=0;l<h;l++) for(let k=0;k<w;k++) mask[n+k+l*D[u]]=0; i+=w; n+=w; } } }
   const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(col,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
-  g.setIndex(pos.length/3>65535?new THREE.Uint32BufferAttribute(idx,1):new THREE.Uint16BufferAttribute(idx,1));
+  const ia=idg.length?idx.concat(idg):idx; g.setIndex(pos.length/3>65535?new THREE.Uint32BufferAttribute(ia,1):new THREE.Uint16BufferAttribute(ia,1));
+  if(idg.length){ g.addGroup(0,idx.length,0); g.addGroup(idx.length,idg.length,1); g.userData.glow=1; }   // v258: los cubitos que brillan ("*#color") van aparte
   if(round) cbRound(g,round,s);
   g.computeBoundingSphere(); return g; }
 // estilo 1: se redondean las orillas de la caja principal de la pieza (lo que sobresale se queda en cubitos; las uniones, rectas)
@@ -10958,57 +10961,307 @@ function cbHair(vg,st,col){ const [W,H,Dp]=CB.M.head, C=col, dk=cbShade(col,.78)
     for(const [y,z] of [[12,4],[9,10],[14,1]]){ vg.set(-2,y,z,C); vg.set(-3,y+1,z,C); vg.set(W+1,y,z+2,C); vg.set(W+2,y+1,z+2,C); } for(const x of [3,8,14]){ vg.set(x,H-3,Dp+1,C); vg.set(x,H-4,Dp+1,dk); } } }
 // ---- lo que trae puesto, en colores ----
 const CB_DEF={st:2, skin:'#f3cfb3', face:'feliz', hs:'corto', hc:'#6b3d22', top:{c:'#4fc3f7',slv:'corta'}, bot:{c:'#3d6fc4',len:'largo'}, shoe:{c:'#e5534b'}};
-function cbLook(eq){ const B=k=>eq && SHOP_BY[eq[k]] ? SHOP_BY[eq[k]] : null, D=CB_DEF, st=B('kst'), sk=B('kskin'), fc=B('kface'), hs=B('khair'), hc=B('khcol'), tp=B('ktop'), bt=B('kbot'), sh=B('kshoe');
-  return {st:st?st.kst:D.st, skin:sk?sk.c:D.skin, face:fc?fc.kface:D.face, hs:hs?hs.khs:D.hs, hc:hc?hc.c:D.hc, top:tp?{c:tp.c,slv:tp.kslv}:D.top, bot:bt?{c:bt.c,len:bt.klen}:D.bot, shoe:sh?{c:sh.c}:D.shoe}; }
-// la figura de cada pieza (se guarda por receta; sq = cuadrada)
-function cbGeo(part,L,sq,sx){ const R=!sq && L.st===1, key=part+'|'+(R?1:2)+'|'+(sx||0)+'|'+JSON.stringify(L); let g=CB.geo.get(key); if(g) return g; if(CB.geo.size>400) CB.geo.delete(CB.geo.keys().next().value);
-  const M=CB.M, sk=L.skin, sk2=cbShade(sk,.93), T=L.top, Bt=L.bot, s2=cbShade(T.c,.8), s3=cbShade(T.c,1.12), p2=cbShade(Bt.c,.8), v=new CbVG(); let org=[0,0,0], box=null;
-  if(part==='pelvis'){ const [W,H,D]=M.pelvis; v.box(-1,0,-1,W+1,H,D+1,Bt.c);
-    for(let x=-1;x<=W;x++){ v.set(x,H-1,-1,p2); v.set(x,H-1,D,p2); } for(let z=-1;z<=D;z++){ v.set(-1,H-1,z,p2); v.set(W,H-1,z,p2); }   // pretina
-    for(const x0 of [2,10]) for(let x=x0;x<x0+4;x++) for(let y=1;y<4;y++) v.set(x,y,-2,y===3?cbShade(Bt.c,.7):Bt.c);   // bolsas de atrás
-    org=[-W/2,0,-D/2]; box=[[-W/2-1,0,-D/2-1],[W/2+1,H,D/2+1]]; }
-  else if(part==='chest'){ const [W,H,D]=M.chest; v.box(0,0,0,W,H,D,sk); v.box(-1,-2,-1,W+1,H,D+1,T.c);
-    for(let x=6;x<12;x++) for(let z=2;z<7;z++) v.set(x,H-1,z,sk); for(let x=5;x<13;x++) for(let z=1;z<8;z++) if(x===5||x===12||z===1||z===7) v.set(x,H,z,s3);   // cuello en relieve
-    for(let x=-1;x<=W;x++){ v.set(x,-2,-1,s2); v.set(x,-2,D,s2); } for(let z=-1;z<=D;z++){ v.set(-1,-2,z,s2); v.set(W,-2,z,s2); }   // dobladillo
-    for(let x=11;x<15;x++) for(let y=8;y<12;y++) v.set(x,y,D+1,y===11?s2:T.c);   // bolsita
-    org=[-W/2,0,-D/2]; box=[[-W/2-1,-2,-D/2-1],[W/2+1,H,D/2+1]]; }
-  else if(part==='neck'){ const [W,H,D]=M.neck; v.box(0,-1,0,W,H,D,sk2); org=[-W/2,0,-D/2]; }
+// ---------- v258: la ropa del catálogo en cubitos (Cubito, fase 3) ----------
+// Toda la ropa es de cubitos: el cuerpo de la prenda es una capa de 1 cubito alrededor de la pieza, los estampados son el color de
+// cada cubito y los detalles (capucha, bolsas, botones, números, dibujos, orejitas, agujetas…) son cubitos que sobresalen.
+const cbM=(a,n)=>((a%n)+n)%n, cbH=(a,b)=>(((a*73856093)^(b*19349663))>>>0)%997/997;
+const CB_MIX=new Map(); const cbMix=(a,b,k)=>{ const q=a+b+k; let r=CB_MIX.get(q); if(!r){ r='#'+new THREE.Color(a).lerp(new THREE.Color(b),k).getHexString(); CB_MIX.set(q,r); } return r; };
+// vuelta alrededor de una caja (para que el estampado siga por los lados): 0 al centro del frente
+function cbPer(x,z,x0,x1,z0,z1){ const cx=(x0+x1+1)>>1, w=x1-cx; return z===z1?x-cx : x===x1?w+(z1-z) : z===z0?w+(z1-z0)+(x1-x) : x===x0?w+(z1-z0)+(x1-x0)+(z-z0) : x-cx; }
+// estampados: dibujitos que se repiten [filas de arriba a abajo, cada cuántos cubitos a lo ancho y a lo alto, corrimiento de cada fila]
+const CB_TILES={ lunares:[['aa','aa'],6,5,3], corazones:[['.a.a.','aaaaa','.aaa.','..a..'],8,6,4], flores:[['.a.','aya','.a.'],6,5,3],
+  nubes:[['.aa..','aaaaa'],9,5,4], fresas:[['.g.','aaa','aya','.a.'],7,6,3], huellitas:[['a.a.a','.....','.aaa.','.aaa.'],8,7,4],
+  copos:[['..a..','a.a.a','.aaa.','a.a.a','..a..'],8,7,4], estrellas:[['..a..','aaaaa','.aaa.','.a.a.'],8,6,4] };
+const CB_PAL={y:'#ffd23f', g:'#4fa83a', k:'#2a2226', w:'#ffffff', r:'#e8414f', b:'#7fd0ff', f:'#ff9a3c', p:'#f49ac1'};
+// el color de cada cubito de una prenda: u = vuelta alrededor, w = altura (de lejos, sin estampado)
+function cbPainter(P,far){ const c=P.c, c2=P.c2||'#ffffff', p=P.pat;
+  if(!p || far){ const b=p ? (p==='arcoiris'||p==='tiedye' ? '#f2d6ea' : cbMix(c,c2,.3)) : c; if(!P.knit || far) return ()=>b; const b2=cbShade(b,.92); return u=>cbM(u,2)?b:b2; }
+  let f;
+  if(CB_TILES[p]){ const [rows,px,py,st]=CB_TILES[p], pal=Object.assign({},CB_PAL,{a:c2}), n=rows.length;
+    f=(u,w)=>{ const row=Math.floor(w/py), r=n-1-cbM(w,py), ch=r>=0?rows[r][cbM(u+row*st,px)]:null; return ch && ch!=='.' ? pal[ch] : c; }; }
+  else if(p==='rayas') f=(u,w)=>cbM(w,4)<2?c2:c;
+  else if(p==='rayasv') f=u=>cbM(u,4)<2?c2:c;
+  else if(p==='vichy'){ const mid=cbMix(c,c2,.5); f=(u,w)=>{ const a=cbM(u,4)<2, b=cbM(w,4)<2; return a&&b?c2:(a||b)?mid:c; }; }
+  else if(p==='cuadros') f=(u,w)=>(Math.floor(u/3)+Math.floor(w/3))&1?c2:c;
+  else if(p==='escoces'){ const dk=cbShade(c2,.72), lt=cbMix(c,'#ffffff',.45); f=(u,w)=>{ const a=cbM(u,8)<2, b=cbM(w,8)<2; return a&&b?dk:(a||b)?c2:(cbM(u,8)===5||cbM(w,8)===5)?lt:c; }; }
+  else if(p==='zigzag') f=(u,w)=>{ const t=cbM(u,6), z=t<3?t:6-t; return cbM(w-z,6)<2?c2:c; };
+  else if(p==='arcoiris'){ const R=['#e8414f','#ff9a3c','#ffd23f','#4fc35a','#4b8fe8','#9a5ad8']; f=(u,w)=>R[Math.floor(cbM(w,12)/2)]; }
+  else if(p==='tiedye'){ const R=['#ff7ab6','#ffd23f','#5fd0ff','#b07aff']; f=(u,w)=>{ const b=w-44, d=Math.sqrt(u*u+b*b)+Math.atan2(b,u)*2.2; return R[cbM(Math.floor(d/2.2),4)]; }; }
+  else if(p==='camuflaje'){ const c3=cbShade(c,.72); f=(u,w)=>{ const n=cbH(Math.floor(u/3),Math.floor(w/3))*.6+cbH(Math.floor((u+7)/5),Math.floor((w+3)/5))*.4; return n<.33?c2:n<.62?c:c3; }; }
+  else if(p==='rombos'){ const dk=cbShade(c,.8); f=(u,w)=>{ const i=Math.floor((u+4)/8), j=Math.floor(w/8), d=Math.abs(cbM(u+4,8)-4)+Math.abs(cbM(w,8)-4); return d<=3 ? ((i+j)&1?c2:dk) : c; }; }
+  else if(p==='mezclilla'){ const dk=cbShade(c,.92), lt=cbMix(c,c2,.2); f=(u,w)=>cbM(u,7)===3&&cbM(w,2)===0?lt:cbM(Math.floor(u/2)+Math.floor(w/3),3)===0?dk:c; }
+  else f=()=>c;
+  if(P.knit){ const g=f, memo=new Map(); f=(u,w)=>{ const col=g(u,w); if(cbM(u,2)) return col; let r=memo.get(col); if(!r){ r=cbShade(col,.92); memo.set(col,r); } return r; }; }
+  return f; }
+// dibujos en relieve (playeras estampadas, números): filas de arriba a abajo; 'a' es el color de la prenda (c2)
+const CB_ICONS={ corazon:['.aa.aa.','aaaaaaa','aaaaaaa','.aaaaa.','..aaa..','...a...'], estrella:['...a...','..aaa..','aaaaaaa','.aaaaa.','..aaa..','.aa.aa.','.a...a.'],
+  rayo:['...aaa','..aaa.','.aaa..','aaaaaa','..aaa.','.aaa..','.aa...','.a....'], carita:['.aaaaa.','aaaaaaa','aakakaa','aaaaaaa','akaaaka','aakkkaa','.aaaaa.'],
+  planeta:['...aaa...','..aaaaa..','yyyyyyyyy','..aaaaa..','...aaa...'], cohete:['..a..','.aaa.','.aba.','.aaa.','.aaa.','raaar','r.f.r','..f..'],
+  flor:['..a..','.aaa.','aayaa','.aaa.','..a..','..g..','.gg..','..g..'], nota:['.aaaaa','.a...a','.a...a','.a...a','aa..aa','aa..aa'],
+  huella:['..a.a..','a.....a','..aaa..','.aaaaa.','.aaaaa.','..aaa..'], dino:['.....aaa','.....aka','.....aaa','a...aaa.','aa.aaaa.','.aaaaaa.','..a..a..'],
+  gato:['a.....a','aa...aa','aaaaaaa','akaaaka','aaapaaa','.aaaaa.'] };
+const CB_DIG=['aaa|a.a|a.a|a.a|aaa','.a.|aa.|.a.|.a.|aaa','aaa|..a|aaa|a..|aaa','aaa|..a|.aa|..a|aaa','a.a|a.a|aaa|..a|..a','aaa|a..|aaa|..a|aaa','aaa|a..|aaa|a.a|aaa','aaa|..a|.a.|.a.|.a.','aaa|a.a|aaa|a.a|aaa','aaa|a.a|aaa|..a|aaa'].map(s=>s.split('|'));
+const cbNum=n=>{ const d=String(n).split('').map(k=>CB_DIG[+k]||CB_DIG[7]); return d[0].map((_,i)=>d.map(q=>q[i]).join('.')); };
+// pone un dibujo: de frente (z fijo) o de espaldas (al revés, para que se lea desde atrás); sc = cubitos por punto
+function cbStamp(v,rows,a,x0,yTop,z,back,sc=1){ const pal=Object.assign({},CB_PAL,{a}), w=rows[0].length;
+  rows.forEach((r,i)=>{ for(let j=0;j<r.length;j++){ const ch=r[j]; if(ch==='.') continue; const jj=back?w-1-j:j; for(let p=0;p<sc;p++) for(let q=0;q<sc;q++) v.set(x0+jj*sc+p,yTop-i*sc-q,z,pal[ch]||a); } }); }
+// anillo de cubitos alrededor de una caja (o = qué tan afuera)
+function cbRing(v,W,D,y,col,o=1,x0=0,z0=0){ for(let x=x0-o;x<x0+W+o;x++) for(let z=z0-o;z<z0+D+o;z++) if(x===x0-o||x===x0+W+o-1||z===z0-o||z===z0+D+o-1) v.set(x,y,z,typeof col==='function'?col(x,z):col); }
+// tipos de prenda
+const CB_SLV={tee:'c',print:'c',jersey:'c',polo:'c',sailor:'c',apron:'c',dress:'p',tank:'n',kimono:'k',none:'n'};   // manga: c corta, l larga, p abombada, n sin manga, k de kimono
+const CB_HOOD=new Set(['hood','cat','hoodear','raincoat']), CB_RIB=new Set(['long','hood','cat','hoodear','cardigan','turtle']);
+const cbBotK=B=>B.bk||(B.len==='corto'?'shorts':'pants'), CB_SKIRT=new Set(['skirt','skirtlong','tutu']), CB_SHORT=new Set(['shorts','overallshort']);
+const CB_SHAFT={converse:5, bota:4, bota2:4, lluvia:7, nieve:6, vaquera:8, botaalta:12, patin:5, patinhielo:5}, CB_UNDER=new Set(['converse','patin','patinhielo']);
+// ---- el pecho con la prenda de arriba (y la pechera del overol) ----
+function cbChest(v,L,far){ const [W,H,D]=CB.M.chest, sk=L.skin, T=L.top, k=T.tk||'tee', B=L.bot, bk=cbBotK(B);
+  const P=cbPainter(T,far), c=T.c, c2=T.c2||'#ffffff', c3=T.c3||cbShade(c,.86), s2=cbShade(c,.8), s3=cbShade(c,1.12), gold='#e8c45a', Z=D+1;
+  const y0=k==='raincoat'||k==='kimono'?-4:-2, per=(x,z)=>cbPer(x,z,-1,W,-1,D), at=(x,y)=>P(x-9,y+CB.CHEST);
+  v.box(0,0,0,W,H,D,sk); if(k==='none'){ cbBib(v,L,far,y0); return y0; }   // (foto de una prenda de abajo: solo la pechera del overol)
+  v.box(-1,y0,-1,W+1,H,D+1,(x,y,z)=>P(per(x,z),y+CB.CHEST));
+  const rib=col=>{ const d=cbShade(col,.86); return (x,z)=>cbM(per(x,z),2)?col:d; };
+  if(k!=='dress'){ if(CB_RIB.has(k)||T.knit){ cbRing(v,W,D,y0,rib(s2)); cbRing(v,W,D,y0+1,rib(s2)); } else cbRing(v,W,D,y0,s2); }   // dobladillo
+  for(let x=6;x<12;x++) for(let z=2;z<7;z++) v.set(x,H-1,z,sk);   // el hueco del cuello
+  const collar=(col,y=H)=>{ for(let x=5;x<13;x++) for(let z=1;z<8;z++) if(x===5||x===12||z===1||z===7) v.set(x,y,z,col); };
+  const flaps=col=>{ for(const [x,y] of [[5,H-1],[6,H-1],[7,H-1],[6,H-2],[7,H-2]]){ v.set(x,y,Z,col); v.set(17-x,y,Z,col); } };
+  if(CB_HOOD.has(k)){ const hc=k==='hoodear'?(T.c2||c):(T.c3||c), hd=cbShade(hc,.72), hs=cbShade(hc,.9);   // capucha caída en la espalda, con su orilla alrededor del cuello
+    for(let x=4;x<14;x++) for(let z=0;z<9;z++) if(!(x>=6&&x<12&&z>=2&&z<7)) v.set(x,H,z,hc);
+    const HW=[6,6,6,6,5,4,3,2];   // mitad del ancho de cada fila, de arriba a abajo (redonda abajo)
+    HW.forEach((w,i)=>{ const y=H-1-i; for(let x=9-w;x<9+w;x++){ v.set(x,y,-2,hc); if(x>9-w && x<8+w && i<7) v.set(x,y,-3,(x===8||x===9)&&i>0?hs:hc); } });
+    for(let x=4;x<14;x++){ v.set(x,H,-1,hd); v.set(x,H,-2,hd); }
+    if(k!=='raincoat'){ const pc=k==='hoodear'?hc:c3; for(let x=4;x<14;x++) for(let y=1;y<6;y++) v.set(x,y,Z,(x===4||x===13)&&y>1&&y<5?cbShade(pc,.8):pc);   // bolsa de canguro
+      for(const x of [7,10]) for(let y=H-5;y<H;y++) v.set(x,y,Z,y===H-5?'#d8d4cc':'#ffffff'); }   // cordones
+    else { for(const y of [H-3,H-7,H-11]) for(const x of [8,9]) v.set(x,y,Z,c2); for(let x=2;x<6;x++){ v.set(x,1,Z,s2); v.set(x+10,1,Z,s2); } }   // botones y bolsas del impermeable
+    const e=k==='cat'?'gato':T.ear, ec=T.c2||hc, sp=T.c3||'#f2c94c';
+    if(k==='cat') cbStamp(v,CB_ICONS.gato,cbShade(c,.75),5,H-4,Z,false);
+    if(e==='gato') for(const s of [0,1]){ const X=s?[12,13,14,13,14,14]:[5,4,3,4,3,3], Y=[H+1,H+1,H+1,H+2,H+2,H+3]; X.forEach((x,i)=>{ v.set(x,Y[i],-2,ec); v.set(x,Y[i],-3,ec); }); }
+    else if(e==='oso'||e==='panda'){ const ek=e==='panda'?'#2a2226':ec; for(const x0 of [3,12]){ for(let x=x0;x<x0+3;x++) for(let y=H+1;y<H+3;y++){ v.set(x,y,-2,ek); v.set(x,y,-3,ek); } v.set(x0+1,H+3,-2,ek); v.set(x0+1,H+3,-3,ek); } }
+    else if(e==='conejo') for(const x0 of [4,12]) for(let i=0;i<7;i++) for(let x=x0;x<x0+2;x++){ const y=H+1+i, z=-2-i; v.set(x,y,z,ec); v.set(x,y,z-1,i>0&&i<6&&x===(x0===4?x0+1:x0)?'#f7b6cf':ec); if(i<6) v.set(x,y,z-2,ec); }
+    else if(e==='dino'||e==='dragon'){ for(const [y,z] of [[H-2,-4],[H-6,-4],[4,-2],[0,-2]]) for(const x of [8,9]){ for(let d=0;d<3;d++) v.set(x,y-d,z,sp); v.set(x,y-1,z-1,sp); v.set(x,y-2,z-1,sp); v.set(x,y-2,z-2,sp); }
+      for(const x of [8,9]){ v.set(x,H+1,-2,sp); v.set(x,H+1,-3,sp); v.set(x,H+2,-3,sp); } }
+    else if(e==='tiburon'){ for(const x of [8,9]){ for(let y=H+1;y<H+4;y++) v.set(x,y,-2,ec); for(let y=H-2;y<H+3;y++) v.set(x,y,-4,ec); for(let y=H-4;y<H+1;y++) v.set(x,y,-5,ec); } }
+    else if(e==='unicornio'){ for(const x of [8,9]) v.set(x,H+1,-2,'#f2c230'); v.set(8,H+2,-2,'#f2c230'); v.set(8,H+3,-2,'#ffe27a');
+      for(let y=H-6;y<H+1;y++) v.set(y%2?4:13,y,-4,['#ff9ad5','#9fd8ff','#c8a8f0'][cbM(y,3)]); }
+  }
+  else if(k==='sailor'){ collar(c2);
+    for(let x=1;x<17;x++) for(let y=H-8;y<H;y++) v.set(x,y,-2,(x===2||x===15||y===H-7)&&x>1&&x<16&&y>=H-7?'#ffffff':c2);   // la solapa de atrás
+    for(let x=1;x<17;x++) for(let z=-1;z<2;z++) v.set(x,H,z,c2); for(const x0 of [1,13]) for(let x=x0;x<x0+4;x++) for(let z=2;z<=D;z++) v.set(x,H,z,c2);
+    for(let i=0;i<6;i++) for(const x of [1+i,2+i]){ v.set(x,H-1-i,Z,c2); v.set(17-x,H-1-i,Z,c2); }
+    const r='#d8283a'; for(const [x,y] of [[8,H-7],[9,H-7],[6,H-6],[7,H-6],[6,H-7],[10,H-6],[11,H-6],[11,H-7],[7,H-8],[7,H-9],[10,H-8],[10,H-9]]) v.set(x,y,Z+1,r); }
+  else if(k==='blazer'){ collar(c); const lp=cbShade(c,1.18);
+    for(let i=0;i<6;i++){ const hw=3-(i>>1), y=H-1-i; for(let x=9-hw;x<9+hw;x++) v.set(x,y,D,'#ffffff'); for(const x of [9-hw-2,9-hw-1]){ v.set(x,y,Z,lp); v.set(17-x,y,Z,lp); } }
+    for(let y=H-8;y<H-1;y++) for(const x of [8,9]) v.set(x,y,Z,y===H-2?cbShade(c2,.8):c2);
+    for(const y of [H-10,H-13]) for(const x of [8,9]) v.set(x,y,Z,gold);
+    for(let x=1;x<5;x++){ v.set(x,3,Z,s2); v.set(17-x,3,Z,s2); } v.set(13,H-5,Z,'#ffffff'); v.set(14,H-5,Z,'#ffffff'); }
+  else if(k==='jersey'){ collar(c2); const n=cbNum(T.num||'7'); cbStamp(v,n,c2,(W-n[0].length)>>1,H-4,Z,false); cbStamp(v,n,c2,(W-n[0].length*2)>>1,H-3,-2,true,2); }
+  else if(k==='print'){ collar(s3); const ic=CB_ICONS[T.icon]||CB_ICONS.corazon; cbStamp(v,ic,c2,(W-ic[0].length)>>1,H-4,Z,false); }
+  else if(k==='polo'){ collar(c2); flaps(c2); for(const y of [H-3,H-5]) v.set(8,y,Z,'#ffffff'); }
+  else if(k==='shirt'||k==='pjtop'){ collar(c2); flaps(c2);
+    if(k==='shirt'){ for(let y=y0+1;y<H-2;y++) for(const x of [8,9]) v.set(x,y,Z,cbM(y-H+2,3)===0?(T.c3||'#ffffff'):c2); for(let x=12;x<16;x++) for(let y=7;y<11;y++) v.set(x,y,Z,y===10?s2:at(x,y)); }
+    else for(const y of [H-3,H-7,H-11]) for(const x of [8,9]) v.set(x,y,Z,c2); }
+  else if(k==='cardigan'){ collar(c); for(let y=y0;y<H;y++) for(const x of [8,9]) v.set(x,y,D,c2); for(const [x,y] of [[7,H-1],[10,H-1],[6,H-1],[11,H-1],[7,H-2],[10,H-2]]) v.set(x,y,D,c2);
+    for(let y=y0;y<H-2;y++){ v.set(7,y,Z,c); v.set(10,y,Z,c); } for(const y of [1,4,7,10]) v.set(7,y,Z,T.c3||gold); }
+  else if(k==='puffer'){ for(let y=y0+1;y<H-1;y++) if(cbM(y-y0,4)) cbRing(v,W,D,y,(x,z)=>P(cbPer(x,z,-2,W+1,-2,D+1),y+CB.CHEST),2);
+    for(let y=y0;y<H-1;y++) for(const x of [8,9]) v.set(x,y,D+2,T.c2||'#2a2226'); collar(c); collar(c,H+1); }
+  else if(k==='kimono'){ collar(c2); for(let i=0;i<9;i++) for(const x of [3+i,4+i]) v.set(x,H-1-i,Z,c2); for(let i=0;i<4;i++) for(const x of [13-i,14-i]) v.set(x,H-1-i,Z,c2);
+    for(let y=0;y<4;y++) cbRing(v,W,D,y,c2,2); for(let x=6;x<12;x++) for(let y=0;y<4;y++) v.set(x,y,-3,(x===8||x===9)?cbShade(c2,.8):c2); for(const x of [5,12]) for(let y=-1;y<5;y++) v.set(x,y,-3,c2); }
+  else if(k==='apron'){ collar(s3); const ap=c2, tr=T.c3||'#d8394a';
+    for(let x=4;x<14;x++) for(let y=y0;y<H-3;y++) v.set(x,y,Z,y===H-4?tr:ap); for(const x of [5,12]) for(let y=H-3;y<H;y++) v.set(x,y,Z,ap);
+    for(let x=6;x<12;x++) for(let y=0;y<4;y++) v.set(x,y,Z+1,y===3?cbShade(tr,.8):tr); cbRing(v,W,D,1,ap); for(const [x,y] of [[6,0],[7,1],[6,2],[8,1],[9,1],[10,1],[11,0],[11,2]]) v.set(x,y,-2,ap); }
+  else if(k==='tank'){ collar(s3); for(let y=H-5;y<H;y++) for(let z=-1;z<=D;z++){ v.set(-1,y,z,null); v.set(W,y,z,null); v.set(0,y,z,sk); v.set(W-1,y,z,sk); }
+    for(let x=0;x<W;x++) if(x<3||x>14) for(let z=-1;z<=D;z++){ v.set(x,H-1,z,z<0||z>=D?null:sk); if(z<0||z>=D) v.set(x,H-2,z,null); }
+    for(let x=0;x<W;x++) if(x<3||x>14) for(let z=0;z<D;z++) v.set(x,H-2,z,sk); }
+  else if(k==='dress'){ collar(s3); cbRing(v,W,D,0,cbShade(c,.85)); }
+  else if(k==='turtle') collar(c);
+  else { collar(T.knit?rib(c):s3); if(k==='tee' && !T.pat && !T.knit && T.slv) for(let x=11;x<15;x++) for(let y=8;y<12;y++) v.set(x,y,Z,y===11?s2:c); }   // la bolsita de la playera básica
+  cbBib(v,L,far,y0);
+  return y0; }
+// pechera y tirantes del overol (encima de la prenda de arriba)
+function cbBib(v,L,far,y0){ const [W,H,D]=CB.M.chest, B=L.bot, bk=cbBotK(B), Z=D+1, gold='#e8c45a';
+  if(bk==='overall'||bk==='overallshort'){ const BP=cbPainter(B,far), bc=(x,y)=>BP(x-9,y+CB.CHEST), b2=cbShade(B.c,.8);   // pechera y tirantes del overol
+    for(let x=4;x<14;x++) for(let y=y0;y<8;y++) v.set(x,y,Z,bc(x,y)); for(let x=4;x<14;x++) v.set(x,7,Z,b2);
+    for(const x0 of [4,12]) for(let x=x0;x<x0+2;x++){ for(let y=8;y<H;y++) v.set(x,y,Z,bc(x,y)); for(let z=-1;z<=D;z++) v.set(x,H,z,bc(x,H)); for(let y=y0;y<H;y++) if(!v.get(x,y,-2)) v.set(x,y,-2,bc(x,y)); }
+    for(const x of [4,13]) v.set(x,6,Z+1,gold); for(let x=7;x<11;x++) for(let y=1;y<5;y++) v.set(x,y,Z+1,y===4?b2:bc(x,y)); } }
+// ---- el cuello (el de tortuga lo cubre) ----
+function cbNeck(v,L,far){ const [W,H,D]=CB.M.neck, T=L.top; v.box(0,-1,0,W,H,D,cbShade(L.skin,.93));
+  if(T.tk==='turtle'){ const P=cbPainter(T,far), d=cbShade(T.c,.88); v.box(-1,-1,-1,W+1,H,D+1,(x,y,z)=>{ const u=cbPer(x,z,-1,W,-1,D); return cbM(u,2)?P(u,y):d; }); } }
+// ---- brazo y antebrazo ----
+function cbSleeve(T){ const k=T.tk||'tee'; return T.slv ? (T.slv==='larga'?'l':'c') : (CB_SLV[k]||'l'); }
+function cbUarm(v,L,far){ const [W,H,D]=CB.M.uarm, T=L.top, sl=cbSleeve(T), P=cbPainter(T,far), c=T.c, s2=cbShade(c,.8), k=T.tk, per=(x,z)=>cbPer(x,z,-1,W,-1,D);
+  v.box(0,-H,0,W,0,D,L.skin); if(sl==='n') return;
+  const len=sl==='l'||sl==='k'?H:sl==='p'?4:7; v.box(-1,-len,-1,W+1,1,D+1,(x,y,z)=>P(per(x,z),y+CB.SH));
+  if(sl==='p'){ for(let y=-3;y<0;y++) cbRing(v,W,D,y,(x,z)=>P(cbPer(x,z,-2,W+1,-2,D+1),y+CB.SH),2); cbRing(v,W,D,-len,cbShade(c,.85)); }
+  else if(sl==='c') cbRing(v,W,D,-len,k==='jersey'||k==='sailor'?(T.c2||'#ffffff'):s2);
+  if(k==='sailor'){ cbRing(v,W,D,-len+1,T.c2); }
+  if(k==='puffer') for(let y=-H+1;y<0;y++) if(cbM(y,4)) cbRing(v,W,D,y,c,2);
+  if(sl==='k') for(let y=-H;y<-3;y++) cbRing(v,W,D,y,(x,z)=>P(cbPer(x,z,-2,W+1,-2,D+1),y+CB.SH),2); }
+function cbFarm(v,L,far){ const [W,H,D]=CB.M.farm, T=L.top, sl=cbSleeve(T), P=cbPainter(T,far), c=T.c, s2=cbShade(c,.8), k=T.tk, per=(x,z)=>cbPer(x,z,-1,W,-1,D), long=sl==='l'||sl==='k';
+  v.box(0,-H,0,W,0,D,L.skin); v.box(1,0,1,W-1,2,D-1,long?c:L.skin); if(!long) return;
+  v.box(-1,-H+1,-1,W+1,0,D+1,(x,y,z)=>P(per(x,z),y+CB.SH-12));
+  const cf=k==='hood'||k==='cat'||k==='hoodear'?(T.c3||s2):s2; for(const y of [-H+1,-H+2]) cbRing(v,W,D,y,CB_RIB.has(k)||T.knit?(x,z)=>cbM(per(x,z),2)?cf:cbShade(cf,.86):cf);
+  if(k==='puffer') for(let y=-H+3;y<0;y++) if(cbM(y,4)) cbRing(v,W,D,y,c,2);
+  if(sl==='k') for(let y=-H+1;y<-1;y++) cbRing(v,W,D,y,(x,z)=>P(cbPer(x,z,-2,W+1,-2,D+1),y+CB.SH-12),2); }
+// ---- la cadera: pantalón, falda, tutú (y la falda del vestido) ----
+const CB_SKROWS={skirt:[[5,4,1],[3,1,2],[0,-5,3],[-6,-11,4]], skirtlong:[[5,4,1],[3,0,2],[-1,-6,3],[-7,-13,4],[-14,-20,5],[-21,-23,6]], dress:[[5,3,2],[2,0,3],[-1,-5,4],[-6,-10,5]]};
+// debajo de las faldas y del tutú, un short casi hasta la rodilla
+const cbUnder=B=>B.bk==='tutu'?(B.c2||cbShade(B.c,.85)):cbShade(B.c,.78);
+function cbSkirt(v,W,D,rows,P,lin){ rows.forEach(([a,b,o],i)=>{ for(let y=b;y<=a;y++){ if(o>1 || y<0) cbRing(v,W,D,y,lin,o-1);   // forro de un color por dentro (así se juntan sus caras)
+  cbRing(v,W,D,y,(x,z)=>{ const col=P(cbPer(x,z,-o,W+o-1,-o,D+o-1),y+CB.HIP); return i===rows.length-1&&y===b?cbShade(col,.86):col; },o); } }); }
+function cbPelvis(v,L,far){ const [W,H,D]=CB.M.pelvis, B=L.bot, T=L.top, bk=cbBotK(B), P=cbPainter(B,far), c=B.c, p2=cbShade(c,.8), per=(x,z)=>cbPer(x,z,-1,W,-1,D);
+  let box=[[-W/2-1,0,-D/2-1],[W/2+1,H,D/2+1]];
+  if(bk==='none'){ v.box(0,0,0,W,H,D,L.skin); return null; }
+  if(bk==='leggings'){ v.box(0,0,0,W,H,D,(x,y,z)=>P(cbPer(x,z,0,W-1,0,D-1),y+CB.HIP)); cbRing(v,W,D,H-1,p2); box=[[-W/2,0,-D/2],[W/2,H,D/2]]; }
+  else if(!CB_SKIRT.has(bk)){ v.box(-1,0,-1,W+1,H,D+1,(x,y,z)=>P(per(x,z),y+CB.HIP)); cbRing(v,W,D,H-1,p2);   // pretina
+    if(bk!=='joggers') for(const x0 of [2,10]) for(let x=x0;x<x0+4;x++) for(let y=1;y<4;y++) v.set(x,y,-2,y===3?cbShade(c,.7):P(x-8,y+CB.HIP));   // bolsas de atrás
+    else for(const x of [7,8]) for(let y=H-3;y<H-1;y++) v.set(x,y,D+1,'#ffffff'); }   // cordón del jogger
+  else { v.box(-1,0,-1,W+1,H,D+1,cbUnder(B));
+    if(bk==='tutu'){ cbRing(v,W,D,H-1,B.c2||p2); for(let y=1;y<H-1;y++) cbRing(v,W,D,y,B.c2||c);
+      [[1,2,5],[-1,0,6],[-3,-2,7]].forEach(([ya,yb,r],t)=>{ for(let x=-r;x<W+r;x++) for(let z=-r;z<D+r;z++){ const dx=Math.max(0,-x,x-W+1), dz=Math.max(0,-z,z-D+1), d=Math.hypot(dx,dz); if(d<1||d>r+.35) continue;
+        if(d>r-.65 && cbH(x+t*7,z)<.35) continue; const u=cbPer(Math.max(-1,Math.min(W,x)),Math.max(-1,Math.min(D,z)),-1,W,-1,D); for(let y=ya;y<=yb;y++) v.set(x,y,z,cbM(u+t,4)<2?c:cbShade(c,.93)); } }); }
+    box=null; }
+  return box; }
+// la falda (y la del vestido): pieza aparte, para que las piernas la empujen al caminar
+const cbHasSkirt=L=>{ const k=cbBotK(L.bot); return k==='skirt'||k==='skirtlong'||L.top.tk==='dress'; };
+function cbSkirtV(v,L,far){ const [W,H,D]=CB.M.pelvis, B=L.bot, k=cbBotK(B), T=L.top;
+  if(k==='skirt'||k==='skirtlong') cbSkirt(v,W,D,CB_SKROWS[k],cbPainter(B,far),cbShade(B.c,.82));
+  if(T.tk==='dress') cbSkirt(v,W,D,CB_SKROWS.dress,cbPainter(T,far),cbShade(T.c,.82)); }
+// ---- muslo, pantorrilla y pie ----
+function cbThigh(v,L,sx,far){ const [W,H,D]=CB.M.thigh, B=L.bot, bk=cbBotK(B), P=cbPainter(B,far), c=B.c, p2=cbShade(c,.8), per=(x,z)=>cbPer(x,z,-1,W,-1,D), out=sx>0?W:-1;
+  v.box(0,-H,0,W,0,D,L.skin); if(bk==='none') return false; if(CB_SKIRT.has(bk)){ const u=cbUnder(B); v.box(-1,-11,-1,W+1,0,D+1,u); cbRing(v,W,D,-11,cbShade(u,.85)); return true; }
+  if(bk==='leggings'){ v.box(0,-H,0,W,0,D,(x,y,z)=>P(cbPer(x,z,0,W-1,0,D-1),y+CB.HIP)); return false; }
+  const pl=CB_SHORT.has(bk)?8:H; v.box(-1,-pl,-1,W+1,0,D+1,(x,y,z)=>P(per(x,z),y+CB.HIP)); if(pl<H) cbRing(v,W,D,-pl,p2);
+  for(let y=-pl+2;y<-1;y++) v.set(out,y,D>>1,p2);   // costura de afuera
+  if(B.stripe) for(let y=-pl;y<0;y++) v.set(out,y,D>>1,B.stripe);
+  if(bk==='cargo'){ const pc=B.c2||p2; for(let z=1;z<6;z++) for(let y=-10;y<-4;y++) v.set(out+sx,y,z,y===-5?cbShade(pc,.85):pc); }
+  return true; }
+function cbShin(v,L,sx,far){ const [W,H,D]=CB.M.shin, B=L.bot, bk=cbBotK(B), Z=L.shoe, zk=Z.sk||'tenis', P=cbPainter(B,far), c=B.c, p2=cbShade(c,.8), per=(x,z)=>cbPer(x,z,-1,W,-1,D), out=sx>0?W:-1;
+  const lp=!CB_SKIRT.has(bk) && !CB_SHORT.has(bk) && bk!=='leggings' && bk!=='none', sk=L.skin; let shell=false;
+  v.box(0,-H,0,W,0,D,sk); v.box(1,0,1,W-1,2,D-1,lp||bk==='leggings'?c:sk);
+  const boot=CB_SHAFT[zk] && !(lp && bk!=='bermuda' && CB_UNDER.has(zk));
+  if(bk==='leggings') v.box(0,-H,0,W,0,D,(x,y,z)=>P(cbPer(x,z,0,W-1,0,D-1),y+17));
+  else if(bk==='bermuda'){ v.box(-1,-3,-1,W+1,0,D+1,(x,y,z)=>P(per(x,z),y+17)); cbRing(v,W,D,-3,p2); cbRing(v,W,D,-3,p2,2); shell=true; }
+  else if(lp){ v.box(-1,-H+1,-1,W+1,0,D+1,(x,y,z)=>P(per(x,z),y+17)); shell=true;
+    if(boot){}
+    else if(bk==='joggers'){ const cf=B.c2||p2; for(const y of [-H+1,-H+2]) cbRing(v,W,D,y,(x,z)=>cbM(per(x,z),2)?cf:cbShade(cf,.86)); }
+    else for(const y of [-H+1,-H+2]) cbRing(v,W,D,y,p2,2);   // dobladillo volteado
+    if(B.stripe) for(let y=-H+1;y<0;y++) v.set(out,y,D>>1,B.stripe); }
+  const h=boot?CB_SHAFT[zk]:0; if(h){ const ZP=cbPainter(Z,far), zc=Z.c, zc2=Z.c2||'#ffffff'; shell=true;   // caña de las botas (encima del pantalón)
+    v.box(-1,-H,-1,W+1,-H+h,D+1,(x,y,z)=>ZP(per(x,z),y+17)); const top=-H+h-1;
+    if(zk==='lluvia') cbRing(v,W,D,top,zc,2);
+    else if(zk==='nieve'){ cbRing(v,W,D,top,'#ffffff',2); cbRing(v,W,D,top-1,'#f2eee6',2); }
+    else if(zk==='bota2') cbRing(v,W,D,top,zc2,2);
+    else if(zk==='botaalta') cbRing(v,W,D,top,cbShade(zc,.85),2);
+    else if(zk==='vaquera'){ const st=cbMix(zc,'#ffffff',.4); for(let x=0;x<W;x++){ v.set(x,top+1,-1,zc); v.set(x,top+1,D,zc); }
+      for(let i=0;i<5;i++){ v.set(out,top-1-i,1+(i>>1),st); v.set(out,top-1-i,D-2-(i>>1),st); v.set(sx>0?-1:W,top-1-i,1+(i>>1),st); v.set(sx>0?-1:W,top-1-i,D-2-(i>>1),st); } }
+    else if(zk==='converse'){ for(let y=-H+1;y<top;y++) if(cbM(y,2)) for(const x of [2,3]) v.set(x,y,D,'#ffffff'); for(let y=-H+1;y<-H+3;y++) for(let z=2;z<5;z++) v.set(out,y,z,(z===3)?cbShade(zc2,.8):zc2); cbRing(v,W,D,top,cbShade(zc,.85)); } }
+  else if(zk==='ballet' && !shell){ const r=Z.c2||'#f49ac1'; for(let y=-H;y<-H+7;y++){ const a=cbM(y,6), x1=a<3?a+1:6-a; for(const x of [x1,W-1-x1]){ v.set(x,y,D,r); v.set(x,y,-1,r); } } cbRing(v,W,D,-H+7,r); }
+  return shell; }
+function cbFoot(v,L,sx,far){ const [W,H,D]=CB.M.foot, Z=L.shoe, k=Z.sk||'tenis', P=cbPainter(Z,far), c=Z.c, c2=Z.c2||'#ffffff', sl=Z.sole||'#f7f4ee', sk=L.skin, dk='#2a2226';
+  if(k==='none') return; const per=(x,z)=>cbPer(x,z,-1,W,-1,D+1), pz=(x,y,z)=>P(per(x,z),y+1);
+  if(k==='sandalia'||k==='chancla'){ for(let x=-1;x<=W;x++) for(let z=-1;z<=D+1;z++){ v.set(x,-1,z,sl); v.set(x,0,z,c); }   // suela y pie descalzo
+    v.box(0,1,0,W,3,D,sk); for(let x=0;x<W;x++) v.set(x,1,D,cbM(x,2)?cbShade(sk,.9):sk);
+    if(k==='sandalia'){ for(const z0 of [D-3,2]) for(let z=z0;z<z0+2;z++){ for(let x=-1;x<=W;x++) v.set(x,3,z,c); for(const x of [-1,W]) for(let y=1;y<3;y++) v.set(x,y,z,c); } for(let x=0;x<W;x++) for(let y=1;y<4;y++) v.set(x,y,-1,c); }
+    else { for(let i=0;i<3;i++){ v.set(2-i,3,D-2-i,c2); v.set(3+i,3,D-2-i,c2); } v.set(-1,2,D-5,c2); v.set(W,2,D-5,c2); }
+    return; }
+  if(k==='pantuani'||k==='pantufla'){ const e=Z.ear||'conejo', ec=k==='pantufla'?'#ffffff':(e==='panda'?dk:c), m2=k==='pantufla'?'#ffffff':c2;   // pantuflas peluditas con orejitas
+    v.box(-2,0,-2,W+2,H+2,D+2,c); for(let x=-2;x<W+2;x++) for(let z=-2;z<3;z++) v.set(x,H+1,z,cbShade(c,.9));
+    const F=D+1, eye=(x,y)=>v.set(x,y,F,dk);
+    if(k==='pantuani'){ eye(0,3); eye(W-1,3); for(let x=1;x<W-1;x++) for(let y=0;y<3;y++) v.set(x,y,F+1,m2); v.set(2,2,F+1,dk); v.set(3,2,F+1,dk); if(e==='panda'){ v.set(-1,3,F,dk); v.set(W,3,F,dk); v.set(0,4,F,dk); v.set(W-1,4,F,dk); } }
+        const ez=D;   // (las orejitas van adelante, para que no las tape el pantalón)
+    if(e==='oso'||e==='panda') for(const x0 of [-1,W-1]){ for(let x=x0;x<x0+2;x++) for(let y=H+2;y<H+4;y++){ v.set(x,y,ez-1,ec); v.set(x,y,ez,ec); } v.set(x0+(x0<0?1:0),H+2,ez+1,m2); }
+    else if(e==='gato') for(const x0 of [-1,W-1]){ for(let x=x0;x<x0+2;x++){ v.set(x,H+2,ez-1,ec); v.set(x,H+2,ez,ec); } v.set(x0<0?-1:W,H+3,ez-1,ec); v.set(x0<0?-1:W,H+3,ez,ec); }
+    else if(e==='conejo') for(const x0 of [0,W-2]) for(let y=H+2;y<H+6;y++){ v.set(x0,y,ez-1,'#ffffff'); v.set(x0+1,y,ez-1,'#ffffff'); if(y<H+5) v.set(x0+(x0?0:1),y,ez,'#f7b6cf'); }
+    else if(e==='rana') for(const x0 of [-1,W-1]){ for(let x=x0;x<x0+2;x++) for(let y=H+2;y<H+4;y++) for(let z=D-1;z<D+1;z++) v.set(x,y,z,c); v.set(x0+(x0<0?1:0),H+3,D+1,dk); }
+    else if(e==='dino') for(const z of [0,3,6]){ v.set(2,H+2,z,m2); v.set(3,H+2,z,m2); v.set(2,H+3,z,m2); }
+    else if(e==='unicornio'){ v.set(2,H+2,D-1,'#f2c230'); v.set(3,H+2,D-1,'#f2c230'); v.set(2,H+3,D-1,'#f2c230'); v.set(2,H+4,D-1,'#ffe27a'); }
+    return; }
+  if(k==='aleta'){ v.box(-1,0,-1,W+1,H,D+1,pz); for(let z=D+1;z<D+11;z++){ const e=1+((z-D)>>1); for(let x=-e;x<W+e;x++) v.set(x,0,z,(x===-e||x===W+e-1||cbM(x-2,3)===0)&&z<D+10?cbShade(c,.8):c); } for(let x=-6;x<W+6;x++) v.set(x,0,D+11,cbShade(c,.8)); return; }
+  if(k==='payaso'){ v.box(-2,0,-1,W+2,H+1,D+7,c); for(let x=-2;x<W+2;x++) for(let z=D+4;z<D+7;z++) v.set(x,H,z,null); for(let x=-2;x<W+2;x++){ v.set(x,H,D+3,cbShade(c,1.1)); v.set(x,H-1,D+6,null); }
+    for(let x=-2;x<W+2;x++) for(let z=-1;z<D+7;z++) v.set(x,-1,z,sl); for(let z=D-4;z<D;z+=2){ v.set(1,H+1,z,'#ffffff'); v.set(W-2,H+1,z,'#ffffff'); } return; }
+  if(k==='nieve'){ v.box(-2,0,-2,W+2,H+1,D+3,pz); for(let x=-2;x<W+2;x++) for(let z=-2;z<=D+2;z++){ v.set(x,-1,z,sl); if(x===-2||x===W+1||z===-2||z===D+2) v.set(x,0,z,sl); } for(let x=0;x<W;x++) v.set(x,H,D,cbShade(c,.85)); return; }
+  const low=k==='ballet'||k==='zapato', top=low?H:H+1; v.box(-1,0,-1,W+1,top,D+2,pz);
+  if(k!=='ballet') for(let x=-1;x<=W;x++) for(let z=-2;z<=D+2;z++) v.set(x,-1,z,k==='vaquera'&&z<2?cbShade(sl,.7):sl);   // suela
+  if(k==='tenis'||k==='luces'||k==='converse'||k==='tacos'){ for(let z=-1;z<=D+1;z++){ v.set(-1,0,z,sl); v.set(W,0,z,sl); } for(let x=-1;x<=W;x++){ v.set(x,0,D+1,sl); v.set(x,0,-1,sl); } }
+  if(k==='converse'){ for(let x=-1;x<=W;x++) for(let y=0;y<3;y++) v.set(x,y,D+1,'#ffffff'); for(let x=-1;x<=W;x++) v.set(x,H,D+1,'#ffffff'); for(let x=0;x<W;x++) v.set(x,H,D,'#ffffff'); }
+  if(k==='tenis'||k==='luces'||k==='converse'||k==='tacos'){ for(let z=D-5;z<D;z+=2) for(let x=1;x<W-1;x++) v.set(x,H+1,z,x===1||x===W-2?'#ffffff':c); for(let z=-1;z<D-5;z++) for(let x=-1;x<=W;x++) v.set(x,H+1,z,cbShade(c,.85)); }
+  if(k==='tenis'||k==='luces'||k==='tacos') for(let z=2;z<6;z++) v.set(sx>0?W:-1,1+((z-2)>>1),z,c2);   // la rayita del lado
+  if(k==='luces') for(let x=-1;x<=W;x++) for(const z of [-2,D+2]) v.set(x,-1,z,'*'+(Z.emi||'#40c0ff'));
+  if(k==='vaquera'){ for(let x=0;x<W;x++) for(let y=0;y<2;y++) v.set(x,y,D+2,P(x,1)); for(let x=1;x<W-1;x++){ v.set(x,0,D+3,P(x,1)); v.set(x,-1,D+3,sl); } for(let x=0;x<W;x++) v.set(x,-1,D+2,sl);
+    for(let x=1;x<W-1;x++) v.set(x,H,D,cbMix(c,'#ffffff',.4)); }
+  if(k==='ballet'){ for(let x=-1;x<=W;x++) for(let z=-1;z<=D+1;z++) v.set(x,-1,z,cbShade(c,.85)); for(let x=0;x<W;x++) for(let z=2;z<D-2;z++) v.set(x,H-1,z,sk);
+    v.set(2,H,D-1,c2); v.set(3,H,D-1,cbShade(c2,.85)); v.set(1,H,D-1,c2); v.set(4,H,D-1,c2); }
+  if(k==='lluvia'){ for(let x=-1;x<=W;x++) for(let z=-1;z<=D+1;z++) if(x===-1||x===W||z===-1||z===D+1) v.set(x,0,z,sl); }
+  if(k==='zapato'){ v.set(2,H,D-1,c2); v.set(3,H,D-1,c2); for(let x=0;x<W;x++) v.set(x,H-1,1,cbShade(c,.8)); }
+  if(k==='tacos'){ for(const [x,z] of [[0,0],[W-1,0],[0,4],[W-1,4],[0,D-1],[W-1,D-1],[2,D+1],[3,D+1]]) v.set(x,-2,z,'#2a2226'); for(const z of [3,5,7]) for(const y of [1,2]) v.set(sx>0?W:-1,y,z+(y-1),c2); }
+  if(k==='patin'){ for(let x=-1;x<=W;x++) for(let z=-1;z<=D+1;z++) v.set(x,-1,z,sl); for(const x0 of [-1,W-1]) for(const z0 of [0,D-2]) v.box(x0,-3,z0,x0+2,-1,z0+2,c2); for(let x=1;x<W-1;x++) for(let y=-2;y<0;y++) v.set(x,y,D+2,'#e5534b'); }
+  if(k==='patinhielo'){ for(let x=-1;x<=W;x++) for(let z=-1;z<=D+1;z++) v.set(x,-1,z,sl); for(let z=-2;z<=D+2;z++) for(const x of [2,3]){ v.set(x,-2,z,'#c9ced8'); v.set(x,-3,z,'#e6eaf0'); } for(const x of [2,3]){ v.set(x,-2,D+3,'#c9ced8'); v.set(x,-1,D+3,'#c9ced8'); } }
+  if(k==='zueco'){ for(let x=-1;x<=W;x++) for(let z=-1;z<=D+1;z++){ v.set(x,-1,z,sl); if(x===-1||x===W||z===-1||z===D+1) v.set(x,0,z,sl); } for(let x=0;x<W;x++) for(let z=D-4;z<=D;z++) if(cbM(x+z,2)===0) v.set(x,H+1,z,cbShade(c,.62));
+    for(let x=-1;x<=W;x++) for(let y=1;y<3;y++) v.set(x,y,-2,sl); v.set(-2,2,0,'#ffffff'); v.set(W+1,2,0,'#ffffff'); }
+  if(k==='bota'||k==='bota2'||k==='botaalta') for(let x=0;x<W;x++) v.set(x,H,D,cbShade(c,.85));
+}
+// la figura de cada pieza (se guarda por receta; sq = cuadrada, de lejos)
+function cbGeo(part,L,sq,sx){ const R=!sq && L.st===1, far=!!sq, T=L.top, B=L.bot, Z=L.shoe;
+  const dep=part==='chest'||part==='pelvis'||part==='skirt'?[L.skin,T,B]:part==='neck'||part==='uarm'||part==='farm'?[L.skin,T]:part==='head'?[L.skin,L.hs,L.hc]:part==='hand'?[L.skin]:part==='thigh'?[L.skin,B]:part==='shin'?[L.skin,B,Z]:[L.skin,Z];
+  const key=part+'|'+(R?1:2)+(far?'f':'')+'|'+(sx||0)+'|'+JSON.stringify(dep); let g=CB.geo.get(key); if(g) return g; if(CB.geo.size>400){ const k0=CB.geo.keys().next().value, g0=CB.geo.get(k0); CB.geo.delete(k0); g0.dispose(); }
+  const M=CB.M, sk=L.skin, sk2=cbShade(sk,.93), v=new CbVG(); let org=[0,0,0], box=null;
+  if(part==='skirt'){ const [W,H,D]=M.pelvis; cbSkirtV(v,L,far); if(L.ph) for(const [k,e] of v.m) if(e[3]==='#000000') v.m.delete(k); g=cbMesh(v,[-W/2,0,-D/2],null,1); if(g.boundingSphere) g.boundingSphere.radius+=.6; CB.geo.set(key,g); return g; }   // (se deforma: esfera más grande)
+  if(part==='pelvis'){ const [W,H,D]=M.pelvis; const b=cbPelvis(v,L,far); org=[-W/2,0,-D/2]; box=b; }
+  else if(part==='chest'){ const [W,H,D]=M.chest, y0=cbChest(v,L,far); org=[-W/2,0,-D/2]; box=[[-W/2-1,y0,-D/2-1],[W/2+1,H,D/2+1]]; }
+  else if(part==='neck'){ const [W,H,D]=M.neck; cbNeck(v,L,far); org=[-W/2,0,-D/2]; }
   else if(part==='head'){ const [W,H,D]=M.head; v.box(0,0,0,W,H,D,sk); cbHair(v,L.hs,L.hc); v.set(-1,8,7,sk2); v.set(-1,9,7,sk2); v.set(W,8,7,sk2); v.set(W,9,7,sk2);   // orejitas
     org=[-W/2,0,-D/2]; box=[[-W/2,0,-D/2],[W/2,H,D/2]]; }
-  else if(part==='uarm'){ const [W,H,D]=M.uarm; v.box(0,-H,0,W,0,D,sk); const sl=T.slv==='larga'?H:7; v.box(-1,-sl,-1,W+1,1,D+1,T.c);
-    if(T.slv!=='larga') for(let x=-1;x<=W;x++) for(let z=-1;z<=D;z++){ if(x>=0&&x<W&&z>=0&&z<D) continue; v.set(x,-sl,z,s2); }
-    org=[-W/2,0,-D/2]; box=[[-W/2-1,-H-99,-D/2-1],[W/2+1,1,D/2+1]]; }
-  else if(part==='farm'){ const [W,H,D]=M.farm; v.box(0,-H,0,W,0,D,sk); v.box(1,0,1,W-1,2,D-1,T.slv==='larga'?T.c:sk);
-    if(T.slv==='larga'){ v.box(-1,-H+1,-1,W+1,0,D+1,T.c); for(let x=-1;x<=W;x++) for(let z=-1;z<=D;z++){ if(x>=0&&x<W&&z>=0&&z<D) continue; v.set(x,-H+1,z,s2); v.set(x,-H+2,z,s2); } }
-    org=[-W/2,0,-D/2]; box=[[-W/2-1,-H,-D/2-1],[W/2+1,99,D/2+1]]; }
+  else if(part==='uarm'){ const [W,H,D]=M.uarm; cbUarm(v,L,far); const n=cbSleeve(T)==='n'; org=[-W/2,0,-D/2]; box=n?[[-W/2,-H-99,-D/2],[W/2,0,D/2]]:[[-W/2-1,-H-99,-D/2-1],[W/2+1,1,D/2+1]]; }
+  else if(part==='farm'){ const [W,H,D]=M.farm; cbFarm(v,L,far); const l=/[lk]/.test(cbSleeve(T)); org=[-W/2,0,-D/2]; box=l?[[-W/2-1,-H,-D/2-1],[W/2+1,99,D/2+1]]:[[-W/2,-H,-D/2],[W/2,99,D/2]]; }
   else if(part==='hand'){ const h=new CbVG(CB.S/2); h.box(0,-8,0,4,0,11,sk); [[0,6],[3,7],[6,6],[9,5]].forEach(([z,l])=>h.box(0,-8-l,z,4,-8,z+2,(x,y)=>y===-8-l?sk2:sk));
     const tx=sx>0?-1:3; h.box(tx,-6,11,tx+2,-1,13,sk); h.box(tx,-7,11,tx+2,-6,13,sk2); g=cbMesh(h,[-2,0,-5.5],null); CB.geo.set(key,g); return g; }
-  else if(part==='thigh'){ const [W,H,D]=M.thigh; v.box(0,-H,0,W,0,D,sk); const pl=Bt.len==='corto'?8:H; v.box(-1,-pl,-1,W+1,0,D+1,Bt.c);
-    if(Bt.len==='corto') for(let x=-1;x<=W;x++) for(let z=-1;z<=D;z++){ if(x>=0&&x<W&&z>=0&&z<D) continue; v.set(x,-pl,z,p2); }
-    for(let y=-pl+2;y<-1;y++) v.set(sx>0?W:-1,y,D/2|0,p2);   // costura de afuera
-    org=[-W/2,0,-D/2]; box=[[-W/2-1,-H-99,-D/2-1],[W/2+1,0,D/2+1]]; }
-  else if(part==='shin'){ const [W,H,D]=M.shin; v.box(0,-H,0,W,0,D,sk); v.box(1,0,1,W-1,2,D-1,Bt.len==='corto'?sk:Bt.c);
-    if(Bt.len!=='corto'){ v.box(-1,-H+1,-1,W+1,0,D+1,Bt.c); for(let x=-2;x<=W+1;x++) for(let z=-2;z<=D+1;z++){ const ed=(x<-1||x>W)+(z<-1||z>D); if(ed>1 || (x>=-1&&x<=W&&z>=-1&&z<=D)) continue; v.set(x,-H+1,z,p2); v.set(x,-H+2,z,p2); } }
-    org=[-W/2,0,-D/2]; box=[[-W/2-1,-H-99,-D/2-1],[W/2+1,99,D/2+1]]; }
-  else if(part==='foot'){ const [W,H,D]=M.foot, sc=L.shoe.c, sl='#f7f4ee'; v.box(-1,0,-1,W+1,H+1,D+2,sc);
-    for(let x=-1;x<=W;x++) for(let z=-2;z<=D+2;z++) v.set(x,-1,z,sl); for(let z=-1;z<=D+1;z++){ v.set(-1,0,z,sl); v.set(W,0,z,sl); } for(let x=-1;x<=W;x++){ v.set(x,0,D+1,sl); v.set(x,0,-1,sl); }
-    for(let z=D-5;z<D;z+=2) for(let x=1;x<W-1;x++) v.set(x,H+1,z,x===1||x===W-2?'#ffffff':sc); for(let z=-1;z<D-5;z++) for(let x=-1;x<=W;x++) v.set(x,H+1,z,cbShade(sc,.85));
-    org=[-W/2,0,-D/2+.5]; box=[[-W/2-1,-1,-D/2-.5],[W/2+1,H+1,D/2+2.5]]; }
+  else if(part==='thigh'){ const [W,H,D]=M.thigh, s=cbThigh(v,L,sx,far); org=[-W/2,0,-D/2]; box=s?[[-W/2-1,-H-99,-D/2-1],[W/2+1,0,D/2+1]]:[[-W/2,-H-99,-D/2],[W/2,0,D/2]]; }
+  else if(part==='shin'){ const [W,H,D]=M.shin, s=cbShin(v,L,sx,far); org=[-W/2,0,-D/2]; box=s?[[-W/2-1,-H-99,-D/2-1],[W/2+1,99,D/2+1]]:[[-W/2,-H-99,-D/2],[W/2,99,D/2]]; }
+  else if(part==='foot'){ const [W,H,D]=M.foot; cbFoot(v,L,sx,far); org=[-W/2,0,-D/2+.5]; const k=Z.sk||'tenis';
+    box=k==='sandalia'||k==='chancla'||k==='pantuani'||k==='pantufla'?null:[[-W/2-1,-1,-D/2-.5],[W/2+1,H+1,D/2+2.5]]; }
+  if(L.ph) for(const [k,e] of v.m) if(e[3]==='#000000') v.m.delete(k);   // (foto de una prenda: sin la piel)
   g=cbMesh(v,org,R&&box?box:null); CB.geo.set(key,g); return g; }
-// las piezas que no son brazos ni piernas (cadera, pecho, cuello, cabeza con su cara), manos y zapatos
+// lo que trae puesto (con todos los datos de la prenda)
+const CB_TOPF=['tk','c','c2','c3','pat','knit','icon','num','ear'], CB_BOTF=['bk','c','c2','pat','stripe'], CB_SHOEF=['sk','c','c2','sole','emi','pat','ear'];
+const cbPick=(it,F)=>{ const o={}; F.forEach(k=>{ if(it[k]!=null) o[k]=it[k]; }); return o; };
+function cbLook(eq){ const B=k=>eq && SHOP_BY[eq[k]] ? SHOP_BY[eq[k]] : null, D=CB_DEF, st=B('kst'), sk=B('kskin'), fc=B('kface'), hs=B('khair'), hc=B('khcol'), tp=B('ktop'), bt=B('kbot'), sh=B('kshoe');
+  return {st:st?st.kst:D.st, skin:sk?sk.c:D.skin, face:fc?fc.kface:D.face, hs:hs?hs.khs:D.hs, hc:hc?hc.c:D.hc,
+    top:tp?(tp.tk?cbPick(tp,CB_TOPF):{c:tp.c,slv:tp.kslv}):D.top, bot:bt?(bt.bk?cbPick(bt,CB_BOTF):{c:bt.c,len:bt.klen}):D.bot, shoe:sh?(sh.sk?cbPick(sh,CB_SHOEF):{c:sh.c}):D.shoe}; }
+// los tenis con luces: sus cubitos brillan con otro material
+const CB_GLOW=new THREE.MeshBasicMaterial({vertexColors:true, map:CB_MAT.map}), CB_MATS=[CB_MAT,CB_GLOW];
+// pone las figuras (de cerca, con su estilo; de lejos, cuadradas y sin estampados)
+function cbDress(u,L,far){ const C=cbParts(u), q=!!far; u.cbFar=q;
+  C.pelvis.geometry=cbGeo('pelvis',L,q); C.skirt.visible=cbHasSkirt(L); if(C.skirt.visible) C.skirt.geometry=cbGeo('skirt',L,q); C.chest.geometry=cbGeo('chest',L,q); C.neck.geometry=cbGeo('neck',L,q); C.head.geometry=cbGeo('head',L,q); C.face.material=cbFaceMat(L.face,L.skin,L.hc);
+  u.arms.forEach((a,i)=>{ const s=a.userData.side, up=a.children.find(m=>m.isMesh); up.geometry=cbGeo('uarm',L,q,s); a.userData.low.geometry=cbGeo('farm',L,q,s); C.hands[i].geometry=cbGeo('hand',L,q,s); C.hands[i].visible=true; });
+  u.legs.forEach((l,i)=>{ const s=l.userData.side, up=l.children.find(m=>m.isMesh && m.material!==tagMat); up.geometry=cbGeo('thigh',L,q,s); l.userData.low.geometry=cbGeo('shin',L,q,s);
+    const f=C.shoes[i]; f.geometry=cbGeo('foot',L,q,s); f.material=f.geometry.userData.glow?CB_MATS:CB_MAT; f.visible=true; }); }
+
+// ---- v258: la falda se hace a un lado cuando pasan las piernas ----
+// En la tarjeta gráfica: lo de enfrente de la falda (más abajo de la cadera) gira con la pierna que va más adelante, y lo de atrás con la
+// que va más atrás (pasando la rodilla, sigue a la pantorrilla); los lados se mezclan poco a poco, así no se abren huecos.
+// Sentado, el frente queda sobre las piernas y cuelga de las rodillas.
+const CB_SKV=`
+uniform vec4 uLeg; uniform float uS;
+vec2 cbFol(float d,float n,float a,float b){ float L=14.0*uS, R=5.5*uS, k=.35+.65*cos(a);
+  if(a>0.0 && n>R) n=R+(n-R)*k; else if(a<0.0 && n<-R) n=-R+(n+R)*k;
+  if(d<=L) return vec2(d*sin(a)+n*cos(a), -d*cos(a)+n*sin(a));
+  float e=d-L; return vec2(L*sin(a)+e*sin(b)+n*cos(b), -L*cos(a)-e*cos(b)+n*sin(b)); }`;
+const CB_SKB=`
+{ float d=-transformed.y; if(d>0.0){ float n=transformed.z, af=max(uLeg.x,uLeg.z), bf=uLeg.x>=uLeg.z?uLeg.y:uLeg.w, ab=min(uLeg.x,uLeg.z), bb=uLeg.x<=uLeg.z?uLeg.y:uLeg.w;
+  vec2 f=af>0.0?cbFol(d,n,af,bf):vec2(n,-d), k=ab<0.0?cbFol(d,n,ab,bb):vec2(n,-d); vec2 r=mix(k,f,clamp(.5+n/(8.0*uS),0.0,1.0)); transformed.z=r.x; transformed.y=r.y; } }`;
+const cbSkPatch=U=>sh=>{ sh.uniforms.uLeg=U.uLeg; sh.uniforms.uS=U.uS; sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\n'+CB_SKV).replace('#include <begin_vertex>','#include <begin_vertex>\n'+CB_SKB); };
+function cbSkirtMesh(u){ const U={uLeg:{value:new THREE.Vector4()}, uS:{value:CB.S}};
+  const m=new THREE.MeshStandardMaterial({vertexColors:true, map:CB_MAT.map, roughness:.9}); m.onBeforeCompile=cbSkPatch(U);
+  const dm=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking}); dm.onBeforeCompile=cbSkPatch(U);
+  const sk=new THREE.Mesh(new THREE.BufferGeometry(),m); sk.customDepthMaterial=dm; sk.castShadow=true; sk.receiveShadow=true; sk.position.y=CB.HIP*CB.S; sk.visible=false;
+  sk.onBeforeRender=()=>{ const v=U.uLeg.value, [l0,l1]=u.legs, a0=l0.rotation.x, a1=l1.rotation.x; v.set(-a0,-(a0+l0.userData.joint.rotation.x),-a1,-(a1+l1.userData.joint.rotation.x)); };
+  return sk; }
 function cbParts(u){ if(u.cb) return u.cb; const S=CB.S, g=new THREE.Group(); g.position.y=-BODY_Y; g.scale.z=1/.78;   // coordenadas como si "body" estuviera en el suelo
   const M=y=>{ const m=new THREE.Mesh(new THREE.BufferGeometry(),CB_MAT); m.position.y=y*S; m.castShadow=true; m.receiveShadow=true; g.add(m); return m; };
-  const pelvis=M(CB.HIP), chest=M(CB.CHEST), neck=M(CB.NECK), head=M(CB.HEAD);
+  const pelvis=M(CB.HIP), chest=M(CB.CHEST), neck=M(CB.NECK), head=M(CB.HEAD), skirt=cbSkirtMesh(u); g.add(skirt);
   const [W,H,D]=CB.M.head, face=new THREE.Mesh(new THREE.PlaneGeometry(W*S,H*S),CB_MAT); face.position.set(0,H*S/2,D*S/2+.0015); head.add(face);
   const hands=u.arms.map(a=>{ const h=new THREE.Mesh(new THREE.BufferGeometry(),CB_MAT); h.position.y=-CB.M.farm[1]*S; h.castShadow=true; a.userData.joint.add(h); h.visible=false; return h; });
   const shoes=u.legs.map(l=>{ const f=new THREE.Mesh(new THREE.BufferGeometry(),CB_MAT); f.position.y=-(CB.M.shin[1]+CB.M.foot[1])*S; f.castShadow=true; l.userData.joint.add(f); f.visible=false; return f; });
-  u.body.add(g); return u.cb={g, pelvis, chest, neck, head, face, hands, shoes}; }
+  u.body.add(g); return u.cb={g, pelvis, chest, neck, head, face, skirt, hands, shoes}; }
 function cbHide(u){ const C=u.cb; if(!C) return; C.g.visible=false; C.hands.forEach(h=>h.visible=false); C.shoes.forEach(f=>f.visible=false); }
-// pone las figuras (de cerca, con su estilo; de lejos, cuadradas)
-function cbDress(u,L,far){ const C=cbParts(u), q=!!far; u.cbFar=q;
-  C.pelvis.geometry=cbGeo('pelvis',L,q); C.chest.geometry=cbGeo('chest',L,q); C.neck.geometry=cbGeo('neck',L,q); C.head.geometry=cbGeo('head',L,q); C.face.material=cbFaceMat(L.face,L.skin,L.hc);
-  u.arms.forEach((a,i)=>{ const s=a.userData.side, up=a.children.find(m=>m.isMesh); up.geometry=cbGeo('uarm',L,q,s); a.userData.low.geometry=cbGeo('farm',L,q,s); C.hands[i].geometry=cbGeo('hand',L,q,s); C.hands[i].visible=true; });
-  u.legs.forEach((l,i)=>{ const s=l.userData.side, up=l.children.find(m=>m.isMesh && m.material!==tagMat); up.geometry=cbGeo('thigh',L,q,s); l.userData.low.geometry=cbGeo('shin',L,q,s); C.shoes[i].geometry=cbGeo('foot',L,q,s); C.shoes[i].visible=true; }); }
 // cambia el peluche al cuerpo que trae puesto (eq.body), con su piel y sus ojos
 function avatarShape(o,eq){ const u=o.userData; if(!u.arms || !u.legs || !u.body) return; if(u.stn){ stRestore(o); u.stn.wr=false; }   // (v238: sin manchas mientras se cambia; luego se vuelven a poner)
   const av=eq && eq.body==='av_chibi' ? 'c' : eq && eq.body==='av_amigu' ? 'a' : eq && eq.body==='av_cubo' ? 'k' : 'f';
@@ -13234,6 +13487,8 @@ ui('papPrivacy').onclick=()=>onlineAsk(privacyOpen, null, 'Para ver la privacida
 // solo guarda la versión, para no llenar de avisos a quien apenas empieza.
 const NEWS_KEY='mundoPelucheNovedades';
 const NEWS={
+  '258':['El Cubito ya tiene toda la ropa del catálogo, hecha de cubitos: 100 prendas de arriba, 100 de abajo y 100 zapatos (sudaderas con capucha, vestidos, overoles, tutús, botas, pantuflas de animalito y más).',
+         'Las faldas y los vestidos se mueven con las piernas al caminar, y debajo llevan un short.'],
   '257':['¡Nuevo tipo de cuerpo: el Cubito! Todo hecho de cubitos: cabello, ropa y zapatos en relieve. Escógelo gratis en Personalizar → Cuerpo.',
          'Escoge su estilo (redondeado o cuadrado), tono de piel, 8 caras, 6 peinados, color de cabello, playera, pantalón o short y tenis.'],
   '256':['Ya puedes jugar «¡Al número!»: resuelve la operación de la pantalla y párate en una casilla con la respuesta antes de que las demás desaparezcan.',
@@ -17853,7 +18108,7 @@ const SHOP_CATS=[
   {id:'aarriba', name:'Arriba', ic:'👕', av:'a'}, {id:'aabajo', name:'Abajo', ic:'👖', av:'a'}, {id:'azapatos', name:'Zapatos', ic:'👟', av:'a'},
   {id:'agorros', name:'Gorros', ic:'🧢', av:'a'}, {id:'aaccesorios', name:'Accesorios', ic:'🎀', av:'a'},
   {id:'kestilo', name:'Estilo', ic:'🧱', av:'k'}, {id:'kpiel', name:'Tono de piel', ic:'🎨', av:'k'}, {id:'kcara', name:'Cara', ic:'😊', av:'k'}, {id:'kpelo', name:'Peinado', ic:'💇', av:'k'}, {id:'kcolor', name:'Color de cabello', ic:'🖍️', av:'k'},
-  {id:'karriba', name:'Playera', ic:'👕', av:'k'}, {id:'kabajo', name:'Pantalón', ic:'👖', av:'k'}, {id:'kzapatos', name:'Zapatos', ic:'👟', av:'k'},   // v257: el Cubito
+  {id:'karriba', name:'Arriba', ic:'👕', av:'k'}, {id:'kabajo', name:'Abajo', ic:'👖', av:'k'}, {id:'kzapatos', name:'Zapatos', ic:'👟', av:'k'},   // v257: el Cubito
   {id:'mascotas', name:'Mascotas', ic:'🐾'}, {id:'sudaderas', name:'Sudaderas', ic:'🧥'}, {id:'camisas', name:'Camisas', ic:'👕'}, {id:'sueteres', name:'Suéteres', ic:'🧶'},
   {id:'gorras', name:'Gorras', ic:'🧢'}, {id:'guantes', name:'Guantes', ic:'🧤'}, {id:'calcetines', name:'Calcetines', ic:'🧦'},
   {id:'zapatos', name:'Zapatos', ic:'👟'}, {id:'gafas', name:'Gafas', ic:'🕶️'}, {id:'colores', name:'Colores especiales', ic:'🌈'}, {id:'texturas', name:'Texturas', ic:'✨'}];
@@ -18437,7 +18692,8 @@ COLS.forEach(([k,c,f,m,fp,mp])=>{ I('karriba','kt_'+k+'_c','Playera '+f+' de man
 { const cp=(cat,pre,np)=>SHOP.filter(it=>it.cat===cat).forEach(it=>{ const o={...it}; delete o.id; delete o.cat; delete o.name; delete o.price; I(np,pre+it.id.slice(it.id.indexOf('_')+1),it.name,it.price,o); });
   cp('cgorros','arg_','agorros'); cp('caccesorios','arc_','aaccesorios');
   cp('carriba','ara_','aarriba'); cp('cabajo','arb_','aabajo'); cp('czapatos','arz_','azapatos');
-  cp('cpelo','ahp_','apelo'); cp('ccolor','ahc_','acolor'); cp('ccejas','acj_','acejas'); cp('cmejillas','amj_','amejillas'); cp('corejas','aor_','aorejas'); }
+  cp('cpelo','ahp_','apelo'); cp('ccolor','ahc_','acolor'); cp('ccejas','acj_','acejas'); cp('cmejillas','amj_','amejillas'); cp('corejas','aor_','aorejas');
+  cp('carriba','kra_','karriba'); cp('cabajo','krb_','kabajo'); cp('czapatos','krz_','kzapatos'); }   // v258: y el Cubito, en cubitos (mismos precios; sus 75 básicas siguen gratis)
 // v201: gestos y globos de pintura (para todos los cuerpos)
 SHOP_CATS.push({id:'gestos', name:'Gestos', ic:'💃', all:1}, {id:'pinturas', name:'Globos de pintura', ic:'🎈', all:1}, {id:'pcarga', name:'Pantallas de carga', ic:'🖼️', all:1}); SLOT_OF.gestos='gest'; SLOT_OF.pinturas='pint'; SLOT_OF.pcarga='lscr';
 LSCR.forEach(l=>I('pcarga','lc_'+l.id,l.n,l.p,{lscr:l.id, nw:1, ...(l.p?{}:{free:1})}));
@@ -18960,7 +19216,7 @@ applyOutfit(plush, wardrobe.eq);
 // Las fotos se hacen de una en una mientras ves la lista y se guardan mientras el juego está abierto.
 // ======================================================================================
 const PH_SZ=256, PH_OUT=128, PH_MAX=360, PH_CACHE=new Map();   // (se guardan las últimas 360 fotos; si vuelves a una lista vieja se vuelven a tomar)
-const PH_SLOTS=new Set(['top','hat','gloves','socks','shoes','glasses','ctop','cbot','cshoe','chat','cacc','cacf','cacn','cacb','cach','atop','abot','ashoe','ahat','aacc','aacf','aacn','aacb','aach']);
+const PH_SLOTS=new Set(['top','hat','gloves','socks','shoes','glasses','ktop','kbot','kshoe','ctop','cbot','cshoe','chat','cacc','cacf','cacn','cacb','cach','atop','abot','ashoe','ahat','aacc','aacf','aacn','aacb','aach']);
 let phRig=null, PH_MS=0, PH_N=0;   // (cuánto tardan, para medir)
 const _phV=new THREE.Vector3(), _phW=new THREE.Vector3();
 function phIsCloth(it){ return !!(it && PH_SLOTS.has(it.slot) && !it.gest && !it.paint && !it.lscr); }
@@ -18999,20 +19255,26 @@ function phPng(R){ const N=PH_SZ, px=R.px, g=R.src.getContext('2d'), im=g.create
   tg.drawImage(R.src,bx0,by0,bw,bh,3,3,dw,dh); tg.globalCompositeOperation='source-in'; tg.fillStyle='rgba(90,68,38,.42)'; tg.fillRect(0,0,t.width,t.height); tg.globalCompositeOperation='source-over';
   for(const [ax,ay] of [[-1,0],[1,0],[0,-1],[0,1],[-.7,-.7],[.7,-.7],[-.7,.7],[.7,.7]]) o.drawImage(t,ax,ay+.4);   // (un contornito café, así lo blanco se ve sobre el fondo claro)
   o.drawImage(R.src,bx0,by0,bw,bh,3,3,dw,dh); let u=''; try{ u=c.toDataURL('image/webp',.9); }catch(e){} return /^data:image\/webp/.test(u) ? u : c.toDataURL('image/png'); }   // (webp pesa como la cuarta parte)
+// v258: la foto de una prenda del Cubito: solo sus cubitos (la piel va de negro puro y se quita; sin cabeza ni manos)
+function cbPhotoDress(u,it){ const L=cbLook({body:'av_cubo',[it.slot]:it.id}), N={...L, skin:'#000000', ph:1};
+  if(it.slot!=='ktop') N.top={tk:'none',c:'#000000'}; if(it.slot!=='kbot') N.bot={bk:'none',c:'#000000'}; if(it.slot!=='kshoe') N.shoe={sk:'none',c:'#000000'};
+  cbDress(u,N,false); const C=u.cb; C.head.visible=false; C.hands.forEach(h=>h.visible=false);
+  const S=new Set([C.pelvis,C.chest,C.neck,C.skirt,...C.shoes]); u.arms.forEach(a=>{ S.add(a.children.find(m=>m.isMesh)); S.add(a.userData.low); }); u.legs.forEach(l=>{ S.add(l.children.find(m=>m.isMesh && m.material!==tagMat)); S.add(l.userData.low); });
+  return {C,S}; }
 // la foto de una prenda (sola, como la traería puesta tu peluche)
 function phGet(key){ const v=PH_CACHE.get(key); if(v!==undefined){ PH_CACHE.delete(key); PH_CACHE.set(key,v); } return v; }   // (la que usas pasa al final de la fila)
 function phSet(key,v){ PH_CACHE.set(key,v); while(PH_CACHE.size>PH_MAX) PH_CACHE.delete(PH_CACHE.keys().next().value); return v; }
 function itemPhoto(it){ const key='i'+it.id, c0=phGet(key); if(c0!==undefined) return c0; let url='';
   try{ const R=phRigGet(); if(!R.o) R.o=makePlush(0); const o=R.o, u=o.userData; R.sc.add(o);
     const eq={}; if(it.av==='c') eq.body='av_chibi'; else if(it.av==='a') eq.body='av_amigu'; else if(it.av==='k') eq.body='av_cubo'; eq[it.slot]=it.id;
-    applyOutfit(o,eq); poseLimbs(o,0,.05,0,false,0,false,null,0,0,false);
+    applyOutfit(o,eq); poseLimbs(o,0,.05,0,false,0,false,null,0,0,false); const kp=it.av==='k'?cbPhotoDress(u,it):null;
     const back=it.as==='espalda' || it.view==='espalda' || it.view==='aespalda' || it.k==='cape';
-    o.position.set(0,0,0); o.rotation.set(.38,back?Math.PI-.6:(it.slot==='cbot'||it.slot==='abot')?.18:.45,0); o.updateMatrixWorld(true);   // (un poco desde arriba, de tres cuartos)
+    o.position.set(0,0,0); o.rotation.set(.38,back?Math.PI-.6:(it.slot==='cbot'||it.slot==='abot'||it.slot==='kbot')?.18:.45,0); o.updateMatrixWorld(true);   // (un poco desde arriba, de tres cuartos)
     const C=new Set(u.cloth||[]), A=u.arms||[], armOf=m=>{ let r=null; for(let q=m;q && q!==o;q=q.parent) if(A.includes(q)) r=q; return r; }, inC=m=>{ for(let q=m;q && q!==o;q=q.parent) if(C.has(q)) return true; return false; };
     let arm=null;   // (de los guantes se ve solo el de enfrente; el reloj, en el brazo donde está)
     if(it.slot==='gloves'){ const has=new Set(); o.traverse(m=>{ if(m.isMesh && inC(m)){ const a=armOf(m); if(a) has.add(a); } }); let bz=-1e9; for(const a of has){ const z=a.getWorldPosition(_phW).z; if(z>bz){ bz=z; arm=a; } } }
-    const cl=m=>{ if(!inC(m)) return false; if(!arm) return true; const a=armOf(m); return !a || a===arm; };
-    url=phShoot(o,cl); R.sc.remove(o);
+    const cl=kp ? (m=>kp.S.has(m) && !!(m.geometry.attributes.position && m.geometry.attributes.position.count)) : (m=>{ if(!inC(m)) return false; if(!arm) return true; const a=armOf(m); return !a || a===arm; });
+    url=phShoot(o,cl); R.sc.remove(o); if(kp){ kp.C.head.visible=true; u.avKey=null; }
   }catch(e){ console.warn('foto de prenda',e); }
   return phSet(key,url); }
 // la foto de una mascota
@@ -35903,7 +36165,8 @@ frame();
     try{ if(!VE.built) vehBuildTaller(); }catch(e){ VE.built=true; console.warn('taller',e); }
     try{ HOWTO.warm(); }catch(e){}   // v228: el papel de los carteles de los minijuegos, listo desde la carga   // v228: los talleres de vehículos se arman aquí (antes, en el primer cuadro del juego: ~140 ms de tirón al llegar)
     // todos los materiales de la isla se preparan ahora (si no, se preparan la primera vez que los ves y el juego da un tironcito)
-    try{ renderer.compile(scene,camera); }catch(e){}
+    let cbWk=null; try{ cbWk=new THREE.Group(); const gb=new THREE.BoxGeometry(.01,.01,.01), sk=cbSkirtMesh({legs:[]}); sk.geometry=gb; sk.visible=true; cbWk.add(sk,new THREE.Mesh(gb,CB_MAT),new THREE.Mesh(gb,CB_GLOW)); cbWk.position.copy(camera.position); scene.add(cbWk); }catch(e){}   // v258: la falda que se mueve y los cubitos que brillan del Cubito
+    try{ renderer.compile(scene,camera); }catch(e){} if(cbWk) scene.remove(cbWk);
     L.step('Juntando las piezas…',.72); await paint();
     { const tb=performance.now(); try{ batchWarm(); }catch(e){ console.warn('batchWarm',e); } window.__ldBatchMs=Math.round(performance.now()-tb); }   // v221
     // v228: una vuelta con la cámara alrededor del inicio (detrás de la pantalla de carga): las imágenes y piezas que ves al aparecer ya quedan en la tarjeta de video
