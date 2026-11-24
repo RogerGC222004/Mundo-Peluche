@@ -7417,7 +7417,7 @@ I18N.start();
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='260';
+const GAME_VERSION='261';
 // ======================================================================================
 // ---------------- v242: ÍCONOS DIBUJADOS EN LUGAR DE EMOJIS ----------------
 // Cada emoji de la lista se cambia, donde aparezca en la pantalla, por un dibujo hecho a mano con el mismo estilo de la barra
@@ -12714,7 +12714,8 @@ function stOnCalc(S){ S.on=S.sp.length>0; if(!S.on) for(let p=1;p<ST_N;p++) if(S
 function stUniSet(S,H){ const U=stUni(S); U.uStH.value=H; U.uStD.value=S.dry; U.uStC.value.setHex(S.col).convertSRGBToLinear();
   for(let p=1;p<ST_N;p++) U.uSt.value[p].set(S.L[p],S.F[p],S.T[p],S.A[p]>.003?S.A[p]:0);
   const n=Math.min(ST_XB,S.X.length); for(let k=0;k<n;k++){ const x=S.X[k]; U.uStXa.value[k].set(x.mn.x,x.mn.y,x.mn.z,1); U.uStXb.value[k].set(x.mx.x,x.mx.y,x.mx.z,1); } U.uStXn.value=n; }
-function stApply(o,S,dt){ const cl=stCloths(S); let on=S.on; for(const c of cl) if(c.on) on=true;
+function stApply(o,S,dt){ if(o.userData && o.userData.fpHid){ if(S.wr){ stRestore(o); S.wr=false; } return; }   // v261: en 1ª persona no se ensucia (si no, la mancha copiaba el material invisible y el cuerpo se quedaba sin verse)
+  const cl=stCloths(S); let on=S.on; for(const c of cl) if(c.on) on=true;
   if(!on && S.warm>0){ S.warm--; return; } if(!on && !S.wr) return; if(!on){ stRestore(o); S.wr=false; return; }
   const H=stHgt(o); stUniSet(S,H); for(const c of cl) stUniSet(c,H);
   if(!S.wr || (S.scanT-=dt)<=0){ S.scanT=.5; stWrap(o,S); S.wr=true; } }
@@ -14338,7 +14339,7 @@ function updateRemotes(dt,t){
     if(r.swim){ const o=swimOffset(r.dive, r.obj.rotation.y); r.obj.position.set(r.pos.x+o.x, r.pos.y+bob+o.y, r.pos.z+o.z); }
     else r.obj.position.set(r.pos.x, r.pos.y+bob+diveLift(r.dive), r.pos.z);
     r.obj.rotation.x=r.dive;
-    r.obj.rotation.z=Math.sin(r.walk)*.08*mv;
+    r.obj.rotation.z=r.obj.userData.av==='k' ? 0 : Math.sin(r.walk)*.08*mv;
     if(r.obj.userData.gs) gestTick(r.obj,dt,mv,r.swim||r.air||!!r.carAnim);   // v201: gestos de los demás
     plushLod(r.obj);   // v201: menos detalle de lejos
     if(r.obj.userData.tg) tongueTick(r.obj,dt,r.swim||!!r.carAnim);
@@ -21307,12 +21308,18 @@ const mgView=M=>M.g.fp ? (M.view||'first') : 'third';
 // cada pieza usa una copia de su material que no pinta color ni profundidad (la sombra del sol sí la dibuja).
 // (Copias propias: los materiales se comparten con los peluches de los demás.) Al volver a 3ª persona se regresan los de antes.
 let fpHideT=0, fpCamNow=false;
-const fpMk=mm=>{ const c=mm.clone(); c.colorWrite=false; c.depthWrite=false; return c; };
+// v261: cada copia recuerda su material de verdad (fpOrig); nunca se copia una copia, y al volver a 3ª persona todo lo que quedó
+// con un material invisible regresa al suyo (antes, si algo cambiaba el material mientras estabas en 1ª persona, el cuerpo se quedaba invisible).
+const FP_ORIG=new WeakMap();   // (copia invisible → material de verdad; fuera de userData para que no se copie al clonar)
+const fpReal=mm=>{ let q=mm; for(let i=0;i<4 && q; i++){ const o=FP_ORIG.get(q); if(o) q=o; else if(q.colorWrite===false && q.userData && q.userData.stOrig && q.userData.stOrig.isMaterial) q=q.userData.stOrig; else break; } return q; };
+const fpMk=mm=>{ const o=fpReal(mm), c=o.clone(); c.colorWrite=false; c.depthWrite=false; FP_ORIG.set(c,o); return c; };
 function fpHide(o,on){ const u=o.userData; if(!on && !u.fpHid) return; if(on && u.fpHid && (fpHideT=(fpHideT+1)%15)!==0) return;   // (cada 15 cuadros revisa ropa nueva)
+  if(on && !u.fpHid && u.stn && u.stn.wr){ stRestore(o); u.stn.wr=false; }   // (las manchas se quitan antes de copiar)
   u.fpHid=on; o.traverse(m=>{ if(!(m.isMesh||m.isSprite) || !m.material) return; const d=m.userData;
-    if(on){ if(d.fpC && m.material===d.fpC) return; if(d.fpC) [].concat(d.fpC).forEach(c=>c.dispose());   // (si le cambiaron el material, se vuelve a copiar)
-      d.fpM=m.material; d.fpC=Array.isArray(m.material)?m.material.map(fpMk):fpMk(m.material); m.material=d.fpC; }
-    else if(d.fpC){ if(m.material===d.fpC) m.material=d.fpM; [].concat(d.fpC).forEach(c=>c.dispose()); d.fpC=null; d.fpM=null; } }); }
+    if(on){ if(d.fpC && m.material===d.fpC) return; if(d.fpC) [].concat(d.fpC).forEach(c=>{ if(c!==m.material && ![].concat(m.material).includes(c)) c.dispose(); });   // (si le cambiaron el material, se vuelve a copiar)
+      const cur=Array.isArray(m.material)?m.material.map(fpReal):fpReal(m.material); d.fpM=cur; d.fpC=Array.isArray(cur)?cur.map(fpMk):fpMk(cur); m.material=d.fpC; }
+    else { const back=Array.isArray(m.material)?m.material.map(fpReal):fpReal(m.material); if(back!==m.material && (!Array.isArray(back) || back.some((q,i)=>q!==m.material[i]))) m.material=back;
+      if(d.fpC){ [].concat(d.fpC).forEach(c=>c.dispose()); d.fpC=null; d.fpM=null; } } }); }
 function fpBody(o,on,arms){ const u=o.userData; if(u.fpOn===on && u.fpArms===!!arms) return; u.fpOn=on; u.fpArms=!!arms; batchDropUnder(o);
   u.body.visible=!on; u.eyes.forEach(e=>e.visible=!on); u.legs.forEach(l=>l.visible=!on); u.arms.forEach(a=>a.visible=!on||!!arms); }
 const _mgEye=new THREE.Vector3(), _mgL=new THREE.Vector3();
@@ -35970,7 +35977,7 @@ function update(dt,t){ myLabelUpdate();
   chSwayTick(plush,dt);   // v153: el cabello se mece
   plush.rotation.y = state==='menu' ? (shopOpen() ? 0 : Math.sin(t*.4)*.5) : player.facing;
   plush.rotation.x = player.diveAngle;
-  plush.rotation.z = player.swim ? 0 : Math.sin(player.walk)*.08*moving;
+  plush.rotation.z = player.swim || plush.userData.av==='k' ? 0 : Math.sin(player.walk)*.08*moving;   // v261: el Cubito camina recto
   if(plush.userData.gs) gestTick(plush,dt,moving,shopOpen()?false:gestBlocked());   // v201: gestos (v202: en la tienda es la vista previa)
   obAfterPose(dt);   // v212: tu objeto en la mano (y lo que lanzaste)
   if(FREE.on) freeTick(dt);   // v208
