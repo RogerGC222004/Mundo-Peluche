@@ -47,6 +47,14 @@ async def m():
       run(33.4,300); o.push(fpsCapNow());          // si ni a 60 llega: 30
       settings.fpsCap='free'; o.push(fpsCapNow()); settings.fpsCap='30'; o.push(fpsCapNow()); settings.fpsCap='auto'; FPA.lvl=0; return o; })()""")
     ok(r==[0,60,60,0,60,80000,30,0,30], '4 Automático: a 120 Hz sin límite; si llega tarde baja a 60; parejo 20 s → prueba 120; no pudo → 60 y espera más; si tampoco → 30 %s'%r)
+    # 5. si la pantalla baja (por ejemplo la cambias de 120 a 60 Hz), en un momento tranquilo (menú, pausa) se nota dos veces y se quita el 120
+    r=await ev("""(()=>{ const raf=window.requestAnimationFrame; window.requestAnimationFrame=()=>0; const st0=state; SCRHZ.v=120; SCRHZ.low=0; SCRHZ.d.length=0; SCRHZ.last=0; settings.fpsCap='120'; let t=5e6; const feed=(ms,n)=>{ for(let i=0;i<n;i++){ t+=ms; hzTick(t); } }; const o=[];
+      state='play'; feed(16.67,200); o.push(SCRHZ.v);          // jugando (puede ir lento): no baja
+      state='pause'; feed(16.67,95); o.push(SCRHZ.v);          // una vez en pausa: todavía no
+      feed(16.67,95); o.push(SCRHZ.v, capList(), settings.fpsCap);   // dos veces: ya es 60 (y el 120 que tenías pasa a Automático)
+      state='play'; feed(8.33,95); o.push(SCRHZ.v);            // si vuelve a 120, sube enseguida
+      state=st0; window.requestAnimationFrame=raf; settings.fpsCap='auto'; return o; })()""")
+    ok(r==[120,120,60,[60,30],'auto',120], '5 la pantalla baja de 120 a 60 Hz: solo se cambia en momentos tranquilos y dos veces seguidas; el 120 que tenías pasa a Automático; si sube, se nota enseguida %s'%r)
     ok(not errs, 'sin errores (%s)'%errs[:3])
     await b.close()
 asyncio.run(m())
