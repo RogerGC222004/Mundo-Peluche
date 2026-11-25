@@ -21,7 +21,7 @@ async def m():
     await ev("menuModes(true); ui('freeBtn').click(); 1"); await pg.wait_for_timeout(300)
     r=await ev("[!ui('freeStart').hidden, ui('freePub').textContent.includes('Crear sala'), !!ui('freeCode')]"); ok(r==[True,True,True], 'Modo libre muestra Empezar solo y Construir con amigos (crear sala, código) %s'%r)
     await ev("ui('freeSolo').click(); 1"); await pg.wait_for_timeout(1500); await ev("(window.requestAnimationFrame=()=>0, __run(1), 1)")
-    r=await ev("[FREE.on, state, +player.pos.y.toFixed(2), Math.round(player.pos.x), !ui('freeHud').hidden, player.swim]"); ok(r[0] and r[1]=='play' and abs(r[2]-.6)<.1 and r[3]==9000 and r[4] and not r[5], 'entras a la planicie parado en el pasto %s'%r)
+    r=await ev("[FREE.on, state, +player.pos.y.toFixed(2), Math.round(player.pos.x), !ui('freeHud').hidden, player.swim, FREE.Y]"); Y=r[6]; ok(r[0] and r[1]=='play' and abs(r[2]-Y)<.1 and r[3]==9000 and r[4] and not r[5], 'entras a la planicie parado en el pasto %s'%r)
     # 2. el menú de objetos
     r=await ev("(()=>{ ui('freeObj').click(); const a=ui('freeGrid').children.length; FREE.tab='jardin'; FREE.sub='plantas'; freeRenderBox(); const b=ui('freeGrid').children.length; FREE.tab='fisica'; freeRenderBox(); const c=ui('freeGrid').children.length; const n=HK.length; return [a,b,c,n]; })()")
     ok(r[0]==15 and r[1]>=10 and r[2]==42 and r[3]>150, 'Objetos: 15 bloques (v254: 9 nuevos), plantas del Taller (%d), 42 de física (v229: dominó, fila, bolo, bolos y torre); en total %d piezas del Taller'%(r[1],r[3]))
@@ -29,11 +29,11 @@ async def m():
     # 3. poner un cubo enfrente, girar, otro encima
     r=await ev("""(()=>{ ui('freeBox').hidden=true; freeSelect({k:'b',a:0,b:3}); __run(.2); const a=freeAim(); freePlace(); const o=FREE.objs[0]; freePlace(); const o2=FREE.objs[1];
       return [FREE.objs.length, +a.x.toFixed(2), +o.box.max.y.toFixed(2), o2?+o2.box.min.y.toFixed(2):null, scanActions.length>=0 && actA && actA.label]; })()""")
-    ok(r[0]==2 and abs(r[2]-1.6)<.05 and r[3] and abs(r[3]-1.6)<.05, 'un cubo enfrente y otro encima (se apilan) %s'%r)
+    ok(r[0]==2 and abs(r[2]-(Y+1))<.05 and r[3] and abs(r[3]-(Y+1))<.05, 'un cubo enfrente y otro encima (se apilan) %s'%r)
     # 4. chocas con el cubo y te puedes subir
     r=await ev("""(()=>{ const o=FREE.objs[0]; player.pos.set(o.x, FREE.Y+.05, o.z+2); player.facing=Math.PI; let minD=9; __run(1.5,()=>{ keys['KeyW']=true; }); keys['KeyW']=false; const d=Math.abs(player.pos.z-o.z);
-      player.pos.set(o.x, 3.5, o.z); player.vy=0; __run(1); return [+d.toFixed(2), +player.pos.y.toFixed(2)]; })()""")
-    ok(r[0]>=.85 and abs(r[1]-2.6)<.1, 'el cubo no se atraviesa (%s m) y te puedes parar encima (y=%s)'%(r[0],r[1]))
+      player.pos.set(o.x, FREE.Y+2.9, o.z); player.vy=0; __run(1); return [+d.toFixed(2), +player.pos.y.toFixed(2)]; })()""")
+    ok(r[0]>=.85 and abs(r[1]-(Y+2))<.1, 'el cubo no se atraviesa (%s m) y te puedes parar encima (y=%s)'%(r[0],r[1]))
     # 5. una pieza del Taller (árbol) y un mueble
     r=await ev("""(()=>{ player.pos.set(FREE.X+5,FREE.Y+.05,FREE.Z+5); player.facing=0; const K=HK.find(K=>K.cat==='jardin' && K.sub==='plantas'); freeSelect({k:'h',a:K.id,b:K.mats[0]}); __run(.1); freeRotate(); freePlace();
       const K2=HK.find(K=>K.cat==='casa' && K.sub==='muebles'); player.pos.x+=4; freeSelect({k:'h',a:K2.id,b:K2.mats[0]}); __run(.1); freePlace(); const o=FREE.objs[FREE.objs.length-2]; return [FREE.objs.length, K.n, K2.n, o.r, +(o.box.max.y-o.box.min.y).toFixed(2)]; })()""")
@@ -42,7 +42,7 @@ async def m():
     r=await ev("""(()=>{ player.pos.set(FREE.X-10,FREE.Y+.05,FREE.Z); player.facing=0; freeSelect({k:'p',a:'playa',b:0}); __run(.1); freePlace(); const B=FREE.dyn[0]; __run(1.5); const y0=+B.root.position.y.toFixed(2), z0=B.root.position.z;
       __run(.6,()=>{ player.pos.z+=.12; player.vel.set(0,0,2.4); }); player.vel.set(0,0,0); __run(1); const moved=+(B.root.position.z-z0).toFixed(2);
       return [FREE.dyn.length, y0, moved]; })()""")
-    ok(r[0]==1 and abs(r[1]-(.6+.45))<.05 and r[2]>1, 'pelota de playa: cae al pasto y al caminarle encima sale rodando %s m'%r[2])
+    ok(r[0]==1 and abs(r[1]-(Y+.45))<.05 and r[2]>1, 'pelota de playa: cae al pasto y al caminarle encima sale rodando %s m'%r[2])
     r=await ev("""(()=>{ player.pos.set(FREE.X-10,FREE.Y+.05,FREE.Z-15); player.facing=0; for(const id of ['goma','tela','boliche','caja','barril']){ freeSelect({k:'p',a:id,b:0}); __run(.05); freePlace(); player.pos.x+=1.5; }
       const goma=FREE.dyn[1]; goma.root.position.y+=4; let top=0; __run(14,()=>{ top=Math.max(top, goma.root.position.y); }); const rest=FREE.dyn.every(d=>d.root.position.y<FREE.Y+d.r+.2);
       return [FREE.dyn.length, rest, FREE.dyn.map(d=>d.id+':'+(d.root.position.y-FREE.Y-d.r).toFixed(2)+':'+d.v.y.toFixed(2)).join(' ')]; })()""")

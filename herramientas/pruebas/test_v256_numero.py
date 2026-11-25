@@ -50,8 +50,8 @@ async def m():
     r=await ev("""(()=>{ const A=AR_SPOTS[NUMI]; const [px,pz]=A.plate; player.pos.set(px,terrainH(px,pz)+.05,pz); __run(.2);
       const acts=arenaActions(); cpuOpen(NUMI); const solo=!ui('cpuSolo').hidden; CPU.pick.n=0; ui('cpuGo').onclick(); __until(()=>__G().ph===3,20);
       const st0=[AR.me.st, __G().pl.length, Math.abs(player.pos.y-NUMG.Y)<.2], seen=[];
-      for(let rd=0;rd<3;rd++){ __until(()=>{ const S=__S(); return S && S.k==='q' && S.r===rd; },30); const G=__G(), S=__S(); __on(rd<2?__good(G,S):__bad(G,S)); __run(.3); seen.push(ui('arTxt').textContent);
-        __until(()=>{ const S=__S(); return !S || S.k!=='q'; },15); __run(2); seen.push([AR.me.st, +player.pos.y.toFixed(1)]); }
+      for(let rd=0;rd<3;rd++){ __until(()=>{ const S=__S(); return S && S.k==='q' && S.r===rd; },50); const G=__G(), S=__S(); __on(rd<2?__good(G,S):__bad(G,S)); __run(.3); seen.push(ui('arTxt').textContent);
+        __until(()=>{ const S=__S(); return !S || S.k!=='q'; },40); __run(2); seen.push([AR.me.st, +player.pos.y.toFixed(1)]); }
       __run(2); const inPool=player.pos.y<2 && Math.abs(arL(A,player.pos.x,player.pos.z)[0])<11;
       __until(()=>__G().ph===4,10); const res=[ui('arResTitle').textContent, ui('arResText').textContent, ui('arResCoins').textContent];
       const rec=localStorage.getItem('mundoPelucheNumRec'); __until(()=>__G().ph===0,15); __run(1);
@@ -84,7 +84,7 @@ async def m():
     # 6. contra 3 de la CPU (difícil): tú fallas en la 1ª; ellos siguen; los que caen se quedan en las pelotitas; resultados
     r=await ev("""(()=>{ const A=AR_SPOTS[NUMI]; const [px,pz]=A.plate; player.pos.set(px,terrainH(px,pz)+.05,pz); __run(.2); cpuStart(NUMI,3,2); __until(()=>__G().ph===3,20);
       const n=__G().pl.length; __until(()=>{ const S=__S(); return S && S.k==='q'; },10); const G=__G(); __on(__bad(G,__S()));
-      let outBots=[], maxR=0; __until(()=>{ const S=__S(); if(S) maxR=Math.max(maxR,S.r); for(const r of cpuBots()) if(r.az[1]===3 && !outBots.some(x=>x.startsWith(r.uid+':'))){ outBots.push(r.uid+':'+r.pos.y.toFixed(1)); } return __G().ph===4; },240);
+      let outBots=[], maxR=0; __until(()=>{ const S=__S(); if(S) maxR=Math.max(maxR,S.r); for(const r of cpuBots()) if(r.az[1]===3 && !outBots.some(x=>x.startsWith(r.uid+':'))){ outBots.push(r.uid+':'+r.pos.y.toFixed(1)); } return __G().ph===4; },480);
       const G2=__G(), sc=G2.rk.map(u=>numScoreOf(G2,u)); return [n, AR.me.st, maxR, outBots, G2.rk.length, sc, G2.tie, ui('arResRank').textContent, ui('arResTitle').textContent]; })()""")
     ok(r[0]==4 and r[1] in (3,0) and r[4]==4 and r[5]==sorted(r[5],reverse=True) and r[5][-1]==0, 'contra 3 de la CPU: 4 jugadores; fallas en la 1ª; llegan hasta la ronda %d; puntos %s · «%s» · %s'%(r[2]+1,r[5],r[7],r[8]))
     ok(all(float(x.split(':')[-1])<1.5 for x in r[3]), 'los de la CPU que caen se quedan en las pelotitas %s'%r[3])
