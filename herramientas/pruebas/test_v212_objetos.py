@@ -40,8 +40,8 @@ async def m():
     # 3. a la barra desde el inventario, y se guarda
     r=await ev("""(()=>{ ui('toMenuBtn').click(); ui('mapList').hidden=true; menuEl.hidden=false; ui('soloBtn').click(); return 1; })()""")
     await pg.wait_for_timeout(2500); await ev("window.requestAnimationFrame=()=>0; __run(.5); 1")
-    r=await ev("""(()=>{ const L=obLoad(); openInv(); useSlot(2); const btns=[...ui('invGrid').children]; const i=inventory.indexOf('o:'+L[0].id); btns[i].click(); useSlot(3); btns2=[...ui('invGrid').children]; btns2[inventory.indexOf('o:'+L[1].id)].click(); useSlot(4); [...ui('invGrid').children][inventory.indexOf('o:'+L[2].id)].click(); closeInv();
-      const saved=JSON.parse(localStorage.getItem('mundoPelucheBarra')); return [state, inventory.length, hotbar[2]==='o:'+L[0].id, hotbar[3]==='o:'+L[1].id, hotbar[4]==='o:'+L[2].id, saved.bar[2]===hotbar[2], ui('hotbar').querySelectorAll('.ob-ic').length]; })()""")
+    r=await ev("""(()=>{ const L=obLoad(); openInv(); const put=(k,j)=>{ const i=INV.findIndex(S=>S && S.k===k); ui('invGrid').children[i-INV_BAR].click(); useSlot(j); }; put('o:'+L[0].id,2); put('o:'+L[1].id,3); put('o:'+L[2].id,4); closeInv();   // (v262: tocas el objeto y luego el espacio de la barra)
+      const saved=JSON.parse(localStorage.getItem('mundoPelucheInv')); return [state, inventory.length, hotbar[2]==='o:'+L[0].id, hotbar[3]==='o:'+L[1].id, hotbar[4]==='o:'+L[2].id, saved.s[2][0]===hotbar[2], ui('hotbar').querySelectorAll('.ob-ic').length]; })()""")
     ok(r==['play',9,True,True,True,True,3], 'en el inventario (5 + 4 objetos); se ponen en la barra y la barra se guarda %s'%r)
     # 4. en la mano en la isla: lanzar → vuela, rebota y regresa
     r=await ev("""(()=>{ useSlot(2); __run(.2); const H=plush.userData.obH; const lab=(ui('actA')||{}).textContent||document.querySelector('.act')?.textContent||'';
@@ -79,7 +79,7 @@ async def m():
     r=await ev("""(()=>{ const L=obLoad(); return [L.length, hotbar[2]==='o:'+L[0].id, hotbar[3]==='o:'+L[1].id, inventory.filter(k=>k.startsWith('o:')).length]; })()""")
     ok(r==[4,True,True,4], 'al volver a abrir el juego: tus 4 objetos y la barra como la dejaste %s'%r)
     r=await ev("""(()=>{ const id=obLoad()[0].id; menuModes(true); ui('mapBtn').click(); [...ui('mapTypes').children].find(x=>x.textContent.includes('Objeto')).click(); const del=ui('mapItems').querySelector('.chip.del'); del.click(); del.click();
-      return [obLoad().length, inventory.includes('o:'+id), hotbar.includes('o:'+id), !ITEMS['o:'+id], JSON.parse(localStorage.getItem('mundoPelucheBarra')).bar.includes('o:'+id)]; })()""")
+      return [obLoad().length, inventory.includes('o:'+id), hotbar.includes('o:'+id), !ITEMS['o:'+id], JSON.parse(localStorage.getItem('mundoPelucheInv')).s.some(e=>e && e[0]==='o:'+id)]; })()""")
     ok(r==[3,False,False,True,False], 'borrar un objeto lo quita del inventario y de la barra %s'%r)
     ok(not errs,'sin errores %s'%errs[:3]); await b.close()
 asyncio.run(m())
