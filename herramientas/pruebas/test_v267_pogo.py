@@ -1,4 +1,4 @@
-# v267: Pogo al cielo: brinca en tu pogo de plataforma en plataforma (salen de la semilla, iguales para todos); gana quien llegue más alto
+# v267: Pogo saltarín: brinca en tu pogo de plataforma en plataforma (salen de la semilla, iguales para todos); gana quien llegue más alto
 # en 3 minutos; plataformas que se mueven o se rompen (para todos), trampolines, resortes, nubes y globos; tú solo, CPU o jugadores.
 import asyncio, json
 from playwright.async_api import async_playwright
@@ -29,7 +29,7 @@ async def m():
     # 1. en la lista de minijuegos: con portada y Tú solo, CPU y Jugadores
     r=await ev("""(async()=>{ ONLINE.on=false; ui('mgBtn').click(); await new Promise(f=>setTimeout(f,300)); const c=[...ui('mgqList').querySelectorAll('.mgq-g')].find(c=>c.textContent.includes('Pogo')); const pic=c&&c.querySelector('.pic');
       const b=c?[...c.querySelectorAll('.mgq-b')].map(b=>b.classList.contains('solo')?'S':b.classList.contains('cpu')?'C':'J').join(''):''; ui('mgqClose')&&ui('mgqClose').click(); return [!!c, !!pic && pic.style.backgroundImage.startsWith('url("data:image/webp'), b, AR_SPOTS[POGI].name, POGI, AR_SPOTS[13].id]; })()""")
-    ok(r==[True,True,'SCJ','Pogo al cielo',14,'numero'], '1 «Pogo al cielo» sale en la lista de minijuegos con su portada: tú solo, CPU o jugadores %s'%r)
+    ok(r==[True,True,'SCJ','Pogo saltarín',14,'numero'], '1 «Pogo saltarín» sale en la lista de minijuegos con su portada: tú solo, CPU o jugadores %s'%r)
     await ev("startGame()"); await pg.wait_for_timeout(1500)
     await ev("""(()=>{ window.requestAnimationFrame=()=>0; window.__run=(sec,fn)=>{ let t=clock.elapsedTime; for(let i=0;i<Math.round(sec/.05);i++){ clock.elapsedTime=(t+=.05); if(fn && fn(i)===true) return true; update(.05,t); } }; __run(1); weatherOfSlot=()=>'clear';
       window.__drive=()=>{ const P=player.pos, T=pogoT(); let tg=null; for(let j=Math.max(1,POG.cur+1);j<POG.L.length;j++){ const p=POG.L[j]; if(POG.broken.has(p.i)) continue; tg=p; break; } if(!tg) return; const [ox,oz]=pogoOff(tg,T), dx=POGG.x+tg.x+ox-P.x, dz=POGG.z+tg.z+oz-P.z, d=Math.hypot(dx,dz); yaw=Math.PI; const k=Math.min(1,d/1.2); stick.y=d>.2?-dz/d*k:0; stick.x=d>.2?-dx/d*k:0; keys.Space=true; };
