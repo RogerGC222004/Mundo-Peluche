@@ -82,6 +82,15 @@ async def m():
     r=await ev("""(()=>{ const src=[...document.scripts].map(s=>s.text).join(''); return [src.includes("(r.az&&r.az[0]===POGI&&r.az[1]===2)"), typeof arPogo]; })()""")
     ok(r[0], '7 los jugadores en el pogo se atraviesan (nadie tumba a nadie) %s'%r)
 
+    # 8. v267: se escoge cuánto dura (3, 5 o 10 min); récord aparte para cada tiempo; los demás usan el del que lleva la partida
+    r=await ev("""(()=>{ localStorage.removeItem('mundoPelucheSoloRec'); localStorage.removeItem('mpPogoMin'); mgqLocal(POGI,0,1); __run(.6); const o=ui('arOpt'); const btn=[...o.querySelectorAll('button')].map(b=>b.textContent).join(',');
+      [...o.querySelectorAll('button')].find(b=>b.textContent==='10 min').click(); __run(.2); const on=[...o.querySelectorAll('button.on')].map(b=>b.textContent).join();
+      let ms=null; __run(15,()=>{ if(AR.G[POGI].ph===3){ ms=AR.G[POGI].ms; return true; } }); const hid=o.hidden, dm=arenaPresence().ag.dm;
+      POG.best=50; AR.G[POGI].ms=0; __run(1.5); const rec=JSON.stringify(soloRecs()), txt=ui('arResText').textContent; __run(8); arLeave(); __run(.5);
+      const H=window.mpParseCheck||null; const r={}; parseArena(r,{ag:{a:POGI,ph:3,ms:1000,gid:'x',pl:[],el:[],dm:5}}); const r2={}; parseArena(r2,{ag:{a:POGI,ph:3,ms:1000,gid:'x',pl:[],el:[],dm:7}});
+      return [btn, on, ms, hid, dm, rec, txt, r.ag.dm, r2.ag.dm, pogoGen(77).L.slice(-1)[0].y>2500]; })()""")
+    ok(r[0]=='3 min,5 min,10 min' and r[1]=='10 min' and r[2]==600000 and r[3] and r[4]==10 and r[5]=='{"pogo10":50}' and '(10 min)' in r[6] and r[7]==5 and r[8]==3 and r[9], '8 se escoge 3, 5 o 10 minutos; récord aparte para cada tiempo; todos juegan con el tiempo escogido %s'%r)
+
     ok(not errs and not cerr, 'sin errores %s %s'%(errs[:3],cerr[:3]))
     await b.close()
 asyncio.run(m())
