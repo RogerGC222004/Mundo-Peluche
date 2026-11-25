@@ -27,8 +27,8 @@ async def m():
     r=await ev("""(async()=>{ ONLINE.on=false; ui('mgBtn').click(); await new Promise(f=>setTimeout(f,300)); const cards=[...ui('mgqList').querySelectorAll('.mgq-g')];
       const o=cards.map(c=>[c.querySelector('b').textContent.trim(), [...c.querySelectorAll('.mgq-b')].map(b=>b.classList.contains('solo')?'S':b.classList.contains('cpu')?'C':'J').join('')]); return [ui('mgq').hidden, o, document.getElementById('onlineOv') ? document.getElementById('onlineOv').hidden : true]; })()""")
     solos=[x[0] for x in r[1] if x[1].startswith('S')]
-    ok(not r[0] and r[2] and len(r[1])==14 and all(x[1] in ('SCJ','CJ') for x in r[1]), '1a «Minijuegos» abre la lista sin pedir internet; los 14 tienen CPU y Jugadores')
-    ok(len(solos)==8 and all(any(n in s for s in solos) for n in ['Plataformas','Carrera','Laberinto','Banda','Canasta','Pinta','perlas','número']), '1b «Tú solo» en 8: %s'%solos)
+    ok(not r[0] and r[2] and len(r[1])==15 and all(x[1] in ('SCJ','CJ') for x in r[1]), '1a «Minijuegos» abre la lista sin pedir internet; los 15 tienen CPU y Jugadores (v267: + Pogo al cielo)')
+    ok(len(solos)==9 and all(any(n in s for s in solos) for n in ['Plataformas','Carrera','Laberinto','Banda','Canasta','Pinta','perlas','número','Pogo']), '1b «Tú solo» en 9: %s'%solos)
     r=await ev("""(async()=>{ const c=[...ui('mgqList').querySelectorAll('.mgq-g')][1]; c.querySelector('.mgq-b.jug').click(); await new Promise(f=>setTimeout(f,300)); const ov=document.getElementById('onlineOv'); const o=[!!ov && !ov.hidden && /línea/.test(ov.textContent)]; if(ov) onlineClose(); return o; })()""")
     ok(r[0], '1c «Jugadores» pide que un adulto prenda «Jugar en línea» (si está apagado)')
     # 2. CPU desde el menú: escoges cuántos y la dificultad (sin «Solo yo»), y empieza en el minijuego
