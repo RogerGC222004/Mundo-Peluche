@@ -32,31 +32,32 @@ async def m():
     ok(r==[True,True,'SCJ','Pogo saltarín',14,'numero'], '1 «Pogo saltarín» sale en la lista de minijuegos con su portada: tú solo, CPU o jugadores %s'%r)
     await ev("startGame()"); await pg.wait_for_timeout(1500)
     await ev("""(()=>{ window.requestAnimationFrame=()=>0; window.__run=(sec,fn)=>{ let t=clock.elapsedTime; for(let i=0;i<Math.round(sec/.05);i++){ clock.elapsedTime=(t+=.05); if(fn && fn(i)===true) return true; update(.05,t); } }; __run(1); weatherOfSlot=()=>'clear';
-      window.__drive=()=>{ const P=player.pos, T=pogoT(); let tg=null; for(let j=Math.max(1,POG.cur+1);j<POG.L.length;j++){ const p=POG.L[j]; if(POG.broken.has(p.i)) continue; tg=p; break; } if(!tg) return; const [ox,oz]=pogoOff(tg,T), dx=POGG.x+tg.x+ox-P.x, dz=POGG.z+tg.z+oz-P.z, d=Math.hypot(dx,dz); yaw=Math.PI; const k=Math.min(1,d/1.2); stick.y=d>.2?-dz/d*k:0; stick.x=d>.2?-dx/d*k:0; keys.Space=true; };
+      window.__drive=()=>{ const P=player.pos, T=pogoT(); const c=POG.L[Math.max(0,POG.cur)]; let ti=POG.cur<=0?POG.starts[0]:(c.nx>=0?c.nx:c.alt); let g=0; while(ti>=0 && POG.broken.has(ti) && g++<5) ti=POG.L[ti].nx>=0?POG.L[ti].nx:POG.L[ti].alt; const tg=ti>=0?POG.L[ti]:null; if(!tg) return; const [ox,oz]=pogoOff(tg,T), dx=POGG.x+tg.x+ox-P.x, dz=POGG.z+tg.z+oz-P.z, d=Math.hypot(dx,dz); yaw=Math.PI; const k=Math.min(1,d/2); stick.y=d>.2?-dz/d*k:0; stick.x=d>.2?-dx/d*k:0; keys.Space=true; };
       window.__stop=()=>{ stick.x=0; stick.y=0; keys.Space=false; }; return 1; })()""")
 
-    # 2. las plataformas: iguales para todos (salen de la semilla), alcanzables, y cada vez más difíciles
-    r=await ev("""(()=>{ const a=pogoGen(777).L, b=pogoGen(777).L, c=pogoGen(778).L; const same=JSON.stringify(a)===JSON.stringify(b), diff=JSON.stringify(a)!==JSON.stringify(c);
-      let mx=0, mr=0; for(let i=2;i<a.length;i++){ mx=Math.max(mx,Math.hypot(a[i].x-a[i-1].x,a[i].z-a[i-1].z)); mr=Math.max(mr,a[i].y-a[i-1].y); }
-      const lv=p=>p.y-a[0].y, early=a.filter(p=>lv(p)<12 && p.i>0), firstMov=a.find(p=>p.k===1), firstBrk=a.find(p=>p.k===2);
-      return [same, diff, +mx.toFixed(1), +mr.toFixed(2), early.every(p=>p.k!==1 && p.k!==2), +lv(firstMov).toFixed(0), +lv(firstBrk).toFixed(0), a.filter(p=>p.h===1).length, a.filter(p=>p.h===2).length, a.filter(p=>p.k===3).length, pogoGen(777).B.length, Math.max(...a.map(p=>Math.hypot(p.x,p.z))).toFixed(1)]; })()""")
-    ok(r[0] and r[1] and r[2]<=4.8 and r[3]<=3.3 and r[4] and r[5]>=12 and r[6]>=35 and r[7]>5 and r[8]>3 and r[9]>5 and r[10]>10 and float(r[11])<7, '2 las plataformas salen de la semilla (iguales para todos), siempre alcanzables, y más arriba se mueven y se rompen; hay trampolines, resortes, nubes y globos %s'%r)
+    # 2. las plataformas: al azar en cada partida pero iguales para todos (salen de la semilla); de 2 a 4 caminos con cruces, alcanzables y cada vez más difíciles
+    r=await ev("""(()=>{ const A=pogoGen(777), a=A.L, b=pogoGen(777).L, c=pogoGen(778).L; const same=JSON.stringify(a)===JSON.stringify(b), diff=JSON.stringify(a)!==JSON.stringify(c);
+      const nps=new Set(); let alts=0, brs=0; for(let sd=1;sd<=40;sd++){ const g=pogoGen(sd*7919); nps.add(g.nP); alts+=g.L.filter(p=>p.alt>=0).length>40?1:0; brs+=g.L.some(p=>p.bridge)?1:0; }
+      let mx=0, mr=0; for(const p of a){ if(p.i===0 || p.pa<0 || p.nx<0) continue; const q=a[p.nx]; mx=Math.max(mx,Math.hypot(q.x-p.x,q.z-p.z)); mr=Math.max(mr,q.y-p.y); }
+      const lv=p=>p.y-a[0].y, early=a.filter(p=>lv(p)<12 && p.i>0), firstMov=a.find(p=>p.k===1), firstBrk=a.find(p=>p.k===2), sorted=a.every((p,i)=>i===0||p.y>=a[i-1].y);
+      return [same, diff, [...nps].sort().join(''), alts, brs, +mx.toFixed(1), +mr.toFixed(2), early.every(p=>p.k!==1 && p.k!==2), +lv(firstMov).toFixed(0), +lv(firstBrk).toFixed(0), a.filter(p=>p.h===1).length, a.filter(p=>p.h===2).length, a.filter(p=>p.k===3).length, A.B.length, Math.max(...a.slice(1).map(p=>Math.hypot(p.x,p.z)+p.w/2)).toFixed(1), sorted]; })()""")
+    ok(r[0] and r[1] and r[2]=='234' and r[3]>=35 and r[4]>=15 and r[5]<=8.6 and r[6]<=6.8 and r[7] and r[8]>=12 and r[9]>=35 and r[10]>5 and r[11]>3 and r[12]>5 and r[13]>10 and float(r[14])<26 and r[15], '2 la torre sale al azar en cada partida (iguales para todos): de 2 a 4 caminos con cruces y puentes, siempre alcanzables, cada vez más difícil %s'%r)
 
     # 3. tú solo: empiezas en la plataforma redonda y brincas solito; manteniendo Saltar brincas más alto
     r=await ev("""(()=>{ const A=AR_SPOTS[POGI], [px,pz]=A.plate; player.pos.set(px,terrainH(px,pz)+.05,pz); __run(.6); const lab=(arenaActions()||[])[0]; cpuStart(POGI,0,1); __run(25,()=>AR.G[POGI].ph===3);
       const G=AR.G[POGI], onBase=Math.hypot(player.pos.x-POGG.x,player.pos.z-POGG.z)<6; const jump=(hold)=>{ let pv=POG.vy, land=null, mx=0; keys.Space=hold; __run(3,()=>{ if(POG.vy>pv+5) land=player.pos.y; pv=POG.vy; if(land!==null) mx=Math.max(mx,player.pos.y-land); }); keys.Space=false; return mx; }; const lo=jump(false), hi=jump(true);
       return [lab&&lab.label, G.ph, G.pl.length, onBase, +lo.toFixed(1), +hi.toFixed(1), !!POG.stick && POG.stick.visible && POG.stick.parent===plush, ui('arTxt').textContent.startsWith('⬆')]; })()""")
-    ok(r[0]=='🤖 Jugar contra la CPU' and r[1]==3 and r[2]==1 and r[3] and 2.4<r[4]<3.6 and r[5]>4.6 and r[6] and r[7], '3 tú solo: empiezas en la plataforma redonda con tu pogo; brincas solito (%s m) y manteniendo Saltar, más alto (%s m) %s'%(r[4],r[5],r))
+    ok(r[0]=='🤖 Jugar contra la CPU' and r[1]==3 and r[2]==1 and r[3] and 5<r[4]<6.4 and r[5]>8.5 and r[6] and r[7], '3 tú solo: empiezas en la plataforma redonda con tu pogo; brincas solito (%s m) y manteniendo Saltar, más alto (%s m) %s'%(r[4],r[5],r))
     r=await ev("""(()=>{ const L=[]; __run(40,i=>{ __drive(); if(i%160===0) L.push(+POG.best.toFixed(0)); }); __stop(); return [L.join(' '), +POG.best.toFixed(1), AR.me.st, ui('arTxt').textContent]; })()""")
     ok(r[1]>40 and r[2]==2, '3b muévete en el aire y vas subiendo de plataforma en plataforma (en 40 s, %s m) %s'%(r[1],r))
     r=await ev("""(()=>{ const y0=player.pos.y, b0=POG.best; __run(4); const fell=player.pos.y<y0-1; return [AR.me.st, POG.best>=b0, fell||true, AR.G[POGI].el.length]; })()""")
     ok(r[0]==2 and r[1] and r[3]==0, '3c si te caes no pierdes: cuenta lo más alto que llegaste %s'%r)
 
     # 4. trampolín, resorte, nube, globo y plataformas que se mueven o se rompen
-    r=await ev("""(()=>{ const T=POG.L.find(p=>p.h===1 && !POG.broken.has(p.i)); player.pos.set(POGG.x+T.x,T.y+POG_TIP+1.2,POGG.z+T.z); POG.vy=-2; let mx=0; __run(2,()=>{ mx=Math.max(mx,player.pos.y-POG_TIP-T.y); });
-      const S=POG.L.find(p=>p.h===2 && !POG.broken.has(p.i)); player.pos.set(POGG.x+S.x,S.y+POG_TIP+1.2,POGG.z+S.z); POG.vy=-2; let ms=0; __run(2,()=>{ ms=Math.max(ms,player.pos.y-POG_TIP-S.y); });
+    r=await ev("""(()=>{ const T=POG.L.find(p=>p.h===1 && !POG.broken.has(p.i)); player.pos.set(POGG.x+T.x,T.y+POG_TIP+1.2,POGG.z+T.z); POG.vy=-2; let mx=0; __run(3.5,()=>{ mx=Math.max(mx,player.pos.y-POG_TIP-T.y); });
+      const S=POG.L.find(p=>p.h===2 && !POG.broken.has(p.i)); player.pos.set(POGG.x+S.x,S.y+POG_TIP+1.2,POGG.z+S.z); POG.vy=-2; let ms=0; __run(3,()=>{ ms=Math.max(ms,player.pos.y-POG_TIP-S.y); });
       return [+mx.toFixed(1), +ms.toFixed(1)]; })()""")
-    ok(r[0]>11 and 6.5<r[1]<11, '4 el trampolín te avienta altísimo (%s m) y el resorte alto (%s m)'%(r[0],r[1]))
+    ok(r[0]>20 and 11<r[1]<18, '4 el trampolín te avienta altísimo (%s m) y el resorte alto (%s m)'%(r[0],r[1]))
     r=await ev("""(()=>{ const B=POG.B.find(b=>!POG.used.has(b.i)); player.pos.set(POGG.x+B.x,B.y-1,POGG.z+B.z); POG.vy=0; __run(.1); const lift=POG.lift>0; let y0=player.pos.y; __run(1.5); return [lift, +(player.pos.y-y0).toFixed(1), POG.used.has(B.i)]; })()""")
     ok(r[0] and r[1]>5 and r[2], '4b el globo te jala para arriba un buen tramo (%s m) %s'%(r[1],r))
     r=await ev("""(()=>{ const M=POG.L.find(p=>p.k===1); const a=pogoOff(M,100), b=pogoOff(M,101.5); const K=POG.L.find(p=>p.k===2 && !POG.broken.has(p.i)); const [ox,oz]=pogoOff(K,pogoT()); player.pos.set(POGG.x+K.x+ox,K.y+POG_TIP+.6,POGG.z+K.z+oz); POG.vy=-3; POG.lift=0;
