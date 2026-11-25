@@ -36,6 +36,8 @@ async def m():
     await pg.wait_for_timeout(3500)
     n=await ev(NEWS); k=await ev("localStorage.getItem('mundoPelucheNovedades')")
     ok(not n and k==VER, '🆕 la primera vez no sale «¿Qué hay de nuevo?» y se guarda la versión (%s)'%k)
+    r=await ev("[ui('newsBtn').hidden, ui('newsDot').hidden, !!NEWS[GAME_VERSION]]")
+    ok(r[0]==(not r[2]) and r[1], '🆕 v263: el botoncito «✨ Novedades» está en el menú (si la versión trae novedades) y sin puntito para un jugador nuevo %s'%r)
 
     # C) Enviar comentarios (web)
     r=await ev(r"""(async()=>{ const T=()=>new Promise(r=>setTimeout(r,80)); const OV=()=>document.getElementById('onlineOv'); const o={};
@@ -63,16 +65,19 @@ async def m():
     await pg.wait_for_timeout(3500)
     n=await ev(NEWS)
     if await ev("!!NEWS[GAME_VERSION]"):
-      ok(bool(n) and 'Versión '+VER in n and 'Genial' in n, '✨ si tenías otra versión sale «¿Qué hay de nuevo?» con las novedades')
-      r=await ev("(()=>{ document.querySelector('#onlineOv .news-ok').click(); return [document.getElementById('onlineOv').hidden, localStorage.getItem('mundoPelucheNovedades'), state]; })()")
-      ok(r[0] and r[1]==VER and r[2]=='menu', '👍 «¡Genial!» la cierra y queda guardada la versión')
+      d=await ev("[!ui('newsBtn').hidden, !ui('newsDot').hidden, (()=>{ const r=ui('newsBtn').getBoundingClientRect(); return r.right>innerWidth*.7 && r.top<innerHeight*.25; })()]")
+      ok(not n and d==[True,True,True], '✨ v263: si tenías otra versión ya no sale sola: el botoncito de arriba a la derecha tiene su puntito %s'%d)
+      await ev("ui('newsBtn').click(); 1"); await pg.wait_for_timeout(300); n=await ev(NEWS)
+      ok(bool(n) and 'Versión '+VER in n and 'Genial' in n, '✨ al tocarlo sale «¿Qué hay de nuevo?» con las novedades')
+      r=await ev("(()=>{ document.querySelector('#onlineOv .news-ok').click(); return [document.getElementById('onlineOv').hidden, localStorage.getItem('mundoPelucheNovedades'), state, ui('newsDot').hidden]; })()")
+      ok(r[0] and r[1]==VER and r[2]=='menu' and r[3], '👍 «¡Genial!» la cierra, queda guardada la versión y se quita el puntito')
     else:   # (v261: versión sin novedades, como lo pidió Roger: no sale nada y se guarda la versión)
       ok(not n and await ev("localStorage.getItem('mundoPelucheNovedades')")==VER, '✨ esta versión no trae novedades: no sale el aviso y se guarda la versión')
     ok(not errs, '🚫 sin errores (%s)'%errs[:3]); await ctx.close()
     pg,errs,ctx=await abrir(b,"localStorage.setItem('mundoPelucheNovedades','%s');"%VER)
     ev=lambda s: asyncio.wait_for(pg.evaluate("s=>__T.ev(s)", s), 600)
     await pg.wait_for_timeout(3500)
-    ok(not await ev(NEWS), '🔁 al volver a abrir la misma versión ya no sale')
+    ok(not await ev(NEWS) and await ev("ui('newsDot').hidden"), '🔁 al volver a abrir la misma versión no sale nada y el botoncito ya no tiene puntito')
     await ctx.close()
 
     # C2) en la app dice (app)
