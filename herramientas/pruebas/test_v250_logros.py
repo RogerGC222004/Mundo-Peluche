@@ -38,12 +38,12 @@ async def m():
       ui('options').hidden=true; openMp(); await __W(); o.salas=document.querySelector('#mp .mp-rooms').hidden; o.privada=isPrivateChoice();
       ui('mpPrivate').click(); await __W(); o.noCambia=isPrivateChoice();
       let args=null; const _j=joinRoom; joinRoom=(c,pub)=>{ args=[c,pub]; }; ui('mpCreate').click(); joinRoom=_j; o.pub=args&&args[1];
-      ui('mp').hidden=true; onlineSet(true); ONLINE.tip=true; const nb=__NOTES.length; ui('mgBtn').click(); await __W(); o.filas=!ui('mgq') || ui('mgq').hidden; o.aviso=__NOTES.slice(nb).join(' ');
+      ui('mp').hidden=true; onlineSet(true); ONLINE.tip=true; const nb=__NOTES.length; ui('mgBtn').click(); await __W(); ui('mgqList').querySelector('.mgq-b.jug').click(); await __W(); o.filas=MGQ.a<0; o.aviso=__NOTES.slice(nb).join(' '); closeMgq();   /* v264: la lista se abre (Tú solo y CPU); «Jugadores» no deja entrar a la fila y avisa por qué */
       fnRooms(); o.libre=/privadas/.test(ui('freeRooms').textContent) && ui('freePub').hidden; return o; })()""")
     ok(r['def'], '🆕 al instalar «Solo salas privadas» y «Ocultar apodos» vienen apagados')
     ok(r['malo'] and r['on'], '🔒 prenderlo pide la operación de adulto (con la mala no cambia) y queda guardado')
     ok(r['salas'] and r['privada'] and r['noCambia'] and r['pub']==False, '🚪 en Multijugador: no se ven las salas públicas y la sala que creas es privada sí o sí')
-    ok(r['filas'] and 'privadas' in r['aviso'], '🎮 las filas de minijuegos con desconocidos no se abren (avisa por qué)')
+    ok(r['filas'] and 'privadas' in r['aviso'], '🎮 las filas de minijuegos con desconocidos no se abren: «Jugadores» avisa por qué (Tú solo y CPU sí)')
     ok(r['libre'], '🏗️ en el Modo libre tampoco hay salas públicas ni botón para crear una pública')
 
     # B) ocultar apodos

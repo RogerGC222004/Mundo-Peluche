@@ -69,6 +69,8 @@ async def m():
       ok(not n and d==[True,True,True], '✨ v263: si tenías otra versión ya no sale sola: el botoncito de arriba a la derecha tiene su puntito %s'%d)
       await ev("ui('newsBtn').click(); 1"); await pg.wait_for_timeout(300); n=await ev(NEWS)
       ok(bool(n) and 'Versión '+VER in n and 'Genial' in n, '✨ al tocarlo sale «¿Qué hay de nuevo?» con las novedades')
+      if await ev("!Array.isArray(NEWS[GAME_VERSION])"):
+        ok('Agregado:' in n and 'Arreglado:' in n and n.index('Agregado:')<n.index('Arreglado:'), '✨ v264: las novedades salen en «Agregado:» y luego «Arreglado:»')
       r=await ev("(()=>{ document.querySelector('#onlineOv .news-ok').click(); return [document.getElementById('onlineOv').hidden, localStorage.getItem('mundoPelucheNovedades'), state, ui('newsDot').hidden]; })()")
       ok(r[0] and r[1]==VER and r[2]=='menu' and r[3], '👍 «¡Genial!» la cierra, queda guardada la versión y se quita el puntito')
     else:   # (v261: versión sin novedades, como lo pidió Roger: no sale nada y se guarda la versión)
