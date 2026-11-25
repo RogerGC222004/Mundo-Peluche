@@ -50,8 +50,8 @@ async def m():
       const a=(jskActions()||[])[0]; return [+lx.toFixed(1), SHIP_DOCK[0]>0, lz>PIER.PZ0 && lz<PIER.PZ1, tblWaterAt(s.x,s.z)!==null, a&&a.label, !!JSK.mesh && JSK.mesh.visible]; })()""")
     ok(r[0]<-8 and r[1] and r[2] and r[3] and r[4]=='🚤 Subirse a mi moto' and r[5], '3 tu moto flota junto a la plataforma de Tortu, del lado contrario al barco, y te subes desde la orilla %s'%r)
     r=await ev("""(()=>{ (jskActions()||[])[0].run(); const k=player.pg&&player.pg.k, R=JSK.ride; let mx=0; __run(3,()=>{ keys.KeyW=true; keys.ShiftLeft=true; mx=Math.max(mx,R.v); }); keys.KeyW=false; keys.ShiftLeft=false;
-      const pr=seaPresence().js, lab=(jskActions()||[])[0].label; return [k, +mx.toFixed(1), JSON.stringify(pr), lab, JSK.mesh.position.distanceTo(new THREE.Vector3(R.x,JSK.mesh.position.y,R.z))<.01, player.pos.y>R.y+.5]; })()""")
-    ok(r[0]=='jet' and r[1]>12 and r[2]=='[0,1]' and r[3]=='Bajarse' and r[4] and r[5], '3b manejas la moto por el mar (hasta %s m/s) sentado arriba; los demás te ven en ella %s'%(r[1],r))
+      const pr=seaPresence().js, lab=(jskActions()||[])[0].label; return [k, +mx.toFixed(1), JSON.stringify(pr), lab, JSK.mesh.position.distanceTo(new THREE.Vector3(R.x,JSK.mesh.position.y,R.z))<.01, player.pos.y>R.y+.2 && player.pos.y<R.y+.5]; })()""")
+    ok(r[0]=='jet' and r[1]>12 and r[2]=='[0,1]' and r[3]=='Bajarse' and r[4] and r[5], '3b manejas la moto por el mar (hasta %s m/s) sentado adentro, en su hueco; los demás te ven en ella %s'%(r[1],r))
     r=await ev("""(()=>{ const R=JSK.ride; let t=0; R.h=Math.atan2(-R.x,-R.z); __run(40,()=>{ keys.KeyW=true; t++; }); keys.KeyW=false; const wat=terrainH(R.x,R.z)<SEA_Y+.2; jskGetOff(); __run(.5); return [wat, JSK.st, player.pg, JSON.stringify(seaPresence().js).slice(0,5)]; })()""")
     ok(r[0] and r[1]==2 and r[2] is None and r[3]=='[0,2,', '3c la moto no se sube a la arena; si te bajas lejos del muelle, se queda flotando donde la dejaste %s'%r)
     r=await ev("""(()=>{ JSK.st=0; const fake={uid:'ana0001', name:'Ana', pos:new THREE.Vector3(), target:new THREE.Vector3(), obj:new THREE.Object3D(), facing:0}; mp.remotes.set('~ana',fake);
