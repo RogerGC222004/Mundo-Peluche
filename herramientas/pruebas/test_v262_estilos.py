@@ -4,6 +4,8 @@
 # que el neón vuelva a dejar el agua como estaba, y que al regresar a Peluche todo quede como antes.
 # Ronda 2: en teléfonos que no pueden, Caricatura y Neón salen apagados con aviso; versión ligera en Baja y Mínima;
 # Caricatura de noche ya no aclara la noche; los letreros en Neón son letreros de neón (cartel oscuro, letras que brillan).
+# v263: Crayones (Crayón suave, Crayón fuerte, Dibujo de niño); las hondas se leen con precisión (sin rayas en los teléfonos);
+# el pixel art acomoda la vista de cuadrito en cuadrito y deja la cámara como estaba.
 import asyncio, json
 from playwright.async_api import async_playwright
 REAL=open('threerepo/build/three.min.js').read()
@@ -34,18 +36,25 @@ async def m():
       const sv=JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}'); out.push(sv.vstyle, sv.pxSize, sv.pxFilter, ui('optPxFilter').querySelectorAll('button').length);
       B[3].click(); out.push(settings.vstyle, ui('optPxRow1').hidden, B[3].getAttribute('aria-pressed'));
       ui('resetOptions').click(); out.push(settings.vstyle); return out; })()""")
-    ok(r[0]==['peluche','pixel','cari','neon'] and r[1]=='peluche' and r[2] and r[3], '1a «Estilo visual» tiene Peluche, Pixel art, Caricatura y Neón; empieza en Peluche y sin las opciones de pixel %s'%r[:4])
+    ok(r[0]==['peluche','pixel','cari','neon','crayon'] and r[1]=='peluche' and r[2] and r[3], '1a «Estilo visual» tiene Peluche, Pixel art, Caricatura, Neón y Crayones; empieza en Peluche y sin las opciones de pixel %s'%r[:4])
     ok(r[4]=='pixel' and not r[5] and not r[6] and r[7]=='2' and r[8]=='0', '1b al escoger Pixel art salen «Tamaño de los cuadritos» (Grandes) y «Filtro del pixel art» (Natural) %s'%r[4:9])
     ok(r[9]=='pixel' and r[10]=='0' and r[11]=='3' and r[12]==6, '1c se guarda el estilo, el tamaño (Chicos) y el filtro (Retro); hay 6 filtros %s'%r[9:13])
     ok(r[13]=='neon' and r[14] and r[15]=='true' and r[16]=='peluche', '1d con Neón se esconden las de pixel; «Restablecer» regresa a Peluche %s'%r[13:])
     r=await ev("""(async()=>{ I18N.set('en'); openOptions(); await new Promise(f=>setTimeout(f,400)); const t=[...ui('optVStyle').querySelectorAll('button')].map(b=>b.textContent.trim()); const f=[...ui('optPxFilter').querySelectorAll('button')].map(b=>b.textContent.trim()); I18N.set('es'); optionsEl.hidden=true; return [t,f]; })()""")
-    ok(r[0]==['Plush','Pixel art','Cartoon','Neon'] and 'Pastel sunset' in r[1] and 'Blue night' in r[1], '1e en inglés: %s / %s'%(r[0],r[1]))
+    ok(r[0]==['Plush','Pixel art','Cartoon','Neon','Crayons'] and 'Pastel sunset' in r[1] and 'Blue night' in r[1], '1e en inglés: %s / %s'%(r[0],r[1]))
 
-    r=await ev("""(()=>{ settings.vstyle='neon'; VSX.can=false; openOptions(); const B=k=>ui('optVStyle').querySelector('[data-v="'+k+'"]'); const o=[B('cari').classList.contains('off'), B('neon').getAttribute('aria-disabled'), B('pixel').classList.contains('off'), B('peluche').getAttribute('aria-pressed'), ui('optVNote').hidden];
+    r=await ev("""(()=>{ settings.vstyle='neon'; VSX.can=false; openOptions(); const B=k=>ui('optVStyle').querySelector('[data-v="'+k+'"]'); const o=[B('cari').classList.contains('off') && B('crayon').classList.contains('off'), B('neon').getAttribute('aria-disabled'), B('pixel').classList.contains('off'), B('peluche').getAttribute('aria-pressed'), ui('optVNote').hidden];
       settings.vstyle='peluche'; syncOptionsUI(); B('neon').click(); o.push(settings.vstyle, ui('optVNote').hidden, ui('optVNote').textContent.trim()); B('pixel').click(); o.push(settings.vstyle);
       VSX.can=null; syncOptionsUI(); o.push(B('neon').classList.contains('off')); ui('resetOptions').click(); optionsEl.hidden=true; return o; })()""")
-    ok(r[0] and r[1]=='true' and not r[2] and r[3]=='true' and r[4], '1f en un teléfono que no puede, Caricatura y Neón salen apagados (y se ve Peluche escogido) %s'%r[:5])
+    ok(r[0] and r[1]=='true' and not r[2] and r[3]=='true' and r[4], '1f en un teléfono que no puede, Caricatura, Neón y Crayones salen apagados (y se ve Peluche escogido) %s'%r[:5])
     ok(r[5]=='peluche' and r[6]==False and r[7]=='Tu teléfono no puede mostrar este estilo' and r[8]=='pixel' and r[9]==False, '1g al tocarlos sale el aviso «%s» y no cambia; Pixel art sí se puede; en un teléfono normal no salen apagados %s'%(r[7],r[5:]))
+
+    r=await ev("""(async()=>{ openOptions(); const o=[ui('optCrRow').hidden, settings.crTrazo]; ui('optVStyle').querySelector('[data-v="crayon"]').click(); o.push(settings.vstyle, ui('optCrRow').hidden, ui('optPxRow1').hidden, [...ui('optCrTrazo').querySelectorAll('button')].map(b=>b.textContent.trim()));
+      ui('optCrTrazo').querySelector('[data-v="2"]').click(); const sv=JSON.parse(localStorage.getItem('mundoPelucheOpciones')||'{}'); o.push(sv.vstyle, sv.crTrazo);
+      I18N.set('en'); await new Promise(f=>setTimeout(f,400)); o.push([...ui('optCrTrazo').querySelectorAll('button')].map(b=>b.textContent.trim()), ui('optCrRow').querySelector('label').textContent.trim(), ui('optVStyle').querySelector('[data-v="crayon"]').textContent.trim()); I18N.set('es');
+      ui('resetOptions').click(); o.push(settings.vstyle, settings.crTrazo); optionsEl.hidden=true; return o; })()""")
+    ok(r[0] and r[1]=='0' and r[2]=='crayon' and not r[3] and r[4] and r[5]==['Crayón suave','Crayón fuerte','Dibujo de niño'], '1h al escoger Crayones sale «Tipo de trazo» (Crayón suave, Crayón fuerte, Dibujo de niño); la de pixel no %s'%r[:6])
+    ok(r[6]=='crayon' and r[7]=='2' and r[8]==['Soft crayon','Bold crayon',"Kid's drawing"] and r[9]=='Stroke type' and r[10]=='Crayons' and r[11]=='peluche' and r[12]=='0', '1i se guarda el trazo; en inglés %s / %s / %s; «Restablecer» regresa a Peluche %s'%(r[8],r[9],r[10],r[6:8]+r[11:]))
 
     await ev("startGame()"); await pg.wait_for_timeout(1500)
     await ev("""window.requestAnimationFrame=()=>0; window.__run=(sec)=>{ let t=clock.elapsedTime; for(let i=0;i<Math.round(sec/.05);i++){ clock.elapsedTime=(t+=.05); update(.05,t); updateSky(.05); } };
@@ -76,11 +85,22 @@ async def m():
     R2=json.loads(await ev("JSON.stringify((()=>{ __hour(.92); __tp('feria'); const o={pel:__shot('peluche'), cari:__shot('cari'), q:VSX.mC.uniforms.nightK.value}; __hour(.3); return o; })())"))
     ok(R2['cari']['mean']<=R2['pel']['mean']*1.15+0.01 and R2['q']>0.9, '2g de noche la Caricatura ya no aclara la noche (%s contra %s en Peluche; noche=%s)'%(R2['cari']['mean'],R2['pel']['mean'],round(R2['q'],2)))
 
+    R3=json.loads(await ev("""JSON.stringify((()=>{ __hour(.3); __tp('parque'); const o={}; for(const k of ['0','1','2']){ settings.crTrazo=k; o['t'+k]=__shot('crayon'); } o.pel=__shot('peluche'); const q0=settings.quality; settings.quality='low'; __shot('crayon'); o.lq=VSX.quad.material===VSX.mKl; settings.quality='mid'; __shot('crayon'); o.full=VSX.quad.material===VSX.mK; settings.quality=q0;
+      o.hp=[VSX.mE,VSX.mN,VSX.mC,VSX.mK,PX.look,PX.fin].every(m=>m && /HPS sampler2D t(Dep|Ds)/.test(m.fragmentShader) && m.fragmentShader.includes('#define HPS highp')); settings.crTrazo='0'; return o; })())"""))
+    print('   ', R3)
+    ok(all(R3['t'+k]['err']==0 and R3['t'+k]['sd']>0.03 for k in '012') and len({R3['t0']['mean'],R3['t1']['mean'],R3['t2']['mean']})==3, '2h los 3 trazos de crayón dibujan sin errores y se ven distintos')
+    ok(R3['lq'] and R3['full'], '2i Crayones también tiene versión ligera en Baja y completa en Media')
+    ok(R3['hp'], '2j las hondas se leen con toda la precisión del teléfono (así no salen rayas horizontales)')
+    r=await ev("""(()=>{ settings.vstyle='pixel'; settings.pxSize='2'; const o=[]; let ok=true, lim=true; const q0=camera.quaternion.clone(), p0=camera.position.clone();
+      for(let i=0;i<6;i++){ camera.rotation.y+=0.0023; camera.position.x+=0.011; camera.updateMatrixWorld(); const qa=camera.quaternion.clone(), pa=camera.position.clone(); vsRender(scene,camera); if(camera.quaternion.angleTo(qa)>1e-6 || camera.position.distanceTo(pa)>1e-6) ok=false; const f=PX.fin.uniforms.off.value; if(Math.abs(f.x)>1.0001||Math.abs(f.y)>1.0001) lim=false; o.push([+f.x.toFixed(2),+f.y.toFixed(2)]); }
+      camera.quaternion.copy(q0); camera.position.copy(p0); camera.updateMatrixWorld(); settings.vstyle='peluche'; return [ok, lim, o]; })()""")
+    ok(r[0] and r[1], '2k pixel art: la vista se acomoda de cuadrito en cuadrito (lo que sobra se recorre suave, %s) y la cámara queda como estaba'%r[2][:3])
+
     # 3. letreros: lo que tiene letras queda marcado (también si se copia a otro dibujo) y entra en la pasada de letras
     r=await ev("""(()=>{ const a=document.createElement('canvas'), q=a.getContext('2d'); window.__vsTxtNew=0; q.fillRect(0,0,4,4); const o=[!!a.__txt, window.__vsTxtNew];
       q.fillText('Hola',1,10); o.push(a.__txt, window.__vsTxtNew); const b=document.createElement('canvas'); b.getContext('2d').drawImage(a,0,0); o.push(b.__txt);
       const c=document.createElement('canvas'); c.getContext('2d').strokeText('x',1,1); o.push(c.__txt);
-      VSX.scanT=-1e9; settings.vstyle='pixel'; vsScan(scene); const near=VSX.txt.filter(m=>m.getWorldPosition(new THREE.Vector3()).distanceTo(player.pos)<40);
+      __tp('ar_plat'); VSX.nearT=-1e9; VSX.scanT=-1e9; settings.vstyle='pixel'; vsScan(scene); const near=VSX.txt.filter(m=>m.getWorldPosition(new THREE.Vector3()).distanceTo(player.pos)<40);
       o.push(VSX.txt.length, near.length, near.every(m=>(m.layers.mask&4)!==0), vsTxtNear(camera)); return o; })()""")
     ok(r[0]==False and r[1]==0 and r[2]==1 and r[3]==1 and r[4]==1 and r[5]==1, '3a un dibujo con letras queda marcado (y avisa para buscarlo pronto); copiarlo a otro también lo marca; sin letras no %s'%r[:6])
     ok(r[6]>20 and r[7]>=2 and r[8] and r[9], '3b los letreros del minijuego entran en la pasada de letras (se ven nítidos) %s'%r[6:])
