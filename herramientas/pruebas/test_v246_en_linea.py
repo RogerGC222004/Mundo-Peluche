@@ -40,13 +40,13 @@ async def m():
     ok(r[0]==False and r[1] and r[2]=='false', '🔒 viene apagado (también para quien ya jugaba): sin vestíbulo y el interruptor de Opciones en «apagado» (%s)'%r[:3])
     r=await ev("""(async()=>{ const out=[];
         ui('mpBtn').click(); await __TICK(); let c=__OV(); out.push(!!c && /apagado/.test(c.textContent) && ui('mp').hidden, c?c.textContent.slice(0,60):''); __CL('.online-no'); await __TICK(); out.push(!__OV());
-        ui('mgBtn').click(); await __TICK(); c=__OV(); out.push(!!c && /apagado/.test(c.textContent) && ui('mgq').hidden); __CL('.online-no'); await __TICK();
+        ui('mgBtn').click(); await __TICK(); const sinAviso=!__OV() && !ui('mgq').hidden; ui('mgqList').querySelector('.mgq-b.jug').click(); await __TICK(); c=__OV(); out.push(sinAviso && !!c && /apagado/.test(c.textContent)); __CL('.online-no'); await __TICK(); closeMgq();   /* v264: la lista se abre sin internet (Tú solo y CPU); «Jugadores» pide permiso */
         await joinRoom('ABCDEF'); out.push(mp.room===null);
         ui('freeBtn').click(); await __TICK(); out.push(ui('freeNetBox').classList.contains('net-off'), ui('freePub').getClientRects().length ? 'se ve' : 'none', document.querySelector('#freeNetBox .net-note').getClientRects().length ? 'se ve' : 'none');
         await fnCreate(true); await __TICK(); out.push(mp.room===null && !!__OV()); __CL('.online-no'); ui('freeStart').hidden=true;
         await new Promise(r=>setTimeout(r,1500)); out.push(__USO.red); return out; })()""")
     ok(r[0] and r[2], '🚪 Multijugador muestra «Jugar en línea está apagado» y no abre las salas; «Ahora no» lo cierra (%s)'%r[1])
-    ok(r[3], '🎯 Minijuegos (filas en línea) también pide permiso')
+    ok(r[3], '🎯 Minijuegos se abre (Tú solo y CPU), pero «Jugadores» (filas en línea) pide permiso')
     ok(r[4], '⛔ aunque se intente entrar a una sala por código, no entra')
     ok(r[5] and r[6]=='none' and r[7]!='none', '🧱 en Modo libre se esconde «Construir con amigos» y sale la nota para prenderlo (botón crear: %s)'%r[6])
     ok(r[8], '🧱 crear sala de Modo libre apagado: no entra y muestra el aviso')
