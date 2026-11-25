@@ -2,6 +2,8 @@
 # Revisa: las opciones (y que el tamaño y el filtro solo salen con pixel art), que se guarden, que cada estilo dibuje sin errores
 # y se vea distinto (pixel = cuadritos, neón = oscuro), que los letreros queden marcados para dibujarse aparte (se puedan leer),
 # que el neón vuelva a dejar el agua como estaba, y que al regresar a Peluche todo quede como antes.
+# Ronda 2: en teléfonos que no pueden, Caricatura y Neón salen apagados con aviso; versión ligera en Baja y Mínima;
+# Caricatura de noche ya no aclara la noche; los letreros en Neón son letreros de neón (cartel oscuro, letras que brillan).
 import asyncio, json
 from playwright.async_api import async_playwright
 REAL=open('threerepo/build/three.min.js').read()
@@ -39,8 +41,15 @@ async def m():
     r=await ev("""(async()=>{ I18N.set('en'); openOptions(); await new Promise(f=>setTimeout(f,400)); const t=[...ui('optVStyle').querySelectorAll('button')].map(b=>b.textContent.trim()); const f=[...ui('optPxFilter').querySelectorAll('button')].map(b=>b.textContent.trim()); I18N.set('es'); optionsEl.hidden=true; return [t,f]; })()""")
     ok(r[0]==['Plush','Pixel art','Cartoon','Neon'] and 'Pastel sunset' in r[1] and 'Blue night' in r[1], '1e en inglés: %s / %s'%(r[0],r[1]))
 
+    r=await ev("""(()=>{ settings.vstyle='neon'; VSX.can=false; openOptions(); const B=k=>ui('optVStyle').querySelector('[data-v="'+k+'"]'); const o=[B('cari').classList.contains('off'), B('neon').getAttribute('aria-disabled'), B('pixel').classList.contains('off'), B('peluche').getAttribute('aria-pressed'), ui('optVNote').hidden];
+      settings.vstyle='peluche'; syncOptionsUI(); B('neon').click(); o.push(settings.vstyle, ui('optVNote').hidden, ui('optVNote').textContent.trim()); B('pixel').click(); o.push(settings.vstyle);
+      VSX.can=null; syncOptionsUI(); o.push(B('neon').classList.contains('off')); ui('resetOptions').click(); optionsEl.hidden=true; return o; })()""")
+    ok(r[0] and r[1]=='true' and not r[2] and r[3]=='true' and r[4], '1f en un teléfono que no puede, Caricatura y Neón salen apagados (y se ve Peluche escogido) %s'%r[:5])
+    ok(r[5]=='peluche' and r[6]==False and r[7]=='Tu teléfono no puede mostrar este estilo' and r[8]=='pixel' and r[9]==False, '1g al tocarlos sale el aviso «%s» y no cambia; Pixel art sí se puede; en un teléfono normal no salen apagados %s'%(r[7],r[5:]))
+
     await ev("startGame()"); await pg.wait_for_timeout(1500)
     await ev("""window.requestAnimationFrame=()=>0; window.__run=(sec)=>{ let t=clock.elapsedTime; for(let i=0;i<Math.round(sec/.05);i++){ clock.elapsedTime=(t+=.05); update(.05,t); updateSky(.05); } };
+      window.__hour=f=>{ const k=Math.floor(Date.now()/1000/DAY_LEN)*DAY_LEN; const T0=(k+f*DAY_LEN)*1000; Date.now=()=>T0; __run(.5); return 1; };
       window.__tp=(id)=>{ const T=TELEPORTS.find(t=>t.id===id); player.pos.set(T.x,terrainH(T.x,T.z)+.1,T.z); player.vel.set(0,0,0); __run(1.2); return 1; };
       // dibuja un cuadro como el juego y lee una cuadrícula de puntitos (y una fila seguida para ver los cuadritos)
       window.__shot=(st,sz,fl)=>{ settings.vstyle=st; settings.pxSize=sz||'2'; settings.pxFilter=fl||'0'; const gl=renderer.getContext();
@@ -62,18 +71,31 @@ async def m():
     bad=[x for x in r if x[1]!=0 or x[2]<0.02]
     ok(not bad and not cerr, '2e los 3 tamaños × 6 filtros del pixel art dibujan bien (18 combinaciones) %s %s'%(bad,cerr[:2]))
 
+    r=await ev("(()=>{ const q0=settings.quality, o=[]; for(const q of ['min','low','mid','high']){ settings.quality=q; __shot('neon'); o.push(VSX.quad.material===VSX.mNl ? 'ligero':'completo'); } settings.quality=q0; return o; })()")
+    ok(r==['ligero','ligero','completo','completo'], '2f en Mínima y Baja se usa la versión ligera de Caricatura y Neón; en Media y Alta la completa %s'%r)
+    R2=json.loads(await ev("JSON.stringify((()=>{ __hour(.92); __tp('feria'); const o={pel:__shot('peluche'), cari:__shot('cari'), q:VSX.mC.uniforms.nightK.value}; __hour(.3); return o; })())"))
+    ok(R2['cari']['mean']<=R2['pel']['mean']*1.15+0.01 and R2['q']>0.9, '2g de noche la Caricatura ya no aclara la noche (%s contra %s en Peluche; noche=%s)'%(R2['cari']['mean'],R2['pel']['mean'],round(R2['q'],2)))
+
     # 3. letreros: lo que tiene letras queda marcado (también si se copia a otro dibujo) y entra en la pasada de letras
     r=await ev("""(()=>{ const a=document.createElement('canvas'), q=a.getContext('2d'); window.__vsTxtNew=0; q.fillRect(0,0,4,4); const o=[!!a.__txt, window.__vsTxtNew];
       q.fillText('Hola',1,10); o.push(a.__txt, window.__vsTxtNew); const b=document.createElement('canvas'); b.getContext('2d').drawImage(a,0,0); o.push(b.__txt);
       const c=document.createElement('canvas'); c.getContext('2d').strokeText('x',1,1); o.push(c.__txt);
       VSX.scanT=-1e9; settings.vstyle='pixel'; vsScan(scene); const near=VSX.txt.filter(m=>m.getWorldPosition(new THREE.Vector3()).distanceTo(player.pos)<40);
-      o.push(VSX.txt.length, near.length, near.every(m=>m.layers.test(new THREE.Layers().set(2)) || (m.layers.mask&4)), vsTxtNear(camera)); return o; })()""")
+      o.push(VSX.txt.length, near.length, near.every(m=>(m.layers.mask&4)!==0), vsTxtNear(camera)); return o; })()""")
     ok(r[0]==False and r[1]==0 and r[2]==1 and r[3]==1 and r[4]==1 and r[5]==1, '3a un dibujo con letras queda marcado (y avisa para buscarlo pronto); copiarlo a otro también lo marca; sin letras no %s'%r[:6])
     ok(r[6]>20 and r[7]>=2 and r[8] and r[9], '3b los letreros del minijuego entran en la pasada de letras (se ven nítidos) %s'%r[6:])
     # los carteles de instrucciones se pintan al acercarte: el siguiente vistazo (al segundo) ya los encuentra
     r=await ev("""(()=>{ const tex=[]; scene.traverse(o=>{ const m=o.material; if(o.isMesh && m && !Array.isArray(m) && m.map && m.map.__paint && !m.map.__done) tex.push(o); }); if(!tex.length) return ['ninguno'];
       const o=tex[0], before=VSX.txt.includes(o); o.material.map.__paint(); VSX.scanT=performance.now()-1100; vsScan(scene); return [before, !!o.material.map.image.__txt, VSX.txt.includes(o)]; })()""")
     ok(r==[False,True,True], '3c un cartel de instrucciones recién pintado entra a la pasada de letras al segundo %s'%r)
+
+    r=await ev("""(()=>{ __tp('ar_plat'); __run(6); VSX.scanT=-1e9; vsScan(scene); const v=new THREE.Vector3(); let best=null, bd=40; for(const o of VSX.txt){ if(!o.parent||o.isSprite) continue; const m=o.material; if(m.map&&m.map.__paint) continue; o.getWorldPosition(v); const d=v.distanceTo(player.pos); if(d<bd){ bd=d; best=o; } }
+      if(!best) return ['sin letrero']; const box=new THREE.Box3().setFromObject(best), c=box.getCenter(new THREE.Vector3()), sz=box.getSize(new THREE.Vector3()).length(), n=new THREE.Vector3(0,0,1).applyQuaternion(best.getWorldQuaternion(new THREE.Quaternion()));
+      camera.position.copy(c).addScaledVector(n,Math.max(1.6,sz*0.9)); camera.lookAt(c); camera.updateMatrixWorld(); VSX.nearT=-1e9;
+      const look=st=>{ settings.vstyle=st; const S=scene; for(let k=0;k<2;k++){ if(vsOn()) vsRender(S,camera); else renderer.render(S,camera); } const gl=renderer.getContext(), W=gl.drawingBufferWidth, H=gl.drawingBufferHeight, w=Math.floor(W*.3), h=Math.floor(H*.16), buf=new Uint8Array(4*w*h);
+        gl.readPixels(Math.floor(W*.35),Math.floor(H*.42),w,h,gl.RGBA,gl.UNSIGNED_BYTE,buf); const L=[]; for(let i=0;i<buf.length;i+=4) L.push((buf[i]*.2126+buf[i+1]*.7152+buf[i+2]*.0722)/255); L.sort((a,b)=>a-b); return [+L[Math.floor(L.length*.5)].toFixed(2), +L[Math.floor(L.length*.99)].toFixed(2)]; };
+      return [look('peluche'), look('neon'), VSX.txtNear]; })()""")
+    ok(r[2] and r[0][0]>0.5 and r[1][0]<0.25 and r[1][1]>0.7, '3d en Neón el letrero es de neón: el cartel oscuro y las letras brillan (mitad %s y lo más claro %s; en Peluche el cartel es claro %s)'%(r[1][0],r[1][1],r[0][0]))
 
     # 4. neón: el agua cuenta como piso en su pasada y luego queda como estaba
     await ev("__tp('muelle'); 1")
