@@ -88,7 +88,7 @@ async def m():
     R3=json.loads(await ev("""JSON.stringify((()=>{ __hour(.3); __tp('parque'); const o={}; for(const k of ['0','1','2']){ settings.crTrazo=k; o['t'+k]=__shot('crayon'); } o.pel=__shot('peluche'); const q0=settings.quality; settings.quality='low'; __shot('crayon'); o.lq=VSX.quad.material===VSX.mKl; settings.quality='mid'; __shot('crayon'); o.full=VSX.quad.material===VSX.mK; settings.quality=q0;
       o.hp=[VSX.mE,VSX.mN,VSX.mC,VSX.mK,PX.look,PX.fin].every(m=>m && /HPS sampler2D t(Dep|Ds)/.test(m.fragmentShader) && m.fragmentShader.includes('#define HPS highp')); settings.crTrazo='0'; return o; })())"""))
     print('   ', R3)
-    ok(all(R3['t'+k]['err']==0 and R3['t'+k]['sd']>0.03 for k in '012') and len({R3['t0']['mean'],R3['t1']['mean'],R3['t2']['mean']})==3, '2h los 3 trazos de crayón dibujan sin errores y se ven distintos')
+    ok(all(R3['t'+k]['err']==0 and R3['t'+k]['sd']>0.03 for k in '012') and len({(R3['t'+k]['mean'],R3['t'+k]['sd'],R3['t'+k]['same']) for k in '012'})==3, '2h los 3 trazos de crayón dibujan sin errores y se ven distintos')
     ok(R3['lq'] and R3['full'], '2i Crayones también tiene versión ligera en Baja y completa en Media')
     ok(R3['hp'], '2j las hondas se leen con toda la precisión del teléfono (así no salen rayas horizontales)')
     r=await ev("""(()=>{ settings.vstyle='pixel'; settings.pxSize='2'; const o=[]; let ok=true, lim=true; const q0=camera.quaternion.clone(), p0=camera.position.clone();
