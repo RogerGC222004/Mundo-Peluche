@@ -18,7 +18,7 @@ async def m():
     ok=lambda c,t: print(('BIEN ' if c else 'MAL  ')+t, flush=True)
     for P in (A,B): await G(P,"ui('mpBack').click(), menuModes(true), ui('mgBtn').click(), 1")
     await A.wait_for_timeout(1500)
-    r=json.loads(await G(A,"[!ui('mgq').hidden, ui('mgqList').children.length, ui('mgqList').textContent.includes('Papa caliente')]")); ok(r[0] and r[1]==14 and r[2], 'Minijuegos abre la lista de los 14 minijuegos (v256: con ¡Al número!) %s'%r)
+    r=json.loads(await G(A,"[!ui('mgq').hidden, ui('mgqList').children.length, ui('mgqList').textContent.includes('Papa caliente')]")); ok(r[0] and r[1]==15 and r[2], 'Minijuegos abre la lista de los 15 minijuegos (v267: con Pogo al cielo) %s'%r)
     await G(A,"mgqJoin(1)"); await A.wait_for_timeout(1200)
     r=json.loads(await G(A,"[ui('mgqCount').textContent, ui('mgqGo').disabled]")); ok(r==['1/12 jugadores',True], 'Ana sola en la fila: 1/12 y «Todo listo» apagado %s'%r)
     r=json.loads(await G(B,"[...ui('mgqList').querySelectorAll('.mgq-g.hot .n')].map(e=>e.textContent)")); ok(len(r)==1 and '1 esperando' in r[0], 'Beto ve que hay 1 esperando en Papa caliente %s'%r)
