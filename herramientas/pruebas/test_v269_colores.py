@@ -36,10 +36,10 @@ async def m():
       return [!!c, !!(pic && pic.style.backgroundImage.includes('webp')), b, AR_SPOTS[COLI].name, COLI, !!HOWTO.G.colores, typeof DRAW!=='undefined'||true]; })()""")
     ok(r[0] and r[1] and r[2]=='SCJ' and r[3]=='Sigue los colores' and r[4]==15 and r[5], '1 «Sigue los colores» sale en la lista con su portada: tú solo, CPU y jugadores; tiene sus carteles de cómo se juega %s'%r)
     # 2. las vueltas salen de la semilla: 12 filas, cada vez más de colores y menos tiempo; el camino siempre se puede seguir
-    r=await ev("""(()=>{ const L=[]; let okAdj=true; for(let r=0;r<12;r++){ const D=colRound(777,r); let prev=-1; for(let i=0;i<12;i++){ const g=D.good[i]; if(g<0) continue; if(prev>=0 && Math.abs(g-prev)>1) okAdj=false; prev=g; } L.push([D.nc, D.lit, D.dir]); }
+    r=await ev("""(()=>{ const L=[]; let okAdj=true; for(let r=0;r<12;r++){ const D=colRound(777,r); let prev=-1; for(let i=0;i<COLG.R;i++){ const g=D.good[i]; if(g<0) continue; if(prev>=0 && Math.abs(g-prev)>1) okAdj=false; prev=g; } L.push([D.nc, D.lit, D.dir]); }
       const same=JSON.stringify([...colRound(777,3).good])===JSON.stringify([...colRound(777,3).good]); COL.rd.clear(); const again=JSON.stringify([...colRound(777,3).good]);
       return [L.map(x=>x[0]).join(','), L[0][1], L[11][1], L.map(x=>x[2]).join(','), okAdj, same]; })()""")
-    ok(r[0]=='6,7,8,9,10,11,12,12,12,12,12,12' and r[1]==6000 and r[2]==2500 and r[3].startswith('1,-1,1,-1') and r[4] and r[5], '2 cada vuelta: más filas de colores (6 → 12), se ilumina menos (6 s → 2.5 s), una de ida y otra de regreso; el camino bueno va de baldosa en baldosa vecina %s'%r)
+    ok(r[0]=='5,6,7,8,9,9,9,9,9,9,9,9' and r[1]==6000 and r[2]==2500 and r[3].startswith('1,-1,1,-1') and r[4] and r[5], '2 cada vuelta: más filas de colores (5 → 9, v270: casillas de 4 m), se ilumina menos (6 s → 2.5 s), una de ida y otra de regreso; el camino bueno va de baldosa en baldosa vecina %s'%r)
     # 3. tú solo: empiezas en la plataforma; mientras se ilumina no se puede pisar el puente
     r=await ev("""(()=>{ mgqLocal(COLI,0,1); __run(20,()=>AR.G[COLI].ph===3); __run(8,()=>(colStage(AR.G[COLI])||{}).k==='l'); __run(1.8);
       const onA=colL(player.pos.x,player.pos.z)[0]<-colBL()/2, glow=COL.glow.count; for(let i=0;i<40;i++){ const [s,c]=colL(player.pos.x,player.pos.z), w=colW(s+.3,c,player.pos.y); player.pos.x=w.x; player.pos.z=w.z; __run(.05); }
@@ -51,9 +51,9 @@ async def m():
     r=await ev("(()=>{ __waitC(1); const s=colL(player.pos.x,player.pos.z)[0]; const a=__walk(-1); return [s>colBL()/2, colRound(AR.G[COLI].sd,1).dir, ...a]; })()")
     ok(r[0] and r[1]==-1 and r[2]==2 and r[3]==1, '4b la siguiente vuelta empieza del otro lado y se cruza de regreso %s'%r)
     # 5. en el puente no se brinca (no se vale saltarse filas)
-    r=await ev("""(()=>{ __waitC(2); const D=colRound(AR.G[COLI].sd,2), BL=colBL()/2; let i0=D.dir>0?0:11; while(D.good[i0]<0 && i0>=0 && i0<12) i0+=D.dir; const c=(D.good[i0]-(COLG.C-1)/2)*COLG.CS, w=colW(-BL+(i0+.5)*COLG.RS,c,COLG.Y); player.pos.set(w.x,w.y,w.z); __run(.3);
+    r=await ev("""(()=>{ __waitC(2); const D=colRound(AR.G[COLI].sd,2), BL=colBL()/2; let i0=D.dir>0?0:COLG.R-1; while(D.good[i0]<0 && i0>=0 && i0<COLG.R) i0+=D.dir; const c=(D.good[i0]-(COLG.C-1)/2)*COLG.CS, w=colW(-BL+(i0+.5)*COLG.RS,c,COLG.Y); player.pos.set(w.x,w.y,w.z); __run(.3);
       player.vy=9; let top=0; for(let k=0;k<20;k++){ __run(.05); top=Math.max(top,player.pos.y); } return [+(top-COLG.Y).toFixed(2), AR.me.st]; })()""")
-    ok(r[0]<=.5 and r[1]==2, '5 en el puente no se brinca: subes %s m como mucho %s'%(r[0],r))
+    ok(r[0]<=.1 and r[1]==2, '5 en el puente no se brinca nada: subes %s m como mucho %s'%(r[0],r))
     # 6. si pisas una equivocada: se hunde, caes a las pelotitas y quedas fuera; tu récord en vueltas
     r=await ev("(()=>{ const a=__walk(1); const g=COL.gone.size; __run(4); return [a[2]>=0, g, AR.me.st, ui('arResTitle').textContent, ui('arResText').textContent, JSON.stringify(soloRecs())]; })()")
     ok(r[0] and 'Vueltas: 2' in r[4] and '"colores":2' in r[5], '6 si pisas un color equivocado se hunde y caes a las pelotitas: quedas fuera (récord: %s) %s'%(r[4],r))
@@ -72,6 +72,17 @@ async def m():
     r=await ev("(()=>{ const src=[...document.scripts].map(s=>s.text).join(''); return [src.includes('arCol()||(r.az&&r.az[0]===COLI&&r.az[1]===2)'), I18N.t('Sigue los colores'), I18N.t('¡Buen intento!')]; })()")
     await ev("(()=>{ I18N.set('en'); return 1; })()"); r2=await ev("I18N.t('Sigue los colores')"); await ev("(()=>{ I18N.set('es'); return 1; })()")
     ok(r[0] and r2=='Follow the Colors', '9 en el puente los jugadores se atraviesan (nadie tumba a nadie); en inglés se llama «%s»'%r2)
+    # 10. v270: vista desde arriba con tu peluche marcado (solo mientras se ilumina); albercas con pelotitas que salpican y se empujan
+    r=await ev("""(()=>{ mgqLocal(COLI,2,1); __run(25,()=>AR.G[COLI].ph===3); __run(8,()=>(colStage(AR.G[COLI])||{}).k==='l'); __run(1.5); const top=colCamera(.05) && camera.position.y>COLG.Y+20, m1=COL.mark.visible;
+      __waitC(0); __run(.3); const m2=COL.mark.visible; arLeave(); cpuEnd(); __run(1); return [top, m1, m2]; })()""")
+    ok(r==[True,True,False], '10 al iluminarse el camino la cámara se va arriba y tu peluche tiene un aro de luz; al cruzar se apaga %s'%r)
+    r=await ev("""(()=>{ const out=[]; for(const [P,x,z,y] of [[COL.pit, ...(w=>[w.x,w.z])(colW(0,colHW()+.8,0)), COLG.h], [NUM.pit, NUMG.x, NUMG.z+2, NUMG.h]]){
+        player.pos.set(x,y+(P===NUM.pit?3.4:5),z); player.vy=0; let a=0; for(let i=0;i<30;i++){ __run(.05); a=Math.max(a,P.act.size); }
+        __run(5); const rest=P.act.size; for(let i=0;i<20;i++){ player.pos.x+=.15; __run(.05); } const walk=P.act.size; player.pos.set(x,y+40,z+60); __run(8); out.push([a, rest, walk, P.act.size]); } return out; })()""")
+    ok(all(x[0]>=6 and x[2]>=1 and x[3]==0 for x in r), '10b en las albercas (Sigue los colores y ¡Al número!) las pelotitas salpican cuando caes, se empujan al caminar y regresan solas a su lugar %s'%r)
+    r=await ev("""(()=>{ const [x,z]=[NUMG.x,NUMG.z]; player.pos.set(x,NUMG.h+.05,z); __run(.5); const t0=performance.now(); for(let i=0;i<60;i++){ player.pos.x+=.08; pitTick(.016); } return +((performance.now()-t0)/60).toFixed(3); })()""")
+    ok(r<1.5, '10c mover las pelotitas cuesta poquito: %s ms por cuadro (en esta computadora sin tarjeta de video)'%r)
+
     ok(not errs and not cerr, 'sin errores %s %s'%(errs[:3],cerr[:3]))
     await b.close()
 asyncio.run(m())
