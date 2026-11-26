@@ -45,13 +45,13 @@ async def m():
     # 3. la marea de tormenta: sube en el mar, entra solo unos metros en la arena y nunca en las entradas
     r=await ev("""(()=>{ weatherOfSlot=()=>'storm'; __run(2); TIDE.h=1.3; for(let i=0;i<400 && !TIDE.cur;i++) tideTick(0); TIDE.h=1.3;
       const sp=TELEPORTS.filter(T=>/^ar_|^muelle$|^cohete$/.test(T.id)).map(T=>[T.id, +tideAt(T.x,T.z).toFixed(2)]);
-      const dry=sp.filter(s=>s[1]>.02); let sea=0, open=0; for(let a=0;a<6.28;a+=.5){ const x=Math.cos(a)*1500, z=Math.sin(a)*1500; open++; if(tideAt(x,z)>1.25) sea++; }
+      const dry=sp.filter(s=>s[1]>.02); let sea=0, open=0; for(let a=0;a<6.28;a+=.5){ const R=(typeof COAST3!=='undefined'?coastRN(a)+400:1500), x=Math.cos(a)*R, z=Math.sin(a)*R; open++; if(tideAt(x,z)>1.25) sea++; }   /* (v271: el mar empieza más lejos) */
       // tierra adentro (2 m o más sobre el mar) nunca le llega
       let inl=0, inN=0; for(let x=-600;x<=600;x+=40) for(let z=-600;z<=600;z+=40){ if(terrainH(x,z)>SEA_Y+2){ inN++; if(tideAt(x,z)>.01) inl++; } }
       return [JSON.stringify(dry), sea, open, inl, inN, !!TIDE.cur, TIDE.m.value===TIDE.cur.tex, sp.length]; })()""")
     ok(r[0]=='[]' and r[1]==r[2] and r[3]==0 and r[4]>50 and r[5] and r[6] and r[7]>=16, '3 con tormenta la marea sube 1.3 m en el mar, pero las entradas de los minijuegos, el muelle y el cohete quedan secos y tierra adentro no llega %s'%r)
     # en la arena: cerca del mar sí entra un poco (unos metros), pero nunca a tierra alta
-    r=await ev("""(()=>{ let wet=0, far=0, mx=0; for(let a=0;a<6.283;a+=.13){ const sea=[], W=[]; for(let d=300; d<1400; d+=3){ const x=Math.cos(a)*d, z=Math.sin(a)*d, th=terrainH(x,z), t=tideAt(x,z);
+    r=await ev("""(()=>{ let wet=0, far=0, mx=0; for(let a=0;a<6.283;a+=.13){ const sea=[], W=[]; const C0=(typeof COAST3!=='undefined'?coastRN(a):1150); for(let d=C0-850; d<C0+250; d+=3){ const x=Math.cos(a)*d, z=Math.sin(a)*d, th=terrainH(x,z), t=tideAt(x,z);
         if(th<SEA_Y) sea.push(d); else if(SEA_Y+t>th+.02) W.push(d); }
         for(const d of W){ wet++; let m=1e9; for(const q of sea) m=Math.min(m,Math.abs(q-d)); mx=Math.max(mx,m); if(m>45) far++; } }
       return [wet, far, mx]; })()""")
