@@ -82,14 +82,23 @@ async def m():
     r=await ev("""(()=>{ const src=[...document.scripts].map(s=>s.text).join(''); return [src.includes("(r.az&&r.az[0]===POGI&&r.az[1]===2)"), typeof arPogo]; })()""")
     ok(r[0], '7 los jugadores en el pogo se atraviesan (nadie tumba a nadie) %s'%r)
 
-    # 8. v267: se escoge cuánto dura (3, 5 o 10 min); récord aparte para cada tiempo; los demás usan el del que lleva la partida
-    r=await ev("""(()=>{ localStorage.removeItem('mundoPelucheSoloRec'); localStorage.removeItem('mpPogoMin'); mgqLocal(POGI,0,1); __run(.6); const o=ui('arOpt'); const btn=[...o.querySelectorAll('button')].map(b=>b.textContent).join(',');
-      [...o.querySelectorAll('button')].find(b=>b.textContent==='10 min').click(); __run(.2); const on=[...o.querySelectorAll('button.on')].map(b=>b.textContent).join();
-      let ms=null; __run(15,()=>{ if(AR.G[POGI].ph===3){ ms=AR.G[POGI].ms; return true; } }); const hid=o.hidden, dm=arenaPresence().ag.dm;
+    # 8. v267: se escoge cuánto dura (3, 5 o 10 min) ANTES de empezar; récord aparte para cada tiempo
+    r=await ev("""(()=>{ localStorage.removeItem('mundoPelucheSoloRec'); localStorage.removeItem('mpPogoMin'); ui('toMenuBtn').click(); __run(.3); openMgq(); mgqKey=''; mgqRender();
+      const card=[...ui('mgqList').children].find(b=>b.querySelector('b').textContent.includes('Pogo')); card.querySelector('.mgq-b.solo').click();
+      const ov=!cpuOv.hidden, tt=ui('cpuTitle').textContent, rows=[ui('cpuN').hidden, ui('cpuD').hidden, ui('cpuT').hidden], btn=[...ui('cpuT').querySelectorAll('button')].map(b=>b.textContent).join(',');
+      [...ui('cpuT').querySelectorAll('button')].find(b=>b.textContent==='10 min').click(); ui('cpuGo').click(); __run(.5);
+      const hud=ui('arTxt').textContent, noOpt=!document.getElementById('arOpt');
+      let ms=null; __run(15,()=>{ if(AR.G[POGI].ph===3){ ms=AR.G[POGI].ms; return true; } }); const dm=arenaPresence().ag.dm;
       POG.best=50; AR.G[POGI].ms=0; __run(1.5); const rec=JSON.stringify(soloRecs()), txt=ui('arResText').textContent; __run(8); arLeave(); __run(.5);
-      const H=window.mpParseCheck||null; const r={}; parseArena(r,{ag:{a:POGI,ph:3,ms:1000,gid:'x',pl:[],el:[],dm:5}}); const r2={}; parseArena(r2,{ag:{a:POGI,ph:3,ms:1000,gid:'x',pl:[],el:[],dm:7}});
-      return [btn, on, ms, hid, dm, rec, txt, r.ag.dm, r2.ag.dm, pogoGen(77).L.slice(-1)[0].y>2500]; })()""")
-    ok(r[0]=='3 min,5 min,10 min' and r[1]=='10 min' and r[2]==600000 and r[3] and r[4]==10 and r[5]=='{"pogo10":50}' and '(10 min)' in r[6] and r[7]==5 and r[8]==3 and r[9], '8 se escoge 3, 5 o 10 minutos; récord aparte para cada tiempo; todos juegan con el tiempo escogido %s'%r)
+      const r={}; parseArena(r,{ag:{a:POGI,ph:3,ms:1000,gid:'x',pl:[],el:[],dm:5}}); const r2={}; parseArena(r2,{ag:{a:POGI,ph:3,ms:1000,gid:'x',pl:[],el:[],dm:7}});
+      return [ov, tt, rows.join(), btn, hud, noOpt, ms, dm, rec, txt, r.ag.dm, r2.ag.dm, pogoGen(77).L.slice(-1)[0].y>2500, localStorage.getItem('mpPogoMin')]; })()""")
+    ok(r[0] and r[1]=='🙂 Tú solo' and r[2]=='true,true,false' and r[3]=='3 min,5 min,10 min' and '⏱ 10 min' in r[4] and r[5] and r[6]==600000 and r[7]==10 and r[8]=='{"pogo10":50}' and '(10 min)' in r[9] and r[10]==5 and r[11]==3 and r[12] and r[13]=='10', '8 desde el menú, «Tú solo» pregunta primero cuánto dura (3, 5 o 10); récord aparte para cada tiempo %s'%r)
+    r=await ev("""(()=>{ mgqCpu(POGI); const a=[ui('cpuTitle').textContent, ui('cpuN').hidden, ui('cpuT').hidden, [...ui('cpuT').querySelectorAll('button[aria-pressed=true]')].map(b=>b.textContent).join()];
+      [...ui('cpuT').querySelectorAll('button')].find(b=>b.textContent==='5 min').click(); CPU.pick.n=1; ui('cpuGo').click(); let ms=null; __run(25,()=>{ if(AR.G[POGI].ph===3){ ms=AR.G[POGI].ms; return true; } });
+      ui('toMenuBtn').click(); __run(1); const after=[AR.me.a, CPU.on, cpuBots().length]; closeMgq(); menuModes(false); startGame(); __run(1);
+      mgqCpu(7); const other=ui('cpuT').hidden; ui('cpuCancel').click(); closeMgq(); startGame(); __run(.5);
+      return [...a, ms, after.join(), other]; })()""")
+    ok(r[0]=='🤖 Jugar contra la CPU' and r[1]==False and r[2]==False and r[3]=='10 min' and r[4]==300000 and r[5]=='-1,false,0' and r[6], '8b contra la CPU: en la misma ventana se escoge el tiempo; con «<» al menú la partida se acaba de verdad %s'%r)
 
     ok(not errs and not cerr, 'sin errores %s %s'%(errs[:3],cerr[:3]))
     await b.close()
