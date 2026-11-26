@@ -33,7 +33,8 @@ async def m():
       const ps=[...Array(5)].map((_,i)=>{ const w=arW(A,0,12.9-i*.62,0); return +groundAt(w.x,w.z,2).toFixed(2); });
       const pz=A.plate, ph=terrainH(pz[0],pz[1]);
       return [NUMI, A.id, A.name, !!tp, +tile.toFixed(2), +pool.toFixed(2), st, ps, +ph.toFixed(2), CPU_AI[NUMI]===numBot]; })()""")
-    ok(r[1]=='numero' and r[3] and abs(r[4]-5)<.01 and abs(r[5]-.4)<.05 and r[6]==sorted(r[6]) and r[6][-1]>4 and r[6][0]<1.4 and max(r[7])>=1.35 and r[9], 'el lugar: minijuego %s «%s», teletransporte, casilla a %s m, piscina a %s m, la escalera grande sube %s, la escalerita %s, placa a %s m, con CPU'%(r[0],r[2],r[4],r[5],r[6],r[7],r[8]))
+    NY0,NH0=await ev('[NUMG.Y,NUMG.h]')   # (v272: se mudó al valle: alturas desde su piso)
+    ok(r[1]=='numero' and r[3] and abs(r[4]-NY0)<.01 and abs(r[5]-NH0)<.05 and r[6]==sorted(r[6]) and r[6][-1]>NY0-1 and r[6][0]<NH0+1.0 and max(r[7])>=NH0+.95 and r[9], 'el lugar: minijuego %s «%s», teletransporte, casilla a %s m, piscina a %s m, la escalera grande sube %s, la escalerita %s, placa a %s m, con CPU'%(r[0],r[2],r[4],r[5],r[6],r[7],r[8]))
     # 2. las operaciones
     r=await ev("""(()=>{ let bad=[], n=0, ops={}, minC=99, sizes={}, maxDiv=0;
       for(let sd=1;sd<=80;sd++) for(let rd=0;rd<12;rd++){ const D=numRound(sd*7919,rd); n++; ops[D.op]=(ops[D.op]||0)+1;
@@ -67,8 +68,9 @@ async def m():
       const lab2=((numActions()||[])[0]||{}).label, pres=numPresence(); let hi=0; camera.position.set(w.x,1,w.z); camera.lookAt(w.x+.3,30,w.z+.3); camera.updateMatrixWorld(); numThrow(); const pres2=numPresence();
       __run(4,()=>{ for(const f of NUM.fly) hi=Math.max(hi,f.m.position.y); });
       return [+top.toFixed(2), lab1, held>=0, o1, hand, lab2, pres.nbh===held, Array.isArray(pres2.nbt) && pres2.nbt[1]===held && pres2.nbh===null, +hi.toFixed(2), out(), NUM.fly.length]; })()""")
-    ok(r[0]<5-1.9, 'en la piscina: brincando llegas máximo a %s m (las casillas están a 5 m)'%r[0])
-    ok(r[1]=='🔴 Agarrar pelotita' and r[2] and r[3]==1 and r[4] and r[5]=='🔴 Lanzar pelotita' and r[6] and r[7] and r[8]<5-.7 and r[9]==0 and r[10]==0, 'pelotitas: «Agarrar» la toma de la piscina (se ve en tu mano y se avisa a la sala), «Lanzar» la avienta (hasta %s m, nunca a las casillas) y cae de nuevo a la piscina %s'%(r[8],r))
+    NY=await ev('NUMG.Y')   # (v272: el juego se mudó al valle: las casillas ya no están a 5 m exactos)
+    ok(r[0]<NY-1.9, 'en la piscina: brincando llegas máximo a %s m (las casillas están a %s m)'%(r[0],NY))
+    ok(r[1]=='🔴 Agarrar pelotita' and r[2] and r[3]==1 and r[4] and r[5]=='🔴 Lanzar pelotita' and r[6] and r[7] and r[8]<NY-.7 and r[9]==0 and r[10]==0, 'pelotitas: «Agarrar» la toma de la piscina (se ve en tu mano y se avisa a la sala), «Lanzar» la avienta (hasta %s m, nunca a las casillas) y cae de nuevo a la piscina %s'%(r[8],r))
     # 4b. lo que lanza otro jugador: se ve en su mano, vuela igual, rebota en ti y cae
     r=await ev("""(()=>{ const A=AR_SPOTS[NUMI], w=arW(A,0,0,0), me=arW(A,4,0,0); player.pos.set(me.x,NUMG.h+.05,me.z); player.vel.set(0,0,0); __run(.3);
       const fake={uid:'~otro', name:'Ana', pos:new THREE.Vector3(w.x,NUMG.h+.05,w.z), obj:new THREE.Object3D(), facing:0}; mp.remotes.set('~otro',fake);
