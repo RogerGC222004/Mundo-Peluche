@@ -100,6 +100,13 @@ async def m():
       return [...a, ms, after.join(), other]; })()""")
     ok(r[0]=='🤖 Jugar contra la CPU' and r[1]==False and r[2]==False and r[3]=='10 min' and r[4]==300000 and r[5]=='-1,false,0' and r[6], '8b contra la CPU: en la misma ventana se escoge el tiempo; con «<» al menú la partida se acaba de verdad %s'%r)
 
+    # 9. v268: los animalitos de las islas (monitos, tucanes, ranitas, pingüinos) salen en su isla desde que se arman (antes esperaban en el inicio)
+    r=await ev("""(()=>{ const base=new Set(); scene.traverse(o=>base.add(o.uuid));
+      if(!JI.done){ const g=jiBuildGen(); while(!g.next().done){} JI.done=true; } if(!WI.done){ const g=wiBuildGen(); while(!g.next().done){} WI.done=true; }
+      const b=new THREE.Box3(), c=new THREE.Vector3(); let n=0; scene.children.forEach(o=>{ if(base.has(o.uuid) || !o.visible || !o.children.length) return; b.setFromObject(o); if(b.isEmpty()) return; b.getCenter(c); if(Math.hypot(c.x-START.x,c.z-START.z)<20) n++; });
+      return [n, JI2.animals.length, WI2.peng.length]; })()""")
+    ok(r[0]==0 and r[1]>10 and r[2]==9, '9 los monitos y pingüinos de las islas ya no aparecen en el inicio %s'%r)
+
     ok(not errs and not cerr, 'sin errores %s %s'%(errs[:3],cerr[:3]))
     await b.close()
 asyncio.run(m())
