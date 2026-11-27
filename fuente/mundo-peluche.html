@@ -8354,6 +8354,12 @@ function rboxMerge(list){ const src=rboxGeo(), sp=src.attributes.position, sn=sr
     for(let i=0;i<idx.length;i++) I.push(idx[i]+k*n); });
   const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(P,3)); g.setAttribute('normal',new THREE.BufferAttribute(N,3)); g.setAttribute('color',new THREE.BufferAttribute(C,3)); g.setIndex(I); g.computeBoundingSphere(); return g; }
 const _vbm={}; const VBM=c=>_vbm[c]||(_vbm[c]=new THREE.MeshStandardMaterial({color:new THREE.Color(c).convertSRGBToLinear(), roughness:.6}));   // un color de bloque (igual que los del valle)
+// v272: pinta una figura triángulo por triángulo según dónde queda cada uno (anillos, gajos, cuadros de colores)
+function vcPaint(m,fn,raw){ m.updateMatrix(); let g=m.geometry; if(g.index) g=g.toNonIndexed(); const P=g.attributes.position, n=P.count, C=new Float32Array(n*3), v=new THREE.Vector3(), c=new THREE.Color();
+  const mm=(a,b,d)=>(Math.min(a,b,d)+Math.max(a,b,d))/2;   // (el centro de la cajita del triángulo: los dos triángulos de cada cuadrito quedan del mismo color, sin dientes)
+  for(let i=0;i+2<n;i+=3){ v.set(mm(P.getX(i),P.getX(i+1),P.getX(i+2)),mm(P.getY(i),P.getY(i+1),P.getY(i+2)),mm(P.getZ(i),P.getZ(i+1),P.getZ(i+2))).applyMatrix4(m.matrix); c.set(fn(v.x,v.y,v.z)); if(!raw) c.convertSRGBToLinear();   // (raw: para el fieltro, que usa los colores tal cual)
+    for(let k=0;k<3;k++){ C[(i+k)*3]=c.r; C[(i+k)*3+1]=c.g; C[(i+k)*3+2]=c.b; } }
+  g.setAttribute('color',new THREE.BufferAttribute(C,3)); m.geometry=g; return m; }
 let _vbMat=null; const vbMat=()=>_vbMat||(_vbMat=new THREE.MeshStandardMaterial({vertexColors:true, roughness:.7}));
 function valleIn(x,z){ if(x>-300 || z<150) return false; const a=Math.atan2(z,x); if(a<1.95||a>2.95) return false; const d=Math.hypot(x,z);
   const w=.03*Math.sin(d/95+1.3)+.015*Math.sin(d/41+.4);   // orilla ondulada
@@ -15486,7 +15492,7 @@ function drawMapDetails(g,z){
   const [sx,sy]=toMap(START.x,START.z); g.fillStyle='#ffd36b'; g.beginPath(); g.arc(sx,sy,START.r/(2*MAP_E)*MAP_PX,0,7); g.fill();
   // aeropuerto: plataforma, pista y terminal
   { const quad=(u0,u1,v0,v1,col)=>{ g.fillStyle=col; g.beginPath(); [[u0,v0],[u1,v0],[u1,v1],[u0,v1]].forEach(([u,v],i)=>{ const [px,py]=toMap(...airportXZ(u,v)); i?g.lineTo(px,py):g.moveTo(px,py); }); g.closePath(); g.fill(); };
-    quad(20,195,-95,-12,'#f1d9ea'); quad(5,245,-12,12,'#5b5e68'); quad(30,120,-126,-110,'#ffb35c'); quad(149,155,-121,-115,'#ff7ac6'); }   // v272: con los colores del valle
+    quad(20,195,-95,-12,'#f1d9ea'); quad(5,245,-12,12,'#b58cff'); quad(30,120,-126,-110,'#ffb35c'); quad(149,155,-121,-115,'#ff7ac6'); }   // v272: con los colores del valle
   // v138: el muelle de Tortu y su plataforma (donde espera el barco)
   try{ const P=PIER, q=(x0,x1,z0,z1,col)=>{ g.fillStyle=col; g.beginPath(); [[x0,z0],[x1,z0],[x1,z1],[x0,z1]].forEach(([u,v],i)=>{ const [px,py]=toMap(...pW(u,v)); i?g.lineTo(px,py):g.moveTo(px,py); }); g.closePath(); g.fill(); };
     q(-P.W-.5,P.W+.5,P.Z0,P.PZ0+.5,'#7a5634'); q(-P.PW-.5,P.PW+.5,P.PZ0-.5,P.PZ1+.5,'#7a5634'); q(-P.W,P.W,P.Z0+.5,P.PZ0+.5,'#c99a62'); q(-P.PW,P.PW,P.PZ0,P.PZ1,'#c99a62'); q(-P.HW,P.HW,P.HZ-P.HW,P.HZ+P.HW,'#e3bf63'); }catch(e){}   // (al cargar, el muelle todavía no existe)
@@ -16455,12 +16461,18 @@ const AIR_PARK=[[60,-52],[112,-52],[150,-58],[177,-58]];   // estacionamientos (
     m.rotation.x=-Math.PI/2; m.position.set(u,y,v); m.receiveShadow=true; g.add(m); return m; };
   // pista con línea central, bordes y umbrales
   const rl=RUNWAY.u1-RUNWAY.u0;
-  flat(asphaltTex('#5b5e68',true), rl, RUNWAY.w, (RUNWAY.u0+RUNWAY.u1)/2, 0, .07, [rl/16,1]);
+  // v272: la pista también es de tapetes de colores (cuadros de 2 m), con su línea blanca en medio
+  { const LN=['#ff5b5b','#ff9d3b','#ffd23f','#5fd36f','#3fa7ff','#9b6bff'], runTex=cv(256,384,(x,w,h)=>{ const n=8, m=12, cs=32, col=(i,j)=>LN[5-Math.floor(Math.abs(j-5.5))];   // carriles de arcoíris (de la orilla al centro)
+      for(let i=0;i<n;i++) for(let j=0;j<m;j++){ x.fillStyle=col(i,j); x.fillRect(i*cs,j*cs,cs,cs); }
+      x.strokeStyle='rgba(70,40,60,.3)'; x.lineWidth=2; for(let i=0;i<=n;i++){ x.beginPath(); x.moveTo(i*cs,0); x.lineTo(i*cs,h); x.stroke(); } for(let j=0;j<=m;j++){ x.beginPath(); x.moveTo(0,j*cs); x.lineTo(w,j*cs); x.stroke(); }
+      for(let i=0;i<n;i++) for(let j=0;j<m;j++){ if((i+j)%2) continue; for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const cx=(i+.5+dx*.59)*cs, cy=(j+.5+dy*.59)*cs; if(cx<0||cx>w||cy<0||cy>h) continue; x.fillStyle=col(i,j); x.beginPath(); x.arc(cx,cy,cs*.15,0,7); x.fill(); x.stroke(); } }
+      x.fillStyle='#ffffff'; x.fillRect(0,h/2-7,w*.55,14); });
+    flat(runTex, rl, RUNWAY.w, (RUNWAY.u0+RUNWAY.u1)/2, 0, .07, [rl/16,1]); }
   const white=new THREE.MeshStandardMaterial({color:0xf4f1e6, roughness:1, polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-6});
   const stripe=(w,d,u,v)=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),white); m.rotation.x=-Math.PI/2; m.position.set(u,.075,v); g.add(m); };
   // v272: las rayas de la orilla y los umbrales, de colores del valle (una sola figura con colores por punto)
-  const CQ=[]; { let k=0; for(let u=RUNWAY.u0;u<RUNWAY.u1-.1;u+=6,k++) [-1,1].forEach(s=>CQ.push([u+3,s*(RUNWAY.w/2-.8),5.9,.7,VB_COLS[(k+(s>0?0:4))%8]])); }
-  [RUNWAY.u0+5, RUNWAY.u1-5].forEach(u=>{ for(let k=-4;k<=4;k++) if(k) CQ.push([u,k*2.3,8,1.1,VB_COLS[(k+8)%8]]); });
+  const CQ=[]; { let k=0; for(let u=RUNWAY.u0;u<RUNWAY.u1-.1;u+=6,k++) [-1,1].forEach(s=>CQ.push([u+3,s*(RUNWAY.w/2-.8),6,.7,'#ffffff'])); }
+  [RUNWAY.u0+5, RUNWAY.u1-5].forEach(u=>{ for(let k=-4;k<=4;k++) if(k) CQ.push([u,k*2.3,8,1.1,'#ffffff']); });
   // plataforma, calle de rodaje y helipuertos
   // v272: la plataforma es de tapetes de foami (colores suavecitos para que se vean los aviones)
   { const c=document.createElement('canvas'); c.width=c.height=256; const q=c.getContext('2d'), n=8, cs=256/n, pc=VB_COLS.map(x=>'#'+new THREE.Color(x).lerp(new THREE.Color('#ffffff'),.3).getHexString()), col=(i,j)=>pc[(i*3+j*5+((i*j)%3))%8];
@@ -16522,10 +16534,10 @@ const AIR_PARK=[[60,-52],[112,-52],[150,-58],[177,-58]];   // estacionamientos (
 const PL={R:1.9, FY:3.1, F:2.05, doorZ:5.2, stairsLen:3.1, len:[-15,10.6]};
 const HE={F:1.05, door:[-1.3,.95], SX:1.7, SY:1.55, SZ:2.55, CY:2.05};   // casco: medidas del óvalo y altura del centro
 const AIR_TYPES=[
-  {kind:'plane', name:'Avión', body:'#fbf7ee', stripe:'#3fa7ff', tail:'#ff5b5b', rb:0},   // v272: con bloques de colores del valle (rb: con qué color empieza la fila)
-  {kind:'plane', name:'Avión', body:'#fbf7ee', stripe:'#ff9d3b', tail:'#9b6bff', rb:3},
-  {kind:'heli',  name:'Helicóptero', body:'#ff9d3b', trim:'#9b6bff', rb:1},
-  {kind:'heli',  name:'Helicóptero', body:'#3fa7ff', trim:'#ff7ac6', rb:5}];
+  {kind:'plane', name:'Avión', body:'#3fa7ff', stripe:'#ffd23f', tail:'#ffd23f', c1:'#3fa7ff', c2:'#ffd23f'},   // v272: dos colores del valle (c1: el cuerpo; c2: alas, cola y detalles)
+  {kind:'plane', name:'Avión', body:'#ff7ac6', stripe:'#ffffff', tail:'#ffffff', c1:'#ff7ac6', c2:'#ffffff'},
+  {kind:'heli',  name:'Helicóptero', body:'#ff9d3b', trim:'#9b6bff', c1:'#ff9d3b', c2:'#9b6bff'},
+  {kind:'heli',  name:'Helicóptero', body:'#2fd3c2', trim:'#ff7ac6', c1:'#2fd3c2', c2:'#ff7ac6'}];
 const AIR_HEAD=Math.atan2(APU[0],APU[1]);   // mirando hacia la pista (hacia el mar)
 // Asientos (x, z locales): 0 piloto, 1 copiloto, el resto pasajeros
 // un asiento por lado y pasillo en medio: así cabe un peluche en cada uno sin encimarse con el de junto ni con la pared
@@ -16539,43 +16551,44 @@ const cushionY=a=>floorOf(a)+.48;
 function buildPlane(T){
   const root=new THREE.Group(), st=new THREE.Group(), R=PL.R, FY=PL.FY;
   const bodyM=felt(T.body,'rgba(0,0,0,.07)',2), stripeM=felt(T.stripe), tailM=felt(T.tail), darkM=felt('#3a3d46'); bodyM.side=THREE.DoubleSide;   // de fieltro como los coches (antes plástico liso: se veía plano)
+  // v272: el avión de dos colores del valle: el cuerpo de uno y las alas, la cola y los detalles del otro
+  const C1=T.c1||T.body, C2=T.c2||T.stripe, bodyVC=felt('#ffffff','rgba(0,0,0,.07)',2); bodyVC.vertexColors=true; bodyVC.side=THREE.DoubleSide;
+  const ring=()=>C1, RING=ring, K2=()=>C2;
   const winM=new THREE.MeshStandardMaterial({color:0x9fd3f0, roughness:.2, emissive:0x3f7fae, emissiveIntensity:.35});
-  const cyl=(r1,r2,len,th0,thl,m)=>{ const c=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,len,28,1,true,th0,thl),m); c.rotation.x=Math.PI/2; return c; };
+  const cyl=(r1,r2,len,th0,thl,m,hs=1)=>{ const c=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,len,28,hs,true,th0,thl),m); c.rotation.x=Math.PI/2; return c; };
   // fuselaje con hueco para la puerta (lado izquierdo, +x)
   const z0=PL.doorZ-.55, z1=PL.doorZ+.55, gap0=.98, gap1=2.04;
-  { const a=cyl(R,R,z0+9,0,Math.PI*2,bodyM); a.position.set(0,FY,(z0-9)/2); st.add(a); }
-  { const b=cyl(R,R,z1-z0,gap1,Math.PI*2-(gap1-gap0),bodyM); b.position.set(0,FY,(z0+z1)/2); st.add(b); }
-  { const c=cyl(R,R,9-z1,0,Math.PI*2,bodyM); c.position.set(0,FY,(z1+9)/2); st.add(c); }
-  const nose=new THREE.Mesh(new THREE.SphereGeometry(R,28,18,0,Math.PI*2,0,Math.PI/2),bodyM); nose.rotation.x=Math.PI/2; nose.scale.set(1,1.6,1); nose.position.set(0,FY,9); st.add(nose);
+  { const a=cyl(R,R,z0+9,0,Math.PI*2,bodyVC,Math.round((z0+9)/.4)); a.position.set(0,FY,(z0-9)/2); st.add(vcPaint(a,RING,true)); }
+  { const b=cyl(R,R,z1-z0,gap1,Math.PI*2-(gap1-gap0),bodyVC,3); b.position.set(0,FY,(z0+z1)/2); st.add(vcPaint(b,RING,true)); }
+  { const c=cyl(R,R,9-z1,0,Math.PI*2,bodyVC,Math.round((9-z1)/.4)); c.position.set(0,FY,(z1+9)/2); st.add(vcPaint(c,RING,true)); }
+  const nose=new THREE.Mesh(new THREE.SphereGeometry(R,28,18,0,Math.PI*2,0,Math.PI/2),bodyVC); nose.rotation.x=Math.PI/2; nose.scale.set(1,1.6,1); nose.position.set(0,FY,9); st.add(vcPaint(nose,RING,true));
   // cola: empieza del mismo grueso que el fuselaje (sin hueco) y se adelgaza hacia atrás, subiendo la panza como un avión de verdad
-  { const g=new THREE.CylinderGeometry(.55,R,6,28,4,true); g.rotateX(-Math.PI/2); g.translate(0,0,-12);
+  { const g=new THREE.CylinderGeometry(.55,R,6,28,15,true); g.rotateX(-Math.PI/2); g.translate(0,0,-12);
     const pa=g.attributes.position; for(let i=0;i<pa.count;i++){ const k=(-9-pa.getZ(i))/6; pa.setY(i,pa.getY(i)+1.1*k); }
-    g.computeVertexNormals(); const tailc=new THREE.Mesh(g,bodyM); tailc.position.set(0,FY,0); st.add(tailc); }
-  { const cap=new THREE.Mesh(new THREE.SphereGeometry(.55,16,10,0,Math.PI*2,0,Math.PI/2),bodyM); cap.rotation.x=-Math.PI/2; cap.scale.set(1,.45,1); cap.position.set(0,FY+1.1,-15); st.add(cap); }
+    g.computeVertexNormals(); const tailc=new THREE.Mesh(g,bodyVC); tailc.position.set(0,FY,0); st.add(vcPaint(tailc,RING,true)); }
+  { const cap=new THREE.Mesh(new THREE.SphereGeometry(.55,16,10,0,Math.PI*2,0,Math.PI/2),bodyVC); cap.rotation.x=-Math.PI/2; cap.scale.set(1,.45,1); cap.position.set(0,FY+1.1,-15); st.add(vcPaint(cap,ring,true)); }
   // franja y ventanillas
-  { const L=[], o=T.rb||0; [-1,1].forEach(s=>{ for(let k=0;k<8;k++) L.push([s*(R+.02),FY-.25,-1.5+(k-3.5)*2.875,.1,.36,2.8,0,VB_COLS[(k+o)%8]]);   // v272: franja de bloques de colores
-      for(let k=0;k<6;k++) L.push([s*(3+k*1.55),FY-1.08,.3,1.4,.1,1.2,0,VB_COLS[(k*3+o+(s>0?0:4))%8]]); });   // y una fila de cuadritos de colores en cada ala
-    st.add(new THREE.Mesh(rboxMerge(L),vbMat())); }
   [-1,1].forEach(s=>{
     for(let k=0;k<PLANE_ROWS;k++){ const z=3.6-k*PLANE_PITCH; const w=new THREE.Mesh(new THREE.BoxGeometry(.1,.46,.34),winM); w.position.set(s*(R-.03),FY+.3,z); st.add(w); } });   // una ventanilla por fila
   const ws=new THREE.Mesh(new THREE.BoxGeometry(2.2,.55,.6),winM); ws.position.set(0,FY+.95,9.55); ws.rotation.x=-.75; st.add(ws);
   // alas, motores, cola y tren de aterrizaje
-  const wing=new THREE.Mesh(new THREE.BoxGeometry(24,.36,3.6),bodyM); wing.position.set(0,FY-1.3,-.6); st.add(wing);   // debajo del piso de la cabina (antes se asomaba adentro)
+  const wing=new THREE.Mesh(new THREE.BoxGeometry(24,.36,3.6,16,1,1),bodyVC); wing.position.set(0,FY-1.3,-.6); st.add(vcPaint(wing,K2,true));   // debajo del piso de la cabina (antes se asomaba adentro)
   [-1,1].forEach(s=>{ const tip=new THREE.Mesh(new THREE.BoxGeometry(.3,1.2,1.2),tailM); tip.position.set(s*12,FY-.75,-1.6); st.add(tip);
-    const e=cyl(.72,.62,3,0,Math.PI*2,stripeM); e.position.set(s*5,FY-2.05,.4); st.add(e); const ec=new THREE.Mesh(new THREE.CircleGeometry(.6,18),darkM); ec.position.set(s*5,FY-2.05,1.91); st.add(ec);
-    const hs=new THREE.Mesh(new THREE.BoxGeometry(3.6,.22,1.9),bodyM); hs.position.set(s*2.2,FY+1.1,-13.6); st.add(hs); });
-  { const o=T.rb||0, fin=new THREE.Mesh(rboxMerge([[0,-1.4,0,.3,1.38,3.2,0,VB_COLS[(o+6)%8]],[0,0,-.1,.3,1.38,3.0,0,VB_COLS[(o+1)%8]],[0,1.4,-.2,.3,1.38,2.7,0,VB_COLS[(o+4)%8]]]),vbMat()); fin.position.set(0,FY+3,-13.6); fin.rotation.x=-.32; st.add(fin); }   // v272: timón de bloques
+    const e=cyl(.72,.62,3,0,Math.PI*2,bodyVC,6); e.position.set(s*5,FY-2.05,.4); st.add(vcPaint(e,ring,true)); const ec=new THREE.Mesh(new THREE.CircleGeometry(.6,18),darkM); ec.position.set(s*5,FY-2.05,1.91); st.add(ec);
+    const hs=new THREE.Mesh(new THREE.BoxGeometry(3.6,.22,1.9,3,1,1),bodyVC); hs.position.set(s*2.2,FY+1.1,-13.6); st.add(vcPaint(hs,K2,true)); });
+  { const fin=new THREE.Mesh(rboxMerge([[0,-1.4,0,.3,1.38,3.2,0,C2],[0,0,-.1,.3,1.38,3.0,0,C2],[0,1.4,-.2,.3,1.38,2.7,0,C2]]),vbMat()); fin.position.set(0,FY+3,-13.6); fin.rotation.x=-.32; st.add(fin); }   // v272: timón de bloques
   const wheel=(x,z,r)=>{ const w=new THREE.Mesh(new THREE.CylinderGeometry(r,r,.4,16),darkM); w.rotation.z=Math.PI/2; w.position.set(x,r,z); st.add(w);
-    const leg=new THREE.Mesh(new THREE.BoxGeometry(.18,FY-R-r+.3,.18),felt('#cfd3dc')); leg.position.set(x,r+(FY-R-r+.3)/2,z); st.add(leg); };
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(.18,FY-R-r+.3,.18),vbMat()); leg.position.set(x,r+(FY-R-r+.3)/2,z); st.add(vcPaint(leg,K2)); };
   wheel(0,7.3,.42); [-1,1].forEach(s=>wheel(s*2.1,-1.0,.55));
   // interior: piso, asientos, cabina de mando
   const floorM=felt('#8e97ad'), seatM=new THREE.MeshStandardMaterial({color:0x4f86c6, roughness:1, emissive:0x1d3b66, emissiveIntensity:.25}), seatM2=new THREE.MeshStandardMaterial({color:0xe5534b, roughness:1, emissive:0x5a1714, emissiveIntensity:.25});
   const fl=new THREE.Mesh(new THREE.BoxGeometry(3.0,.1,17.6),floorM); fl.position.set(0,PL.F-.05,-.4); st.add(fl);   // del ancho de adentro: ya no se asoma por fuera
   const aisle=new THREE.Mesh(new THREE.BoxGeometry(.9,.02,13),felt('#c95f5f')); aisle.position.set(0,PL.F+.01,-1.9); st.add(aisle);
-  PLANE_SEATS.forEach(([x,z],i)=>{ const m=i<2?seatM2:seatM, w=i<2?.62:.82;
-    const c=new THREE.Mesh(new THREE.BoxGeometry(w,.16,.55),m); c.position.set(x,PL.F+.4,z); st.add(c);
-    const b=new THREE.Mesh(new THREE.BoxGeometry(w,.85,.13),m); b.position.set(x,PL.F+.86,z-.3); b.rotation.x=-.12; st.add(b);
-    const hr=new THREE.Mesh(new THREE.BoxGeometry(w*.55,.22,.15),m); hr.position.set(x,PL.F+1.36,z-.36); hr.rotation.x=-.12; st.add(hr);   // cabecera
+  const seatVC=new THREE.MeshStandardMaterial({vertexColors:true, roughness:1, emissive:0x262626});   // v272: asientos de colores (cada fila de un color)
+  PLANE_SEATS.forEach(([x,z],i)=>{ const m=seatVC, w=i<2?.62:.82, col=i<2?C1:C2, C=()=>col;
+    const c=new THREE.Mesh(new THREE.BoxGeometry(w,.16,.55),m); c.position.set(x,PL.F+.4,z); st.add(vcPaint(c,C));
+    const b=new THREE.Mesh(new THREE.BoxGeometry(w,.85,.13),m); b.position.set(x,PL.F+.86,z-.3); b.rotation.x=-.12; st.add(vcPaint(b,C));
+    const hr=new THREE.Mesh(new THREE.BoxGeometry(w*.55,.22,.15),m); hr.position.set(x,PL.F+1.36,z-.36); hr.rotation.x=-.12; st.add(vcPaint(hr,()=>'#ffffff'));   // cabecera
     const base=new THREE.Mesh(new THREE.BoxGeometry(w*.7,.32,.4),darkM); base.position.set(x,PL.F+.16,z); st.add(base); });
   { const cm=new THREE.MeshStandardMaterial({color:0xfbf3e4, roughness:1, emissive:0xfbf3e4, emissiveIntensity:.32, side:THREE.DoubleSide});   // techo claro de la cabina
     const ce=new THREE.Mesh(new THREE.BoxGeometry(2.6,.06,16.4),cm); ce.position.set(0,FY+1.32,-.6); st.add(ce);
@@ -16586,13 +16599,13 @@ function buildPlane(T){
   mergeStatic(st); st.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); root.add(st);
   // puerta (bisagra adelante) y escalera plegable
   const doorP=new THREE.Group(); doorP.position.set(R+.04,PL.F+.95,z1); root.add(doorP);
-  const door=new THREE.Mesh(new THREE.BoxGeometry(.08,1.92,1.1),bodyM); door.position.set(0,0,-.55); doorP.add(door);
+  const door=new THREE.Mesh(new THREE.BoxGeometry(.08,1.92,1.1),bodyVC); door.position.set(0,0,-.55); doorP.add(vcPaint(door,()=>ring(PL.doorZ),true));
   const dstr=new THREE.Mesh(new THREE.BoxGeometry(.1,.3,1.12),stripeM); dstr.position.set(.01,-.3,-.55); doorP.add(dstr);
   const dwin=new THREE.Mesh(new THREE.BoxGeometry(.11,.36,.3),winM); dwin.position.set(.01,.45,-.55); doorP.add(dwin);
   const stairsP=new THREE.Group(); stairsP.position.set(R,PL.F,PL.doorZ); root.add(stairsP);
   { const sg=new THREE.Group(), N=6, L=PL.stairsLen, H=PL.F, stepM=felt('#cfd3dc'), railM=felt(T.stripe);
     const land=new THREE.Mesh(new THREE.BoxGeometry(.75,.12,1.15),stepM); land.position.set(.375,-.06,0); sg.add(land);
-    for(let k=1;k<=N;k++){ const x=.75+(k-.5)*(L-.75)/N, y=-k*H/N; const s=new THREE.Mesh(new THREE.BoxGeometry((L-.75)/N+.05,.1,1.1),stepM); s.position.set(x,y+.0,0); sg.add(s); }
+    for(let k=1;k<=N;k++){ const x=.75+(k-.5)*(L-.75)/N, y=-k*H/N; const s=new THREE.Mesh(new THREE.BoxGeometry((L-.75)/N+.05,.1,1.1),vbMat()); s.position.set(x,y+.0,0); sg.add(vcPaint(s,()=>k%2?C1:C2)); }   // v272: escalones de los dos colores
     [-1,1].forEach(sd=>{ const len=Math.hypot(L-.75,H), r=new THREE.Mesh(new THREE.BoxGeometry(len,.08,.08),railM); r.position.set(.75+(L-.75)/2,-H/2+.9,sd*.55); r.rotation.z=-Math.atan2(H,L-.75); sg.add(r);
       const side=new THREE.Mesh(new THREE.BoxGeometry(len,.32,.06),railM); side.position.set(.75+(L-.75)/2,-H/2-.05,sd*.56); side.rotation.z=-Math.atan2(H,L-.75); sg.add(side);
       const post=new THREE.Mesh(new THREE.BoxGeometry(.06,.9,.06),railM); post.position.set(.7,.45,sd*.55); sg.add(post); });
@@ -16605,25 +16618,27 @@ function buildHeli(T){
   const bodyM=felt(T.body,'rgba(0,0,0,.1)',2), trimM=felt(T.trim), glassM2=new THREE.MeshStandardMaterial({color:0x9fd3f0, roughness:.15, transparent:true, opacity:.55, side:THREE.DoubleSide, depthWrite:false}); bodyM.side=THREE.DoubleSide;
   // cuerpo con abertura lateral (lado izquierdo, +x)
   // cabina más grande: un peluche sentado (≈1.7 de alto) cabe completo sin que se le asome la cabeza por el techo
-  const body=new THREE.Mesh(new THREE.SphereGeometry(1,28,18,Math.PI+.75,Math.PI*2-1.5),bodyM); body.scale.set(HE.SX,HE.SY,HE.SZ); body.position.set(0,HE.CY,0); st.add(body);
+  // v272: de dos colores del valle: el casco y la cola de uno, los patines, el mástil, las aspas y los asientos del otro
+  const C1=T.c1||T.body, C2=T.c2||T.trim, K1=()=>C1, K2=()=>C2, bodyVC=felt('#ffffff','rgba(0,0,0,.1)',2); bodyVC.vertexColors=true; bodyVC.side=THREE.DoubleSide;
+  const body=new THREE.Mesh(new THREE.SphereGeometry(1,40,18,Math.PI+.75,Math.PI*2-1.5),bodyVC); body.scale.set(HE.SX,HE.SY,HE.SZ); body.position.set(0,HE.CY,0); st.add(vcPaint(body,K1,true));
   const bub=new THREE.Mesh(new THREE.SphereGeometry(1,24,14,Math.PI*.15,Math.PI*.7,.25,1.25),glassM2); bub.scale.set(HE.SX+.05,HE.SY+.05,HE.SZ+.07); bub.position.set(0,HE.CY,0); root.add(bub);
   { const fl=new THREE.Mesh(new THREE.CylinderGeometry(1,1,.12,28),felt('#8e97ad')); fl.scale.set(1.24,1,1.84); fl.position.set(0,F-.06,0); st.add(fl); }   // piso ovalado: no se sale del casco
-  const boom=new THREE.Mesh(new THREE.CylinderGeometry(.34,.18,5.6,14),bodyM); boom.rotation.x=Math.PI/2; boom.position.set(0,2.4,-4.9); st.add(boom);
+  const boom=new THREE.Mesh(new THREE.CylinderGeometry(.34,.18,5.6,14,8),bodyVC); boom.rotation.x=Math.PI/2; boom.position.set(0,2.4,-4.9); st.add(vcPaint(boom,K1,true));
   const fin=new THREE.Mesh(new THREE.BoxGeometry(.16,1.5,1.0),trimM); fin.position.set(0,2.95,-7.5); st.add(fin);
-  { const L=[], o=T.rb||0; [-3.0,-4.2,-5.4,-6.6].forEach((z,k)=>{ const r=.18+.16*(z+7.7)/5.6, q=2*r+.14; L.push([0,2.4,z,q,q,.5,0,VB_COLS[(k*2+o)%8]]); }); st.add(new THREE.Mesh(rboxMerge(L),vbMat())); }   // v272: anillos de bloques de colores en la cola
-  const mast=new THREE.Mesh(new THREE.CylinderGeometry(.14,.2,.7,10),trimM); mast.position.set(0,3.75,0); st.add(mast);
-  [-1,1].forEach(s=>{ const sk=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,4.0,8),trimM); sk.rotation.x=Math.PI/2; sk.position.set(s*1.25,.1,0); st.add(sk);
-    [-1,1].forEach(z=>{ const p=new THREE.Mesh(new THREE.BoxGeometry(.08,.95,.08),trimM); p.position.set(s*1.14,.55,z*.95); p.rotation.z=s*.2; st.add(p); }); });
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(.14,.2,.7,10),VBM(C2)); mast.position.set(0,3.75,0); st.add(mast);
+  [-1,1].forEach(s=>{ const sk=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,4.0,8,8),bodyVC); sk.rotation.x=Math.PI/2; sk.position.set(s*1.25,.1,0); st.add(vcPaint(sk,K2,true));
+    [-1,1].forEach(z=>{ const p=new THREE.Mesh(new THREE.BoxGeometry(.08,.95,.08),VBM(C2)); p.position.set(s*1.14,.55,z*.95); p.rotation.z=s*.2; st.add(p); }); });
   const seatM=new THREE.MeshStandardMaterial({color:0x3a3d46, roughness:1, emissive:0x1a1c22, emissiveIntensity:.3});
-  HELI_SEATS.forEach(([x,z])=>{ const c=new THREE.Mesh(new THREE.BoxGeometry(.66,.16,.52),seatM); c.position.set(x,F+.4,z); st.add(c);
-    const b=new THREE.Mesh(new THREE.BoxGeometry(.66,.8,.13),seatM); b.position.set(x,F+.82,z-.29); b.rotation.x=-.1; st.add(b); });
+  const seatVC=new THREE.MeshStandardMaterial({vertexColors:true, roughness:1, emissive:0x262626});
+  HELI_SEATS.forEach(([x,z],i)=>{ const C=K2; const c=new THREE.Mesh(new THREE.BoxGeometry(.66,.16,.52),seatVC); c.position.set(x,F+.4,z); st.add(vcPaint(c,C));
+    const b=new THREE.Mesh(new THREE.BoxGeometry(.66,.8,.13),seatVC); b.position.set(x,F+.82,z-.29); b.rotation.x=-.1; st.add(vcPaint(b,C)); });
   const dash=new THREE.Mesh(new THREE.BoxGeometry(1.6,.4,.4),trimM); dash.position.set(0,F+.95,1.75); dash.rotation.x=-.4; st.add(dash);
   mergeStatic(st); st.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); root.add(st);
   const rotorG=new THREE.Group(); rotorG.position.set(0,4.12,0); root.add(rotorG); const rotor=rotorG;
-  for(let k=0;k<4;k++){ const b=new THREE.Mesh(new THREE.BoxGeometry(.32,.06,5.8),VBM(VB_COLS[(k*2+(T.rb||0))%8])); b.position.z=2.9; const arm=new THREE.Group(); arm.rotation.y=k*Math.PI/2; arm.add(b); rotor.add(arm); }   // v272: cada aspa de un color
+  for(let k=0;k<4;k++){ const b=new THREE.Mesh(new THREE.BoxGeometry(.32,.06,5.8),VBM(C2)); b.position.z=2.9; const arm=new THREE.Group(); arm.rotation.y=k*Math.PI/2; arm.add(b); rotor.add(arm); }   // v272: aspas del segundo color
   const hub=new THREE.Mesh(new THREE.CylinderGeometry(.28,.28,.2,12),trimM); rotor.add(hub);
   const tail=new THREE.Group(); tail.position.set(.22,2.95,-7.5); root.add(tail);
-  [0,1].forEach(k=>{ const b=new THREE.Mesh(new THREE.BoxGeometry(.05,1.3,.16),trimM); b.rotation.x=k*Math.PI/2; tail.add(b); });
+  [0,1].forEach(k=>{ const b=new THREE.Mesh(new THREE.BoxGeometry(.05,1.3,.16),VBM(C2)); b.rotation.x=k*Math.PI/2; tail.add(b); });
   root.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
   return {root, rotorG, tail};
 }
