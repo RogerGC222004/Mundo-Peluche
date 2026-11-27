@@ -1879,7 +1879,7 @@ I18N.add({
 "Jalar":"Pull","Esperando que pique":"Waiting for a bite","Dejar de pescar":"Stop fishing","Guardar el pez":"Keep the fish","Soltar el pez":"Release the fish","Darle el pez a Cuco":"Give the fish to Cuco",
 "Cerrar la puerta":"Close the door","Abrir la puerta":"Open the door","Dejar el balde":"Put down the bucket","Hablar con Tortu":"Talk to Tortu","Tomar el balde":"Take the bucket","Ver el balde":"Check the bucket",
 "Alguien está pescando aquí":"Someone is fishing here","Pescar (falta un balde)":"Fish (you need a bucket)","Balde lleno":"Bucket full","Sacar un pez":"Reel in a fish","Disparar":"Shoot","Subir a la isla":"Go up to the island","Ir hacia allá":"Go there",
-"Desierto Canela":"Cinnamon Desert","¡Llegaste al Desierto Canela!":"You reached the Cinnamon Desert!","Abrir el cofre de la pirámide":"Open the pyramid chest","¡100 monedas en el cofre de la pirámide! Vuelve mañana por más":"100 coins in the pyramid chest! Come back tomorrow for more","Cofre vacío: vuelve mañana":"Empty chest: come back tomorrow","Abrir el cofre":"Open the chest","Saltar del globo":"Jump off the balloon","Bajarse del globo":"Get off the balloon","Subir al globo":"Board the balloon",
+"Tabla de arena":"Sandboard","Bajarse de la tabla":"Get off the board","Montar el camello":"Ride the camel","Bajarse del camello":"Get off the camel","Mueve el joystick a los lados para girar · Saltar para brincar":"Move the joystick sideways to turn · Jump to hop","A/D para girar · W para empujar · Espacio para brincar":"A/D to turn · W to push · Space to hop","Mueve el joystick para caminar con el camello":"Move the joystick to walk with the camel","W/S para avanzar · A/D para girar":"W/S to move · A/D to turn","¡Un remolino! Toca «Tirarse» para salir":"A whirlwind! Tap «Dive» to get out","¡Un remolino! «Tirarse» (Q) para salir":"A whirlwind! «Dive» (Shift/C) to get out","Desierto Canela":"Cinnamon Desert","¡Llegaste al Desierto Canela!":"You reached the Cinnamon Desert!","Abrir el cofre de la pirámide":"Open the pyramid chest","¡100 monedas en el cofre de la pirámide! Vuelve mañana por más":"100 coins in the pyramid chest! Come back tomorrow for more","Cofre vacío: vuelve mañana":"Empty chest: come back tomorrow","Abrir el cofre":"Open the chest","Saltar del globo":"Jump off the balloon","Bajarse del globo":"Get off the balloon","Subir al globo":"Board the balloon",
 "Hablar con Fresita":"Talk to Fresita","No tienes semillas: ve con Fresita":"You have no seeds: go see Fresita","Otra semilla":"Other seed","Regar":"Water",
 "Abrir el cofre del cañón":"Open the canyon chest","Hablar con el topo":"Talk to the mole","Entrar a la mina":"Enter the mine","Salir de la mina":"Leave the mine","Usar el elevador":"Use the elevator","Abrir el cofre escondido":"Open the hidden chest",
 "Romper la roca":"Break the rock","Alguien":"Someone","Lanzar":"Throw","Batear":"Swing the bat","Subirse a la tabla":"Get on the board","Tomar tabla":"Take a board","Lanzar tabla":"Throw the board","Colgarte la tabla":"Carry the board on your back","Dejar tabla":"Put the board down",
@@ -10150,7 +10150,8 @@ const decals=(()=>{
     for(let i=0;i<P.N;i++){ if(!P.live[i]) continue; const age=now-P.born[i];
       if(age>=PRINT_TIME){ P.live[i]=0; setI(P,i,0); ch=true; } else { hi=i+1; if(age>PRINT_TIME-PRINT_FADE){ setI(P,i,(PRINT_TIME-age)/PRINT_FADE); ch=true; } } }
     if(ch) P.m.instanceMatrix.needsUpdate=true; if(P.m.count!==hi) P.m.count=hi; }); }
-  return { foot:(x,y,z,yaw,dent,now)=>add(feet,x,y,z,yaw,.24,.32,dent,now), smear:(x,y,z,yaw,dent,now)=>add(smear,x,y,z,yaw,.78,1.15,dent,now), update };
+  function clearNear(x,z,r){ for(const P of [feet]){ let ch=false; for(let i=0;i<P.N;i++){ if(!P.live[i]) continue; const o=i*6; if(Math.abs(P.d[o]-x)<r && Math.abs(P.d[o+2]-z)<r){ P.live[i]=0; setI(P,i,0); ch=true; } } if(ch) P.m.instanceMatrix.needsUpdate=true; } }
+  return { clearNear, foot:(x,y,z,yaw,dent,now)=>add(feet,x,y,z,yaw,.24,.32,dent,now), smear:(x,y,z,yaw,dent,now)=>add(smear,x,y,z,yaw,.78,1.15,dent,now), update };
 })();
 // altura para una huella: encima del glaseado de la plaza, del pasto o de lo que se esté pisando
 function decalY(x,z,y){ const g=groundAt(x,z,y), t=terrainH(x,z); return g + (Math.abs(g-t)<.05 ? (Math.hypot(x,z)<CAKE.R ? .125 : .09) : .035); }
@@ -10282,13 +10283,138 @@ function desPyrCollide(p,vx,vz,dt){ const P=DES.pyr; if(Math.abs(p.x-P.x)>P.B+1 
   const bad=(x,z)=>{ for(const [ox,oz] of [[0,0],[.36,0],[-.36,0],[0,.36],[0,-.36]]){ const g=desPyrGround(x+ox,z+oz,p.y+.05); if(g!==null && g>p.y+.46) return true; } return false; };
   if(!bad(p.x,p.z)) return; const px=p.x-vx*dt, pz=p.z-vz*dt; if(!bad(px,p.z)) p.x=px; else if(!bad(p.x,pz)) p.z=pz; else { p.x=px; p.z=pz; } }
 const DES_KEY='mundoPelucheCofrePiramide', desDone=()=>{ try{ return localStorage.getItem(DES_KEY)===today(); }catch(e){ return false; } };
-function desActions(){ const C=DES.chest; if(!C || player.car||player.ac||player.pg||player.mg||player.balloon) return null;
-  if(Math.hypot(player.pos.x-C.x,player.pos.z-C.z)>2.2 || Math.abs(player.pos.y-C.y)>2) return null;
+function desActions(){ const C=DES.chest; if(!C || player.car||player.ac||player.pg||player.mg||player.balloon||player.swim||player.whirl) return null;
+  { const K=DES.camel; if(K && Math.hypot(player.pos.x-K.x,player.pos.z-K.z)<3 && Math.abs(player.pos.y-terrainH(K.x,K.z))<1.5) return [{label:'Montar el camello', run:desCamelStart}, null]; }
+  if(Math.hypot(player.pos.x-C.x,player.pos.z-C.z)>2.2 || Math.abs(player.pos.y-C.y)>2){ if(player.grounded && desSandAt(player.pos.x,player.pos.z) && Math.abs(player.pos.y-terrainH(player.pos.x,player.pos.z))<.3) return [{label:'Tabla de arena', run:desBoardStart}, null]; return null; }
   return desDone() ? [{label:'Cofre vacío: vuelve mañana', disabled:true, run:()=>{}}, null]
     : [{label:'Abrir el cofre de la pirámide', run:()=>{ if(desDone()) return; try{ localStorage.setItem(DES_KEY,today()); }catch(e){} addCoins(100); adOffer(100); flashNote('¡100 monedas en el cofre de la pirámide! Vuelve mañana por más'); try{ audio.wave(); }catch(e){} }}, null]; }
+// ---------- v273 (parte 2): tabla de arena, camello para montar, remolinos y animalitos del desierto ----------
+const DES_FVC=(()=>{ const m=felt('#ffffff','rgba(0,0,0,.1)'); m.vertexColors=true; return m; })();
+// --- la tabla de arena: bajas las dunas deslizándote (como el trineo); con Saltar das un brinquito ---
+function desBoardGeo(){ return DES.boardGeo||(DES.boardGeo=desMerge([[rboxGeo(),0,.04,0,.62,.08,1.6,0,0,0,'#ff9d3b'],[rboxGeo(),0,.085,0,.48,.02,1.3,0,0,0,'#ffd23f'],[rboxGeo(),0,.09,.5,.28,.02,.22,0,0,0,'#ff5b5b'],[rboxGeo(),0,.09,-.5,.28,.02,.22,0,0,0,'#3fa7ff']])); }
+function desBoardMesh(){ const m=new THREE.Mesh(desBoardGeo(),DES_FVC); m.castShadow=true; m.userData.noCol=true; m.userData.noBatch=true; m.visible=false; scene.add(m); return m; }
+function desBoardStart(){ const f=player.facing, h=terrainH(player.pos.x,player.pos.z); startPlay('sandb',0); const P=player.pg; if(!P) return;
+  P.sb={x:player.pos.x, z:player.pos.z, y:h, vy:0, air:false, vx:Math.sin(f)*2.2, vz:Math.cos(f)*2.2, h:f, t0:performance.now()/1000, slow:0, crash:0};
+  flashNote(isTouch?'Mueve el joystick a los lados para girar · Saltar para brincar':'A/D para girar · W para empujar · Espacio para brincar'); try{ audio.slide(); }catch(e){} }
+function desBoardJump(){ const S=player.pg && player.pg.sb; if(!S || S.air || S.crash) return; S.air=true; S.vy=5.2; try{ audio.jump(); }catch(e){} }
+function desBoardRide(P,dt){ const S=P.sb; if(!S) return null; S.age=(S.age||0)+dt; const now=S.age+.001;
+  if(!S.crash){ const e=1.2, hx=(terrainH(S.x+e,S.z)-terrainH(S.x-e,S.z))/(2*e), hz=(terrainH(S.x,S.z+e)-terrainH(S.x,S.z-e))/(2*e), k=1/Math.sqrt(1+hx*hx+hz*hz);
+    if(!S.air){ S.vx+=-9.8*hx*k*k*dt; S.vz+=-9.8*hz*k*k*dt; }
+    let sp=Math.hypot(S.vx,S.vz); const st=Math.max(-1,Math.min(1,(keys.KeyA||keys.ArrowLeft?1:0)-(keys.KeyD||keys.ArrowRight?1:0)-stick.x)), push=Math.max(0,Math.min(1,(keys.KeyW||keys.ArrowUp?1:0)-stick.y));
+    if(sp>.4 && st){ const a=st*dt*1.7, c=Math.cos(a), s=Math.sin(a), vx=S.vx*c+S.vz*s, vz=-S.vx*s+S.vz*c; S.vx=vx; S.vz=vz; }
+    if(push>.1 && sp<6 && !S.air){ const hx2=sp>.3?S.vx/sp:Math.sin(S.h), hz2=sp>.3?S.vz/sp:Math.cos(S.h); S.vx+=hx2*push*2.4*dt; S.vz+=hz2*push*2.4*dt; }   // empujar con el pie en lo plano
+    const sand=desSandAt(S.x,S.z), drag=Math.exp(-dt*(.1+.004*sp+(sand?0:1.6))); S.vx*=drag; S.vz*=drag; sp=Math.hypot(S.vx,S.vz);
+    if(sp>0 && !S.air){ const fr=Math.min(sp,.75*dt)/sp; S.vx-=S.vx*fr; S.vz-=S.vz*fr; sp=Math.hypot(S.vx,S.vz); }   // roce con la arena
+    if(sp>19){ S.vx*=19/sp; S.vz*=19/sp; sp=19; }
+    const nx=S.x+S.vx*dt, nz=S.z+S.vz*dt, nh=terrainH(nx,nz);
+    for(const o of obsNear(nx,nz)){ const d=Math.hypot(nx-o.x,nz-o.z); if(d<o.r+.5 && o.top>S.y+.35){ if(sp>5){ S.crash=now; try{ audio.bump(); audio.flop(.7); }catch(e){} flashNote('¡Pum! Chocaste'); } else { S.vx*=-.3; S.vz*=-.3; } break; } }
+    if(!S.crash){ S.x=nx; S.z=nz;
+      const yb=S.y+S.vy*dt-4.9*dt*dt; if(S.air || (nh<yb-.03 && sp>6)){ S.air=true; S.y=yb; S.vy-=9.8*dt; if(S.y<=nh){ S.y=nh; S.air=false; S.vy=0; try{ dustPuff&&dustPuff(S.x,S.y,S.z); }catch(e){} } }
+      else { S.vy=Math.max(-12,Math.min(12,(nh-S.y)/dt)); S.y=nh; } }
+    if(terrainH(S.x,S.z)<SEA_Y+.2 || INLAND_SEA.some(L=>Math.hypot(S.x-L.x,S.z-L.z)<L.R*.85)){ S.crash=now; }
+    if(sp>3 && performance.now()-lastLookT>1500) yaw=lerpAng(yaw, Math.atan2(S.vx,S.vz)+Math.PI, 1-Math.exp(-dt*3));
+    if(sp>.4) S.h=Math.atan2(S.vx,S.vz); P.v=Math.round(sp*10)/10;
+    S.slow = sp<.5 && !S.air && now>2 ? S.slow+dt : 0;
+    if(S.slow>2.2){ S.crash=now-1; setTimeout(()=>{ if(player.pg===P) stopPlay(); },0); }
+  } else if(now-S.crash>.9){ setTimeout(()=>{ if(player.pg===P) stopPlay(); },0); }
+  const e=1, sh=Math.sin(S.h||0), ch=Math.cos(S.h||0), tilt=S.air?0:Math.atan2(terrainH(S.x+sh*e,S.z+ch*e)-terrainH(S.x-sh*e,S.z-ch*e),2*e);
+  S.tilt=tilt; const pose=tblRidePose(S.x,S.y+.06,S.z,S.h,tilt,0,now,0); return pose; }
+function desRemoteBoard(r,dt,t){ const S=DES.rem.get(r)||(DES.rem.set(r,{}),DES.rem.get(r)); r.pos.lerp(r.target,1-Math.exp(-dt*10)); r.sbH=r.sbH===undefined?r.facing:lerpAng(r.sbH,r.facing||0,1-Math.exp(-dt*8));
+  if(!S.b){ S.b=desBoardMesh(); } S.b.visible=true; S.b.position.set(r.pos.x,r.pos.y-.03,r.pos.z); S.b.rotation.set(0,r.sbH,0);
+  const pose=tblRidePose(r.pos.x,r.pos.y-.03,r.pos.z,r.sbH,0,0,t,0); placePlay(r.obj,pose); pgPoseLimbs(r.obj,pose,t,dt,r.walk); r.label.position.set(0,2.42,0); r.blob.visible=false; S.seen=t; return true; }
+// --- el camello: espera junto al oasis; te subes y lo manejas como un vehículo ---
+function desCamelMesh(){ const T='#d9a86a', T2='#c79358', BLK='#2a2226', WHT='#ffffff', sph=new THREE.SphereGeometry(1,12,8), cyl=new THREE.CylinderGeometry(1,1,1,10), eye=new THREE.SphereGeometry(1,6,4);
+  const g=new THREE.Group(), body=new THREE.Mesh(desMerge([[sph,0,1.55,0,.62,.55,1.05,0,0,0,T],[sph,0,2.08,-.05,.42,.42,.5,0,0,0,T2],[cyl,0,1.92,.95,.2,.85,.2,.7,0,0,T],[sph,0,2.38,1.28,.24,.24,.36,0,0,0,T],[sph,0,2.32,1.6,.15,.14,.16,0,0,0,T2],
+      [sph,-.15,2.6,1.15,.07,.12,.05,0,0,.3,T2],[sph,.15,2.6,1.15,.07,.12,.05,0,0,-.3,T2],[eye,-.16,2.47,1.47,.05,.06,.04,0,0,0,BLK],[eye,.16,2.47,1.47,.05,.06,.04,0,0,0,BLK],[eye,-.15,2.49,1.5,.018,.018,.015,0,0,0,WHT],[eye,.17,2.49,1.5,.018,.018,.015,0,0,0,WHT],
+      [rboxGeo(),0,2.0,-.05,.95,.12,.9,0,0,0,'#ff5b5b'],[rboxGeo(),0,2.06,-.05,.7,.04,.7,0,0,0,'#ffd23f'],[rboxGeo(),-.5,1.75,-.05,.04,.5,.8,0,0,0,'#3fa7ff'],[rboxGeo(),.5,1.75,-.05,.04,.5,.8,0,0,0,'#3fa7ff'],[cyl,0,1.4,-1.0,.05,.6,.05,-.4,0,0,T2]]),DES_FVC);
+  body.castShadow=true; g.add(body); const legs=[]; for(const [x,z] of [[-.32,.6],[.32,.6],[-.32,-.65],[.32,-.65]]){ const p=new THREE.Group(); p.position.set(x,1.25,z); const l=new THREE.Mesh(desMerge([[cyl,0,-.6,0,.13,1.2,.13,0,0,0,T],[sph,0,-1.2,0,.15,.08,.17,0,0,0,T2]]),DES_FVC); l.castShadow=true; p.add(l); g.add(p); legs.push(p); }
+  g.userData.legs=legs; g.traverse(o=>{ if(o.isMesh){ o.userData.noCol=true; o.userData.noBatch=true; } }); scene.add(g); return g; }
+function desCamelAnim(g,ph,amp){ const L=g.userData.legs; L.forEach((p,i)=>{ p.rotation.x=Math.sin(ph+(i===0||i===3?0:Math.PI))*amp; }); }
+function desCamelStart(){ const C=DES.camel; startPlay('camel',0); const P=player.pg; if(!P) return; P.cm={x:C.x, z:C.z, h:C.h, v:0, ph:0}; C.idle.visible=false; if(!C.ride) C.ride=desCamelMesh(); C.ride.visible=true;
+  flashNote(isTouch?'Mueve el joystick para caminar con el camello':'W/S para avanzar · A/D para girar'); }
+function desCamelRide(P,dt){ const S=P.cm; if(!S) return null; const C=DES.camel;
+  let f=0, st=0; if(keys.KeyW||keys.ArrowUp) f+=1; if(keys.KeyS||keys.ArrowDown) f-=1; if(keys.KeyD||keys.ArrowRight) st+=1; if(keys.KeyA||keys.ArrowLeft) st-=1; f-=stick.y; st+=stick.x; f=Math.max(-1,Math.min(1,f)); st=Math.max(-1,Math.min(1,st));
+  const shift=keys.ShiftLeft||keys.ShiftRight, run=(settings.alwaysRun?!shift:shift)||Math.hypot(stick.x,stick.y)>.95, vmax=run?8.5:4.5;
+  S.v+=(f*(f>=0?vmax:1.8)-S.v)*(1-Math.exp(-dt*2)); S.h-=st*dt*(1.1+.15*Math.min(1,Math.abs(S.v)/4));
+  const px=S.x, pz=S.z; S.x+=Math.sin(S.h)*S.v*dt; S.z+=Math.cos(S.h)*S.v*dt;
+  for(const o of obsNear(S.x,S.z)){ if(o.top!==undefined && o.top<terrainH(S.x,S.z)+.5) continue; const dx=S.x-o.x, dz=S.z-o.z, d=Math.hypot(dx,dz), m=o.r+.9; if(d<m && d>1e-4){ S.x=o.x+dx/d*m; S.z=o.z+dz/d*m; S.v*=.7; } }
+  if(terrainH(S.x,S.z)<SEA_Y+.3 || INLAND_SEA.some(L=>Math.hypot(S.x-L.x,S.z-L.z)<L.R*.9) || (Math.abs(S.x-DES.pyr.x)<DES.pyr.B+1.2 && Math.abs(S.z-DES.pyr.z)<DES.pyr.B+1.2)){ S.x=px; S.z=pz; S.v*=-.2; }   // no se mete al agua ni a la pirámide
+  const h=terrainH(S.x,S.z); S.ph+=dt*Math.abs(S.v)*1.6; if(Math.abs(S.v)>1.2 && performance.now()-lastLookT>1500) yaw=lerpAng(yaw, S.h+Math.PI, 1-Math.exp(-dt*2));
+  if(C.ride){ C.ride.position.set(S.x,h,S.z); C.ride.rotation.set(0,S.h,0); desCamelAnim(C.ride,S.ph,Math.min(.55,Math.abs(S.v)*.09)); C.ride.position.y+=Math.abs(Math.sin(S.ph))*.06*Math.min(1,Math.abs(S.v)/3); }
+  P.v=Math.round(S.v*10)/10; return {pos:[S.x,h+2.12+(C.ride?C.ride.position.y-h:0)*.6,S.z], yaw:S.h, sit:1, grip:1}; }
+function desCamelEnd(P){ const C=DES.camel; if(C.ride) C.ride.visible=false; C.idle.visible=true; const S=P&&P.cm; if(S){ const x=S.x+Math.cos(S.h)*1.6, z=S.z-Math.sin(S.h)*1.6; return [x,0,z]; } return null; }
+function desRemoteCamel(r,dt,t){ const S=DES.rem.get(r)||(DES.rem.set(r,{}),DES.rem.get(r)); r.pos.lerp(r.target,1-Math.exp(-dt*8)); const yawT=r.facing||0; r.cmH=r.cmH===undefined?yawT:lerpAng(r.cmH,yawT,1-Math.exp(-dt*6));
+  if(!S.c) S.c=desCamelMesh(); S.c.visible=true; const h=terrainH(r.pos.x,r.pos.z), mv=Math.min(1,r.target.distanceTo(r.pos)*4); S.ph=(S.ph||0)+dt*(1+mv*5); S.c.position.set(r.pos.x,h,r.pos.z); S.c.rotation.set(0,r.cmH,0); desCamelAnim(S.c,S.ph,.08+mv*.4);
+  const pose={pos:[r.pos.x,h+2.12,r.pos.z], yaw:r.cmH, sit:1, grip:1}; placePlay(r.obj,pose); pgPoseLimbs(r.obj,pose,t,dt,r.walk); r.label.position.set(0,2.42,0); r.blob.visible=false; S.seen=t; return true; }
+// lo de los demás que ya no se usa (se fueron de la tabla o del camello)
+function desRemoteSweep(t){ for(const [r,S] of DES.rem){ if(S.seen!==undefined && t-S.seen>.3){ if(S.b) S.b.visible=false; if(S.c) S.c.visible=false; } if(!mp.remotes || ![...mp.remotes.values()].includes(r)){ if(S.b) scene.remove(S.b); if(S.c) scene.remove(S.c); DES.rem.delete(r); } } }
+// --- remolinos de arena: dos a la vez, iguales para todos (dependen del reloj); te levantan girando; «Tirarse» para salir; borran las huellas ---
+function desWhirlPos(k,tm){ const SL=75, slot=Math.floor(tm/SL)+k*7919, u=(tm%SL)/SL, a=DES.a0+.08+rlHash(slot,11)*(DES.a1-DES.a0-.16), m=coastMidR(a), n=coastRN(a), r=m+(n-m)*(.15+.6*rlHash(slot,13));
+  const bx=Math.cos(a)*r, bz=Math.sin(a)*r, d=rlHash(slot,17)*6.283, L=90*(u-.5); return {x:bx+Math.cos(d)*L+8*Math.sin(u*9+k), z:bz+Math.sin(d)*L+8*Math.cos(u*7+k), k:Math.min(1,Math.min(u,1-u)*10)}; }
+function desWhirlMesh(){ const G=new THREE.Group(), c=document.createElement('canvas'); c.width=64; c.height=128; const q=c.getContext('2d');
+  for(let i=0;i<60;i++){ q.strokeStyle='rgba(255,236,200,'+(.35+Math.random()*.55)+')'; q.lineWidth=2+Math.random()*4; q.beginPath(); const y=Math.random()*128, x=Math.random()*64; q.moveTo(x,y); q.lineTo(x+16+Math.random()*20,y-6); q.stroke(); }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; const parts=[];
+  for(let i=0;i<3;i++){ const m=new THREE.Mesh(new THREE.CylinderGeometry(2.8+i*1.4,.6+i*.5,4.5,18,1,true), new THREE.MeshBasicMaterial({map:t, color:'#e6bd7e', transparent:true, opacity:.85-i*.18, depthWrite:false, side:THREE.DoubleSide})); m.position.y=1.8+i*3.6; m.userData.noCol=true; m.userData.noBatch=true; G.add(m); parts.push(m); }
+  G.userData.parts=parts; G.visible=false; scene.add(G); return G; }
+function desWhirlTick(dt){ const tm=Date.now()/1000, p=player.pos, near=Math.abs(p.x-1500)<2500 && desW(p.x,p.z)>0.01 || (player.whirl);
+  if(!DES.wm){ DES.wm=[desWhirlMesh(),desWhirlMesh()]; }
+  for(let k=0;k<2;k++){ const W=desWhirlPos(k,tm), m=DES.wm[k], dd=Math.hypot(W.x-p.x,W.z-p.z), vis=near && dd<320 && W.k>.02; m.visible=vis; if(!vis) continue;
+    m.position.set(W.x,terrainH(W.x,W.z),W.z); m.scale.setScalar(.35+.65*W.k); m.userData.parts.forEach((q,i)=>{ q.rotation.y+=dt*(4+i); q.material.map.offset.y=(q.material.map.offset.y+dt*.6)%1; });
+    if(dd<60) try{ decals.clearNear(W.x,W.z,3.5); }catch(e){}   // borra las huellas por donde pasa
+    // ¿te agarró?
+    if(!player.whirl && W.k>.6 && dd<2.4 && !player.pg && !player.car && !player.ac && !player.swim && !player.mg && performance.now()/1000>(DES.whirlFree||0) && p.y<terrainH(p.x,p.z)+2){ player.whirl={k, t:0, a:Math.atan2(p.z-W.z,p.x-W.x), r:Math.max(.6,dd), y0:p.y}; flashNote(isTouch?'¡Un remolino! Toca «Tirarse» para salir':'¡Un remolino! «Tirarse» (Q) para salir'); try{ audio.wave(); }catch(e){} } }
+  const R=player.whirl; if(!R) return; const W=desWhirlPos(R.k,tm); R.t+=dt; R.r+=(.9-R.r)*Math.min(1,dt*2); R.a+=dt*(4.5+R.t); const g=terrainH(W.x,W.z), hy=Math.min(8.5,R.t*3);
+  if(player.dive || R.t>5.2 || W.k<.3 || player.pg || player.car){ const out=player.dive?4:6; player.whirl=null; DES.whirlFree=performance.now()/1000+3; player.vel.set(Math.cos(R.a)*out,0,Math.sin(R.a)*out); player.vy=player.dive?1:3; player.grounded=false; return; }
+  p.set(W.x+Math.cos(R.a)*R.r, g+hy+.4*Math.sin(R.t*3), W.z+Math.sin(R.a)*R.r); player.vel.set(0,0,0); player.vy=0; player.grounded=false; player.facing=-R.a; }
+// --- animalitos: aparecen cerca de ti en el desierto (cada quien ve los suyos) ---
+const DESA={list:[], t:0, geo:{}};
+function desAnimalGeo(kind){ if(DESA.geo[kind]) return DESA.geo[kind]; const sph=new THREE.SphereGeometry(1,10,7), cyl=new THREE.CylinderGeometry(1,1,1,8), cone=new THREE.ConeGeometry(1,1,8), eye=new THREE.SphereGeometry(1,6,4), B='#2a2226', W='#ffffff', P='#ff9ec4';
+  const eyes=(x,y,z,s)=>[[eye,x-.06*s,y,z,.035*s,.04*s,.03*s,0,0,0,B],[eye,x+.06*s,y,z,.035*s,.04*s,.03*s,0,0,0,B],[eye,x-.05*s,y+.015*s,z+.02*s,.012*s,.012*s,.01*s,0,0,0,W],[eye,x+.07*s,y+.015*s,z+.02*s,.012*s,.012*s,.01*s,0,0,0,W]];
+  const D={
+    lagartija:[[sph,0,.1,0,.11,.08,.32,0,0,0,'#7fc47a'],[sph,0,.12,.33,.09,.07,.12,0,0,0,'#7fc47a'],[cone,0,.07,-.5,.05,.42,.05,-Math.PI/2,0,0,'#6cb067'],...[[-1,.15],[1,.15],[-1,-.15],[1,-.15]].map(([s,z])=>[sph,s*.13,.04,z,.05,.03,.07,0,0,0,'#6cb067']),...eyes(0,.17,.43,1.4)],
+    fenec:[[sph,0,.32,0,.2,.2,.3,0,0,0,'#f1d3a2'],[sph,0,.48,.3,.16,.15,.15,0,0,0,'#f1d3a2'],[sph,0,.44,.44,.06,.05,.07,0,0,0,'#f7e6c8'],[eye,0,.46,.5,.025,.025,.02,0,0,0,B],[cone,-.13,.72,.26,.08,.3,.04,0,0,.35,'#f1d3a2'],[cone,.13,.72,.26,.08,.3,.04,0,0,-.35,'#f1d3a2'],[cone,-.13,.71,.28,.05,.22,.02,0,0,.35,P],[cone,.13,.71,.28,.05,.22,.02,0,0,-.35,P],[sph,0,.34,-.36,.08,.08,.18,.6,0,0,'#f7e6c8'],...[[-1,.15],[1,.15],[-1,-.15],[1,-.15]].map(([s,z])=>[cyl,s*.1,.1,z,.04,.2,.04,0,0,0,'#e5c08a']),...eyes(0,.53,.43,1.6)],
+    escorpion:[[sph,0,.1,0,.16,.08,.22,0,0,0,'#c8743a'],[sph,0,.1,.22,.1,.07,.09,0,0,0,'#c8743a'],...[0,1,2,3].map(i=>[sph,0,.16+i*.07,-.22-i*.07+(i>2?.08:0),.06,.06,.06,0,0,0,'#b8652e']),[cone,0,.42,-.38,.04,.1,.04,2.4,0,0,'#5a2a14'],[sph,-.17,.1,.36,.06,.04,.08,0,0,0,'#c8743a'],[sph,.17,.1,.36,.06,.04,.08,0,0,0,'#c8743a'],...eyes(0,.16,.29,1)],
+    tortuga:[[sph,0,.22,0,.34,.22,.4,0,0,0,'#8a6a3e'],[sph,0,.3,0,.26,.16,.32,0,0,0,'#a0804e'],[sph,0,.18,.44,.12,.11,.14,0,0,0,'#9ac48a'],...[[-1,.22],[1,.22],[-1,-.22],[1,-.22]].map(([s,z])=>[sph,s*.27,.08,z,.08,.08,.09,0,0,0,'#9ac48a']),...eyes(0,.23,.55,1.2)],
+    serpiente:[...[...Array(14)].map((_,i)=>[sph,Math.sin(i*.45)*.1,.065-i*.002,.48-i*.06,.075-i*.003,.06-i*.002,.09,0,Math.cos(i*.45)*.4,0,i%3===1?'#b8722a':'#e2a84a']),[sph,Math.sin(-.45)*.1,.08,.6,.1,.07,.13,0,0,0,'#e2a84a'],[cone,Math.sin(-.45)*.1,.07,.74,.012,.08,.012,Math.PI/2,0,0,'#e85a7a'],...eyes(Math.sin(-.45)*.1,.13,.66,1.1)],
+    liebre:[[sph,0,.3,0,.16,.18,.25,0,0,0,'#c9a27a'],[sph,0,.44,.24,.12,.12,.13,0,0,0,'#c9a27a'],[sph,-.05,.72,.2,.04,.18,.03,0,0,-.15,'#c9a27a'],[sph,.05,.72,.2,.04,.18,.03,0,0,.15,'#c9a27a'],[sph,0,.32,-.26,.07,.07,.07,0,0,0,W],[sph,.1,.1,-.1,.06,.06,.14,0,0,0,'#b8916a'],[sph,-.1,.1,-.1,.06,.06,.14,0,0,0,'#b8916a'],...eyes(0,.47,.35,1.3)],
+    halcon:[[sph,0,0,0,.2,.16,.4,0,0,0,'#8a5a36'],[sph,0,.08,.36,.13,.12,.13,0,0,0,'#efe2c8'],[cone,0,.06,.5,.04,.1,.04,Math.PI/2,0,0,'#ffcf3a'],[sph,0,-.02,-.42,.1,.03,.18,0,0,0,'#6e4428'],...eyes(0,.12,.46,1.1)] };
+  return DESA.geo[kind]=desMerge(D[kind]); }
+function desAnimalWing(){ return DESA.wing||(DESA.wing=desMerge([[new THREE.SphereGeometry(1,8,5),.45,0,0,.5,.04,.22,0,0,0,'#7a4e2e']])); }
+function desAnimalSpawn(kind,x,z){ const g=new THREE.Group(), m=new THREE.Mesh(desAnimalGeo(kind),DES_FVC); m.castShadow=kind!=='halcon'; g.add(m); let wings=null;
+  if(kind==='halcon'){ wings=[-1,1].map(s=>{ const w=new THREE.Mesh(desAnimalWing(),DES_FVC); w.scale.x=s; g.add(w); return w; }); }
+  g.traverse(o=>{ if(o.isMesh){ o.userData.noCol=true; o.userData.noBatch=true; } }); scene.add(g);
+  const A={kind, g, m, wings, x, z, h:Math.random()*6.28, v:0, st:0, t:Math.random()*3, ph:Math.random()*6, cx:x, cz:z, r:20+Math.random()*25}; DESA.list.push(A); return A; }
+function desAnimalsTick(dt){ const p=player.pos, inDes=desW(p.x,p.z)>.5 && !SP.on && !FREE.on;
+  // quitar los que quedaron lejos
+  for(let i=DESA.list.length-1;i>=0;i--){ const A=DESA.list[i]; if(!inDes || Math.hypot(A.x-p.x,A.z-p.z)>110){ scene.remove(A.g); DESA.list.splice(i,1); } }
+  if(!inDes) return;
+  DESA.t-=dt; if(DESA.t<=0){ DESA.t=1.2; const want=['lagartija','fenec','escorpion','tortuga','serpiente','liebre','lagartija','liebre'], have=DESA.list.filter(A=>A.kind!=='halcon').length;
+    if(have<7){ const kind=want[Math.floor(Math.random()*want.length)], a=Math.random()*6.28, d=28+Math.random()*40, x=p.x+Math.cos(a)*d, z=p.z+Math.sin(a)*d; if(desSandAt(x,z) && !obsNear(x,z).some(o=>Math.hypot(o.x-x,o.z-z)<o.r+1)) desAnimalSpawn(kind,x,z); }
+    if(!DESA.list.some(A=>A.kind==='halcon')){ const a=Math.random()*6.28; desAnimalSpawn('halcon',p.x+Math.cos(a)*40,p.z+Math.sin(a)*40); } }
+  for(const A of DESA.list){ A.t-=dt; A.ph+=dt; const dp=Math.hypot(A.x-p.x,A.z-p.z), flee=dp<7 && A.kind!=='tortuga' && A.kind!=='halcon';
+    if(A.kind==='halcon'){ A.cx+=(p.x-A.cx)*dt*.05; A.cz+=(p.z-A.cz)*dt*.05; const an=A.ph*.25; A.x=A.cx+Math.cos(an)*A.r; A.z=A.cz+Math.sin(an)*A.r; A.h=-an; const y=terrainH(A.x,A.z)+22+Math.sin(A.ph*.4)*3; A.g.position.set(A.x,y,A.z); A.g.rotation.set(0,A.h,.35);
+      const fl=Math.sin(A.ph*6)*(.5+.5*Math.max(0,Math.sin(A.ph*.7))); A.wings.forEach((w,i)=>{ w.rotation.z=(i?-1:1)*fl*.5; }); continue; }
+    const SPD={lagartija:4.5, fenec:3, escorpion:.7, tortuga:.35, serpiente:1.2, liebre:6}[A.kind];
+    if(flee){ A.h=Math.atan2(A.x-p.x,A.z-p.z); A.v=SPD*(A.kind==='escorpion'||A.kind==='serpiente'?1.2:1.4); A.st=1; A.t=1.5; }
+    else if(A.t<=0){ if(A.st){ A.st=0; A.v=0; A.t=1+Math.random()*3; } else { A.st=1; A.h+=(Math.random()-.5)*2.2; A.v=SPD*(.4+Math.random()*.6); A.t=A.kind==='lagartija'?.5+Math.random()*.7:1.5+Math.random()*3; } }
+    const nx=A.x+Math.sin(A.h)*A.v*dt, nz=A.z+Math.cos(A.h)*A.v*dt; if(desSandAt(nx,nz) && !obsNear(nx,nz).some(o=>Math.hypot(o.x-nx,o.z-nz)<o.r+.3)){ A.x=nx; A.z=nz; } else { A.h+=Math.PI*.7; A.v*=.5; }
+    let y=terrainH(A.x,A.z), rx=0, rz=0, ry=A.h;
+    if(A.kind==='liebre' && A.v>.1){ y+=Math.abs(Math.sin(A.ph*9))*.35; rx=Math.sin(A.ph*9)*.2; }
+    if(A.kind==='fenec' && A.v>.1){ y+=Math.abs(Math.sin(A.ph*12))*.05; }
+    if(A.kind==='serpiente') ry+=Math.sin(A.ph*4)*.35;
+    if(A.kind==='lagartija' && A.v>.1) ry+=Math.sin(A.ph*20)*.18;
+    if(A.kind==='escorpion') rz=Math.sin(A.ph*8)*.04*(A.v>.05?1:0);
+    if(A.kind==='tortuga') rz=Math.sin(A.ph*3)*.04*(A.v>.05?1:0);
+    A.g.position.set(A.x,y,A.z); A.g.rotation.set(rx,ry,rz); } }
 let desSeen=false;
-function desUpdate(dt){ const C=DES.chest; if(C && Math.abs(player.pos.x-C.x)<80 && Math.abs(player.pos.z-C.z)<80){ const want=desDone()?1:0; C.open+=(want-C.open)*Math.min(1,dt*4); C.lid.rotation.x=-C.open*1.7; C.coins.visible=C.open<.5; }
+function desUpdate(dt){ try{ desWhirlTick(dt); desAnimalsTick(dt); }catch(e){ if(!window.__desE){ window.__desE=1; console.warn('desierto',e); } }
+  { const on=player.pg && player.pg.k==='sandb' && player.pg.sb; if(on && !DES.board) DES.board=desBoardMesh(); if(DES.board){ DES.board.visible=!!on; if(on){ const S=player.pg.sb; DES.board.position.set(S.x,S.y,S.z); DES.board.rotation.order='YXZ'; DES.board.rotation.set(-(S.tilt||0),S.h,0); } } }
+  { const C=DES.camel; if(C && Math.abs(player.pos.x-C.x)<120 && Math.abs(player.pos.z-C.z)<120){ C.ph+=dt; desCamelAnim(C.idle,0,0); C.idle.children[0].rotation.x=Math.sin(C.ph*.8)*.02; } }
+  try{ desRemoteSweep(performance.now()/1000); }catch(e){}
+  const C=DES.chest; if(C && Math.abs(player.pos.x-C.x)<80 && Math.abs(player.pos.z-C.z)<80){ const want=desDone()?1:0; C.open+=(want-C.open)*Math.min(1,dt*4); C.lid.rotation.x=-C.open*1.7; C.coins.visible=C.open<.5; }
   if(!desSeen && desW(player.pos.x,player.pos.z)>.6){ desSeen=true; flashNote('¡Llegaste al Desierto Canela!'); } }
+(function desCamel(){ DES.rem=new Map(); const O=DES.oasis, a=Math.atan2(O.z,O.x), x=O.x-Math.cos(a)*(O.R+17)-Math.sin(a)*9, z=O.z-Math.sin(a)*(O.R+17)+Math.cos(a)*9, h=Math.atan2(O.x-x,O.z-z)+Math.PI/2;
+  const g=desCamelMesh(); g.position.set(x,terrainH(x,z),z); g.rotation.y=h; DES.camel={x,z,h,idle:g,ride:null,ph:0}; obstacles.push({x,z,r:1.1,top:terrainH(x,z)+2.2,walk:false}); })();
 
 // ---------- Bajo el mar ----------
 // Algas que se mecen
@@ -14029,7 +14155,8 @@ tap(camChip,()=>{ const M=player.mg; if(mzLocked()){ flashNote('En el laberinto 
 hold(ui('tJump'),()=>{ touchHold.up=true; jump(); },()=>{ touchHold.up=false; });
 hold(ui('tDive'),()=>{ touchHold.down=true; startDive(); },()=>{ touchHold.down=false; });
 
-function jump(){ if(player.pg && player.pg.k==='vine'){ jiVineRelease(); return; }   // v142: soltar la liana
+function jump(){ if(player.pg && player.pg.k==='vine'){ jiVineRelease(); return; }
+  if(player.pg && player.pg.k==='sandb'){ desBoardJump(); return; } if(player.pg && player.pg.k==='camel') return;   // v273   // v142: soltar la liana
   if(player.pg && (player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='veh' || player.pg.k==='vehp' || player.pg.k==='surf' || player.pg.k==='jet')) return;   // v144: en el tobogán y en la rueda no se salta
   if(player.busy) return; if(player.mg || (typeof SP!=='undefined' && SP.on)) return; if(hook.mode>=2){ bowRelease(); return; } if(player.pg && (player.pg.k==='swing'||player.pg.k==='ride'||player.pg.k==='see'||player.pg.k==='fmv')){ stopPlay(); return; } const now=performance.now()/1000, coyote=!player.grounded && player.vy<=1.5 && now-(player.lastGroundT||0)<.25;   // v195: saltar aunque te acabes de salir de la orilla (v270: más tiempo, para teléfonos lentos)
   if((player.grounded||coyote) && !player.dive && !player.swim && !player.car && !player.ac && !player.pg){ player.vy=trOnMat(player.pos.x,player.pos.z,player.pos.y)?9.5:7.2; player.grounded=false; player.jumpBuf=0; player.lastGroundT=0; audio.jump(); }
@@ -16331,7 +16458,7 @@ function scanActions(){
   { const [x,y]=airActions(); if(x||y||player.ac){ setActions(x,y); return; } }
   { const fa=freeActions(); if(fa){ setActions(fa[0],fa[1],fa[2]); return; } }   // v208: modo libre
   if(SP.on){ const sa=spaceActions(); setActions(sa?sa[0]:null, sa?sa[1]:null); return; }
-  if(iSteer() || (player.pg && player.pg.k==='sled')){ const [x,y]=pgActions(); setActions(x,y); return; }   // v138: en el timón · v140: en el trineo
+  if(iSteer() || (player.pg && (player.pg.k==='sled' || player.pg.k==='sandb' || player.pg.k==='camel'))){ const [x,y]=pgActions(); setActions(x,y); return; }   // v138: en el timón · v140: en el trineo
   { const va=vehActions(); if(va){ setActions(va[0],va[1]); return; } }   // v182: el vehículo y el taller
   { const jk=jskActions(); if(jk){ setActions(jk[0],jk[1]); return; } }   // v266: la moto acuática
   { const wa=wiActions(); if(wa){ setActions(wa[0],wa[1]); return; } }   // v140: Isla Invierno
@@ -16541,7 +16668,7 @@ function updateCarHud(){
 // Botones táctiles: a pie (saltar, tirarse…) o en coche (acelerar, frenar)
 function updateTouchMode(){
   const inCar=!!player.car, pilot=typeof iPilot==='function' && iPilot(), aboard=!!player.ac, seatedAir=aboard && player.ac.mode==='seated';
-  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && (player.pg.k==='cuco' || player.pg.k==='helm' || player.pg.k==='sled' || player.pg.k==='zip' || player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='vehp' || player.pg.k==='surf' || player.pg.k==='jet' || (player.pg.k==='veh' && !(VE.w && (VE.w.S.canAir||VE.w.S.sub)))));
+  ui('tbtnsFoot').hidden=inCar || seatedAir || !!(player.pg && (player.pg.k==='cuco' || player.pg.k==='camel' || player.pg.k==='helm' || player.pg.k==='sled' || player.pg.k==='zip' || player.pg.k==='icsl' || player.pg.k==='dwheel' || player.pg.k==='dcar' || player.pg.k==='vehp' || player.pg.k==='surf' || player.pg.k==='jet' || (player.pg.k==='veh' && !(VE.w && (VE.w.S.canAir||VE.w.S.sub)))));
   ui('tcar').hidden=!((inCar && player.car.kind==='seated') || pilot);
   { const vd=!!(player.pg && player.pg.k==='veh' && VE.w), L=vd&&VE.w.L; ui('tveh').hidden=!vd; if(vd){ ui('tveh').classList.toggle('up',!!VE.w.S.canAir); ui('tSiren').hidden=!(L && (L.sr.length||L.sb.length)); ui('tVLights').hidden=!(L && (L.head.length||L.tail.length)); ui('tFx').hidden=!vehFxOf(VE.w).length; } }   // v182
   const drv=(inCar && player.car.seat===0) || pilot;
@@ -17320,8 +17447,8 @@ function trRemotePose(r,t,dt){ if(r.tz && r.tz[2]) pgPoseLimbs(r.obj,{climb:(per
 let myPush={i:-1,t:0}; player.pushUntil=0;
 function pgOccupied(k,i){ if(player.pg && player.pg.k===k && player.pg.i===i) return 'me';
   for(const r of mp.remotes.values()) if(r.pl && r.pl[0]===PG_KINDS.indexOf(k) && r.pl[1]===i) return r; return null; }
-const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled','zip','vine','icsl','dwheel','dcar','veh','vehp','surf','fmv','jet'];   // v266: + moto acuática   // v182: + carrusel de dulces
-function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars' && k!=='cart' && k!=='veh' && k!=='vehp' && k!=='surf' && k!=='jet') return;   // v182: cada quien tiene su vehículo
+const PG_KINDS=['swing','slide','bars','ride','see','bench','cuco','cart','helm','sled','zip','vine','icsl','dwheel','dcar','veh','vehp','surf','fmv','jet','sandb','camel'];   // v273: tabla de arena y camello   // v266: + moto acuática   // v182: + carrusel de dulces
+function startPlay(k,i){ if(pgOccupied(k,i) && k!=='slide' && k!=='bars' && k!=='cart' && k!=='veh' && k!=='vehp' && k!=='surf' && k!=='jet' && k!=='sandb' && k!=='camel') return;   // v182: cada quien tiene su vehículo
   holding=false; applyHeld(); renderHotbar();
   player.pg={k,i,t0:performance.now()/1000, from:[player.pos.x,player.pos.y,player.pos.z]}; if(k==='cuco') lgAdd('cuco');
   player.vel.set(0,0,0); player.vy=0; player.dive=null; player.diveAngle=0;
@@ -17337,6 +17464,7 @@ function stopPlay(){ const P=player.pg; if(!P) return; const pose=player.pgPose;
   else if(P.k==='bench'){ const b=BENCHES[P.i]; out=[b.x+Math.sin(b.yaw)*.95,0,b.z+Math.cos(b.yaw)*.95]; }
   else if(P.k==='helm'){ const [x,z]=shipW(.95,HELM_Z-.9); out=[x,SH.DECK,z]; }   // v138: al soltar el timón te quedas en la cubierta
   else if(P.k==='fmv') out=pqExit(P);   // v217
+  else if(P.k==='camel') out=desCamelEnd(P)||[player.pos.x,0,player.pos.z];   // v273: te bajas a un lado del camello
   else if(P.k==='cart'){ const q=MC.at(P.s||0); out=[q.x+Math.cos(q.yaw)*1.3, q.y, q.z-Math.sin(q.yaw)*1.3]; MC.s=P.s||0; }   // v137: te bajas a un lado del carrito
   else out=pose?pose.pos:[player.pos.x,player.pos.y,player.pos.z];
   player.pos.set(out[0], groundAt(out[0],out[2],(P.k==='bench'?BENCHES[P.i].y:P.k==='cart'||P.k==='helm'||P.k==='fmv'?out[1]:0)+.3), out[2]); if(pose) player.facing=pose.yaw;
@@ -17379,6 +17507,7 @@ function updateMyPlay(dt){
   if(P.k==='cart') return mcRide(P,dt);   // v137
   if(P.k==='helm'){ P.v=0; return helmPose(); }
   if(P.k==='sled') return wiSledRide(P,dt);   // v140
+  if(P.k==='sandb') return desBoardRide(P,dt); if(P.k==='camel') return desCamelRide(P,dt);   // v273
   if(P.k==='icsl') return diSlideRide(P,dt); if(P.k==='dwheel') return diWheelRide(P,dt); if(P.k==='dcar') return diCarRide(P,dt); if(P.k==='veh') return vehRide(P,dt); if(P.k==='surf') return tblRide(P,dt); if(P.k==='jet') return jskRide(P,dt); if(P.k==='vehp') return vehpRide(P,dt);   // v144 · v182
   if(P.k==='zip') return jiZipRide(P,dt); if(P.k==='vine') return jiVineRide(P,dt);   // v142   // v138: el barco se mueve en shipUpdate
   if(P.k==='swing'){ const S=pgState.swing[P.i];
@@ -17435,7 +17564,7 @@ function pgActions(){
   if(!player.pg && !player.car && !player.ac && !player.dive && cucoNear()){ const s=cucoFreeSeat(); return [s<0 ? {label:'Cuco está lleno', disabled:true, run:()=>{}} : {label:'Subirse a Cuco', run:cucoBoard}, null]; }
   if(!player.pg && !player.car && !player.ac && !player.dive && !player.swim && !player.mg && mcNear()) return [{label:'Subir al carrito', run:mcBoard}, null];   // v137
   if(player.pg){ const k=player.pg.k; if(k==='slide'||k==='bars') return [null,null];
-    return [{label: k==='sled'?'Bajarse del trineo': k==='helm'?'Soltar el timón': k==='cart'?'Bajar del carrito': k==='swing'?'Bajarse del columpio': k==='ride'?'Bajarse': k==='bench'?'Levantarse':k==='fmv'?'Bajarse':'Bajarse del sube y baja', run:stopPlay}, null]; }
+    return [{label: k==='sandb'?'Bajarse de la tabla': k==='camel'?'Bajarse del camello': k==='sled'?'Bajarse del trineo': k==='helm'?'Soltar el timón': k==='cart'?'Bajar del carrito': k==='swing'?'Bajarse del columpio': k==='ride'?'Bajarse': k==='bench'?'Levantarse':k==='fmv'?'Bajarse':'Bajarse del sube y baja', run:stopPlay}, null]; }
   if(player.car || player.ac || player.swim || player.dive) return [null,null];
   for(let i=0;i<BENCHES.length;i++){ const b=BENCHES[i]; if(Math.hypot(player.pos.x-b.x,player.pos.z-b.z)<1.5 && Math.abs(player.pos.y-(b.y-.5))<1 && !pgOccupied('bench',i)) return [{label:'Sentarse', run:()=>startPlay('bench',i)}, null]; }
   const px=player.pos.x, pz=player.pos.z; if(Math.hypot(px-PG.x,pz-PG.z)>PG.R+2) return [null,null];
@@ -17458,6 +17587,7 @@ function updateRemoteInPlay(r,dt,t){
     if(!pose) return false; placePlay(r.obj,pose); r.pos.set(...pose.pos); r.target.set(...pose.pos); pgPoseLimbs(r.obj,pose,t,dt,r.walk); r.label.position.set(0,2.42,0); r.blob.visible=false; return true; }   // v217: en un juego del Modo libre
   let v=0;
   if(k==='sled') return wiRemoteSled(r,dt,t);   // v140: en su trineo
+  if(k==='sandb') return desRemoteBoard(r,dt,t); if(k==='camel') return desRemoteCamel(r,dt,t);   // v273
   if(k==='surf') return tblRemoteRide(r,dt,t);   /* v196 */
   if(k==='jet') return jskRemoteRide(r,dt,t);   // v266: en su moto acuática
   if(k==='veh'||k==='vehp'){ const pose=vehRemotePose(r,k,d[1]); if(!pose) return false; placePlay(r.obj,pose); r.pos.set(...pose.pos); r.target.set(...pose.pos); pgPoseLimbs(r.obj,pose,t,dt,r.walk); r.label.position.set(0,2.42,0); r.blob.visible=false; return true; }   // v182
