@@ -8389,14 +8389,19 @@ function valleWrite(){ const V=VALLE, B=V.base; if(!B) return; const N=V.N, S=V.
   const at=(x,z)=>{ const i=Math.floor((x-V.x0)/S), j=Math.floor((z-V.z0)/S); return (i<0||j<0||i>=N||j>=N)?-1:j*N+i; };
   // la plaza: anillos de colores
   { const P=V.plaza, R=P.R; for(let z=P.z-R;z<=P.z+R;z+=S) for(let x=P.x-R;x<=P.x+R;x+=S){ const c=at(x,z); if(c<0||!B[c]) continue; const d=Math.hypot(x-P.x,z-P.z); if(d<=R) D[c]=d<5?200:201+((Math.floor((d-5)/3.5))%8); } }
-  // v272: el piso de dos minijuegos: el jardín de Escondidas (verdes intercalados) y el huerto (azul y blanco, como mantel); con orilla de arcoíris
+  // v272: alrededor de cada minijuego, una plazita blanca (así se ve ordenado) y en ¡A dibujar! un piso redondo de cuadros rosas y blancos
+  for(const M of MG_PADS){ const G0=[FRU,ESG,CHOC,DWG,NUMG].find(G=>G.x===M.x && G.z===M.z); if(!G0) continue; const R=Math.max(M.R,G0.S?G0.S*1.42+3:0);   // (los cuadrados, hasta sus esquinas)
+    for(let z=M.z-R;z<=M.z+R;z+=S) for(let x=M.x-R;x<=M.x+R;x+=S){ const c=at(x,z); if(c<0||!B[c]) continue; if(Math.hypot(x-M.x,z-M.z)<=R) D[c]=200; } }
+  { const R=DWG.R+1.2, i0=Math.floor((DWG.x-R-V.x0)/2), i1=Math.floor((DWG.x+R-V.x0)/2), j0=Math.floor((DWG.z-R-V.z0)/2), j1=Math.floor((DWG.z+R-V.z0)/2);
+    for(let j=j0;j<=j1;j++) for(let i=i0;i<=i1;i++){ const c=j*N+i; if(i<0||j<0||i>=N||j>=N||!B[c]) continue; const d=Math.hypot(V.x0+(i+.5)*2-DWG.x,V.z0+(j+.5)*2-DWG.z); if(d>R) continue; D[c]=d>R-1.8 ? 201+((i+j)%8) : ((i+j)%2 ? 207 : 200); } }
+  // el piso de dos minijuegos: el jardín de Escondidas (verdes intercalados) y el huerto (azul y blanco, como mantel); con orilla de arcoíris
   for(const [G,a,b] of [[ESG,204,208],[FRU,205,200]]){ const S=G.S, i0=Math.floor((G.x-S-V.x0)/2), i1=Math.floor((G.x+S-V.x0)/2), j0=Math.floor((G.z-S-V.z0)/2), j1=Math.floor((G.z+S-V.z0)/2); 
     for(let j=j0;j<=j1;j++) for(let i=i0;i<=i1;i++){ const c=j*N+i; if(i<0||j<0||i>=N||j>=N||!B[c]) continue; const dx=Math.abs(V.x0+(i+.5)*2-G.x), dz=Math.abs(V.z0+(j+.5)*2-G.z); if(dx>S+.4 || dz>S+.4) continue;
       D[c]=Math.max(dx,dz)>S-1.6 ? 201+((i+j)%8) : ((i+j)%2 ? a : b); } }
   for(const W of VALLE_PATHS){ const word=((W.en && I18N.lang==='en') ? W.en : (I18N.t(W.w)||W.w)+'  ').toLocaleUpperCase('es'), cen=[], seen=new Set(); let s=0;
     for(let q=0;q<W.pts.length-1;q++){ const [x0,z0]=W.pts[q], [x1,z1]=W.pts[q+1], dx=x1-x0, dz=z1-z0, L=Math.hypot(dx,dz), nx=-dz/L, nz=dx/L, k=((Math.round(Math.atan2(dx,dz)/(Math.PI/2))%4)+4)%4;
       for(let t=0;t<L;t+=.5,s+=.5){ const x=x0+dx*t/L, z=z0+dz*t/L;
-        for(let o=-W.wide;o<=W.wide;o+=.5){ const c=at(x+nx*o,z+nz*o); if(c<0||!B[c]) continue; const e=Math.abs(o)>W.wide-1.01; if(e){ if(D[c]===255 || D[c]>200) D[c]=201+((Math.floor(s/6))%8); } else if(D[c]===255 || D[c]>200) D[c]=200; }
+        for(let o=-W.wide-1.6;o<=W.wide+1.6;o+=.5){ const c=at(x+nx*o,z+nz*o); if(c<0||!B[c]) continue; if(D[c]===255 || D[c]>200) D[c]=200; }   // v272: el camino todo blanco hasta su cerquita (antes: orilla de colores y tapetes revueltos adentro)
         const c=at(x,z); if(c>=0 && B[c] && !seen.has(c)){ seen.add(c); cen.push([c,k]); } } }
     if(V.words) cen.forEach(([c,k],i)=>{ const g=MAT_GLYPHS.indexOf(word[i%word.length]); D[c]=g>=0?1+g*4+k:200; }); }   // (v272: Roger prefirió los caminos sin letras: V.words apagado)
   if(V.tex){ V.tex.needsUpdate=true; } }
@@ -8413,10 +8418,12 @@ valleBuild(); relang(valleWrite);
 const VALLE_GLSL=`uniform sampler2D uMatT; uniform vec4 uMatR; uniform sampler2D uGlyph; uniform sampler2D uMatPal;
 float mHash(vec2 c){ return fract(sin(dot(c,vec2(127.1,311.7)))*43758.5453); }
 vec3 mPal(float i){ return texture2D(uMatPal,vec2((mod(i,8.0)+.5)/8.0,.5)).rgb; }
-vec2 mCell(vec2 p){ vec2 c=floor(p), f=p-c; if(mod(c.x+c.y,2.0)>.5){   /* las piezas «impares» reciben las pestañas de sus vecinas */
-  if(length(f-vec2(.09,.5))<.15) c.x-=1.0; else if(length(f-vec2(.91,.5))<.15) c.x+=1.0; else if(length(f-vec2(.5,.09))<.15) c.y-=1.0; else if(length(f-vec2(.5,.91))<.15) c.y+=1.0; }
-  return c; }
 float mVal(vec2 c){ return floor(texture2D(uMatT,(c+.5)/uMatR.zw).r*255.0+.5); }
+float mGrp(float v){ return v>254.5 ? 0.0 : v>200.5 ? 1.0 : v>.5 ? 2.0 : 3.0; }   /* v272: tapetes revueltos / de un color / blancos (caminos y plazitas) / pasto */
+vec2 mCell(vec2 p){ vec2 c=floor(p), f=p-c; if(mod(c.x+c.y,2.0)>.5){   /* las piezas «impares» reciben las pestañas de sus vecinas (solo si son de la misma clase: así las orillas quedan limpias) */
+  vec2 n=c; if(length(f-vec2(.09,.5))<.15) n.x-=1.0; else if(length(f-vec2(.91,.5))<.15) n.x+=1.0; else if(length(f-vec2(.5,.09))<.15) n.y-=1.0; else if(length(f-vec2(.5,.91))<.15) n.y+=1.0;
+  if(n!=c && mGrp(mVal(n))==mGrp(mVal(c))) c=n; }
+  return c; }
 `;// ---------- v271: áreas verdes: lago con patitos, picnic y caminos que unen las zonas nuevas ----------
 const GREEN3=(()=>{ const a=-1.31, r=1550, [x,z]=polar(a,r), [x2,z2]=polar(a+.026,r+34);
   const lake=[{x,z,R:58,floor:-3.6},{x:x2,z:z2,R:40,floor:-3.4}];
@@ -9703,6 +9710,7 @@ instanced(sphereG, rockMat, MAP.rocks, (o,[x,z,s,rot])=>{ const base=groundMin(x
 MAP.rocks.forEach(([x,z,s])=>{ const base=groundMin(x,z,.8*s)-.15*s; obstacles.push({x,z,r:s*1.05,top:base+s*1.05,walk:true}); });
 
 // Palmeras de la playa
+['trees','rocks','flowers','palms'].forEach(k=>{ MAP[k]=MAP[k].filter(([x,z])=>!valleIn(x,z)); });   // v272: en el Valle de los minijuegos no hay palmeras ni árboles normales (todo es de bloques)
 (function palms(){
   const trunk=felt('#b88a5a','rgba(70,40,10,.2)'), leaf=felt('#5fae45','rgba(20,60,10,.15)'), nut=felt('#7a5232','rgba(0,0,0,.2)');
   MAP.palms.forEach(([x,z,s,rot])=>{
@@ -15470,7 +15478,15 @@ function mapBakeTrees(cv,E){ const S=cv.width, g=cv.getContext('2d'), k=S/(2*E),
   g.fillStyle='#3d7a3a'; for(const t of NV.pines){ if(Math.abs(t[0])>E || Math.abs(t[1])>E) continue; g.beginPath(); g.arc((E-t[0])*k,(E-t[1])*k,1.4*f,0,7); g.fill(); } }
 mapBakeTrees(mapTerrain,MAP_E);
 const mapTerrainC=mkMapTerrain(MAP_E0, 560, 1024, false); mapBakeTrees(mapTerrainC,MAP_E0);
-function mapDrawTerrain(g){ g.drawImage(mapTerrain,0,0,MAP_PX,MAP_PX); const [x0,y0]=toMap(MAP_E0,MAP_E0), s=MAP_E0/MAP_E*MAP_PX; g.drawImage(mapTerrainC,x0,y0,s,s); }
+// v272: el valle va encima en su propia imagen, con cuadritos nítidos de 8 m (si no, lo de afuera del centro se veía borroso y con un corte)
+const mapValle=(()=>{ const V=VALLE, D=V.cells; if(!D) return null; const B=4, M=V.N/B, cv=document.createElement('canvas'); cv.width=cv.height=M; const g=cv.getContext('2d'), im=g.createImageData(M,M), cnt=new Map();
+  for(let bj=0;bj<M;bj++) for(let bi=0;bi<M;bi++){ cnt.clear(); let best=0, bv=0;
+    for(let q=0;q<B*B;q++){ const ci=V.N-1-(bi*B+(q%B)), cj=V.N-1-(bj*B+((q/B)|0)), v=D[cj*V.N+ci]; if(!v) continue; const k=v===255?255:v>200?v:200, n=(cnt.get(k)||0)+1; cnt.set(k,n); if(n>best){ best=n; bv=k; } }
+    if(best<B*B/2) continue; const ci=V.N-1-bi*B, cj=V.N-1-bj*B, c=bv===255?MAP_MATS[(rlHash(ci>>3,cj>>3)*8)|0]:bv>200?MAP_MATS[bv-201]:[246,242,234], o=(bj*M+bi)*4;
+    im.data[o]=c[0]; im.data[o+1]=c[1]; im.data[o+2]=c[2]; im.data[o+3]=255; }
+  g.putImageData(im,0,0); return cv; })();
+function mapDrawTerrain(g){ g.drawImage(mapTerrain,0,0,MAP_PX,MAP_PX); const [x0,y0]=toMap(MAP_E0,MAP_E0), s=MAP_E0/MAP_E*MAP_PX; g.drawImage(mapTerrainC,x0,y0,s,s);
+  if(mapValle){ const V=VALLE, [vx,vy]=toMap(V.x0+V.N*V.S,V.z0+V.N*V.S), vs=V.N*V.S/(2*MAP_E)*MAP_PX, sm=g.imageSmoothingEnabled; g.imageSmoothingEnabled=false; g.drawImage(mapValle,vx,vy,vs,vs); g.imageSmoothingEnabled=sm; } }
 // Detalles fijos (caminos, árboles, rocas, botones) en coordenadas del mapa
 const MAP_LEAF=['#5e9a38','#6fae3e','#e79ab0','#f0c35a'];
 const mapTrackPts=TRACK.pts.map(([x,z])=>toMap(x,z));
@@ -25135,6 +25151,14 @@ const HOWTO=(()=>{ const F='Sniglet, Nunito, sans-serif', W=512, H=512;
   const rr=(q,x,y,w,h,r,fill,stroke)=>{ q.beginPath(); q.moveTo(x+r,y); q.arcTo(x+w,y,x+w,y+h,r); q.arcTo(x+w,y+h,x,y+h,r); q.arcTo(x,y+h,x,y,r); q.arcTo(x,y,x+w,y,r); q.closePath(); if(fill){ q.fillStyle=fill; q.fill(); } if(stroke){ q.strokeStyle=stroke; q.lineWidth=3; q.stroke(); } };
   const water=(q,y)=>{ q.fillStyle='#69c3ef'; q.fillRect(30,y,W-60,445-y); q.strokeStyle='rgba(255,255,255,.7)'; q.lineWidth=3; for(let x=40;x<W-50;x+=40){ q.beginPath(); q.arc(x+10,y+14,9,Math.PI,0); q.stroke(); } };
   const boom=(q,x,y,r,col='#ffd34d')=>{ q.fillStyle=col; q.beginPath(); for(let i=0;i<16;i++){ const a=i/16*Math.PI*2, k=i%2?r*.5:r; q.lineTo(x+Math.cos(a)*k,y+Math.sin(a)*k); } q.closePath(); q.fill(); };
+  // v272: los minijuegos del valle son de bloques y tapetes de foami: dibujitos iguales
+  const VBC=['#ff5b5b','#ff9d3b','#ffd23f','#5fd36f','#3fa7ff','#9b6bff','#ff7ac6','#2fd3c2'];
+  const cube=(q,x,y,w,h,col)=>{ rr(q,x,y,w,h,Math.min(w,h)*.2,col,'rgba(0,0,0,.28)'); q.fillStyle='rgba(255,255,255,.32)'; q.fillRect(x+w*.16,y+h*.12,w*.68,Math.max(3,h*.12)); };
+  const mats=(q,x,y,w,h,cs,colf)=>{ q.save(); q.beginPath(); q.rect(x,y,w,h); q.clip(); for(let j=0;j*cs<h;j++) for(let i=0;i*cs<w;i++){ q.fillStyle=colf(i,j); q.fillRect(x+i*cs,y+j*cs,cs,cs); }
+    q.strokeStyle='rgba(70,40,60,.28)'; q.lineWidth=2; for(let i=0;i*cs<=w;i++){ q.beginPath(); q.moveTo(x+i*cs,y); q.lineTo(x+i*cs,y+h); q.stroke(); } for(let j=0;j*cs<=h;j++){ q.beginPath(); q.moveTo(x,y+j*cs); q.lineTo(x+w,y+j*cs); q.stroke(); }
+    for(let j=0;j*cs<h;j++) for(let i=0;i*cs<w;i++){ if((i+j)%2) continue; const c=colf(i,j); for(const [a,b] of [[1,0],[0,1]]){ q.fillStyle=c; q.beginPath(); q.arc(x+(i+.5+a*.59)*cs,y+(j+.5+b*.59)*cs,cs*.15,0,7); q.fill(); } } q.restore(); };
+  const tag=(q,t,x,y,sz=20,col='#5a2b2b')=>{ q.font='800 '+sz+'px '+F; const w=q.measureText(t).width+18; rr(q,x-w/2,y-sz*.75,w,sz*1.5,sz*.5,'rgba(255,255,255,.9)'); label(q,t,x,y,sz,col); };   // (un letrerito con fondo blanco: se lee sobre los tapetes)
+  const hsh=(i,j)=>Math.floor(Math.abs(Math.sin(i*127.1+j*311.7)*43758.5453))%8;
   // los dibujos (zona de dibujo: y de 82 a 440; el texto de abajo va aparte)
   const DRAW={
     plat(q){ water(q,370);
@@ -25161,8 +25185,9 @@ const HOWTO=(()=>{ const F='Sniglet, Nunito, sans-serif', W=512, H=512;
       plush(q,x0+2.5*S,y0+2.5*S-6,.55,'#ff9ad5'); label(q,'SALIDA',x0+4.5*S,y0+6*S+24,22,'#2e7d32'); label(q,'¡nuevo cada vez!',256,96,22); },
     carros(q){ const car=(x,y,a,col,n)=>{ q.save(); q.translate(x,y); q.rotate(a); rr(q,-34,-24,68,48,14,col,'rgba(0,0,0,.3)'); q.strokeStyle='#888'; q.lineWidth=4; q.beginPath(); q.moveTo(34,0); q.lineTo(60,0); q.stroke();
         for(let i=0;i<n;i++){ const by=(i-(n-1)/2)*16; q.strokeStyle='#999'; q.lineWidth=1.5; q.beginPath(); q.moveTo(-34,0); q.lineTo(-62,by); q.stroke(); q.fillStyle=['#ff5d6c','#ffd34d','#7ed957','#4fc3f7','#c77dff'][i]; q.beginPath(); q.ellipse(-70,by,11,13,0,0,7); q.fill(); } q.restore(); };
+      mats(q,40,170,432,230,34,(i,j)=>['#ff9c9c','#ffc48a','#ffe58a','#9fe5a8','#9fd3ff','#c9b0ff','#ffb3dc','#94e8df'][hsh(i,j)]); for(let k=0;k<14;k++){ cube(q,40+k*31,150,30,22,VBC[k%8]); cube(q,40+k*31,398,30,22,VBC[(k+4)%8]); }   // v272: piso de tapetes y orilla de bloques
       car(170,280,0,'#4fc3f7',5); car(380,280,0,'#ff9ad5',3); boom(q,308,280,22,'#fff59d'); label(q,'¡POP!',308,230,30,'#c62828');
-      label(q,'aguja',205,330,20); label(q,'globos',100,215,20); arrow(q,60,380,200,380,'#e5534b',5); label(q,'turbo',130,410,20); },
+      tag(q,'aguja',205,330,20); tag(q,'globos',100,215,20); arrow(q,60,380,200,380,'#e5534b',5); tag(q,'turbo',130,372,20); },
     banda(q){ const y=300; const g=q.createLinearGradient(40,0,470,0); g.addColorStop(0,'#ff8ad8'); g.addColorStop(.5,'#9b8cff'); g.addColorStop(1,'#6fd3ff'); q.fillStyle=g; q.fillRect(40,y,430,26);
       q.fillStyle='#3a3f52'; q.fillRect(40,y+26,430,12); q.fillStyle='#10122a'; q.fillRect(300,y,60,26);
       q.fillStyle='#ffb74d'; q.fillRect(410,y-90,16,90); arrow(q,330,y+70,140,y+70,'#5c6bc0',7); label(q,'la banda va hacia atrás',256,y+110,22);
@@ -25188,14 +25213,14 @@ const HOWTO=(()=>{ const F='Sniglet, Nunito, sans-serif', W=512, H=512;
       pad(220,370,'#ff5d6c'); pad(300,160,'#4fc3f7'); q.fillStyle='#222'; q.beginPath(); q.arc(262,250,13,0,7); q.fill(); arrow(q,262,250,256,125,'#e5534b',5); label(q,'¡GOL!',430,140,28,'#c62828'); label(q,'tú',220,410,20); },
   };
   // v195: Canasta de frutas
-  DRAW.frutas=q=>{ q.fillStyle='#8fd36a'; q.fillRect(40,360,432,80);
+  DRAW.frutas=q=>{ mats(q,40,360,432,80,30,(i,j)=>(i+j)%2?'#ffffff':'#3fa7ff');   // v272: piso azul y blanco, como mantel
     const fr=(x,y,c,r=17)=>{ q.fillStyle=c; q.beginPath(); q.arc(x,y,r,0,7); q.fill(); q.fillStyle='#6b4a2b'; q.fillRect(x-2,y-r-7,4,9); };
     const sh=(x,y,r,a)=>{ q.fillStyle='rgba(40,30,20,'+a+')'; q.beginPath(); q.ellipse(x,y,r,r*.35,0,0,7); q.fill(); };
     fr(360,150,'#ff9a1f'); sh(360,392,14,.18); fr(130,205,'#e8383d'); sh(130,395,22,.28); fr(425,245,'#ffcf3a',19); sh(425,396,30,.38);
     arrow(q,360,180,360,232,'#e08a2f',4); arrow(q,130,235,130,290,'#e5534b',4);
     plush(q,250,286,1.15,'#4fc3f7'); rr(q,210,312,80,42,10,'#c68a4a','rgba(0,0,0,.25)'); q.strokeStyle='#9a6331'; q.lineWidth=5; q.beginPath(); q.arc(250,314,32,Math.PI,0); q.stroke();
     q.fillStyle='#e8383d'; q.beginPath(); q.arc(238,312,9,0,7); q.fill(); q.fillStyle='#ff9a1f'; q.beginPath(); q.arc(258,310,9,0,7); q.fill();
-    label(q,'¡ponte debajo!',256,100,26,'#c62828'); label(q,'la sombra crece',150,425,19,'#2e5a1f'); label(q,'dorada = 3',428,292,20,'#a4740a'); };
+    label(q,'¡ponte debajo!',256,100,26,'#c62828'); tag(q,'la sombra crece',150,418,19,'#2e5a1f'); label(q,'dorada = 3',428,292,20,'#a4740a'); };
   DRAW.pinta=q=>{ const N=8, S=40, x0=96, y0=110, own=[0,0,1,1,1,2,2,-1, 0,0,0,1,-1,2,2,2, 0,-1,0,-1,-1,-1,2,2, 0,0,-1,-1,1,1,1,2, -1,0,0,-1,1,1,-1,-1, 1,1,0,0,-1,1,2,2, 1,1,-1,0,0,-1,2,-1, -1,1,1,-1,0,0,2,2];
     const cols=['#ff4f7b','#3fa9ff','#ffc93f']; rr(q,x0-8,y0-8,N*S+16,N*S+16,10,'#f7f0e2','rgba(0,0,0,.2)');
     own.forEach((o,k)=>{ if(o<0) return; const i=k%N, j=Math.floor(k/N); q.fillStyle=cols[o]; q.beginPath(); q.arc(x0+i*S+S/2,y0+j*S+S/2,S*.62,0,7); q.fill(); });
@@ -25212,7 +25237,8 @@ const HOWTO=(()=>{ const F='Sniglet, Nunito, sans-serif', W=512, H=512;
     rr(q,136,84,240,74,14,'#1d2440','#ffcf4d'); label(q,'3 + 4 = ?',256,122,40,'#ffffff');
     for(let i=0;i<46;i++){ q.fillStyle=C[i%6]; q.beginPath(); q.arc(70+((i*67)%372),388+((i*29)%40),13,0,7); q.fill(); }
     const nums=[7,6,7,8,9,7,5,7,8]; for(let k=0;k<9;k++){ const x=136+(k%3)*82, y=176+Math.floor(k/3)*62; rr(q,x,y,76,56,10,C[(k*2+1)%6],'rgba(0,0,0,.2)'); label(q,String(nums[k]),x+38,y+30,32,'#4a2a1a'); }
-    plush(q,218,212,.75,'#7ed957'); };
+    plush(q,218,212,.75,'#7ed957');
+    for(let k=0;k<6;k++){ cube(q,92,170+k*36,34,34,k%2?'#ffffff':VBC[k%8]); cube(q,386,170+k*36,34,34,k%2?'#ffffff':VBC[(k+4)%8]); } };   // v272: postes de bloques
   DRAW.pogo=q=>{ const C=['#ff9ec4','#9ee6c4','#ffd34d','#8fd6ff','#c79bff'];   // v267: la torre de plataformas y alguien en su pogo
     q.fillStyle='#ffd34d'; q.beginPath(); q.ellipse(256,430,170,34,0,0,7); q.fill(); q.fillStyle='#ff9ec4'; q.beginPath(); q.ellipse(256,422,150,26,0,0,7); q.fill();
     [[150,350,0],[300,290,1],[190,225,2],[330,160,3],[230,95,4]].forEach(([x,y,c])=>rr(q,x-55,y,110,22,8,C[c],'rgba(0,0,0,.2)'));
@@ -25230,12 +25256,14 @@ const HOWTO=(()=>{ const F='Sniglet, Nunito, sans-serif', W=512, H=512;
     const cush=(x,y,c)=>{ rr(q,x-30,y-14,60,28,12,c,'rgba(0,0,0,.25)'); };
     cush(170,320,'#ff6f91'); cush(330,300,'#5fb7ff'); plush(q,330,262,.9,'#7ed957'); plush(q,175,280,.9,'#ff9ad5'); plush(q,420,300,.9,'#ffd34d',{arms:'up'});
     label(q,'♪ ♫ ♪',256,120,40,'#7a2b8a'); label(q,'cuando pare la música…',256,165,22,'#5a2b2b'); label(q,'¡sin cojín!',430,230,20,'#c62828'); };
-  DRAW.escondidas=q=>{ q.fillStyle='#9fd66f'; q.fillRect(40,300,432,140);
-    const bush=(x,y,s)=>{ q.fillStyle='#4f9a3a'; [[0,0,1],[-.7,.2,.7],[.7,.2,.7],[0,-.5,.8]].forEach(([a,b,k])=>{ q.beginPath(); q.arc(x+a*40*s,y+b*40*s,40*s*k,0,7); q.fill(); }); };
-    plush(q,150,300,1.1,'#ff9ad5'); bush(150,320,1.2); q.fillStyle='#ff9ad5'; q.beginPath(); q.arc(132,262,9,0,7); q.arc(168,262,9,0,7); q.fill();
-    q.fillStyle='#3f8a3c'; q.fillRect(250,250,110,70); plush(q,390,300,1,'#4fc3f7',{arms:'up'}); label(q,'👀',390,225,30);
+  DRAW.escondidas=q=>{ mats(q,40,300,432,140,36,(i,j)=>(i+j)%2?'#2fd3c2':'#5fd36f');   // v272: piso verde intercalado, arbusto de cubitos y seto de bloques
+    const bush=(x,y)=>{ const G=['#3fbf5a','#5fd36f','#2fae7a','#8fe36b']; [[-58,-20,52],[6,-24,56],[-30,-70,50],[-26,-8,62]].forEach(([a,b,w],k)=>cube(q,x+a,y+b,w,w,G[k%4])); [['#ff7ac6',-50,-60],['#ffd23f',10,-40],['#ffffff',-4,-80]].forEach(([c,a,b])=>cube(q,x+a,y+b,14,14,c)); };
+    plush(q,150,300,1.1,'#ff9ad5'); bush(162,330); q.fillStyle='#ff9ad5'; q.beginPath(); q.arc(132,262,9,0,7); q.arc(168,262,9,0,7); q.fill();
+    for(let r=0;r<2;r++) for(let c=0;c<4;c++) cube(q,248+c*28,252+r*34,27,33,(r+c)%2?'#ff7ac6':'#3fbf5a'); plush(q,390,300,1,'#4fc3f7',{arms:'up'}); label(q,'👀',390,225,30);
     label(q,'¡te encontré!',400,190,22,'#c62828'); label(q,'escondido',150,190,20,'#2e5a1f'); label(q,'seto',305,340,18,'#ffffff'); label(q,'1… 2… 3…',256,110,28,'#5a2b2b'); };
-  DRAW.dibujar=q=>{ q.fillStyle='#ff9fb8'; q.beginPath(); q.ellipse(256,330,190,70,0,0,7); q.fill(); q.fillStyle='#fff6e3'; q.beginPath(); q.ellipse(256,325,165,55,0,0,7); q.fill();
+  DRAW.dibujar=q=>{ mats(q,40,250,432,190,40,(i,j)=>(i+j)%2?'#ffffff':'#ff7ac6');   // v272: piso de cuadros rosas y blancos, mesa con sillitas de bloques
+    [[70,300,'#ffd23f'],[410,300,'#3fa7ff'],[120,390,'#5fd36f'],[362,390,'#9b6bff']].forEach(([x,y,c])=>{ cube(q,x,y-34,34,36,c); cube(q,x-2,y,38,12,c); });
+    q.fillStyle='#ff9fb8'; q.beginPath(); q.ellipse(256,330,190,70,0,0,7); q.fill(); q.fillStyle='#fff6e3'; q.beginPath(); q.ellipse(256,325,165,55,0,0,7); q.fill();
     q.fillStyle='#fffdf6'; q.save(); q.translate(256,320); q.rotate(-.08); q.fillRect(-55,-38,110,76); q.setLineDash([6,8]); q.strokeStyle='rgba(150,140,130,.6)'; q.lineWidth=6; q.beginPath(); q.moveTo(-10,-22); q.lineTo(8,-30); q.lineTo(8,28); q.stroke(); q.setLineDash([]);
     q.strokeStyle='#e5534b'; q.lineWidth=5; q.beginPath(); q.moveTo(-8,-20); q.lineTo(9,-28); q.lineTo(9,10); q.stroke(); q.restore();
     plush(q,120,250,1,'#4fc3f7'); plush(q,392,250,1,'#ff9ad5'); plush(q,256,190,.9,'#7ed957');
@@ -35339,6 +35367,7 @@ const VDEC={board:null, boardT:0, boardKey:''};
   let sd=2720; const R=()=>{ sd=(sd*16807)%2147483647; return (sd-1)/2147483646; }, pick=L=>L[Math.floor(R()*L.length)];
   const rbox=rboxGeo();
   const BX=[], blk=(x,y,z,sx,sy,sz,ry,c)=>BX.push([x,y,z,sx,sy,sz,ry,c]), bulbs=[[],[],[],[]], drops=[];
+  const onPath=(x,z,m)=>{ for(const W of VALLE_PATHS) for(let i=0;i<W.pts.length-1;i++){ const [ax,az]=W.pts[i], [bx,bz]=W.pts[i+1], ex=bx-ax, ez=bz-az, l2=ex*ex+ez*ez||1; let t=((x-ax)*ex+(z-az)*ez)/l2; t=t<0?0:t>1?1:t; if(Math.hypot(x-ax-ex*t,z-az-ez*t)<W.wide+m) return true; } return false; };   // v272: ¿cae encima de un camino? (donde dos caminos salen juntos)
   const near=(x,z)=>{ for(const W of VALLE_PATHS) for(let i=0;i<W.pts.length-1;i++){ const [ax,az]=W.pts[i], [bx,bz]=W.pts[i+1], ex=bx-ax, ez=bz-az, l2=ex*ex+ez*ez||1; let t=((x-ax)*ex+(z-az)*ez)/l2; t=t<0?0:t>1?1:t; if(Math.hypot(x-ax-ex*t,z-az-ez*t)<W.wide*2+5) return true; } return false; };
   const padNear=(x,z,m)=>[FRU,CHOC,ESG,DWG,NUMG].some(G=>Math.max(Math.abs(x-G.x),Math.abs(z-G.z))<(G===ESG?44:G===FRU?39:G===CHOC?38:G===NUMG?35:26)+m);
   const apOK=(x,z,m)=>{ const [u,v]=airportUV(x,z); return !(u>-160-m && Math.abs(v+55)<175+m) && !(u>-70-m && u<285+m && v>-165-m && v<55+m); };
@@ -35352,22 +35381,34 @@ const VDEC={board:null, boardT:0, boardKey:''};
     // el letrero
     const cv=document.createElement('canvas'); cv.width=1024; cv.height=160; const g=cv.getContext('2d'); let tex=null;
     const dr=()=>{ g.clearRect(0,0,1024,160); g.fillStyle='#fffaf0'; g.beginPath(); g.roundRect?g.roundRect(6,6,1012,148,40):g.rect(6,6,1012,148); g.fill(); g.lineWidth=10; g.strokeStyle='#ff7ac6'; g.stroke();
-      const txt=I18N.t('Valle de los minijuegos'); g.font='900 78px Sniglet, Nunito, sans-serif'; g.textAlign='center'; g.textBaseline='middle'; let x=512-g.measureText(txt).width/2; g.textAlign='left';
+      const txt=I18N.t('Valle de los minijuegos'); let fs=78; g.font='900 '+fs+'px Sniglet, Nunito, sans-serif'; while(fs>36 && g.measureText(txt).width>1024-110){ fs-=3; g.font='900 '+fs+'px Sniglet, Nunito, sans-serif'; }   // v272: la letra se achica si no cabe
+      g.textAlign='center'; g.textBaseline='middle'; let x=512-g.measureText(txt).width/2; g.textAlign='left';
       [...txt].forEach((ch,i)=>{ g.fillStyle=COLS[i%8]; g.fillText(ch,x,84); x+=g.measureText(ch).width; }); if(tex) tex.needsUpdate=true; };
-    dr(); relang(dr); tex=new THREE.CanvasTexture(cv); tex.encoding=THREE.sRGBEncoding; tex.anisotropy=4;
-    const sg=new THREE.Mesh(new THREE.PlaneGeometry(17,2.65), new THREE.MeshBasicMaterial({map:tex, transparent:true, side:THREE.DoubleSide})); sg.position.set(X-ux*.85,y0+12.2,Z-uz*.85); sg.rotation.y=Math.atan2(-ux,-uz); sg.userData.noCol=true; scene.add(sg); }
+    dr(); relang(dr); try{ document.fonts.ready.then(dr); }catch(e){} tex=new THREE.CanvasTexture(cv); tex.encoding=THREE.sRGBEncoding; tex.anisotropy=4;
+    const sg=new THREE.Mesh(new THREE.PlaneGeometry(14.2,2.22), new THREE.MeshBasicMaterial({map:tex, transparent:true})); sg.position.set(X-ux*.85,y0+12.2,Z-uz*.85); sg.rotation.y=Math.atan2(-ux,-uz); sg.userData.noCol=true; scene.add(sg);
+    const sb=new THREE.Mesh(sg.geometry,sg.material); sb.position.set(X+ux*.85,y0+12.2,Z+uz*.85); sb.rotation.set(0,sg.rotation.y+Math.PI,0); sb.userData.noCol=true; scene.add(sb); }   // (v272: y otro por dentro, que se lee al derecho al salir)   // (v272: cabe entre las dos torres)
   // --- la plaza: fuente de bloques, bancas de bloques, banderines y foquitos de feria ---
   { const y0=terrainH(P.x,P.z);
     for(let k=0;k<16;k++){ const a=k/16*Math.PI*2; blk(P.x+Math.cos(a)*5.4,y0+.45,P.z+Math.sin(a)*5.4,2.1,.9,1.1,-a,COLS[k%8]); }   // la orilla de la fuente
-    const water=new THREE.Mesh(new THREE.CylinderGeometry(5,5,.2,32), new THREE.MeshStandardMaterial({color:'#79cfff', roughness:.15, emissive:'#1b5a86', emissiveIntensity:.25})); water.position.set(P.x,y0+.62,P.z); water.userData.noCol=true; scene.add(water);
+    // v272: agua de verdad (la misma de los estanques: con olitas, brillos y espuma)
+    { const E=5.2, N=16, data=new Uint8Array(N*N).fill(Math.round((1.6+2)/12*255)), dt=new THREE.DataTexture(data,N,N,THREE.LuminanceFormat); dt.needsUpdate=true;
+      const m=makeWaterMat({A:WATER.lakeA, depth:{tex:dt, rect:new THREE.Vector4(P.x-E,P.z-E,2*E,2*E)}, shallow:'#6fcbea', deep:'#2a78b8', deepD:1.2, detail:waterTex, tile:4, foam:.55, opacity:.95}); m.userData.lake=true; waterMats.push(m);
+      const pos=[0,0,0], idx=[], S2=40, RG=6; for(let r=1;r<=RG;r++) for(let k=0;k<S2;k++){ const t=k/S2*Math.PI*2, f=r/RG*4.75; pos.push(Math.cos(t)*f,0,Math.sin(t)*f); }
+      for(let k=0;k<S2;k++) idx.push(0,1+(k+1)%S2,1+k); for(let r=1;r<RG;r++) for(let k=0;k<S2;k++){ const A2=1+(r-1)*S2+k, B2=1+(r-1)*S2+(k+1)%S2; idx.push(A2,B2,A2+S2, B2,B2+S2,A2+S2); }
+      const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); geo.setIndex(idx);
+      const w=new THREE.Mesh(geo,m); w.position.set(P.x,y0+.68,P.z); w.renderOrder=2; w.userData.noBatch=true; w.userData.noCol=true; scene.add(w);
+      const bed=new THREE.Mesh(new THREE.CircleGeometry(5,32), new THREE.MeshStandardMaterial({color:'#2f86c4', roughness:.9})); bed.rotation.x=-Math.PI/2; bed.position.set(P.x,y0+.08,P.z); bed.userData.noCol=true; scene.add(bed); }   // (el fondo de la fuente)
     let y=y0+.7; for(let k=0;k<5;k++){ const s=2.2-k*.35; blk(P.x,y+s/2,P.z,s,s,s,k*.5,COLS[(k*3)%8]); y+=s; }
     VDEC.spout={x:P.x, y, z:P.z, y0:y0+.72};
     obstacles.push({x:P.x,z:P.z,r:5.9,top:y0+.9,walk:true});
     for(let k=0;k<6;k++){ const a=k/6*Math.PI*2+.26, bx=P.x+Math.cos(a)*15, bz=P.z+Math.sin(a)*15, by=terrainH(bx,bz), yaw=Math.atan2(P.x-bx,P.z-bz), c=COLS[(k*3+1)%8];
       if(near(bx,bz)) continue;
-      blk(bx,by+.5,bz,2.4,.32,.75,yaw+Math.PI/2,c); blk(bx-Math.sin(yaw)*.32,by+.95,bz-Math.cos(yaw)*.32,2.4,.6,.18,yaw+Math.PI/2,c);
-      for(const q of [-.9,.9]) blk(bx+Math.cos(yaw)*q,by+.18,bz-Math.sin(yaw)*q,.36,.36,.6,yaw+Math.PI/2,COLS[(k*3+4)%8]);
-      const cy=Math.cos(yaw+Math.PI), sy=Math.sin(yaw+Math.PI); [-.75,0,.75].forEach(f=>obstacles.push({x:bx+cy*f, z:bz-sy*f, r:.42, top:by+.66, walk:true})); BENCHES.push({x:bx,z:bz,y:by+.66,yaw:yaw+Math.PI}); }
+      // v272: banca de bloques de verdad: asiento, respaldo atrás, patas y descansabrazos; te sientas mirando a la fuente
+      const fx=Math.sin(yaw), fz=Math.cos(yaw), lx=Math.cos(yaw), lz=-Math.sin(yaw), c2=COLS[(k*3+4)%8];
+      blk(bx,by+.42,bz,2.4,.16,.72,yaw,c); blk(bx-fx*.33,by+.86,bz-fz*.33,2.4,.6,.16,yaw,c);
+      for(const q of [-1,1]) for(const w of [-.24,.24]) blk(bx+lx*q+fx*w,by+.17,bz+lz*q+fz*w,.16,.34,.16,yaw,c2);
+      for(const q of [-1.27,1.27]) blk(bx+lx*q,by+.62,bz+lz*q,.16,.26,.66,yaw,c2);
+      [-.75,0,.75].forEach(f=>obstacles.push({x:bx+lx*f, z:bz+lz*f, r:.42, top:by+.5, walk:true})); BENCHES.push({x:bx,z:bz,y:by+.5,yaw}); }
     // postes y banderines con foquitos (se prenden de noche)
     const posts=[]; for(let k=0;k<12;k++){ const a=k/12*Math.PI*2+.13, x=P.x+Math.cos(a)*(P.R-2), z=P.z+Math.sin(a)*(P.R-2); posts.push([x,z,terrainH(x,z)]); let yy=terrainH(x,z); for(let q=0;q<5;q++){ blk(x,yy+.55,z,.55,1.1,.55,0,q%2?'#ffffff':COLS[k%8]); yy+=1.1; } obstacles.push({x,z,r:.4,top:yy,walk:false}); }
     const fv=[], fc=[], cc=new THREE.Color();
@@ -35379,24 +35420,26 @@ const VDEC={board:null, boardT:0, boardKey:''};
     const fg=new THREE.BufferGeometry(); fg.setAttribute('position',new THREE.Float32BufferAttribute(fv,3)); fg.setAttribute('color',new THREE.Float32BufferAttribute(fc,3)); fg.computeVertexNormals();
     const fm=new THREE.Mesh(fg,new THREE.MeshStandardMaterial({vertexColors:true, side:THREE.DoubleSide, roughness:.8})); fm.userData.noCol=true; scene.add(fm);
     // chorritos de agua de la fuente (bolitas en arco)
-    { const S=VDEC.spout; for(let k=0;k<8;k++){ const a=k/8*Math.PI*2+.2; for(let i=1;i<=9;i++){ const t=i/10, r=.6+t*4.2, y=S.y+.4+3.2*t-5.6*t*t*(S.y-S.y0+3.2)/(S.y-S.y0+3.2); drops.push([S.x+Math.cos(a)*r, Math.max(S.y0+.1,S.y+.3+2.2*t-(S.y-S.y0+2.4)*t*t), S.z+Math.sin(a)*r, .22-t*.08]); } } }
+    // v272: chorros que se mueven: gotitas que salen de arriba y caen al agua (se animan solo si estás cerca)
+    { const n=8*12, m=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,1), new THREE.MeshStandardMaterial({color:'#c9f0ff', emissive:'#3a8fc0', emissiveIntensity:.35, roughness:.1, transparent:true, opacity:.8}), n);
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled=false; m.castShadow=false; m.userData.noCol=true; m.userData.noBatch=true; scene.add(m); VDEC.jets={m, n, t:0}; valleJets(0,true); }
     // tablero de récords
     { const a=A+Math.PI*.78, bx=P.x+Math.cos(a)*(P.R+7), bz=P.z+Math.sin(a)*(P.R+7), by=terrainH(bx,bz), yaw=Math.atan2(P.x-bx,P.z-bz), cx=Math.cos(yaw), sx=Math.sin(yaw);
-      for(const q of [-3.6,3.6]){ let yy=by; for(let k=0;k<4;k++){ blk(bx+cx*q,yy+.55,bz-sx*q,.9,1.1,.9,yaw,COLS[(k+(q>0?2:5))%8]); yy+=1.1; } obstacles.push({x:bx+cx*q,z:bz-sx*q,r:.7,top:yy,walk:false}); }
+      for(const q of [-4.5,4.5]){ let yy=by; for(let k=0;k<4;k++){ blk(bx+cx*q,yy+.55,bz-sx*q,.9,1.1,.9,yaw,COLS[(k+(q>0?2:5))%8]); yy+=1.1; } obstacles.push({x:bx+cx*q,z:bz-sx*q,r:.7,top:yy,walk:false}); }
       const cv=document.createElement('canvas'); cv.width=512; cv.height=320; const tex=new THREE.CanvasTexture(cv); tex.encoding=THREE.sRGBEncoding; tex.anisotropy=4;
       const m=new THREE.Mesh(new THREE.PlaneGeometry(7.6,4.75), new THREE.MeshBasicMaterial({map:tex})); m.position.set(bx,by+4.2,bz); m.rotation.y=yaw; m.userData.noCol=true; scene.add(m);
       const back=new THREE.Mesh(new THREE.BoxGeometry(8,5.1,.25), felt('#5a4426')); back.position.set(bx-Math.sin(yaw)*.16,by+4.2,bz-Math.cos(yaw)*.16); back.rotation.y=yaw; scene.add(back);
       VDEC.board={cv, tex, x:bx, z:bz}; valleBoardDraw(); relang(()=>{ VDEC.boardKey=''; valleBoardDraw(); }); } }
   // --- foquitos de feria a los dos lados de la avenida de la entrada ---
   { const W=VALLE_PATHS[0], [x0,z0]=W.pts[0], [x1,z1]=W.pts[1], L=Math.hypot(x1-x0,z1-z0), dx=(x1-x0)/L, dz=(z1-z0)/L, nx=-dz, nz=dx, n=Math.floor((L-10)/22);
-    for(const sg of [-1,1]){ const posts=[]; for(let i=0;i<=n;i++){ const x=x0+dx*(8+i*22)+nx*sg*(W.wide*2+3.2), z=z0+dz*(8+i*22)+nz*sg*(W.wide*2+3.2), y=terrainH(x,z); posts.push([x,z,y]);
+    for(const sg of [-1,1]){ const posts=[]; for(let i=0;i<=n;i++){ const x=x0+dx*(8+i*22)+nx*sg*(W.wide+3.3), z=z0+dz*(8+i*22)+nz*sg*(W.wide+3.3), y=terrainH(x,z); posts.push([x,z,y]);
         for(let q=0;q<4;q++) blk(x,y+.55+q*1.1,z,.5,1.1,.5,0,q%2?'#ffffff':COLS[(i+q)%8]); obstacles.push({x,z,r:.35,top:y+4.4,walk:false}); }
       for(let i=0;i<posts.length-1;i++){ const [ax,az,ay]=posts[i], [bx,bz,by]=posts[i+1]; for(let q=1;q<16;q++){ const t=q/16; bulbs[(q+i)%4].push([ax+(bx-ax)*t, lerp(ay,by,t)+4.5-1.6*Math.sin(t*Math.PI), az+(bz-az)*t]); } } } }
   // --- cercas de bloques en fila a los lados de los caminos ---
   for(const W of VALLE_PATHS){ const pts=W.pts; let s=0, n=0, from=W.wide===4?0:0;
     for(let q=0;q<pts.length-1;q++){ const [x0,z0]=pts[q], [x1,z1]=pts[q+1], dx=x1-x0, dz=z1-z0, L=Math.hypot(dx,dz), nx=-dz/L, nz=dx/L;
-      for(let t=0;t<L;t+=1.9,s+=1.9){ const total=W.wide===4?1e9:60; if(W.wide!==4 && s>total && s<(W.len||1e9)) continue; n++;
-        for(const sg of [-1,1]){ const x=x0+dx*t/L+nx*sg*(W.wide*2+1.2), z=z0+dz*t/L+nz*sg*(W.wide*2+1.2); if(!valleIn(x,z) || padNear(x,z,2)) continue; const y=terrainH(x,z); blk(x,y+.45,z,.9,.9,.9,Math.atan2(dx,dz),COLS[(n+(sg>0?0:4))%8]); obstacles.push({x,z,r:.55,top:y+.9,walk:true}); } } } }
+      for(let t=0;t<L;t+=1.9,s+=1.9){ n++;   /* v272: la cerquita va en todo el camino (antes solo los primeros 60 m) */
+        for(const sg of [-1,1]){ const x=x0+dx*t/L+nx*sg*(W.wide+2.1), z=z0+dz*t/L+nz*sg*(W.wide+2.1); if(!valleIn(x,z) || padNear(x,z,2) || onPath(x,z,1.75) || Math.hypot(x-P.x,z-P.z)<P.R+1.5) continue; const y=terrainH(x,z); blk(x,y+.45,z,.9,.9,.9,Math.atan2(dx,dz),COLS[(n+(sg>0?0:4))%8]); obstacles.push({x,z,r:.55,top:y+.9,walk:true}); } } } }
   // --- árboles gigantes de bloques ---
   const trees=[]; for(let tries=0;tries<3000 && trees.length<30;tries++){ const a=V.a0+.03+R()*(V.a1-V.a0-.06), r=coastMidR(a)+40+R()*(coastRN(a)-coastMidR(a)-240), x=Math.cos(a)*r, z=Math.sin(a)*r;
     if(!free(x,z,22) || trees.some(t=>Math.hypot(t[0]-x,t[1]-z)<48)) continue; trees.push([x,z]);
@@ -35417,7 +35460,7 @@ const VDEC={board:null, boardT:0, boardKey:''};
     const y=terrainH(x,z), m=4+Math.floor(R()*4); let top=y; for(let k=0;k<m;k++){ const s=.7+R()*.6, ox=(R()-.5)*1.8, oz=(R()-.5)*1.8, yb=y+s/2+(k>3?s*.8:0); blk(x+ox,yb,z+oz,s,s,s,R()*6,R()<.25?pick(COLS):pick(GREENS)); top=Math.max(top,yb+s/2); } obstacles.push({x,z,r:1.3,top,walk:true}); }
   ['#fff3a0','#ffb3d9','#a6e3ff','#c6ffb3'].forEach((h,i)=>{ const m=new THREE.MeshStandardMaterial({color:h, emissive:h, emissiveIntensity:0, roughness:.4}); signGlow.push(m);
     if(bulbs[i].length) instanced(sphereLo, m, bulbs[i], (o,[x,y,z])=>{ o.position.set(x,y,z); o.scale.setScalar(.17); }, {shadow:false, chunk:220, hideEmpty:true}); });
-  if(drops.length) instanced(sphereLo, new THREE.MeshStandardMaterial({color:'#9fe0ff', emissive:'#2a6f9a', emissiveIntensity:.35, roughness:.2}), drops, (o,[x,y,z,r])=>{ o.position.set(x,y,z); o.scale.setScalar(r); }, {shadow:false, chunk:220, hideEmpty:true});
+
   BX.push(...VBLK);   // (con los bloques de los minijuegos)
   const L=instanced(rbox, new THREE.MeshStandardMaterial({roughness:.7}), BX, (o,[x,y,z,sx,sy,sz,ry])=>{ o.position.set(x,y,z); o.scale.set(sx,sy,sz); o.rotation.y=ry; }, {chunk:240, hideEmpty:true, lo:new THREE.BoxGeometry(1,1,1)});   // (de lejos, cubitos sencillos)
   { const c=new THREE.Color(); BX.forEach((b,i)=>L.setColorAt(i,c.set(b[7]).convertSRGBToLinear())); L.meshes.forEach(m=>{ if(m.instanceColor) m.instanceColor.needsUpdate=true; m.userData.noCol=true; }); }   // (los choques ya están puestos a mano: así es igual en todos lados)
@@ -35431,14 +35474,32 @@ const VDEC={board:null, boardT:0, boardKey:''};
       const s=1+R()*.6, y=terrainH(x,z); cubes[n%6].push([x,y+s/2,z,s,R()*6]); obstacles.push({x,z,r:s*.6,top:y+s,walk:true}); if(R()<.35){ cubes[(n+3)%6].push([x+(R()-.5)*.3,y+s+s*.4,z+(R()-.5)*.3,s*.8,R()*6]); } }
     cubes.forEach((list,v)=>{ if(!list.length) return; const gq=new THREE.BoxGeometry(1,1,1), uv=gq.attributes.uv; for(let f=0;f<6;f++){ const c=(v*5+f*3)%16, u0=(c%4)/4, v0=1-(Math.floor(c/4)+1)/4; for(let q=0;q<4;q++){ const i=f*4+q; uv.setXY(i,u0+uv.getX(i)/4,v0+uv.getY(i)/4); } }
       instanced(gq, cm, list, (o,[x,y,z,s,ry])=>{ o.position.set(x,y,z); o.scale.setScalar(s); o.rotation.y=ry; }, {chunk:240, hideEmpty:true}).meshes.forEach(m=>m.userData.noCol=true); }); }
-  // letreros al empezar cada camino (en la plaza)
-  VALLE_PATHS.slice(1).forEach((W,i)=>{ const [x0,z0]=W.pts[0], [x1,z1]=W.pts[2], dx=x1-x0, dz=z1-z0, l=Math.hypot(dx,dz), nx=-dz/l, nz=dx/l, sx=x0+nx*(W.wide*2+2.5)+dx/l*3, sz=z0+nz*(W.wide*2+2.5)+dz/l*3, sy=terrainH(sx,sz);
-    const cv=document.createElement('canvas'); cv.width=256; cv.height=96; const g=cv.getContext('2d'); let tex=null;
-    const dr=()=>{ g.fillStyle=COLS[(i*3+1)%8]; g.fillRect(0,0,256,96); g.fillStyle='#fffaf0'; g.fillRect(8,8,240,80); g.fillStyle='#5a4426'; g.textAlign='center'; g.textBaseline='middle'; g.font='800 30px Sniglet, Nunito, sans-serif';
-      let t=I18N.t(W.w); if(g.measureText(t).width>226) g.font='800 24px Sniglet, Nunito, sans-serif'; g.fillText(t,128,50); if(tex) tex.needsUpdate=true; };
-    dr(); relang(dr); tex=new THREE.CanvasTexture(cv); tex.encoding=THREE.sRGBEncoding; const ry=Math.atan2(-dx,-dz);
-    const post=new THREE.Mesh(rbox, new THREE.MeshStandardMaterial({color:COLS[(i*3+1)%8], roughness:.7})); post.scale.set(.35,2.2,.35); post.position.set(sx,sy+1.1,sz); scene.add(post);
-    const pl=new THREE.Mesh(new THREE.PlaneGeometry(1.8,.68), new THREE.MeshStandardMaterial({map:tex, roughness:.9, side:THREE.DoubleSide})); pl.position.set(sx,sy+2.35,sz); pl.rotation.y=ry; scene.add(pl); });
+  // v272: letreros con flecha. (1) Al empezar cada camino: el nombre y una flecha hacia adelante, mirando a la plaza.
+  // (2) Un poste de flechas en la plaza, donde llega la avenida: cada tabla apunta hacia el camino de su minijuego.
+  const arrowSign=(w,h,col,name,dir)=>{ const cv=document.createElement('canvas'); cv.width=w; cv.height=h; const g=cv.getContext('2d'); let tex=null;
+    const dr=()=>{ g.clearRect(0,0,w,h); const tip=h*.55, x0=dir<0?tip:4, x1=dir<0?w-4:w-tip, m=h/2;
+      g.beginPath(); if(dir>0){ g.moveTo(4,6); g.lineTo(x1,6); g.lineTo(w-4,m); g.lineTo(x1,h-6); g.lineTo(4,h-6); } else if(dir<0){ g.moveTo(w-4,6); g.lineTo(x0,6); g.lineTo(4,m); g.lineTo(x0,h-6); g.lineTo(w-4,h-6); } else { g.rect(4,6,w-8,h-12); } g.closePath();
+      g.fillStyle=col; g.fill(); g.lineWidth=7; g.strokeStyle='#ffffff'; g.stroke();
+      let fs=Math.round(h*.46); const t=I18N.t(name); g.font='800 '+fs+'px Sniglet, Nunito, sans-serif'; const room=(x1-x0)-20; while(fs>12 && g.measureText(t).width>room){ fs-=2; g.font='800 '+fs+'px Sniglet, Nunito, sans-serif'; }
+      g.fillStyle='#ffffff'; g.textAlign='center'; g.textBaseline='middle'; g.lineWidth=5; g.strokeStyle='rgba(60,30,40,.35)'; g.strokeText(t,(x0+x1)/2,m+2); g.fillText(t,(x0+x1)/2,m+2); if(tex) tex.needsUpdate=true; };
+    dr(); relang(dr); try{ document.fonts.ready.then(dr); }catch(e){} tex=new THREE.CanvasTexture(cv); tex.encoding=THREE.sRGBEncoding; tex.anisotropy=4;
+    return new THREE.MeshStandardMaterial({map:tex, roughness:.85, transparent:true, alphaTest:.4}); };
+  const upSign=(col,name)=>{ const cv=document.createElement('canvas'); cv.width=256; cv.height=160; const g=cv.getContext('2d'); let tex=null;
+    const dr=()=>{ g.fillStyle=col; g.fillRect(0,0,256,160); g.fillStyle='#fffaf0'; g.fillRect(8,8,240,144);
+      g.fillStyle=col; g.beginPath(); g.moveTo(128,16); g.lineTo(168,62); g.lineTo(144,62); g.lineTo(144,84); g.lineTo(112,84); g.lineTo(112,62); g.lineTo(88,62); g.closePath(); g.fill();   // flecha: «sigue por aquí»
+      g.fillStyle='#5a4426'; g.textAlign='center'; g.textBaseline='middle'; let fs=30; const t=I18N.t(name); g.font='800 '+fs+'px Sniglet, Nunito, sans-serif'; while(fs>14 && g.measureText(t).width>226){ fs-=2; g.font='800 '+fs+'px Sniglet, Nunito, sans-serif'; } g.fillText(t,128,118); if(tex) tex.needsUpdate=true; };
+    dr(); relang(dr); try{ document.fonts.ready.then(dr); }catch(e){} tex=new THREE.CanvasTexture(cv); tex.encoding=THREE.sRGBEncoding; tex.anisotropy=4; return new THREE.MeshStandardMaterial({map:tex, roughness:.9, side:THREE.DoubleSide}); };
+  const postL=[];
+  VALLE_PATHS.slice(1).forEach((W,i)=>{ const [x0,z0]=W.pts[0], [x1,z1]=W.pts[2], dx=x1-x0, dz=z1-z0, l=Math.hypot(dx,dz), nx=-dz/l, nz=dx/l, sx=x0+nx*(W.wide+2.8)+dx/l*1.5, sz=z0+nz*(W.wide+2.8)+dz/l*1.5, sy=terrainH(sx,sz), col=COLS[(i*3+1)%8];
+    for(let k=0;k<3;k++) postL.push([sx,sy+.38+k*.76,sz,.4,.74,.4,0,k%2?'#ffffff':col]);
+    const pl=new THREE.Mesh(new THREE.PlaneGeometry(1.9,1.19), upSign(col,W.w)); pl.position.set(sx,sy+2.85,sz); pl.rotation.y=Math.atan2(-dx,-dz); pl.userData.noCol=true; scene.add(pl); obstacles.push({x:sx,z:sz,r:.35,top:sy+3.4,walk:false}); });
+  { const ux=(V.arch.x-P.x)/Math.hypot(V.arch.x-P.x,V.arch.z-P.z), uz=(V.arch.z-P.z)/Math.hypot(V.arch.x-P.x,V.arch.z-P.z), px=P.x+ux*(P.R-7)-uz*5.5, pz=P.z+uz*(P.R-7)+ux*5.5, py=terrainH(px,pz);
+    const ways=VALLE_PATHS.slice(1).map((W,i)=>({W,i,a:Math.atan2(W.pts[0][1]-pz,W.pts[0][0]-px)}));
+    for(let k=0;k<7;k++) postL.push([px,py+.38+k*.76,pz,.5,.74,.5,0,k%2?'#ffffff':COLS[(k*3)%8]]);
+    ways.forEach(({W,i,a},k)=>{ const dx=Math.cos(a), dz=Math.sin(a), y=py+2.0+k*.62, r=Math.atan2(-dz,dx), col=COLS[(i*3+1)%8];
+      for(const [d,rot] of [[1,r],[-1,r+Math.PI]]){ const m=new THREE.Mesh(new THREE.PlaneGeometry(3.2,.6), arrowSign(512,96,col,W.w,d)); m.position.set(px+dx*1.75-dz*d*.03, y, pz+dz*1.75+dx*d*.03); m.rotation.y=rot; m.userData.noCol=true; scene.add(m); } });
+    obstacles.push({x:px,z:pz,r:.45,top:py+5.4,walk:false}); }
+  { const m=new THREE.Mesh(rboxMerge(postL),vbMat()); m.castShadow=true; m.userData.noCol=true; scene.add(m); }
   window.__valleMs=performance.now()-t0; window.__valleN=BX.length; })();
 function valleBoardDraw(){ const B=VDEC.board; if(!B) return; const recs=soloRecs(), rows=[];
   for(const a in SOLO_REC){ const A=AR_SPOTS[a]; if(!A) continue; const v=recs[soloKey(+a,{dm:180000})]; rows.push([I18N.t(A.name), soloFmt(+a,v)]); }
@@ -35449,7 +35510,14 @@ function valleBoardDraw(){ const B=VDEC.board; if(!B) return; const recs=soloRec
   g.font='800 21px Nunito, sans-serif'; rows.slice(0,9).forEach(([n,v],i)=>{ const y=78+i*25; g.textAlign='left'; g.fillStyle=C[i%8]; g.fillRect(24,y-8,14,14); g.fillStyle='#5a4426'; g.fillText(n,46,y); g.textAlign='right'; g.fillText(v,488,y); });
   B.tex.needsUpdate=true; }
 TELEPORTS.push({id:'valle', name:'Valle de los minijuegos', x:VALLE.plaza.x-Math.cos(VALLE.A)*(VALLE.plaza.R+4), z:VALLE.plaza.z-Math.sin(VALLE.A)*(VALLE.plaza.R+4), noPortal:true});
-function valleTick(dt){ const B=VDEC.board; if(!B) return; const cam=camera.position; if(Math.abs(cam.x-B.x)>200 || Math.abs(cam.z-B.z)>200) return; VDEC.boardT-=dt; if(VDEC.boardT<=0){ VDEC.boardT=3; valleBoardDraw(); } }
+function valleTick(dt){ const B=VDEC.board; if(!B) return; const cam=camera.position; if(Math.abs(cam.x-B.x)>200 || Math.abs(cam.z-B.z)>200) return; VDEC.boardT-=dt; if(VDEC.boardT<=0){ VDEC.boardT=3; valleBoardDraw(); }
+  valleJets(dt); }
+// los chorros de la fuente: 8 arcos de gotitas que van subiendo y cayendo al agua (en 1.2 s)
+function valleJets(dt,force){ const J=VDEC.jets, S=VDEC.spout; if(!J || !S) return; const _vj=J.o||(J.o=new THREE.Object3D()); const cam=camera.position, far=Math.hypot(cam.x-S.x,cam.z-S.z)>90; J.m.visible=!far; if(far && !force) return;
+  J.t=(J.t+dt/1.2)%1; const H=S.y-S.y0;
+  for(let k=0;k<8;k++){ const a=k/8*Math.PI*2+.2, ca=Math.cos(a), sa=Math.sin(a); for(let i=0;i<12;i++){ const u=(i/12+J.t)%1, r=.5+u*4.1, y=S.y+.35+2.4*u-(H+2.4+.35)*u*u;
+      _vj.position.set(S.x+ca*r, Math.max(S.y0+.05,y), S.z+sa*r); _vj.scale.setScalar(.2-u*.07); _vj.updateMatrix(); J.m.setMatrixAt(k*12+i,_vj.matrix); } }
+  J.m.instanceMatrix.needsUpdate=true; }
 
 // ---------------- v271: áreas verdes: picnic junto al lago y patitos que nadan en fila ----------------
 // Se arma la primera vez que te acercas. Los patitos van según la hora (todos los de la sala los ven en el mismo lugar).
@@ -37465,7 +37533,7 @@ if(GROUND_MAT){ const m=GROUND_MAT;
             float dv=length(vViewPosition), far=smoothstep(30.0,85.0,dv);   // de lejos: sin letras ni rayitas (si no, se ve como ruido)
             float e=.035+.03*far, ed=0.0; vec2 n1=mCell(mp+vec2(e,0.0)), n2=mCell(mp-vec2(e,0.0)), n3=mCell(mp+vec2(0.0,e)), n4=mCell(mp-vec2(0.0,e));
             if(n1!=c || n2!=c || n3!=c || n4!=c) ed=1.0-.75*far;
-            col=mix(col,mix(base,vec3(.86,.74,.8),.35*smoothstep(70.0,200.0,dv)),far);
+            col=mix(col,mix(base,vec3(.86,.78,.82),.45*smoothstep(55.0,180.0,dv)),far);   // (v272: de lejos más tranquilo)
             #ifdef USE_MAP
             col*=.9+.12*dot(texelColor.rgb,vec3(.333));
             #endif
