@@ -23,7 +23,7 @@ async def m():
     # contra una pared: un obstáculo justo enfrente
     r=await ev("(()=>{ const o={x:player.pos.x, z:player.pos.z+3, r:1, top:player.pos.y+5}; obstacles.push(o); paintLaunch('flor', player.pos.clone().add(new THREE.Vector3(0,1.4,.5)), new THREE.Vector3(0,1,9), true); __run(1); const s=PBALL.splats[PBALL.splats.length-1]; const n=new THREE.Vector3(0,0,1).applyQuaternion(s.m.quaternion); obstacles.splice(obstacles.indexOf(o),1); return [s.m.material===PBALL.mat.flor, +n.z.toFixed(2), +Math.abs(n.y).toFixed(2), +(s.m.position.z-(o.z-o.r)).toFixed(2)]; })()")
     ok(r[0] and r[1]<-.9 and r[2]<.1 and abs(r[3])<.1,'contra una pared queda parada en la pared %s'%r)
-    r=await ev("(()=>{ const n0=PBALL.splats.length; paintLaunch('luna', new THREE.Vector3(1200,4,1200), new THREE.Vector3(0,0,1), true); __run(1.5); return [PBALL.splats.length-n0, PBALL.fly.length]; })()")
+    r=await ev("(()=>{ const n0=PBALL.splats.length; const a=.8, rr=coastRN(a)+400; paintLaunch('luna', new THREE.Vector3(Math.cos(a)*rr,4,Math.sin(a)*rr), new THREE.Vector3(0,0,1), true); __run(1.5); return [PBALL.splats.length-n0, PBALL.fly.length]; })()")
     ok(r==[0,0],'en el mar no deja mancha %s'%r)
     r=await ev("(()=>{ for(let i=0;i<20;i++){ paintLaunch('rayo', player.pos.clone().add(new THREE.Vector3(i*.3-3,1.5,0)), new THREE.Vector3(0,2,2), true); } __run(1.5); return PBALL.splats.length; })()")
     ok(r==16,'máximo 16 manchas a la vez: %s'%r)

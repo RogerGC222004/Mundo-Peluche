@@ -21,6 +21,7 @@ async def m():
     ok(r[3]==13 and r[4]==20,'13 gestos y 20 globos en la tienda (%s, %s); bailecito cuesta %s'%(r[3],r[4],r[5]))
     # empezar a jugar (como jugador real)
     await ev("startGame(); 1"); await pg.wait_for_timeout(1500)
+    await pg.wait_for_function("(()=>{ const l=document.getElementById('loader'); return !l || l.hidden || getComputedStyle(l).display==='none'; })()", polling=100, timeout=20000)   # v272: esperar a que se quite la pantalla de carga (con la isla grande tarda un poquito más)
     r=await ev("[state, !!ui('tGest'), ui('tGest').getBoundingClientRect().width>0]"); ok(r[0]=='play' and r[2],'el botón Gestos está en pantalla %s'%r)
     bx=await pg.evaluate("(()=>{ const r=document.getElementById('tGest').getBoundingClientRect(); return [r.x+r.width/2, r.y+r.height/2]; })()")
     await pg.touchscreen.tap(bx[0],bx[1]); await pg.wait_for_timeout(300)
