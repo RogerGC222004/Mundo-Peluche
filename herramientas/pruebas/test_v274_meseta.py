@@ -48,6 +48,22 @@ async def m():
     # 9. de noche los hongos brillan
     r=await ev("""(()=>{ const d0=sky.dayK; sky.dayK=0; mesUpdate(.016); const g=MES_GLOW.value; sky.dayK=d0; mesUpdate(.016); return [+g.toFixed(2), +MES_GLOW.value.toFixed(2), !!MES.sp]; })()""")
     ok(r[0]>.4 and r[2], 'de noche los hongos brillan y hay esporas de luz %s'%r)
+    # 10. el suelo es micelio gris en toda la zona (y no en el desierto ni el valle)
+    r=await ev("""(()=>{ const a=1.43, m=coastMidR(a), n=coastRN(a); const x=Math.cos(a)*(m+(n-m)*.5), z=Math.sin(a)*(m+(n-m)*.5); return [+mycW(x,z).toFixed(2), +mycW(MES.x,MES.z).toFixed(2), mycW(DES.pyr.x,DES.pyr.z), mycW(VALLE.plaza.x,VALLE.plaza.z)]; })()""")
+    ok(r[0]>.9 and r[1]>.9 and r[2]==0 and r[3]==0, 'el suelo de la zona y de la meseta es micelio gris %s'%r)
+    # 11. bosque de hongos: muchos medianos y «árboles»
+    r=await ev("""(()=>{ const k={}; MES.mid.forEach(q=>k[q[3]]=(k[q[3]]||0)+1); return [MES.mid.length, k.arbol||0, (MES.colossal||[]).length]; })()""")
+    ok(r[0]>1500 and r[1]>150 and r[2]>=12, 'bosque de hongos: %s medianos, %s hongos árbol, %s colosales'%tuple(r))
+    # 12. peluchitos hongo: aparecen, con ojitos saltones; saludan, se esconden y te siguen
+    r=await ev("""(()=>{ const a=1.45, m=coastMidR(a), n=coastRN(a), x=Math.cos(a)*(m+(n-m)*.62), z=Math.sin(a)*(m+(n-m)*.62); arWarp(x,terrainH(x,z)+.1,z,0); for(let i=0;i<12;i++) __run(1); return [MF.list.length, MF.I?MF.I.ew.count:0]; })()""")
+    ok(r[0]>=4 and r[1]==2*r[0], 'aparecen peluchitos hongo (%s) con sus ojitos saltones (%s)'%tuple(r))
+    r=await ev("""(()=>{ const A=MF.list[0]; player.pos.set(A.x+4,terrainH(A.x+4,A.z),A.z); player.vel.set(0,0,0); A.waveCd=0; A.follow=false; __run(.5); const wave=A.waveT>0;
+      player.pos.set(A.x+6,terrainH(A.x+6,A.z),A.z); for(let i=0;i<8;i++){ player.vel.set(-7,0,0); update(.05,clock.elapsedTime+=.05); } const hid=+A.hide.toFixed(2);
+      player.vel.set(0,0,0); player.pos.set(A.x+3,terrainH(A.x+3,A.z),A.z); __run(3); __run(3.5); const fol=A.follow;
+      keys['KeyW']=true; yaw=Math.PI/2; __run(5); keys['KeyW']=false; __run(2); const d=Math.hypot(A.x-player.pos.x,A.z-player.pos.z); return [wave, hid, fol, +d.toFixed(1)]; })()""")
+    ok(r[0], 'si te acercas caminando, te saluda')
+    ok(r[1]>.7, 'si llegas corriendo, se esconde bajo su sombrero (%s)'%r[1])
+    ok(r[2] and r[3]<6, 'si te quedas quieto junto a él, te sigue (queda a %s m después de caminar)'%r[3])
     print('errores', errs[:3]); ok(not errs, 'sin errores')
     await b.close()
 asyncio.run(m())
