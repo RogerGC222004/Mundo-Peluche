@@ -42,7 +42,7 @@ async def m():
       b.click(); await T(); c=OV(); c.querySelector('.online-in').value=String(res(c)+1); c.querySelector('.online-ok').click(); await T(); c=OV();
       o.malo=!c.hidden && !!c.querySelector('.online-op');
       c.querySelector('.online-in').value=String(res(c)); c.querySelector('.online-ok').click(); await T(); c=OV();
-      o.card=!c.hidden && /Califica Mundo Peluche/.test(c.textContent) && !/premio|regalo|monedas/i.test(c.textContent);
+      o.card=!c.hidden && /Gracias por jugar/.test(c.textContent) && /Ahora no/.test(c.textContent) && !/premio|regalo|monedas/i.test(c.textContent);
       c.querySelector('.rt-go').click(); await T(); o.url=window.__rtLast||''; o.cerro=OV().hidden; ui('options').hidden=true; await T();
       o.menuWeb=[state, window.mundoAtras(), OV().hidden]; return o; })()"""%RES)
     ok(r['vis'], '⭐ «Califica Mundo Peluche» está en Opciones → Para papás')
