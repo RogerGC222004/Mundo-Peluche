@@ -1,4 +1,4 @@
-# v276: arreglos (ronda 1 y 2): arroyo con agua de verdad, manantial y cascadita; casa del árbol rehecha; remolinos y cañas fuera del inicio, brincos en escaleras y sombreros, sin caras encimadas que parpadean (meseta y pirámide), bordillo y pared de la meseta, sin tabla de arena y pose de surf, letrero de Escondidas
+# v276: arreglos (rondas 1, 2 y 3): arena de verdad, caritas y manchitas pegadas, animalitos tranquilos, tortuga del desierto, sentado en el camello; arroyo con agua de verdad, manantial y cascadita; casa del árbol rehecha; remolinos y cañas fuera del inicio, brincos en escaleras y sombreros, sin caras encimadas que parpadean (meseta y pirámide), bordillo y pared de la meseta, sin tabla de arena y pose de surf, letrero de Escondidas
 import asyncio, sys, os
 from playwright.async_api import async_playwright
 REAL=open('threerepo/build/three.min.js').read()
@@ -79,6 +79,39 @@ async def m():
       for(let i=0;i<25;i++){ yaw=Math.atan2(-(Math.cos(a)),-(Math.sin(a))); __run(.1); } keys['KeyW']=false; __run(.3); const d=Math.hypot(player.pos.x-S.x,player.pos.z-S.z);
       return [+(player.pos.y-h).toFixed(2), +(d-S.r1).toFixed(2)]; })()""")
     ok(abs(r[0])<.6 and r[1]<.05, 'en la espiral el barandal no te deja caer %s'%r)
+    # 15. arena de verdad en el desierto (sin tela ni costuras) y granitos que vuelan
+    r=await ev("""(()=>{ const D=DES.pyr, near=(cx,cz)=>{ let best=null, bd=1e9; for(const T of TERRAIN_LOD){ const d=Math.hypot(T.c.x-cx,T.c.z-cz); if(d<bd){ bd=d; best=T; } } return best; };
+      const mx=T=>{ const a=T&&T.hi.attributes.aSand; if(!a) return -1; const I=T.hi.index; let m=0; if(I){ const r=T.hi.drawRange, e=Math.min(I.count,r.start+r.count); for(let i=r.start;i<e;i++) m=Math.max(m,a.getX(I.getX(i))); } else for(let i=0;i<a.count;i++) m=Math.max(m,a.getX(i)); return +m.toFixed(2); };
+      let x=2300,z=300; for(let i=0;i<40 && !desSandAt(x,z);i++){ x+=7; } arWarp(x,terrainH(x,z)+.1,z,0); __run(1.5);
+      return [mx(near(x,z)), mx(near(0,0)), !!(DES_FLY.pts && DES_FLY.pts.visible), GROUND_MAT.customProgramCacheKey()]; })()""")
+    ok(r[0]>.9 and r[1]==0 and r[2], 'el desierto es arena de verdad (granitos, ondas y brillitos), el resto sigue igual, y vuelan granitos %s'%r)
+    # 16. caritas de cactus y manchitas de hongo pegadas a su superficie
+    r=await ev("""(()=>{ let worst=0; const F=DES.cactusFace({t:'cyl',R:.45},2.05,1); for(const q of F){ if(q[4]<.03) continue; const d=Math.hypot(q[1],q[3])-.45; worst=Math.max(worst,Math.abs(d)-q[6]*.9); }
+      const E={t:'ell',yc:.62,rx:.78,ry:.66,rz:.78}; for(const q of DES.cactusFace(E,.74,1.05)){ if(q[4]<.03) continue; const k=Math.sqrt((q[1]/E.rx)**2+((q[2]-E.yc)/E.ry)**2+(q[3]/E.rz)**2); worst=Math.max(worst,Math.abs(k-1)*E.rx-q[6]*.9); }
+      let sp=0; for(let i=0;i<8;i++){ const a=i*.8, e=.3+i*.08, q=spotOn(MES_G,0,0,0,.5,.12,.5,a,e,.13,'#fff'); const k=Math.sqrt((q[1]/.5)**2+(q[2]/.12)**2+(q[3]/.5)**2); sp=Math.max(sp,Math.abs(k-.992)); }
+      return [+worst.toFixed(3), +sp.toFixed(4)]; })()""")
+    ok(r[0]<.03 and r[1]<.002, 'la carita de los cactus y las manchitas de los hongos van pegaditas %s'%r)
+    # 17. animalitos tranquilos: caminando te acercas; corriendo huyen poquito y luego te miran; la ardilla solo trepa si corres
+    r=await ev("""(()=>{ const face=(x,z)=>{ yaw=Math.atan2(-(x-player.pos.x),-(z-player.pos.z)); }; let x=2300,z=300; for(let i=0;i<40 && !desSandAt(x,z);i++){ x+=7; } arWarp(x,terrainH(x,z)+.1,z,0); __run(1);
+      const clr=()=>{ DESA.list.forEach(A=>scene.remove(A.g)); DESA.list.length=0; DESA.t=99; };
+      const go=(kind,run)=>{ clr(); const A=desAnimalSpawn(kind,player.pos.x+12,player.pos.z); A.cur=false; let minD=99, fled=0; keys['KeyW']=true; if(run) keys['ShiftLeft']=true; for(let i=0;i<50;i++){ face(A.x,A.z); __run(.1); minD=Math.min(minD,Math.hypot(A.x-player.pos.x,A.z-player.pos.z)); if(A.mode==='flee') fled=1; } keys['KeyW']=false; keys['ShiftLeft']=false; __run(2.6); return [+minD.toFixed(1),fled,A.mode||'-']; };
+      const w=go('fenec',false), c=go('liebre',true), t=go('tortuga',true); clr(); return [w,c,t]; })()""")
+    ok(r[0][0]<3 and not r[0][1], 'caminando, el fenec te deja acercarte y te mira %s'%r[0])
+    ok(r[1][1] and r[1][2]=='look', 'si llegas corriendo, la liebre huye poquito y luego se voltea a mirarte %s'%r[1])
+    r2=await ev("""(()=>{ const face=(x,z)=>{ yaw=Math.atan2(-(x-player.pos.x),-(z-player.pos.z)); }; const T=FOR.th; let x=T.x+30, z=T.z+30; for(let i=0;i<30 && !forOkSpot(x,z);i++){ x+=5; } arWarp(x,terrainH(x,z)+.1,z,0); __run(1);
+      const clr=()=>{ FORA.list.forEach(A=>scene.remove(A.g)); FORA.list.length=0; FORA.t=99; };
+      const go=(kind,run)=>{ clr(); const A=forAnimalSpawn(kind,player.pos.x+11,player.pos.z); A.cur=false; let minD=99, fled=0, climb=0; keys['KeyW']=true; if(run) keys['ShiftLeft']=true; for(let i=0;i<45;i++){ face(A.x,A.z); __run(.1); minD=Math.min(minD,Math.hypot(A.x-player.pos.x,A.z-player.pos.z)); if(A.mode==='flee') fled=1; if(A.tree) climb=1; } keys['KeyW']=false; keys['ShiftLeft']=false; __run(.5); return [+minD.toFixed(1),fled,climb]; };
+      const v=go('venado',false), a=go('ardilla',false), b=go('ardilla',true); clr(); return [v,a,b]; })()""")
+    ok(r2[0][0]<3 and not r2[0][1] and not r2[1][2] and r2[2][2], 'en el bosque: el venado te deja acercarte caminando; la ardilla solo trepa si llegas corriendo %s'%r2)
+    # 18. la tortuga del desierto: grande, choca y no huye
+    r3=await ev("""(()=>{ const g=desAnimalGeo('tortuga'); g.computeBoundingBox(); const b=g.boundingBox; return [+(b.max.y-b.min.y).toFixed(2), +(b.max.z-b.min.z).toFixed(2)]; })()""")
+    ok(r3[0]>.9 and r3[1]>1.6 and r[2][0]>=1.1 and not r[2][1], 'la tortuga es casi del tamaño del peluche (%s m de alto, %s de largo), choca y no huye %s'%(r3[0],r3[1],r[2]))
+    # 19. en el camello vas sentado en la silla (sea cual sea tu muñeco)
+    r=await ev("""(()=>{ const out=[]; for(const av of ['','av_cubo','av_chibi']){ if(player.pg) stopPlay(); __run(.2); if(av) wardrobe.eq.body=av; else delete wardrobe.eq.body; applyOutfit(plush,{...wardrobe.eq}); __run(.2);
+        const K=DES.camel; arWarp(K.x+1.5,groundAt(K.x+1.5,K.z,999)+.1,K.z,0); __run(.4); desCamelStart(); __run(1.2); keys['KeyW']=true; __run(1); keys['KeyW']=false; __run(.1);
+        const C=DES.camel.ride, seat=C.position.y+(C.userData.body?C.userData.body.position.y:0)+DES_SEAT; sitMeasure(plush); const butt=plush.position.y+plush.userData.sitButt; out.push(+(butt-seat).toFixed(3)); }
+      stopPlay(); __run(.3); delete wardrobe.eq.body; applyOutfit(plush,{...wardrobe.eq}); return out; })()""")
+    ok(all(abs(v)<.1 for v in r), 'en el camello vas sentado en la silla (frijolito, cubo y chibi) %s'%r)
     # 9. más precisión para la profundidad
     r=await ev("camera.near")
     ok(r>=.1, 'la cámara ve desde 10 cm (menos parpadeo de lejos) %s'%r)
