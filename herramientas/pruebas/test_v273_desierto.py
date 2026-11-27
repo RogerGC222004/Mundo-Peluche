@@ -50,8 +50,8 @@ async def m():
     ok(r[2]>8 and r[3]>1.8, 'el camello camina (%s m en 4 s) y vas sentado arriba (%s m)'%(r[2],r[3]))
     ok(r[4] and r[5] and r[6], 'te bajas y el camello vuelve a su lugar')
     # 8. remolino: te levanta girando y «Tirarse» te saca
-    r=await ev("""(()=>{ let W=desWhirlPos(0,Date.now()/1000), tries=0; while(W.k<.8 && tries<20){ tries++; __run(1); W=desWhirlPos(0,Date.now()/1000); } if(W.k<.8) return ['sin remolino']; arWarp(W.x+.5,groundAt(W.x+.5,W.z,999)+.1,W.z,0); for(let i=0;i<10 && !player.whirl;i++){ W=desWhirlPos(0,Date.now()/1000); player.pos.set(W.x+.5,terrainH(W.x,W.z),W.z); __run(.1); }
-      const got=!!player.whirl; __run(1.5); const up=player.pos.y-terrainH(player.pos.x,player.pos.z); startDive(); __run(.2); return [got,+up.toFixed(1),!player.whirl]; })()""")
+    r=await ev("""(()=>{ const D0=Date.now, t0=D0()/1000; let off=0; while(off<900 && desWhirlPos(0,t0+off).k<.85) off+=.5; if(off>0) Date.now=()=>D0()+off*1000; let W=desWhirlPos(0,Date.now()/1000); if(W.k<.8){ Date.now=D0; return ['sin remolino']; } arWarp(W.x+.5,groundAt(W.x+.5,W.z,999)+.1,W.z,0); for(let i=0;i<10 && !player.whirl;i++){ W=desWhirlPos(0,Date.now()/1000); player.pos.set(W.x+.5,terrainH(W.x,W.z),W.z); __run(.1); }
+      const got=!!player.whirl; __run(1.5); const up=player.pos.y-terrainH(player.pos.x,player.pos.z); startDive(); __run(.2); const res=[got,+up.toFixed(1),!player.whirl]; Date.now=D0; return res; })()""")
     ok(r[0] and r[1]>2.5 and r[2], 'un remolino te levanta (%s m) y con «Tirarse» sales %s'%(r[1] if len(r)>1 else '',r))
     # 9. animalitos
     r=await ev("""(()=>{ const a=.4, m=coastMidR(a), n=coastRN(a), rr=m+(n-m)*.45, x=Math.cos(a)*rr, z=Math.sin(a)*rr; arWarp(x,groundAt(x,z,999)+.1,z,0); __run(14); return [DESA.list.length, [...new Set(DESA.list.map(A=>A.kind))].join(',')]; })()""")
