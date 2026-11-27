@@ -7808,7 +7808,7 @@ const SKY = 0xcfe7f2;
 scene.background = new THREE.Color(SKY);
 scene.fog = new THREE.Fog(SKY, 60, 190);
 
-const camera = new THREE.PerspectiveCamera(65, 1, 0.05, 500);
+const camera = new THREE.PerspectiveCamera(65, 1, 0.1, 500);   // v276: lo más cercano a 10 cm (antes 5): el doble de precisión para la profundidad, menos parpadeo donde dos caras quedan juntitas
 camera.rotation.order = 'YXZ';
 
 // ---------- Luces ----------
@@ -8483,10 +8483,20 @@ const MES=(()=>{ const a=1.2, m=coastMidR(a), n=coastRN(a), r=m+(n-m)*.42, x=Mat
   return {a0:.92, a1:1.95, x, z, R:72, S:9, H:20, AP:155, base:0, top:0, acc:[fs, fs+2.25, fs-2.25], slabs:[], helix:[], bouncy:[], caps:[]}; })();
 // el borde de la meseta (un poco ondulado; parejito donde llegan la escalera, la rampa y la espiral)
 function mesRim(f){ let fade=1; for(const a of MES.acc){ const d=angD(f,a); fade*=1-Math.exp(-d*d*30); } return MES.R+(5*Math.sin(3*f+1)+3.5*Math.sin(5*f-2)+2*Math.sin(9*f+.5))*fade; }
+// v276: dónde llegan la escalera y los puentes a la orilla ([subida, de u, a u]); ahí el pasto no se asoma por encima y el bordillo se corta
+MES.FP=[[0,-2.05,2.05],[1,18,21.2],[2,-1.6,1.6]];
+function mesAccW(x,z){ const dx=x-MES.x, dz=z-MES.z, AR=MES._accR||(MES._accR=MES.acc.map(a=>[Math.cos(a),Math.sin(a),mesRim(a)])); let w=0; for(const [k,u0,u1] of MES.FP){ const [c,s,R0]=AR[k], u=-dx*s+dz*c, v=dx*c+dz*s-R0; const E=ULTRA?10.5:7; if(v<-8-E||v>4+E||u<u0-E-3||u>u1+E+3) continue; const o=Math.max(u0-u,u-u1,-5.5-v,v-1,0); w=Math.max(w,1-smooth(E,E+2.5,o)); } return w; }   // (todo parejo hasta un cuadrito de terreno más allá: el terreno se dibuja con puntos cada 5 m)
+function mesCurbCut(f){ for(const [k,u0,u1] of MES.FP){ const a=MES.acc[k]; if(Math.cos(f-a)<.5) continue; const u=mesRim(f)*Math.sin(f-a); if(u>u0-.12 && u<u1+.12) return true; } return false; }
+// el bordillo de piedra de la orilla: alto sobre la meseta según qué tan afuera (o = distancia a la orilla)
+function mesCurbY(o){ return o<-.95?lerp(-.35,.24,(o+1.15)/.2):o<-.75?lerp(.24,.32,(o+.95)/.2):o<.55?.32:o<.8?lerp(.32,.22,(o-.55)/.25):lerp(.22,-.05,(o-.8)/.15); }
+// la pared por fuera: qué tan afuera de la orilla está a cierta altura (la falda se abre hacia abajo); igual que la figura que se dibuja
+const MES_WALL=(()=>{ const T=[], Y=[], D=[]; for(let k=0;k<=260;k++){ const t=k/200, pr=t>=1?0:1-t*t*(3-2*t), y=(t>1?-(t-1)*9:MES.H*pr)-.7*smooth(.82,1,t); T.push(t); Y.push(y); D.push(t*MES.S+.5+1.6*t+3.2*t*t); } return {T,Y,D}; })();
+function mesWallOff(y,f){ const W=MES_WALL, yy=y-MES.base; let k=0; if(yy>=W.Y[0]) k=0; else { let lo=0, hi=W.Y.length-1; while(hi-lo>1){ const m=(lo+hi)>>1; if(W.Y[m]>yy) lo=m; else hi=m; } k=hi; }
+  const N=ULTRA?200:360, i=((Math.round(f/(Math.PI*2)*N)%N)+N)%N, band=Math.floor(Math.min(yy,MES.H)/2.6); return W.D[k]+.35*(rlHash(band+7,(i/6|0))-.5)+.25*Math.sin(f*40+band); }
 // 1 arriba, 0 al pie (la pared de piedra es muy parada)
 function mesProf(x,z){ const dx=x-MES.x, dz=z-MES.z, d=Math.hypot(dx,dz); if(d>MES.R+MES.S+16) return 0; const t=(d-mesRim(Math.atan2(dz,dx)))/MES.S; return t<=0?1:t>=1?0:1-t*t*(3-2*t); }
 function mesLandH(x,z,h){ const dx=x-MES.x, dz=z-MES.z; if(dx>MES.AP||dx<-MES.AP||dz>MES.AP||dz<-MES.AP) return h; const d=Math.hypot(dx,dz); if(d>MES.AP) return h;
-  h=lerp(h,MES.base,1-smooth(MES.R+MES.S+40,MES.AP,d)); const p=mesProf(x,z); if(p>0) h=Math.max(h,MES.base+MES.H*p+(p>.999?.45*(rlNoise(x/23+5,z/23-3)-.5):0)); return h; }
+  h=lerp(h,MES.base,1-smooth(MES.R+MES.S+40,MES.AP,d)); const p=mesProf(x,z); if(p>0){ let nz=0; if(p>.999){ nz=.45*(rlNoise(x/23+5,z/23-3)-.5); const w=mesAccW(x,z); if(w>0) nz=lerp(nz,Math.min(nz,-.2),w); } h=Math.max(h,MES.base+MES.H*p+nz); } return h; }   // v276: bajo los puentes el pasto queda abajito (antes se asomaba encima en manchas)
 MES.base=+Math.max(SEA_Y+3, terrainExact(MES.x,MES.z)).toFixed(2); MES.top=MES.base+MES.H; MES_ON=true;
 // el suelo de micelio (gris) de la Meseta Champiñón: 0 afuera, 1 adentro (orillas suaves, sin tocar la playa)
 function mycW(x,z){ if(z<-200) return 0; const a=Math.atan2(z,x), d=Math.hypot(x,z), aw=a+.02*Math.sin(d/90+.7); if(aw<.88||aw>1.99) return 0;
@@ -10324,14 +10334,14 @@ function desMerge(parts){ const P=[], N=[], U=[], C=[], I=[]; let base=0; const 
   { const s=P.B-(P.L-1)*P.IN; obstacles.push({x:P.x,z:P.z,r:s*.45,top:H+P.L*P.SH+2.1,walk:false}); box(-s*.4,s*.4,-s*.4,s*.4,P.L*P.SH,P.L*P.SH+1.4,mats[1]); box(-s*.25,s*.25,-s*.25,s*.25,P.L*P.SH+1.4,P.L*P.SH+2.1,mats[2]); }   // remate arriba
   // marco de la entrada
   for(const q of [-1,1]) obstacles.push({x:P.x-P.B,z:P.z+q*(P.TW+.45),r:.5,top:H+P.TH+.8,walk:false});
-  box(-P.B-.6,-P.B+.6,-P.TW-.9,-P.TW,0,P.TH+.8,mats[2]); box(-P.B-.6,-P.B+.6,P.TW,P.TW+.9,0,P.TH+.8,mats[2]); box(-P.B-.7,-P.B+.7,-P.TW-1,P.TW+1,P.TH,P.TH+.8,mats[1]);
+  box(-P.B-.6,-P.B+.6,-P.TW-.9,-P.TW+.06,-.3,P.TH,mats[2]); box(-P.B-.6,-P.B+.6,P.TW-.06,P.TW+.9,-.3,P.TH,mats[2]); box(-P.B-.7,-P.B+.7,-P.TW-1,P.TW+1,P.TH,P.TH+.8,mats[1]);   // v276: las columnas llegan abajo del dintel y sobresalen tantito del túnel (antes sus caras quedaban justo encima de otras y parpadeaban)
   G.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); scene.add(G); mergeStatic(G); G.traverse(o=>{ if(o.isMesh){ o.userData.noCol=true; o.castShadow=true; o.receiveShadow=true; } });
   // lucecitas en el cuarto (cristales que brillan)
   { const m=new THREE.MeshStandardMaterial({color:'#ffcf7a', emissive:'#ff9d3b', emissiveIntensity:.9, roughness:.3}); for(const [x,z] of [[c-.15,-1.8],[c-.15,1.8],[-1.8,c-.15],[1.8,c-.15],[-1.8,-c+.15],[1.8,-c+.15]]){ const g=new THREE.Mesh(new THREE.OctahedronGeometry(.18),m); g.position.set(P.x+x,H+1.9,P.z+z); g.scale.y=1.6; g.userData.noCol=true; scene.add(g); } }
   // el cofre (una vez al día)
   { const ch=new THREE.Group(), gold=felt('#f2c94c','rgba(120,80,0,.2)'), cw=felt('#8a5a33','rgba(40,20,5,.25)'), bx=new THREE.BoxGeometry(1,1,1), add=(par,g,m,x,y,z,sx,sy,sz)=>{ const o=new THREE.Mesh(g,m); o.position.set(x,y,z); o.scale.set(sx,sy,sz); par.add(o); return o; };
     ch.position.set(P.x+.6,H,P.z); ch.rotation.y=-Math.PI/2; add(ch,bx,cw,0,.32,0,1.3,.64,.85); [-.5,.5].forEach(x=>add(ch,bx,gold,x,.33,0,.08,.66,.88)); const lid=new THREE.Group(); lid.position.set(0,.64,-.42); ch.add(lid); add(lid,bx,cw,0,.12,.42,1.34,.24,.88);
-    const coins=add(ch,new THREE.CylinderGeometry(.45,.45,.1,14),gold,0,.58,0,1,1,1); ch.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.userData.noCol=true; o.userData.noBatch=true; } }); scene.add(ch);
+    const coins=add(ch,new THREE.CylinderGeometry(.45,.45,.1,14),gold,0,.62,0,1,1,1); ch.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.userData.noCol=true; o.userData.noBatch=true; } }); scene.add(ch);
     DES.chest={x:P.x+.6, z:P.z, y:H, lid, coins, open:0}; obstacles.push({x:P.x+.6,z:P.z,r:.75,top:H+.7,walk:true}); }
   // ruinas: columnas rotas, muros bajitos y bloques caídos (de bloques de arenisca, una sola figura)
   { const L=[], ob=[], cols=['#e2b47a','#d6a266','#ecc58f','#c99258']; let sd=7301; const R=()=>{ sd=(sd*16807)%2147483647; return (sd-1)/2147483646; };
@@ -10355,7 +10365,7 @@ function desPyrCollide(p,vx,vz,dt){ const P=DES.pyr; if(Math.abs(p.x-P.x)>P.B+1 
 const DES_KEY='mundoPelucheCofrePiramide', desDone=()=>{ try{ return localStorage.getItem(DES_KEY)===today(); }catch(e){ return false; } };
 function desActions(){ const C=DES.chest; if(!C || player.car||player.ac||player.pg||player.mg||player.balloon||player.swim||player.whirl) return null;
   { const K=DES.camel; if(K && Math.hypot(player.pos.x-K.x,player.pos.z-K.z)<3 && Math.abs(player.pos.y-terrainH(K.x,K.z))<1.5) return [{label:'Montar el camello', run:desCamelStart}, null]; }
-  if(Math.hypot(player.pos.x-C.x,player.pos.z-C.z)>2.2 || Math.abs(player.pos.y-C.y)>2){ if(player.grounded && desSandAt(player.pos.x,player.pos.z) && Math.abs(player.pos.y-terrainH(player.pos.x,player.pos.z))<.3) return [{label:'Tabla de arena', run:desBoardStart}, null]; return null; }
+  if(Math.hypot(player.pos.x-C.x,player.pos.z-C.z)>2.2 || Math.abs(player.pos.y-C.y)>2) return null;   // v276: ya no hay tabla de arena (estorbaba el botón)
   return desDone() ? [{label:'Cofre vacío: vuelve mañana', disabled:true, run:()=>{}}, null]
     : [{label:'Abrir el cofre de la pirámide', run:()=>{ if(desDone()) return; try{ localStorage.setItem(DES_KEY,today()); }catch(e){} addCoins(100); adOffer(100); flashNote('¡100 monedas en el cofre de la pirámide! Vuelve mañana por más'); try{ audio.wave(); }catch(e){} }}, null]; }
 // ---------- v273 (parte 2): tabla de arena, camello para montar, remolinos y animalitos del desierto ----------
@@ -10427,7 +10437,7 @@ function desWhirlMesh(){ const G=new THREE.Group(), c=document.createElement('ca
   const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; const parts=[];
   for(let i=0;i<3;i++){ const m=new THREE.Mesh(new THREE.CylinderGeometry(2.8+i*1.4,.6+i*.5,4.5,18,1,true), new THREE.MeshBasicMaterial({map:t, color:'#e6bd7e', transparent:true, opacity:.85-i*.18, depthWrite:false, side:THREE.DoubleSide})); m.position.y=1.8+i*3.6; m.userData.noCol=true; m.userData.noBatch=true; G.add(m); parts.push(m); }
   G.userData.parts=parts; G.visible=false; scene.add(G); return G; }
-function desWhirlTick(dt){ const tm=Date.now()/1000, p=player.pos, near=Math.abs(p.x-1500)<2500 && desW(p.x,p.z)>0.01 || (player.whirl);
+function desWhirlTick(dt){ const tm=Date.now()/1000, p=player.pos, near=!!((Math.abs(p.x-1500)<2500 && desW(p.x,p.z)>0.01) || player.whirl);   // (v276: siempre true/false; con null se veían en el inicio)
   if(!DES.wm){ DES.wm=[desWhirlMesh(),desWhirlMesh()]; }
   for(let k=0;k<2;k++){ const W=desWhirlPos(k,tm), m=DES.wm[k], dd=Math.hypot(W.x-p.x,W.z-p.z), vis=near && dd<320 && W.k>.02; m.visible=vis; if(!vis) continue;
     m.position.set(W.x,terrainH(W.x,W.z),W.z); m.scale.setScalar(.35+.65*W.k); m.userData.parts.forEach((q,i)=>{ q.rotation.y+=dt*(4+i); q.material.map.offset.y=(q.material.map.offset.y+dt*.6)%1; });
@@ -10513,7 +10523,7 @@ function mushParts(x,y,z,s,kind,pal,rot,o={}){ const [sh,sr,cr,ch]=MES_SHAPE[kin
 function mushTop(y,s,kind,stem){ const [sh,,,ch]=MES_SHAPE[kind], H=stem!==undefined?stem:sh*s; return {bot:y+H, top:y+H+ch*s}; }
 // un hongo con sombrero para pararse encima (tallo y sombrero chocan; abajo del sombrero se puede pasar si está alto)
 function mesSolidMush(x,y,z,s,kind,stem,bouncy){ const [,sr,cr,ch]=MES_SHAPE[kind], T=mushTop(y,s,kind,stem), top=T.top-ch*s*.22;
-  obstacles.push({x,z,r:Math.max(.25,sr*s),top:T.bot+.05,walk:false}); obstacles.push({x,z,r:cr*s,top,walk:true,bot:T.bot-.05});
+  obstacles.push({x,z,r:Math.max(.25,sr*s),top:T.bot+.05,walk:false}); obstacles.push({x,z,r:cr*s,top,walk:true,bot:T.bot-.05,domeB:T.bot,domeH:ch*s,domeR:cr*s});
   const c={x,z,r:cr*s,top}; MES.caps.push(c); if(bouncy){ c.b=1; MES.bouncy.push(c); } return c; }
 // ---- suelo y choques de las subidas ----
 function mesSlabH(S,x,z){ if(S.t==='hx'){ const dx=x-S.x, dz=z-S.z, d=Math.hypot(dx,dz); if(d<S.r0||d>S.r1) return null; const f=((Math.atan2(dz,dx)-S.a0)/(Math.PI*2)%1+1)%1, out=[]; for(let k=0;k<S.turns+1;k++){ const q=(f+k)/S.turns; if(q>=0&&q<=1) out.push(S.h0+(S.h1-S.h0)*q); } return out.length?out:null; }
@@ -10521,17 +10531,20 @@ function mesSlabH(S,x,z){ if(S.t==='hx'){ const dx=x-S.x, dz=z-S.z, d=Math.hypot
   return [S.n?S.h0+Math.min(S.n,Math.floor(q*S.n)+1)*(S.h1-S.h0)/S.n:S.h0+(S.h1-S.h0)*q]; }
 function mesNear(x,z){ const dx=x-MES.x, dz=z-MES.z, e=MES.R+MES.S+45; return dx<e && dx>-e && dz<e && dz>-e; }
 function mesGround(x,z,y){ if(!mesNear(x,z)) return null; let g=null; const yy=y===undefined?1e9:y;
-  for(const S of MES.slabs){ if(Math.abs(x-S.x)>S.bb||Math.abs(z-S.z)>S.bb) continue; const hs=mesSlabH(S,x,z); if(!hs) continue; for(const h of hs) if(yy>=h-.6 && (g===null||h>g)) g=h; } return g; }
-function mesCollide(p){ if(!mesNear(p.x,p.z) || player.pg) return;
+  for(const S of MES.slabs){ if(Math.abs(x-S.x)>S.bb||Math.abs(z-S.z)>S.bb) continue; const hs=mesSlabH(S,x,z); if(!hs) continue; for(const h of hs) if(yy>=h-.6 && (g===null||h>g)) g=h; }
+  { const dx=x-MES.x, dz=z-MES.z, d=Math.hypot(dx,dz); if(d>MES.R-15 && d<MES.R+15){ const f=Math.atan2(dz,dx), o=d-mesRim(f); if(o>-1 && o<.86 && !mesCurbCut(f)){ const h=MES.top+mesCurbY(o); if(yy>=h-.6 && (g===null||h>g)) g=h; } } }   // v276: el bordillo de la orilla
+  return g; }
+function mesCollide(p,dt){ if(!mesNear(p.x,p.z) || player.pg) return;
   for(const S of MES.slabs){ if(Math.abs(p.x-S.x)>S.bb||Math.abs(p.z-S.z)>S.bb) continue; const hs=mesSlabH(S,p.x,p.z); if(!hs) continue;
     for(const h of hs){ if(p.y>=h-.6 || (S.th && p.y+PLAYER_H<h-S.th)) continue;
       if(S.t==='hx'){ const dx=p.x-S.x, dz=p.z-S.z, d=Math.hypot(dx,dz)||1; p.x=S.x+dx/d*(S.r1+.42); p.z=S.z+dz/d*(S.r1+.42); }
       else { const dx=p.x-S.x, dz=p.z-S.z, u=dx*S.ux+dz*S.uz, v=-dx*S.uz+dz*S.ux, pu=S.hu-Math.abs(u), pv=S.hv-Math.abs(v); let nu=u, nv=v; if(pu<pv) nu=Math.sign(u||1)*(S.hu+.42); else nv=Math.sign(v||1)*(S.hv+.42);
         p.x=S.x+nu*S.ux-nv*S.uz; p.z=S.z+nu*S.uz+nv*S.ux; } break; } }
   // la pared de la meseta: desde abajo no se sube; si te caes por la orilla, resbalas hasta el pie
-  const dx=p.x-MES.x, dz=p.z-MES.z, d=Math.hypot(dx,dz), f=Math.atan2(dz,dx), R=mesRim(f), foot=R+MES.S+.4;
-  if(d<R+.5 || d>foot || p.y>MES.top-1) return; const g=groundAt(p.x,p.z,p.y); if(g>terrainH(p.x,p.z)+.3) return;
-  const nd=d>foot-2 ? foot : Math.min(foot, d+11*Math.min(.05,MES._dt||.016)); p.x=MES.x+dx/d*nd; p.z=MES.z+dz/d*nd; }
+  // (v276: la pared se abre hacia abajo como falda: el choque sigue la figura que se ve, a la altura de los pies; antes te podías meter en la falda)
+  const dx=p.x-MES.x, dz=p.z-MES.z, d=Math.hypot(dx,dz), f=Math.atan2(dz,dx), R=mesRim(f);
+  if(d<R+.5 || d>R+MES.S+8 || p.y>MES.top-1) return; const foot=R+mesWallOff(p.y+Math.min(0,player.vy||0)*(dt||.016)*1.3,f)+.42; if(d>=foot) return; const g=groundAt(p.x,p.z,p.y); if(g>terrainH(p.x,p.z)+.3) return;   // (si vas cayendo: a la altura donde vas a quedar)
+  p.x=MES.x+dx/d*foot; p.z=MES.z+dz/d*foot; }   // (siempre por fuera de la pared que se ve: al caerte resbalas pegadito a ella)
 // ---- todo lo que se ve ----
 (function mesBuild(){ const t0=performance.now(), M=MES, base=M.base, top=M.top, G=MES_G, parts=[], A=[], prisms={P:[],N:[],U:[],C:[],I:[]};
   const STONE=['#e9d3c4','#d9c2e6','#f2dcc0','#cdb6dc','#f0cbd2','#e2d6ee'], col=new THREE.Color();
@@ -10550,11 +10563,20 @@ function mesCollide(p){ if(!mesNear(p.x,p.z) || player.pg) return;
     for(let k=0;k<10;k++){ const y=511-((k+1)*2.6+5)/26*512; q.fillStyle='rgba(255,255,255,.35)'; q.fillRect(0,y,64,2); }   // costurita entre capas
     const tex=new THREE.CanvasTexture(cv); tex.wrapS=THREE.RepeatWrapping; tex.anisotropy=2; tex.encoding=THREE.sRGBEncoding; const wm=new THREE.MeshStandardMaterial({map:tex, vertexColors:true, roughness:1, metalness:0});
     for(let i=0;i<=N;i++){ const f=i/N*Math.PI*2, R=mesRim(f), c=Math.cos(f), s=Math.sin(f);
-      for(let j=0;j<=Mr;j++){ const t=-.12+j/Mr*1.42, pr=t<=0?1:t>=1?0:1-t*t*(3-2*t), y=t>1?base-(t-1)*9:base+M.H*pr, band=Math.floor((y-base)/2.6), led=.35*(rlHash(band+7,(i/6|0))-.5)+.25*Math.sin(f*40+band), tp=Math.max(0,t);
+      for(let j=0;j<=Mr;j++){ const t=-.12+j/Mr*1.42, pr=t<=0?1:t>=1?0:1-t*t*(3-2*t), y=(t>1?base-(t-1)*9:base+M.H*pr)-.7*smooth(.82,1,t)+(t<0?t/.12*.5:0), band=Math.floor((y-base)/2.6), led=.35*(rlHash(band+7,(i/6|0))-.5)+.25*Math.sin(f*40+band), tp=Math.max(0,t);
         const d=R+t*M.S+.5+1.6*tp+3.2*tp*tp+led; P.push(M.x+c*d,y,M.z+s*d); U.push(f*R/9,(y-base+5)/26); col.set(j===0?'#d8d1dc':'#ffffff'); C.push(col.r,col.g,col.b); } }
     for(let i=0;i<N;i++) for(let j=0;j<Mr;j++){ const a=i*(Mr+1)+j, b=a+Mr+1; I.push(a,b,a+1, b,b+1,a+1); }
     const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2)); g.setAttribute('color',new THREE.Float32BufferAttribute(C,3)); g.setIndex(I); g.computeVertexNormals();
     const m=new THREE.Mesh(g,wm); m.receiveShadow=true; m.userData.noCol=true; scene.add(m); M.wall=m; }
+  // v276: bordillo de piedra en la orilla de arriba: tapa la unión del pasto con la pared (antes se veía un hueco y parpadeaba); se corta donde llegan la escalera y los puentes
+  { const N=ULTRA?200:360, PR=[[-1.15,-.35],[-.95,.24],[-.75,.32],[.55,.32],[.8,.22],[.95,-.05],[.95,-.55]], P=[], U=[], C=[], I=[], c1=new THREE.Color(), c2=new THREE.Color(), W=new THREE.Color('#ffffff');
+    const ring=(f,cl)=>{ const R=mesRim(f), c=Math.cos(f), s=Math.sin(f), b0=P.length/3; PR.forEach(([o,y],k)=>{ P.push(M.x+c*(R+o),top+y,M.z+s*(R+o)); U.push(f*R/2,k*.3); c2.copy(cl); if(k>=2&&k<=4) c2.lerp(W,.35); C.push(c2.r,c2.g,c2.b); }); return b0; };
+    const cap=(f,cl,dir)=>{ const b0=ring(f,cl); for(let k=1;k<PR.length-1;k++){ if(dir>0) I.push(b0,b0+k,b0+k+1); else I.push(b0,b0+k+1,b0+k); } };
+    for(let i=0;i<N;i++){ const fa=i/N*Math.PI*2, fb=(i+1)/N*Math.PI*2; if(mesCurbCut((fa+fb)/2)) continue; c1.set(STONE[((i/3|0)*7)%6]);
+      const a=ring(fa,c1), b=ring(fb,c1); for(let k=0;k<PR.length-1;k++) I.push(a+k,b+k,a+k+1, b+k,b+k+1,a+k+1);
+      if(mesCurbCut((fa-Math.PI*2/N+fa)/2)) cap(fa,c1,1); if(mesCurbCut((fb+fb+Math.PI*2/N)/2)) cap(fb,c1,-1); }   // (tapitas donde se corta)
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2)); g.setAttribute('color',new THREE.Float32BufferAttribute(C,3)); g.setIndex(I); g.computeVertexNormals();
+    const m=new THREE.Mesh(g,DES_FVC); m.receiveShadow=true; m.userData.noCol=true; scene.add(m); M.curb=m; }
   // 2) la escalera de piedra (del lado del centro de la isla): 50 escalones de 40 cm
   { const f=M.acc[0], n=50, run=.6, L=n*run, w=1.7; M.stair={f, L};
     for(let k=0;k<n;k++){ const v0=L-(k+1)*run-.6, y=base+(k+1)*M.H/n; fbox(f,-w,w,v0,v0+run,base-1.2,y,y,k%2?'#e9d3c4':'#e2d6ee'); }
@@ -10573,7 +10595,7 @@ function mesCollide(p){ if(!mesNear(p.x,p.z) || player.pg) return;
     sl(-hu-W,-hu,v0+W,v0+3*W,base+2*h3,base+2*h3,'#f2dcc0'); slab(f,-hu-W,-hu,v0+W,v0+3*W,base+2*h3,base+2*h3,{th:TH}); pil(-hu-W+.4,v0+W+.4,base+2*h3-TH); pil(-hu-W+.4,v0+3*W-.4,base+2*h3-TH);   // descanso 2
     // puente a la orilla (pasa por encima del descanso 1 y de la pared)
     fbox(f,hu,hu+W,-4.5,v0+3*W,top-.7,top,top,'#f0cbd2'); slab(f,hu,hu+W,-4.5,v0+3*W,top,top,{th:.7});
-    for(const v of [v0+3*W-.6,v0+2*W+.3]) for(const u of [hu+.4,hu+W-.4]){ const [x,z]=mesAt(f,u,v); parts.push([G.cyl,x,(base+top)/2,z,.32,top-base,.32,0,0,0,'#fff1dc']); obstacles.push({x,z,r:.32,top:top-.7,walk:false}); }
+    for(const v of [v0+3*W-.6,v0+2*W+.3]) for(const u of [hu+.4,hu+W-.4]){ const [x,z]=mesAt(f,u,v); parts.push([G.cyl,x,(base-.3+top-.72)/2,z,.32,top-.72-base+.3,.32,0,0,0,'#fff1dc']); obstacles.push({x,z,r:.32,top:top-.7,walk:false}); }   // v276: los postes llegan abajo del puente (antes su tapa quedaba justo en el piso del puente y se veían manchas)
     for(let k=0;k<3;k++){ const [x,z]=mesAt(f,-hu+6+k*13,v0+3*W+1.4); const T=mushTop(base,4.2,'boton'); parts.push(...mushParts(x,terrainH(x,z),z,4.2,'boton',k+1,k)); mesSolidMush(x,terrainH(x,z),z,4.2,'boton'); } }   // hongos grandes junto a la rampa
   // 4) la espiral: hongos repisa alrededor del tallo de un hongo colosal; arriba, un puentecito a la orilla
   { const f=M.acc[2], vc=M.S+6.5, [cx,cz]=mesAt(f,0,vc), r0=3.4, r1=6.6, turns=2.5, aEnd=Math.atan2(MES.z-cz,MES.x-cx), a0=aEnd+Math.PI; M.spiral={x:cx,z:cz,f};   // (empieza del lado de afuera y llega mirando a la meseta)
@@ -10595,7 +10617,7 @@ function mesCollide(p){ if(!mesNear(p.x,p.z) || player.pg) return;
   { const fo=M.acc[0]+Math.PI, [mx,mz]=[M.x+Math.cos(fo)*24, M.z+Math.sin(fo)*24], capY=top+29, CR=9, CT=capY+1.9; M.mir={x:mx,z:mz,top:CT,r:CR};
     parts.push([G.cyl,mx,(top+capY)/2,mz,2.4,capY-top+.2,2.4,0,0,0,'#fff1dc']); parts.push(...mushParts(mx,capY-.01,mz,1,'mesa',4,0,{stem:0,spots:0}).map(p=>{ if(p[0]===G.stem) p[5]=.01; if(p[0]===G.dome||p[0]===G.disc){ p[4]*=CR/.5; p[6]*=CR/.5; p[5]=p[0]===G.dome?2.2:1; } return p; }));
     for(let i=0;i<14;i++){ const a=i*2.399, rr=CR*(.3+.6*((i*.618)%1)); parts.push([G.dome,mx+Math.cos(a)*rr,capY+2.2*Math.sqrt(1-(rr/CR)**2)-.06,mz+Math.sin(a)*rr,.42,.1,.42,0,0,0,'#ffffff']); }
-    obstacles.push({x:mx,z:mz,r:2.4,top:capY,walk:false}); obstacles.push({x:mx,z:mz,r:CR*.95,top:CT,walk:true,bot:capY-.1}); M.caps.push({x:mx,z:mz,r:CR*.95,top:CT});
+    obstacles.push({x:mx,z:mz,r:2.4,top:capY,walk:false}); obstacles.push({x:mx,z:mz,r:CR*.95,top:CT,walk:true,bot:capY-.1,domeB:capY,domeH:2.2,domeR:CR}); M.caps.push({x:mx,z:mz,r:CR*.95,top:CT});
     for(let i=0;i<34;i++){ const a=i/34*Math.PI*2, rr=CR*.8, x=mx+Math.cos(a)*rr, z=mz+Math.sin(a)*rr, y=capY+2.2*Math.sqrt(1-(rr/CR)**2)-.2; parts.push(...mushParts(x,y,z,1.6,'boton',i%MES_PAL.length,a,{spots:2})); obstacles.push({x,z,r:.5,top:CT+1.2,walk:false}); }   // barandal de honguitos (se brinca para bajar)
     // la escalera de hongos (en espiral alrededor del mirador)
     const seq=[1,2,3,4,5,'B',12,13,14,15,16,'B',22,23,24,25,'B','M']; let a=fo+Math.PI*.5, prev=null, k=0;
@@ -10636,7 +10658,7 @@ function mesCollide(p){ if(!mesNear(p.x,p.z) || player.pg) return;
   const COL=[]; for(let i=0;i<20;i++){ const a=.97+i*.048+rlHash(i,77)*.03, m=coastMidR(a), n=coastRN(a), r=m+(n-m)*(.22+.5*rlHash(i,91)), x=Math.cos(a)*r, z=Math.sin(a)*r; if(Math.hypot(x-M.x,z-M.z)<M.R+M.S+60 || !okAt(x,z,10) || ex(x,z,14)) continue; COL.push([x,z,14+rlHash(i,5)*12,i]); addA(x,z,14); }
   COL.forEach(([x,z,h,i])=>{ const y=terrainH(x,z)-.4, s=h/ (MES_SHAPE.gordo[0]+MES_SHAPE.gordo[3]) , kind='gordo', stemH=h*.7, capS=h*.55;
     parts.push(...mushParts(x,y,z,1,kind,i%MES_PAL.length,i,{stem:stemH,spots:9}).map(p=>{ if(p[0]===G.stem){ p[4]=p[6]=h*.09; } else { const kx=capS, cy=y+stemH; p[1]=x+(p[1]-x)*kx; p[3]=z+(p[3]-z)*kx; p[2]=cy+(p[2]-cy)*kx*.8; p[4]*=kx; p[6]*=kx; p[5]*=p[0]===G.disc?1:kx*.8; } return p; }));
-    const cr=MES_SHAPE.gordo[2]*capS, ctop=y+stemH+MES_SHAPE.gordo[3]*capS*.8*.82; obstacles.push({x,z,r:h*.09,top:y+stemH,walk:false}); obstacles.push({x,z,r:cr,top:ctop,walk:true,bot:y+stemH-.1}); M.caps.push({x,z,r:cr,top:ctop});
+    const cr=MES_SHAPE.gordo[2]*capS, ctop=y+stemH+MES_SHAPE.gordo[3]*capS*.8*.82; obstacles.push({x,z,r:h*.09,top:y+stemH,walk:false}); obstacles.push({x,z,r:cr,top:ctop,walk:true,bot:y+stemH-.1,domeB:y+stemH,domeH:MES_SHAPE.gordo[3]*capS*.8,domeR:cr}); M.caps.push({x,z,r:cr,top:ctop});
     const ba=i*1.7, bx=x+Math.cos(ba)*(cr+3.2), bz=z+Math.sin(ba)*(cr+3.2), by=terrainH(bx,bz); parts.push(...mushParts(bx,by,bz,2.6,'mesa',1,ba,{spots:6})); const c=mesSolidMush(bx,by,bz,2.6,'mesa',undefined,true); c.tx=x+Math.cos(ba)*cr*.4; c.tz=z+Math.sin(ba)*cr*.4; c.th=ctop; });
   M.colossal=COL;
   // los medianos que se pisan (los rosas con estrella son trampolín)
@@ -10719,7 +10741,7 @@ function mesUpdate(dt){ const M=MES, p=player.pos; M._dt=dt;
   const night=1-(typeof sky!=='undefined' && sky.dayK!==undefined?sky.dayK:1), k=Math.max(0,(night-.25)/.75); MES_GLOW.value=k*.85;
   const a=Math.atan2(p.z,p.x), inZ=Math.abs(angD(a,1.43))<.6 && Math.hypot(p.x,p.z)>coastMidR(a)*.98 && !SP.on && !FREE.on;
   // trampolines
-  if(inZ && !player.pg && !player.swim && player.grounded && player.vy<=0){ for(const b of M.bouncy){ if(Math.abs(p.x-b.x)>b.r||Math.abs(p.z-b.z)>b.r) continue; if(Math.hypot(p.x-b.x,p.z-b.z)<b.r*.85 && Math.abs(p.y-b.top)<.3){
+  if(inZ && !player.pg && !player.swim && player.grounded && player.vy<=0){ for(const b of M.bouncy){ if(Math.abs(p.x-b.x)>b.r||Math.abs(p.z-b.z)>b.r) continue; if(Math.hypot(p.x-b.x,p.z-b.z)<b.r*.85 && p.y>b.top-1.4 && p.y<b.top+.35){
       if(b.tx!==undefined){ const dh=b.th-b.top, V=Math.sqrt(2*20*(Math.max(0,dh)+Math.max(2.4,dh*.3))), T=(V+Math.sqrt(Math.max(0,V*V-40*dh)))/20; player.vy=V; M.fling={fx:(b.tx-p.x)/T, fz:(b.tz-p.z)/T, t:T}; player.vel.set(0,0,0); }
       else player.vy=14;
       player.grounded=false; player.squash=1; try{ const R=audio.raw(), t0=R.ctx.currentTime; R.tone('sine',160,560,t0,.25,.14); }catch(e){} break; } } }
@@ -11561,7 +11583,8 @@ function groundAt(x,z,y){
   for(const o of obsNear(x,z)){
     if(!o.walk) continue;
     const dx=x-o.x, dz=z-o.z;
-    if(dx*dx+dz*dz < (o.r*.8)*(o.r*.8) && y>=o.top-.45 && o.top>g) g=o.top;
+    const d2=dx*dx+dz*dz; if(d2 >= (o.r*.8)*(o.r*.8)) continue; const tt=o.domeH?o.domeB+o.domeH*Math.sqrt(Math.max(0,1-d2/(o.domeR*o.domeR))):o.top;   // v276: los sombreros de hongo son redondos de verdad
+    if(y>=tt-.45 && tt>g) g=tt;
   }
   return g;
 }
@@ -18080,6 +18103,8 @@ function pgPoseLimbs(obj,pose,t,dt,walkPh){
   if(pose.climb!==undefined){ const ph=pose.climb*Math.PI*6; arms.forEach(a=>{ const sd=a.userData.side; a.rotation.z=sd*1.9; a.rotation.x=-.9+Math.sin(ph+(sd>0?0:Math.PI))*.35; });
     legs.forEach((l,k)=>{ l.rotation.x=-.5+Math.sin(ph+(k?Math.PI:0))*.45; l.userData.joint.rotation.x=.8; }); }
   if(pose.push) arms.forEach(a=>{ const sd=a.userData.side; a.rotation.z=sd*.25; a.rotation.x=-1.45*pose.push; a.userData.joint.rotation.x=-.1; });   // empujando
+  if(pose.surf){ const ln=pose.lean||0, al=pose.alt||0; legs.forEach(l=>{ const sd=l.userData.side||1; l.rotation.x=-.5; l.rotation.z=sd*.34; l.userData.joint.rotation.x=.95; });   // v276: surfeando: piernas abiertas y rodillas dobladas
+    arms.forEach(a=>{ const sd=a.userData.side; a.rotation.z=sd*(1.15+sd*ln*.5)+(sd>0?al:-al)*.12; a.rotation.x=-.2; a.userData.joint.rotation.x=-.25; a.userData.joint.rotation.z=0; }); }   // brazos abiertos para el equilibrio
 }
 function placePlay(obj,pose){ obj.position.set(pose.pos[0],pose.pos[1],pose.pos[2]); obj.rotation.order='YXZ'; obj.rotation.set(pose.tilt||0,pose.yaw,pose.swing||0); }
 // acciones del parque
@@ -18692,7 +18717,7 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
       const reel=new THREE.Mesh(pCyl,reelM); reel.scale.set(.13,.09,.13); reel.position.copy(base).addScaledVector(D,.12).add(new THREE.Vector3(0,-.14,0)); reel.rotation.z=Math.PI/2; gS.add(reel);
       const tipL=base.clone().addScaledVector(D,L);
       const tip=pV(tipL.x, tipL.y, tipL.z), cast=pV(sd*(P.W+11), SEA_Y, u+((k*7+(sd>0?3:0))%5-2)*.6), idle=pV(tipL.x, SEA_Y, tipL.z);
-      const bob=new THREE.Mesh(sphereG,bobM); bob.scale.set(.12,.11,.12); bob.userData.noBatch=true; scene.add(bob);
+      const bob=new THREE.Mesh(sphereG,bobM); bob.scale.set(.12,.11,.12); bob.userData.noBatch=true; bob.position.copy(idle); bob.position.y+=.04; scene.add(bob);   // v276: el corcho empieza en su lugar (antes en el centro de la isla, dibujándose de más)
       P.rods.push({i, sd, u, tip, cast, idle, bob, pos:idle.clone(), stand:[sd*(P.W-.72), u-.35]});
       // el balde (de metal) a un lado de la caña
       P.buckets.push({i, home:pV(sd*(P.W-.5), P.Y, u+1.15), items:[], o:null, carried:false});
@@ -18821,7 +18846,7 @@ const inHouse=(x,z,y)=>{ const P=PIER, [lx,lz]=pL(x,z); return Math.abs(lx)<P.HH
   const pail=new THREE.CylinderGeometry(.3,.23,.5,18,1,true), rimG=new THREE.TorusGeometry(.3,.025,6,20), handG=new THREE.TorusGeometry(.3,.015,4,14,Math.PI);
   const saved=(()=>{ try{ return JSON.parse(localStorage.getItem('mundoPelucheBaldes')||'null'); }catch(e){ return null; } })();
   P.buckets.forEach((b,i)=>{ const g=new THREE.Group(); g.userData.noBatch=true;
-    const s=new THREE.Mesh(pail,metal); s.position.y=.25; s.material.side=THREE.DoubleSide; g.add(s); const bt=new THREE.Mesh(new THREE.CircleGeometry(.23,16),metal); bt.rotation.x=-Math.PI/2; bt.position.y=.01; g.add(bt);
+    const s=new THREE.Mesh(pail,metal); s.position.y=.25; s.material.side=THREE.DoubleSide; g.add(s); const bt=new THREE.Mesh(new THREE.CircleGeometry(.23,16),metal); bt.rotation.x=-Math.PI/2; bt.position.y=.035; g.add(bt);
     const r=new THREE.Mesh(rimG,metal); r.rotation.x=Math.PI/2; r.position.y=.5; g.add(r); [.17,.36].forEach(y=>{ const bd=new THREE.Mesh(new THREE.TorusGeometry(.245+y*.13,.012,4,20),metal); bd.rotation.x=Math.PI/2; bd.position.y=y; g.add(bd); });
     const h=new THREE.Mesh(handG,metal); h.position.y=.5; g.add(h); mergeStatic(g);
     const w=new THREE.Mesh(new THREE.CircleGeometry(.28,16),wat); w.rotation.x=-Math.PI/2; w.position.y=.38; w.visible=false; g.add(w); b.water=w;
@@ -18898,13 +18923,13 @@ function takeBait(b,s){ if(b){ const k=b.items.findIndex(id=>FISH[id].s===s); if
   const dock=new THREE.Mesh(desMerge(PT),DES_FVC); dock.castShadow=true; dock.receiveShadow=true; dock.userData.noCol=true; scene.add(dock);
   // las cañas: dos a cada lado, cerca de la punta
   const rodM=felt('#5a3a22','rgba(30,10,0,.2)'), up=new THREE.Vector3(0,1,0), bobM=PIER.rods[0].bob.material; F.rod0=PIER.rods.length;
-  const lines=new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(4*6),3)), new THREE.LineBasicMaterial({color:0xf4f4f4})); lines.frustumCulled=false; lines.userData.noBatch=true; scene.add(lines); F.rodLines=lines;
+  const lines=new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(4*6),3)), new THREE.LineBasicMaterial({color:0xf4f4f4})); lines.frustumCulled=false; lines.userData.noBatch=true; lines.visible=false; scene.add(lines); F.rodLines=lines;   // v276: apagadas hasta que llegas al estanque (antes se dibujaban en el inicio)
   [[.62,-1],[.62,1],[.9,-1],[.9,1]].forEach(([q,sd])=>{ const i=PIER.rods.length, bx=x0+(x1-x0)*q, bz=z0+(z1-z0)*q, sx=-uz*sd, sz=ux*sd;   // (sx,sz: hacia el agua de ese lado)
     const base=new THREE.Vector3(bx+sx*(W-.1),Y+1.05,bz+sz*(W-.1)), D=new THREE.Vector3(sx*Math.cos(.62),Math.sin(.62),sz*Math.cos(.62)), Lr=3.2;
     const rod=new THREE.Mesh(new THREE.CylinderGeometry(.028,.065,Lr,8),rodM); rod.position.copy(base).addScaledVector(D,Lr/2); rod.quaternion.setFromUnitVectors(up,D); rod.userData.noCol=true; scene.add(rod);
     const post=new THREE.Mesh(cyl,felt('#7a5634')); post.scale.set(.1,1.1,.1); post.position.set(base.x,Y+.55,base.z); post.userData.noCol=true; scene.add(post);
     const tip=base.clone().addScaledVector(D,Lr), cast=new THREE.Vector3(bx+sx*(W+9),SEA_Y,bz+sz*(W+9)), idle=new THREE.Vector3(tip.x,SEA_Y,tip.z);
-    const bob=new THREE.Mesh(sphereG,bobM); bob.scale.set(.12,.11,.12); bob.userData.noBatch=true; scene.add(bob);
+    const bob=new THREE.Mesh(sphereG,bobM); bob.scale.set(.12,.11,.12); bob.userData.noBatch=true; bob.position.copy(idle); bob.position.y+=.04; scene.add(bob);   // v276: el corcho empieza en su lugar (antes en el centro de la isla, dibujándose de más)
     PIER.rods.push({i, sd, u:0, tip, cast, idle, bob, pos:idle.clone(), stand:[bx+sx*(W-.75), bz+sz*(W-.75)], pond:true, Y, face:Math.atan2(sx,sz)}); });
   F.dock={x0,z0,x1,z1,Y}; })();
 function pondNearRod(){ let best=null, bd=1.5; for(const r of PIER.rods){ if(!r.pond) continue; const d=Math.hypot(r.stand[0]-player.pos.x,r.stand[1]-player.pos.z); if(d<bd && Math.abs(player.pos.y-r.Y)<.8){ bd=d; best=r; } } return best; }
@@ -25863,7 +25888,7 @@ function tblRide(P,dt){ const R=TBL.ride; if(!R){ setTimeout(()=>{ if(player.pg=
   if(Math.abs(R.v)>2.5 && Math.random()<dt*6) try{ splashBurst(R.x-Math.sin(R.h)*.9,R.y,R.z-Math.cos(R.h)*.9,.15); }catch(e){}
   P.v=Math.round(R.v*10)/10; const pose=tblRidePose(R.x,R.y,R.z,R.h,R.pitch,R.roll,R.t,s); pose.armsUp=.3+.25*Math.min(1,R.surf||0); return pose; }
 // el peluche parado en la tabla, con los bracitos abiertos para no caerse
-function tblRidePose(x,y,z,h,pt,rl,t,s){ return {pos:[x,y+TBL_T/2+.03,z], yaw:h, tilt:-pt, swing:rl, armsUp:.3, alt:Math.sin(t*1.7)*.5+(s||0)*.6}; }
+function tblRidePose(x,y,z,h,pt,rl,t,s){ return {pos:[x,y+TBL_T/2+.03-.16,z], yaw:h+Math.PI/2, tilt:.1+rl*.9, swing:-pt*.9, surf:1, lean:rl, alt:Math.sin(t*1.7)*.5+(s||0)*.6}; }   // v276: de lado, rodillas dobladas y brazos para el equilibrio
 // la tabla debajo de los pies (la mía o la de un amigo)
 function tblPlaceRiding(L,x,y,z,h,pt,rl){ L.position.set(x,y+.01,z); L.rotation.order='YXZ'; L.rotation.set(pt,h+Math.PI,-rl); L.visible=true; }
 function tblRemoteRide(r,dt,t){ const S=TBL.rem.get(r)||(TBL.rem.set(r,{h:null,l:null,lid:-1}),TBL.rem.get(r)), a=r.tb, id=a?a[0]:0;
@@ -36296,7 +36321,10 @@ const VDEC={board:null, boardT:0, boardKey:''};
       g.fillStyle='#5a4426'; g.textAlign='center'; g.textBaseline='middle'; let fs=30; const t=I18N.t(name); g.font='800 '+fs+'px Sniglet, Nunito, sans-serif'; while(fs>14 && g.measureText(t).width>226){ fs-=2; g.font='800 '+fs+'px Sniglet, Nunito, sans-serif'; } g.fillText(t,128,118); if(tex) tex.needsUpdate=true; };
     dr(); relang(dr); try{ document.fonts.ready.then(dr); }catch(e){} tex=new THREE.CanvasTexture(cv); tex.encoding=THREE.sRGBEncoding; tex.anisotropy=4; return new THREE.MeshStandardMaterial({map:tex, roughness:.9, side:THREE.DoubleSide}); };
   const postL=[];
-  VALLE_PATHS.slice(1).forEach((W,i)=>{ const [x0,z0]=W.pts[0], [x1,z1]=W.pts[2], dx=x1-x0, dz=z1-z0, l=Math.hypot(dx,dz), nx=-dz/l, nz=dx/l, sx=x0+nx*(W.wide+2.8)+dx/l*1.5, sz=z0+nz*(W.wide+2.8)+dz/l*1.5, sy=terrainH(sx,sz), col=COLS[(i*3+1)%8];
+  // v276: si dos caminos salen juntos de la plaza, el cartel va a la orilla de afuera (antes quedaba en medio del otro camino)
+  const sideOf=W=>{ const sib=VALLE_PATHS.slice(1).filter(S=>S!==W && Math.hypot(S.pts[0][0]-W.pts[0][0],S.pts[0][1]-W.pts[0][1])<12); if(!sib.length) return 1;
+    const [ax,az]=W.pts[0], [bx,bz]=W.pts[3], [qx,qz]=sib[0].pts[3], tx=bx-ax, tz=bz-az; return ((qx-bx)*(-tz)+(qz-bz)*tx)>0?-1:1; };
+  VALLE_PATHS.slice(1).forEach((W,i)=>{ const sd=sideOf(W), [x0,z0]=W.pts[0], [x1,z1]=W.pts[2], dx=x1-x0, dz=z1-z0, l=Math.hypot(dx,dz), nx=-dz/l*sd, nz=dx/l*sd, sx=x0+nx*(W.wide+2.8)+dx/l*1.5, sz=z0+nz*(W.wide+2.8)+dz/l*1.5, sy=terrainH(sx,sz), col=COLS[(i*3+1)%8];
     for(let k=0;k<3;k++) postL.push([sx,sy+.38+k*.76,sz,.4,.74,.4,0,k%2?'#ffffff':col]);
     const pl=new THREE.Mesh(new THREE.PlaneGeometry(1.9,1.19), upSign(col,W.w)); pl.position.set(sx,sy+2.85,sz); pl.rotation.y=Math.atan2(-dx,-dz); pl.userData.noCol=true; scene.add(pl); obstacles.push({x:sx,z:sz,r:.35,top:sy+3.4,walk:false}); });
   { const ux=(V.arch.x-P.x)/Math.hypot(V.arch.x-P.x,V.arch.z-P.z), uz=(V.arch.z-P.z)/Math.hypot(V.arch.x-P.x,V.arch.z-P.z), px=P.x+ux*(P.R-7)-uz*5.5, pz=P.z+uz*(P.R-7)+ux*5.5, py=terrainH(px,pz);
@@ -38701,7 +38729,8 @@ function update(dt,t){ myLabelUpdate();
       const ox=player.pos.x-o.x, oz=player.pos.z-o.z;
       if(Math.abs(ox)>o.r+.5 || Math.abs(oz)>o.r+.5) continue;
       const d=Math.hypot(ox,oz), min=o.r+.42;
-      if(d<min && d>0.0001 && player.pos.y<o.top-.45 && !(o.bot!==undefined && player.pos.y+PLAYER_H<o.bot) && !(o.bot!==undefined && player.pos.y>=o.top-.45)){ player.pos.x=o.x+ox/d*min; player.pos.z=o.z+oz/d*min; }
+      const ot=o.domeH?o.domeB+o.domeH*Math.sqrt(Math.max(0,1-d*d/(o.domeR*o.domeR))):o.top;   // v276: sombrero redondo: su altura donde estás
+      if(d<min && d>0.0001 && player.pos.y<ot-.45 && !(o.bot!==undefined && player.pos.y+PLAYER_H<o.bot) && !(o.bot!==undefined && player.pos.y>=ot-.45)){ player.pos.x=o.x+ox/d*min; player.pos.z=o.z+oz/d*min; }
     }
     // animalitos y otros jugadores: se empujan suavecito (no se atraviesan)
     softPushes();
@@ -38709,7 +38738,7 @@ function update(dt,t){ myLabelUpdate();
     collideAircraft(player.pos);   // aviones y helicópteros también
     mzCollide(player.pos);   // v160: los setos del laberinto
     desPyrCollide(player.pos,player.vel.x,player.vel.z,dt);   // v273: las paredes de la pirámide
-    mesCollide(player.pos);   // v274: la pared de la meseta y los lados de sus subidas
+    mesCollide(player.pos,dt);   // v274: la pared de la meseta y los lados de sus subidas
     forCollide(player.pos);   // v275: barandales, casita y espiral de la casa del árbol
     tmRails(player.pos);   // v162: barandales de la banda
     houseCollide(player.pos);   // v165: muros de las casitas
@@ -38750,6 +38779,7 @@ function update(dt,t){ myLabelUpdate();
       } else {
         player.vy -= 20*dt; player.pos.y += player.vy*dt;
         if(player.pos.y<=g && (trampLand(g) || raceLand(g) || fiBounce(g) || diBounce(g))){}   // trampolín: rebota
+        else if(player.pos.y<=g && player.vy>0){ player.pos.y=g; }   // v276: si el piso sube (escalón, cuesta) mientras brincas, el brinco sigue (antes se cancelaba)
         else if(player.pos.y<=g){
           const impact=-player.vy;
           if(!player.grounded){
