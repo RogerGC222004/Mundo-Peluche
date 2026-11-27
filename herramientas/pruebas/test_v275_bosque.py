@@ -1,4 +1,4 @@
-# v275: Bosque Frondoso (parte 1): árboles gigantes, casa del árbol (espiral, plataforma con barandal, casita, puentes colgantes), arroyo con piedras y cascadita, estanque, fogata y luciérnagas
+# v275: Bosque Frondoso (partes 1 y 2): árboles gigantes, casa del árbol (espiral, plataforma con barandal, casita, puentes colgantes), arroyo con piedras y cascadita, estanque, fogata y luciérnagas
 import asyncio, sys, os
 from playwright.async_api import async_playwright
 REAL=open('threerepo/build/three.min.js').read()
@@ -46,6 +46,21 @@ async def m():
     # 7. de noche: luciérnagas y la fogata alumbra
     r=await ev("""(()=>{ %s const C=F.fire; arWarp(C.x+10,C.y+.1,C.z,0); const d0=sky.dayK; sky.dayK=0; forUpdate(.016); forUpdate(.016); const ff=!!FOR_FX.ff && FOR_FX.ff.visible, gl=FOR_FX.glow.material.opacity; sky.dayK=d0; return [ff, +gl.toFixed(2)]; })()"""%W)
     ok(r[0] and r[1]>.5, 'de noche hay luciérnagas y la fogata alumbra %s'%r)
+    # 8. el muelle del estanque: se pesca y salen peces de agua dulce
+    r=await ev("""(()=>{ const rods=PIER.rods.filter(r=>r.pond), r=rods[0]; arWarp(r.stand[0],r.Y+.1,r.stand[1],0); __run(.5); const onDock=Math.abs(player.pos.y-r.Y)<.1; const a=pondActions(); const L=a&&a[0]?a[0].label:''; const got=[];
+      for(let k=0;k<6;k++){ const b=pondActions(); if(b&&b[0]) b[0].run(); __run(.2); const F=player.fish; if(!F) break; F.T=.3; __run(1); for(let i=0;i<F.N;i++) reelFish(); const sp=F.sp; __run(1.5); got.push(sp); }
+      return [rods.length, onDock, L, got.every(id=>FISH[id]&&FISH[id].fresh), got.length, FISH.filter(f=>f.fresh).length, !!FISH.find(f=>f.n==='Koi dorada' && f.r===3)]; })()""")
+    ok(r[0]==4 and r[1] and r[2].startswith('Pescar'), 'muelle en el estanque con 4 cañas %s'%r[:3])
+    ok(r[3] and r[4]>=5, 'en el estanque salen peces de agua dulce (%s pescados)'%r[4])
+    ok(r[5]==12 and r[6], '12 peces nuevos de agua dulce, con la koi dorada legendaria')
+    # 9. animalitos del bosque
+    r=await ev("""(()=>{ const a=3.6, m=coastMidR(a), n=coastRN(a), x=Math.cos(a)*(m+(n-m)*.5), z=Math.sin(a)*(m+(n-m)*.5); arWarp(x,terrainH(x,z)+.1,z,0); for(let i=0;i<15;i++) __run(1); const k={}; FORA.list.forEach(A=>k[A.kind]=(k[A.kind]||0)+1); return [FORA.list.length, JSON.stringify(k)]; })()""")
+    ok(r[0]>=5, 'aparecen animalitos del bosque: %s'%r[1])
+    r=await ev("""(()=>{ const p=player.pos; const o=obstacles.filter(o=>!o.walk && o.top>p.y+20 && o.r<1.2 && Math.hypot(o.x-p.x,o.z-p.z)<120).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0]; if(!o) return [false,0];
+      arWarp(o.x+12,terrainH(o.x+12,o.z)+.1,o.z,0); __run(.3); const A=forAnimalSpawn('ardilla',o.x+4,o.z); player.pos.set(A.x+3,terrainH(A.x+3,A.z),A.z); player.vel.set(0,0,0); let mx=0; for(let i=0;i<40;i++){ __run(.1); mx=Math.max(mx,A.y-terrainH(A.x,A.z)); } return [!!A.tree, +mx.toFixed(2)]; })()""")
+    ok(r[1]>1, 'la ardilla se trepa al árbol si te acercas %s'%r)
+    r=await ev("""(()=>{ const g=FOR.giants[8]; arWarp(g.x+20,terrainH(g.x+20,g.z)+.1,g.z,0); for(let i=0;i<4;i++) __run(1); const ow=FORA.list.find(A=>A.kind==='buho'); if(!ow) return ['sin búho']; const d0=sky.dayK; sky.dayK=1; forUpdate(.016); const day=ow.ey.visible; sky.dayK=0; player.pos.set(ow.x+8,terrainH(ow.x+8,ow.z),ow.z); camera.position.set(ow.x+8,ow.y,ow.z); forUpdate(.016); const nightEyes=ow.ey.visible; sky.dayK=d0; return [day, nightEyes, +(ow.y-terrainH(ow.x,ow.z)).toFixed(1)]; })()""")
+    ok(r[0] is False and r[1] is True and r[2]>5, 'el búho duerme de día en su rama y de noche abre los ojitos %s'%r)
     print('errores', errs[:3]); ok(not errs, 'sin errores')
     await b.close()
 asyncio.run(m())
