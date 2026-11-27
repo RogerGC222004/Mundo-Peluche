@@ -1,0 +1,120 @@
+# v276: arreglos (rondas 1, 2 y 3): arena de verdad, caritas y manchitas pegadas, animalitos tranquilos, tortuga del desierto, sentado en el camello; arroyo con agua de verdad, manantial y cascadita; casa del árbol rehecha; remolinos y cañas fuera del inicio, brincos en escaleras y sombreros, sin caras encimadas que parpadean (meseta y pirámide), bordillo y pared de la meseta, sin tabla de arena y pose de surf, letrero de Escondidas
+import asyncio, sys, os
+from playwright.async_api import async_playwright
+REAL=open('threerepo/build/three.min.js').read()
+html='<!doctype html><meta charset=utf-8><style>[hidden]{display:none!important}</style>'+open(os.environ.get('JUEGO','/home/claude/mundo-peluche.html')).read().replace("function frame(){","window.__T={ev(s){return eval(s);}}; function frame(){",1)
+async def m():
+  async with async_playwright() as p:
+    b=await p.chromium.launch(args=["--use-gl=swiftshader","--enable-unsafe-swiftshader"]); pg=await b.new_page(viewport={"width":780,"height":360}); errs=[]; pg.on("pageerror",lambda e:errs.append(str(e)))
+    await pg.add_init_script("localStorage.clear(); localStorage.setItem('mundoPelucheOpciones', JSON.stringify({quality:'low', qDef:1, hints:false, weather:false}));")
+    async def route(r):
+      if r.request.url.startswith("https://test.local"): await r.fulfill(body=html.encode(), content_type="text/html; charset=utf-8")
+      elif "three" in r.request.url: await r.fulfill(body=REAL, content_type="application/javascript")
+      else: await r.abort()
+    await pg.route("https://**/*", route); await pg.goto("https://test.local/"); await pg.wait_for_function("window.__T", timeout=180000); await pg.wait_for_timeout(800)
+    ev=lambda s: pg.evaluate("s=>__T.ev(s)", s)
+    ok=lambda c,t: print(('BIEN ' if c else 'MAL  ')+t)
+    await ev("window.__run=(sec)=>{ let t=clock.elapsedTime; const n=Math.round(sec/.05); for(let i=0;i<n;i++){ clock.elapsedTime=(t+=.05); update(.05,t); } }; startGame(); 1"); await pg.wait_for_timeout(1200); await ev("__run(1); 1")
+    ZF="window.__zf=function(cx,cz,R,opt){ opt=opt||{}; const TOL=opt.tol||.012, CELL=2, terrMat=new Set(); try{ TERRAIN_LOD.forEach(t=>terrMat.add(t.m.material)); }catch(e){}\n  const tris=[]; const va=new THREE.Vector3(), vb=new THREE.Vector3(), vc=new THREE.Vector3(), M=new THREE.Matrix4(), IM=new THREE.Matrix4();\n  scene.updateMatrixWorld(true); let meshes=0;\n  scene.traverse(o=>{ if(!o.isMesh || !o.geometry || !o.geometry.attributes.position) return; if(o.isSkinnedMesh) return; try{ if(o===farRelief) return; }catch(e){} const mat=Array.isArray(o.material)?o.material[0]:o.material; if(!mat || mat.visible===false) return; if(mat.transparent && mat.opacity<.5) return; if(mat.depthWrite===false || mat.depthTest===false) return;\n    // ¿visible en la jerarquía? (se permiten los que solo están apagados por distancia)\n    const g=o.geometry; if(!g.boundingSphere) g.computeBoundingSphere(); const isT=terrMat.has(o.material); if(isT && !opt.terrain) return;\n    const nI=o.isInstancedMesh?o.count:1; if(nI===0) return; if(!(o.layers.mask&1)) return; if(!opt.hidden){ let p=o; while(p){ if(p.visible===false) return; p=p.parent; } } const pos=g.attributes.position, idx=g.index, nT=idx?idx.count/3:pos.count/3; if(nT*nI>400000) return;\n    const id=o.uuid.slice(0,5)+(o.name?':'+o.name:'')+'/'+(g.type||'').replace('Geometry','').replace('Buffer','')+(g.index?g.index.count/3:pos.count/3);\n    for(let ii=0;ii<nI;ii++){ M.copy(o.matrixWorld); if(o.isInstancedMesh){ o.getMatrixAt(ii,IM); M.multiply(IM); }\n      const c=g.boundingSphere.center.clone().applyMatrix4(M), sc=M.getMaxScaleOnAxis(), rr=g.boundingSphere.radius*sc; if(Math.abs(c.x-cx)>R+rr || Math.abs(c.z-cz)>R+rr) continue; meshes++;\n      const dr=g.drawRange, s0=Math.max(0,Math.floor(dr.start/3)), s1=Math.min(nT, dr.count===Infinity?nT:Math.floor((dr.start+dr.count)/3));\n      for(let t=s0;t<s1;t++){ const i0=idx?idx.getX(t*3):t*3, i1=idx?idx.getX(t*3+1):t*3+1, i2=idx?idx.getX(t*3+2):t*3+2;\n        va.fromBufferAttribute(pos,i0).applyMatrix4(M); vb.fromBufferAttribute(pos,i1).applyMatrix4(M); vc.fromBufferAttribute(pos,i2).applyMatrix4(M);\n        const mx=(va.x+vb.x+vc.x)/3, mz=(va.z+vb.z+vc.z)/3; if(Math.abs(mx-cx)>R || Math.abs(mz-cz)>R) continue;\n        const e1x=vb.x-va.x,e1y=vb.y-va.y,e1z=vb.z-va.z,e2x=vc.x-va.x,e2y=vc.y-va.y,e2z=vc.z-va.z; let nx=e1y*e2z-e1z*e2y, ny=e1z*e2x-e1x*e2z, nz=e1x*e2y-e1y*e2x; const L=Math.hypot(nx,ny,nz); if(L<2e-4) continue; nx/=L; ny/=L; nz/=L;\n        if(mat.side===THREE.BackSide){ nx=-nx; ny=-ny; nz=-nz; }\n        tris.push({o, id, ii, t, isT, ds:mat.side===THREE.DoubleSide, n:[nx,ny,nz], d:nx*va.x+ny*va.y+nz*va.z, v:[[va.x,va.y,va.z],[vb.x,vb.y,vb.z],[vc.x,vc.y,vc.z]], col:(mat.color?mat.color.getHexString():'?'), area:L/2}); } } });\n  // cubetas: normal (redondeada) + distancia del plano + celda\n  const B=new Map(); const nk=n=>Math.round(n[0]*40)+','+Math.round(n[1]*40)+','+Math.round(n[2]*40);\n  tris.forEach((T,i)=>{ const k0=nk(T.n), dq=Math.round(T.d/.05); let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,z0=1e9,z1=-1e9; for(const v of T.v){ x0=Math.min(x0,v[0]); x1=Math.max(x1,v[0]); y0=Math.min(y0,v[1]); y1=Math.max(y1,v[1]); z0=Math.min(z0,v[2]); z1=Math.max(z1,v[2]); }\n    T.bb=[x0,x1,y0,y1,z0,z1]; const cx0=Math.floor(x0/CELL), cx1=Math.floor(x1/CELL), cy0=Math.floor(y0/CELL), cy1=Math.floor(y1/CELL), cz0=Math.floor(z0/CELL), cz1=Math.floor(z1/CELL); if((cx1-cx0+1)*(cy1-cy0+1)*(cz1-cz0+1)>3000) return;\n    for(let a=cx0;a<=cx1;a++) for(let b=cy0;b<=cy1;b++) for(let c=cz0;c<=cz1;c++){ const k=k0+'|'+dq+'|'+a+','+b+','+c; let L=B.get(k); if(!L) B.set(k,L=[]); L.push(i); } });\n  // recorte de un triángulo contra otro (en 2D, en el plano)\n  const clip=(P,Q)=>{ let out=P; for(let i=0;i<3;i++){ const a=Q[i], b=Q[(i+1)%3], inp=out; out=[]; const side=p=>(b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]);\n      for(let j=0;j<inp.length;j++){ const p=inp[j], q=inp[(j+1)%inp.length], sp=side(p), sq=side(q); if(sp>=0) out.push(p); if((sp>=0)!==(sq>=0)){ const t=sp/(sp-sq); out.push([p[0]+(q[0]-p[0])*t, p[1]+(q[1]-p[1])*t]); } } if(!out.length) return 0; }\n    let A=0; for(let j=0;j<out.length;j++){ const p=out[j], q=out[(j+1)%out.length]; A+=p[0]*q[1]-q[0]*p[1]; } return Math.abs(A)/2; };\n  const proj=(T,ax)=>{ const r=T.v.map(v=>[v[ax[0]],v[ax[1]]]); const s=(r[1][0]-r[0][0])*(r[2][1]-r[0][1])-(r[1][1]-r[0][1])*(r[2][0]-r[0][0]); if(s<0){ const t=r[1]; r[1]=r[2]; r[2]=t; } return r; };\n  const seen=new Set(), hits=[];\n  for(const [k,L] of B){ const [nkey,dq,cell]=k.split('|'); const cand=[]; for(const dd of [-1,0,1]){ const L2=B.get(nkey+'|'+(+dq+dd)+'|'+cell); if(L2) cand.push(...L2); }\n    for(const i of L) for(const j of cand){ if(j<=i) continue; const pk=i+'_'+j; if(seen.has(pk)) continue; seen.add(pk); const A=tris[i], Bt=tris[j];\n      if(A.o===Bt.o && A.ii===Bt.ii && A.t===Bt.t) continue; if(A.isT && Bt.isT) continue;\n      const dot=A.n[0]*Bt.n[0]+A.n[1]*Bt.n[1]+A.n[2]*Bt.n[2]; if(dot<.9995) continue; if(Math.abs(A.d-Bt.d)>TOL) continue;\n      const a=A.bb, b=Bt.bb; if(a[0]>b[1]+.01||b[0]>a[1]+.01||a[2]>b[3]+.01||b[2]>a[3]+.01||a[4]>b[5]+.01||b[4]>a[5]+.01) continue;\n      const an=A.n.map(Math.abs), ax=an[0]>=an[1]&&an[0]>=an[2]?[1,2]:an[1]>=an[2]?[2,0]:[0,1]; const ov=clip(proj(A,ax),proj(Bt,ax)); if(ov<.004) continue;\n      const cxx=(A.v[0][0]+A.v[1][0]+A.v[2][0])/3, cyy=(A.v[0][1]+A.v[1][1]+A.v[2][1])/3, czz=(A.v[0][2]+A.v[1][2]+A.v[2][2])/3;\n      hits.push({x:cxx,y:cyy,z:czz, n:A.n.map(v=>Math.round(v*100)/100), a:A.id+'#'+A.col+(A.isT?'(T)':''), b:Bt.id+'#'+Bt.col+(Bt.isT?'(T)':''), ov, dd:Math.abs(A.d-Bt.d)}); } }\n  // agrupar\n  const C=new Map(); for(const h of hits){ const k=Math.round(h.x/3)+','+Math.round(h.z/3)+'|'+[h.a,h.b].sort().join('|'); let c=C.get(k); if(!c){ c={x:h.x,y:h.y,z:h.z,a:h.a,b:h.b,n:h.n,ov:0,cnt:0,dd:0}; C.set(k,c); } c.ov+=h.ov; c.cnt++; c.dd=Math.max(c.dd,h.dd); }\n  const out=[...C.values()].sort((p,q)=>q.ov-p.ov).map(c=>({x:Math.round(c.x*10)/10,y:Math.round(c.y*10)/10,z:Math.round(c.z*10)/10,n:c.n,a:c.a,b:c.b,ov:Math.round(c.ov*100)/100,cnt:c.cnt,dd:Math.round(c.dd*1000)/1000}));\n  return {tris:tris.length, meshes, clusters:out.length, top:out.slice(0,opt.top||40)}; };\n"
+    await ev(ZF+";1")
+    face="const face=(x,z)=>{ yaw=Math.atan2(-(x-player.pos.x),-(z-player.pos.z)); };"
+    # 1. en el inicio no hay cosas de otras zonas (remolinos, sedales y corchos del estanque)
+    r=await ev("""(()=>{ arWarp(7,groundAt(7,-5,999)+.1,-5,0); __run(2); const wm=(DES.wm||[]).map(g=>g.visible); const bad=PIER.rods.filter(r=>Math.hypot(r.bob.position.x,r.bob.position.z)<200).length;
+      return [wm.length, wm.every(v=>v===false), FOR.rodLines.visible===false, bad]; })()""")
+    ok(r[0]>0 and r[1], 'los remolinos del desierto no aparecen en el inicio %s'%r[:2])
+    ok(r[2] and r[3]==0, 'los sedales y corchos de las cañas no se dibujan en el centro de la isla %s'%r[2:])
+    # 2. brincar mientras subes una escalera (antes el brinco se cancelaba si el escalón subía)
+    r=await ev("""(()=>{ %s const f=MES.acc[0], out=[]; for(let k=0;k<6;k++){ const [x,z]=mesAt(f,0,MES.stair.L-3-k*3); arWarp(x,mesGround(x,z,999)+.05,z,0); __run(.3); const [tx,tz]=mesAt(f,0,-5); keys['KeyW']=true; face(tx,tz); __run(.25); const y0=player.pos.y; keys['Space']=true; __run(.1); keys['Space']=false; let mx=0; for(let i=0;i<10;i++){ face(tx,tz); __run(.05); mx=Math.max(mx,player.pos.y-y0); } keys['KeyW']=false; out.push(+mx.toFixed(2)); } return out; })()"""%face)
+    ok(all(v>.6 for v in r), 'en la escalera de la meseta el brinco siempre responde %s'%r)
+    # 3. sombreros de hongo redondos: al pararte cerca de la orilla no flotas ni te hundes
+    r=await ev("""(()=>{ const c=MES.caps.find(c=>!c.b && c.r>2 && c.r<6); const o=obstacles.find(o=>o.domeH && Math.abs(o.x-c.x)<.01 && Math.abs(o.z-c.z)<.01); const x=c.x+c.r*.6, z=c.z; arWarp(x,o.domeB+o.domeH+1,z,0); __run(1); const want=o.domeB+o.domeH*Math.sqrt(1-(c.r*.6/o.domeR)**2); return [+(player.pos.y-want).toFixed(2)]; })()""")
+    ok(abs(r[0])<.12, 'en la orilla del sombrero de un hongo quedas sobre la curva %s'%r)
+    # 4. sin caras encimadas en los puentes, escalera y espiral de la meseta, ni en la entrada de la pirámide
+    out=[]
+    for nm,c,R in [('rampa','mesAt(MES.acc[1],19,0)',26),('escalera','mesAt(MES.acc[0],0,0)',14),('espiral','mesAt(MES.acc[2],0,0)',14),('pirámide','[DES.pyr.x-DES.pyr.B,DES.pyr.z]',6)]:
+      r=await ev("""(()=>{ const [cx,cz]=%s; arWarp(cx,MES.top+2,cz,0); __run(.5); const a=__zf(cx,cz,%d,{terrain:true}); return [a.tris, a.top.filter(t=>t.ov>.05).length, JSON.stringify(a.top.slice(0,2))]; })()"""%(c,R)); out.append((nm,r[0],r[1],r[2]))
+    ok(all(t>500 and n==0 for _,t,n,_ in out), 'ninguna cara encimada (parpadeo) en meseta y pirámide %s'%[(a,b,c) for a,b,c,_ in out]+('' if all(n==0 for _,_,n,_ in out) else ' '+str([d for *_,d in out])))
+    # 5. bajo los puentes de la meseta el pasto no se asoma
+    r=await ev("""(()=>{ let mx=-9; for(const [k,u0,u1] of MES.FP) for(let u=u0;u<=u1;u+=.4) for(let v=-4.4;v<=0;v+=.4){ const [x,z]=mesAt(MES.acc[k],u,v); mx=Math.max(mx,terrainH(x,z)-MES.top); } return +mx.toFixed(3); })()""")
+    ok(r<-.05, 'el pasto queda abajo de los puentes y la escalera (%s m)'%r)
+    # 6. bordillo en la orilla: tapa la unión y se camina encima; la pared no deja meterse a su falda
+    r=await ev("""(()=>{ %s const M=MES, f=M.acc[0]+2.2, R=mesRim(f), x=M.x+Math.cos(f)*(R-.1), z=M.z+Math.sin(f)*(R-.1); arWarp(x,M.top+1,z,0); __run(1); const on=+(player.pos.y-M.top).toFixed(2);
+      const ins=[]; for(const da of [1.0,2.6,4.4]){ const f2=M.acc[0]+da, R2=mesRim(f2), d0=R2+M.S+20, x2=M.x+Math.cos(f2)*d0, z2=M.z+Math.sin(f2)*d0; arWarp(x2,terrainH(x2,z2)+.1,z2,0); __run(.3); keys['KeyW']=true; let mn=99;
+        for(let i=0;i<50;i++){ face(M.x,M.z); __run(.1); const p=player.pos, ff=Math.atan2(p.z-M.z,p.x-M.x); mn=Math.min(mn,Math.hypot(p.x-M.x,p.z-M.z)-(mesRim(ff)+mesWallOff(p.y,ff))); } keys['KeyW']=false; ins.push(+mn.toFixed(2)); }
+      return [!!M.curb, on, ins]; })()"""%face)
+    ok(r[0] and abs(r[1]-.32)<.05, 'bordillo de piedra en la orilla de la meseta y te puedes parar encima %s'%r[:2])
+    ok(all(v>.3 for v in r[2]), 'desde abajo la pared no te deja meterte en su falda %s'%r[2])
+    # 7. desierto: ya no hay tabla de arena; al surfear la pose es de lado con las rodillas dobladas
+    r=await ev("""(()=>{ const a=.4, m=coastMidR(a), n=coastRN(a), x=Math.cos(a)*(m+(n-m)*.5), z=Math.sin(a)*(m+(n-m)*.5); arWarp(x,terrainH(x,z)+.1,z,0); __run(.3); let lab=''; try{ const s=desActions(); lab=s&&s[0]?s[0].label:''; }catch(e){} const P=tblRidePose(0,0,0,0,0,.4,1,0); return [lab, P.surf===1, +P.lean.toFixed(2)]; })()""")
+    ok(r[0]!='Tabla de arena' and r[1], 'ya no hay tabla de arena y el surf usa la pose de lado %s'%r)
+    # 8. el letrero de Escondidas: a la orilla del camino, cerca de la plaza y sin estorbar el otro camino
+    r=await ev("""(()=>{ const segD=(x,z,W)=>{ let m=1e9; for(let i=0;i<W.pts.length-1;i++){ const [ax,az]=W.pts[i], [bx,bz]=W.pts[i+1], ex=bx-ax, ez=bz-az, l2=ex*ex+ez*ez||1; let t=((x-ax)*ex+(z-az)*ez)/l2; t=t<0?0:t>1?1:t; m=Math.min(m,Math.hypot(x-ax-ex*t,z-az-ez*t)-W.wide); } return m; };
+      const out=[]; scene.traverse(o=>{ if(o.isMesh && o.geometry && o.geometry.parameters && o.geometry.parameters.width===1.9 && o.geometry.parameters.height===1.19){ const x=o.position.x, z=o.position.z, own=VALLE_PATHS.map(W=>segD(x,z,W)); out.push([Math.min(...own), Math.hypot(x-VALLE.plaza.x,z-VALLE.plaza.z)-VALLE.plaza.R]); } });
+      return out.map(v=>v.map(n=>+n.toFixed(1))); })()""")
+    ok(len(r)==5 and all(a>2 and d<16 for a,d in r), 'los 5 letreros del valle quedan a la orilla de su camino, junto a la plaza y sin pisar otro camino %s'%r)
+    # 10. el arroyo del bosque es agua de verdad: nadas en medio, en el manantial y en la pocita; chapoteas en la orilla
+    r=await ev("""(()=>{ const S=FOR.stream, out={}; const at=(x,z,lab)=>{ arWarp(x,S.L[0]+3,z,0); player.pos.y=Math.max(terrainH(x,z),(riverLevelAt(x,z)??-99))+.3; player.vy=-2; player.grounded=false; for(let i=0;i<30;i++) __run(.1); out[lab]=[player.swim, player.inWater]; };
+      const i=50, [x,z]=S.pts[i], [x2,z2]=S.pts[i+1], dx=x2-x, dz=z2-z, l=Math.hypot(dx,dz), nx=-dz/l, nz=dx/l;
+      at(x,z,'centro'); at(x+nx*3.8,z+nz*3.8,'orilla'); at(x+nx*7,z+nz*7,'seco'); at(S.spring.x,S.spring.z,'manantial'); at(S.plunge.x,S.plunge.z,'pocita');
+      const W=FOR_WATER; return [out, Math.abs(riverLevelAt(x,z)-S.L[i])<.01, W.meshes.length, W.meshes[0].material.type, !!(W.meshes[0].material.defines||{}).FLOW, W.fall.material===fallMats[1]]; })()""")
+    o=r[0]
+    ok(o['centro'][0] and o['manantial'][0] and o['pocita'][0], 'en el arroyo, el manantial y la pocita de la cascadita se puede nadar %s'%o)
+    ok(o['orilla'][1] and not o['orilla'][0] and not o['seco'][0] and not o['seco'][1], 'en la orilla chapoteas y afuera estás seco')
+    ok(r[1] and r[2]>=4 and r[3]=='ShaderMaterial' and r[4] and r[5], 'el agua es como la del río (corre, refleja) y la cascadita cae como la del río %s'%r[1:])
+    # 11. el agua nace del manantial (sin corte recto) y llega al estanque
+    r=await ev("""(()=>{ const S=FOR.stream, C=S.spring, P=S.pts, Pd=FOR.pond; const a=riverLevelAt(C.x,C.z)!==null, b=riverLevelAt((C.x+P[1][0])/2,(C.z+P[1][1])/2)!==null; let last=-1; for(let i=P.length-1;i>0;i--){ if(riverLevelAt(P[i][0],P[i][1])!==null){ last=i; break; } }
+      const dl=Math.hypot(P[last][0]-Pd.x,P[last][1]-Pd.z); return [a,b,+(dl-Pd.R).toFixed(1)]; })()""")
+    ok(r[0] and r[1] and r[2]<0, 'el arroyo sale del manantial sin hueco y llega hasta el estanque %s'%r)
+    # 12. casa del árbol: sin caras encimadas en pisos, escalones, barandales y casita
+    out=[]
+    for nm,c,R in [('casita','(()=>{ const T=FOR.th, ac=Math.atan2(-T.z,-T.x)+Math.PI, R=FOR.giants[0].r+.15+3.3; return [T.x+Math.cos(ac)*R,T.z+Math.sin(ac)*R]; })()',5),('plataforma','[FOR.th.x,FOR.th.z]',10),('vecino','[FOR.giants[1].x,FOR.giants[1].z]',6)]:
+      r=await ev("""(()=>{ const [cx,cz]=%s; arWarp(cx,FOR.th.y+1,cz,0); __run(.5); const a=__zf(cx,cz,%d,{top:60}); const bad=a.top.filter(t=>t.n[1]>-.5 && t.ov>.05); return [a.tris, bad.length, JSON.stringify(bad.slice(0,2))]; })()"""%(c,R)); out.append((nm,r[0],r[1],r[2]))
+    ok(all(t>500 and n==0 for _,t,n,_ in out), 'casa del árbol: ninguna cara encimada que se vea %s'%[(a,b,c) for a,b,c,_ in out]+('' if all(n==0 for _,_,n,_ in out) else ' '+str([d for *_,d in out])))
+    # 13. postes derechos de la espiral hasta el suelo, piso de una pieza y redes
+    r=await ev("""(()=>{ const P=FOR.thPosts.filter(Boolean); return [P.length, P.every(p=>p.gb<=terrainH(p.x,p.z)+.01 && p.top-p.gb>6), !!FOR.deck, FOR.nets.geometry.index.count/6, !!FOR_FX.lamp]; })()""")
+    ok(r[0]>=12 and r[1], 'los postes de la espiral bajan hasta el suelo (%s postes)'%r[0])
+    ok(r[2] and r[3]>60 and r[4], 'pisos de una sola pieza, %s tramos de red entre postes y farolito en la casita'%r[3])
+    # 14. el barandal de la espiral no te deja caer (y abajo se entra)
+    r=await ev("""(()=>{ const S=FOR.slabs.find(s=>s.t==='hx'), rm=(S.r0+S.r1)/2, th=S.turns*Math.PI*2*.45, a=S.a0+th, h=S.h0+(S.h1-S.h0)*.45; arWarp(S.x+Math.cos(a)*rm,h+.05,S.z+Math.sin(a)*rm,0); __run(.3); keys['KeyW']=true;
+      for(let i=0;i<25;i++){ yaw=Math.atan2(-(Math.cos(a)),-(Math.sin(a))); __run(.1); } keys['KeyW']=false; __run(.3); const d=Math.hypot(player.pos.x-S.x,player.pos.z-S.z);
+      return [+(player.pos.y-h).toFixed(2), +(d-S.r1).toFixed(2)]; })()""")
+    ok(abs(r[0])<.6 and r[1]<.05, 'en la espiral el barandal no te deja caer %s'%r)
+    # 15. arena de verdad en el desierto (sin tela ni costuras) y granitos que vuelan
+    r=await ev("""(()=>{ const D=DES.pyr, near=(cx,cz)=>{ let best=null, bd=1e9; for(const T of TERRAIN_LOD){ const d=Math.hypot(T.c.x-cx,T.c.z-cz); if(d<bd){ bd=d; best=T; } } return best; };
+      const mx=T=>{ const a=T&&T.hi.attributes.aSand; if(!a) return -1; const I=T.hi.index; let m=0; if(I){ const r=T.hi.drawRange, e=Math.min(I.count,r.start+r.count); for(let i=r.start;i<e;i++) m=Math.max(m,a.getX(I.getX(i))); } else for(let i=0;i<a.count;i++) m=Math.max(m,a.getX(i)); return +m.toFixed(2); };
+      let x=2300,z=300; for(let i=0;i<40 && !desSandAt(x,z);i++){ x+=7; } arWarp(x,terrainH(x,z)+.1,z,0); __run(1.5);
+      return [mx(near(x,z)), mx(near(0,0)), !!(DES_FLY.pts && DES_FLY.pts.visible), GROUND_MAT.customProgramCacheKey()]; })()""")
+    ok(r[0]>.9 and r[1]==0 and r[2], 'el desierto es arena de verdad (granitos, ondas y brillitos), el resto sigue igual, y vuelan granitos %s'%r)
+    # 16. caritas de cactus y manchitas de hongo pegadas a su superficie
+    r=await ev("""(()=>{ let worst=0; const F=DES.cactusFace({t:'cyl',R:.45},2.05,1); for(const q of F){ if(q[4]<.03) continue; const d=Math.hypot(q[1],q[3])-.45; worst=Math.max(worst,Math.abs(d)-q[6]*.9); }
+      const E={t:'ell',yc:.62,rx:.78,ry:.66,rz:.78}; for(const q of DES.cactusFace(E,.74,1.05)){ if(q[4]<.03) continue; const k=Math.sqrt((q[1]/E.rx)**2+((q[2]-E.yc)/E.ry)**2+(q[3]/E.rz)**2); worst=Math.max(worst,Math.abs(k-1)*E.rx-q[6]*.9); }
+      let sp=0; for(let i=0;i<8;i++){ const a=i*.8, e=.3+i*.08, q=spotOn(MES_G,0,0,0,.5,.12,.5,a,e,.13,'#fff'); const k=Math.sqrt((q[1]/.5)**2+(q[2]/.12)**2+(q[3]/.5)**2); sp=Math.max(sp,Math.abs(k-.992)); }
+      return [+worst.toFixed(3), +sp.toFixed(4)]; })()""")
+    ok(r[0]<.03 and r[1]<.002, 'la carita de los cactus y las manchitas de los hongos van pegaditas %s'%r)
+    # 17. animalitos tranquilos: caminando te acercas; corriendo huyen poquito y luego te miran; la ardilla solo trepa si corres
+    r=await ev("""(()=>{ const face=(x,z)=>{ yaw=Math.atan2(-(x-player.pos.x),-(z-player.pos.z)); }; let x=2300,z=300; for(let i=0;i<40 && !desSandAt(x,z);i++){ x+=7; } arWarp(x,terrainH(x,z)+.1,z,0); __run(1);
+      const clr=()=>{ DESA.list.forEach(A=>scene.remove(A.g)); DESA.list.length=0; DESA.t=99; };
+      const go=(kind,run)=>{ clr(); const A=desAnimalSpawn(kind,player.pos.x+12,player.pos.z); A.cur=false; let minD=99, fled=0; keys['KeyW']=true; if(run) keys['ShiftLeft']=true; for(let i=0;i<50;i++){ face(A.x,A.z); __run(.1); minD=Math.min(minD,Math.hypot(A.x-player.pos.x,A.z-player.pos.z)); if(A.mode==='flee') fled=1; } keys['KeyW']=false; keys['ShiftLeft']=false; __run(2.6); return [+minD.toFixed(1),fled,A.mode||'-']; };
+      const w=go('fenec',false), c=go('liebre',true), t=go('tortuga',true); clr(); return [w,c,t]; })()""")
+    ok(r[0][0]<3 and not r[0][1], 'caminando, el fenec te deja acercarte y te mira %s'%r[0])
+    ok(r[1][1] and r[1][2]=='look', 'si llegas corriendo, la liebre huye poquito y luego se voltea a mirarte %s'%r[1])
+    r2=await ev("""(()=>{ const face=(x,z)=>{ yaw=Math.atan2(-(x-player.pos.x),-(z-player.pos.z)); }; const T=FOR.th; let x=T.x+30, z=T.z+30; for(let i=0;i<30 && !forOkSpot(x,z);i++){ x+=5; } arWarp(x,terrainH(x,z)+.1,z,0); __run(1);
+      const clr=()=>{ FORA.list.forEach(A=>scene.remove(A.g)); FORA.list.length=0; FORA.t=99; };
+      const go=(kind,run)=>{ clr(); const A=forAnimalSpawn(kind,player.pos.x+11,player.pos.z); A.cur=false; let minD=99, fled=0, climb=0; keys['KeyW']=true; if(run) keys['ShiftLeft']=true; for(let i=0;i<45;i++){ face(A.x,A.z); __run(.1); minD=Math.min(minD,Math.hypot(A.x-player.pos.x,A.z-player.pos.z)); if(A.mode==='flee') fled=1; if(A.tree) climb=1; } keys['KeyW']=false; keys['ShiftLeft']=false; __run(.5); return [+minD.toFixed(1),fled,climb]; };
+      const v=go('venado',false), a=go('ardilla',false), b=go('ardilla',true); clr(); return [v,a,b]; })()""")
+    ok(r2[0][0]<3 and not r2[0][1] and not r2[1][2] and r2[2][2], 'en el bosque: el venado te deja acercarte caminando; la ardilla solo trepa si llegas corriendo %s'%r2)
+    # 18. la tortuga del desierto: grande, choca y no huye
+    r3=await ev("""(()=>{ const g=desAnimalGeo('tortuga'); g.computeBoundingBox(); const b=g.boundingBox; return [+(b.max.y-b.min.y).toFixed(2), +(b.max.z-b.min.z).toFixed(2)]; })()""")
+    ok(r3[0]>.9 and r3[1]>1.6 and r[2][0]>=1.1 and not r[2][1], 'la tortuga es casi del tamaño del peluche (%s m de alto, %s de largo), choca y no huye %s'%(r3[0],r3[1],r[2]))
+    # 19. en el camello vas sentado en la silla (sea cual sea tu muñeco)
+    r=await ev("""(()=>{ const out=[]; for(const av of ['','av_cubo','av_chibi']){ if(player.pg) stopPlay(); __run(.2); if(av) wardrobe.eq.body=av; else delete wardrobe.eq.body; applyOutfit(plush,{...wardrobe.eq}); __run(.2);
+        const K=DES.camel; arWarp(K.x+1.5,groundAt(K.x+1.5,K.z,999)+.1,K.z,0); __run(.4); desCamelStart(); __run(1.2); keys['KeyW']=true; __run(1); keys['KeyW']=false; __run(.1);
+        const C=DES.camel.ride, seat=C.position.y+(C.userData.body?C.userData.body.position.y:0)+DES_SEAT; sitMeasure(plush); const butt=plush.position.y+plush.userData.sitButt; out.push(+(butt-seat).toFixed(3)); }
+      stopPlay(); __run(.3); delete wardrobe.eq.body; applyOutfit(plush,{...wardrobe.eq}); return out; })()""")
+    ok(all(abs(v)<.1 for v in r), 'en el camello vas sentado en la silla (frijolito, cubo y chibi) %s'%r)
+    # 9. más precisión para la profundidad
+    r=await ev("camera.near")
+    ok(r>=.1, 'la cámara ve desde 10 cm (menos parpadeo de lejos) %s'%r)
+    print('errores', errs[:3]); ok(not errs, 'sin errores')
+    await b.close()
+asyncio.run(m())

@@ -39,16 +39,9 @@ async def m():
     r=await ev("""(()=>{ const P=DES.pyr; arWarp(P.x-P.B+4,P.H+.1,P.z,0); __run(.5); yaw=Math.PI; keys['KeyW']=true; for(let i=0;i<12;i++){ yaw=Math.PI; __run(.25); } keys['KeyW']=false; return [+(player.pos.z-P.z).toFixed(2), +(player.pos.y-P.H).toFixed(2)]; })()""")
     ok(abs(r[0])<1.3 and r[1]<.3, 'las paredes del túnel no se atraviesan %s'%r)
     # --- parte 2 ---
-    # 6. tabla de arena: en una duna, deslizarse, brincar y bajarse solito al pararse
-    r=await ev("""(()=>{ const a=.4, m=coastMidR(a), n=coastRN(a); let best=null; for(let f=.25;f<.7;f+=.004){ const r=m+(n-m)*f, x=Math.cos(a)*r, z=Math.sin(a)*r, e=2, g=Math.hypot(terrainH(x+e,z)-terrainH(x-e,z),terrainH(x,z+e)-terrainH(x,z-e))/(2*e); if(desSandAt(x,z) && (!best||g>best[2]) && !obsNear(x,z).some(o=>Math.hypot(o.x-x,o.z-z)<o.r+6)) best=[x,z,g]; }
-      const [x,z]=best; arWarp(x,groundAt(x,z,999)+.1,z,0); __run(.6); const lab=(desActions()||[])[0]; const L=lab?lab.label:''; if(lab) lab.run(); __run(.1); const on=player.pg && player.pg.k==='sandb';
-      let mx=0, air=false; for(let i=0;i<20;i++){ __run(.2); if(player.pg && player.pg.sb){ mx=Math.max(mx,Math.hypot(player.pg.sb.vx,player.pg.sb.vz)); if(i===5){ jump(); } if(player.pg.sb.air) air=true; } }
-      __run(10); return [L,on,+mx.toFixed(1),air,0,+best[2].toFixed(2)]; })()""")
-    await asyncio.sleep(.3)
-    r[4]=await ev("(()=>{ __run(.2); const S=player.pg&&player.pg.sb; return S?[S.slow,Math.hypot(S.vx,S.vz),S.air,S.crash,player.pg.k]:true; })()")
-    ok(r[0]=='Tabla de arena' and r[1], 'en la arena aparece «Tabla de arena» y te subes %s'%r[:2])
-    ok(r[2]>2.5 and r[3], 'la tabla se desliza por la duna (hasta %s m/s) y brinca'%r[2])
-    ok(r[4] is True, 'al pararse te bajas solito')
+    # 6. (v276) ya no hay tabla de arena en el desierto
+    r=await ev("""(()=>{ const a=.4, m=coastMidR(a), n=coastRN(a), x=Math.cos(a)*(m+(n-m)*.45), z=Math.sin(a)*(m+(n-m)*.45); arWarp(x,terrainH(x,z)+.1,z,0); __run(.6); const A=desActions(); return A&&A[0]?A[0].label:''; })()""")
+    ok(r!='Tabla de arena', 'ya no sale el botón de la tabla de arena (%s)'%(r or 'nada'))
     # 7. camello: subirse, caminar y bajarse
     r=await ev("""(()=>{ const K=DES.camel; arWarp(K.x+1.5,groundAt(K.x+1.5,K.z,999)+.1,K.z,0); __run(.6); const a=desActions(); const L=a&&a[0]?a[0].label:''; if(a&&a[0]) a[0].run(); __run(.2); const on=player.pg && player.pg.k==='camel', x0=player.pg&&player.pg.cm?player.pg.cm.x:0, z0=player.pg&&player.pg.cm?player.pg.cm.z:0;
       keys['KeyW']=true; __run(4); keys['KeyW']=false; __run(1); const cm=player.pg&&player.pg.cm, d=cm?Math.hypot(cm.x-x0,cm.z-z0):0, high=cm?player.pos.y-terrainH(cm.x,cm.z):0; stopPlay(); __run(.5);
@@ -57,8 +50,8 @@ async def m():
     ok(r[2]>8 and r[3]>1.8, 'el camello camina (%s m en 4 s) y vas sentado arriba (%s m)'%(r[2],r[3]))
     ok(r[4] and r[5] and r[6], 'te bajas y el camello vuelve a su lugar')
     # 8. remolino: te levanta girando y «Tirarse» te saca
-    r=await ev("""(()=>{ let W=desWhirlPos(0,Date.now()/1000), tries=0; while(W.k<.8 && tries<20){ tries++; __run(1); W=desWhirlPos(0,Date.now()/1000); } if(W.k<.8) return ['sin remolino']; arWarp(W.x+.5,groundAt(W.x+.5,W.z,999)+.1,W.z,0); for(let i=0;i<10 && !player.whirl;i++){ W=desWhirlPos(0,Date.now()/1000); player.pos.set(W.x+.5,terrainH(W.x,W.z),W.z); __run(.1); }
-      const got=!!player.whirl; __run(1.5); const up=player.pos.y-terrainH(player.pos.x,player.pos.z); startDive(); __run(.2); return [got,+up.toFixed(1),!player.whirl]; })()""")
+    r=await ev("""(()=>{ const D0=Date.now, t0=D0()/1000; let off=0; while(off<900 && desWhirlPos(0,t0+off).k<.85) off+=.5; if(off>0) Date.now=()=>D0()+off*1000; let W=desWhirlPos(0,Date.now()/1000); if(W.k<.8){ Date.now=D0; return ['sin remolino']; } arWarp(W.x+.5,groundAt(W.x+.5,W.z,999)+.1,W.z,0); for(let i=0;i<10 && !player.whirl;i++){ W=desWhirlPos(0,Date.now()/1000); player.pos.set(W.x+.5,terrainH(W.x,W.z),W.z); __run(.1); }
+      const got=!!player.whirl; __run(1.5); const up=player.pos.y-terrainH(player.pos.x,player.pos.z); startDive(); __run(.2); const res=[got,+up.toFixed(1),!player.whirl]; Date.now=D0; return res; })()""")
     ok(r[0] and r[1]>2.5 and r[2], 'un remolino te levanta (%s m) y con «Tirarse» sales %s'%(r[1] if len(r)>1 else '',r))
     # 9. animalitos
     r=await ev("""(()=>{ const a=.4, m=coastMidR(a), n=coastRN(a), rr=m+(n-m)*.45, x=Math.cos(a)*rr, z=Math.sin(a)*rr; arWarp(x,groundAt(x,z,999)+.1,z,0); __run(14); return [DESA.list.length, [...new Set(DESA.list.map(A=>A.kind))].join(',')]; })()""")
