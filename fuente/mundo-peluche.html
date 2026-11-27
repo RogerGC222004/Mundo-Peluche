@@ -8376,10 +8376,15 @@ function valleIn(x,z){ if(x>-300 || z<150) return false; const a=Math.atan2(z,x)
   return true; }
 // los caminos del valle (de tapetes): de la entrada a la plaza y de la plaza a la placa de cada minijuego
 const VALLE_PATHS=(()=>{ const P=VALLE.plaza, A=VALLE.arch, L0=Math.hypot(P.x-A.x,P.z-A.z), out=[{pts:[[A.x,A.z],[P.x-(P.x-A.x)/L0*(P.R-1),P.z-(P.z-A.z)/L0*(P.R-1)]], w:'HOLA JUEGA ', en:'HELLO PLAY ', wide:4}];
-  const to=(tx,tz,name,side)=>{ const dx=tx-P.x, dz=tz-P.z, L=Math.hypot(dx,dz), ux=dx/L, uz=dz/L, sx=P.x+ux*(P.R+1), sz=P.z+uz*(P.R+1), mx=(sx+tx)/2-uz*L*.12*side, mz=(sz+tz)/2+ux*L*.12*side, pts=[];
-    for(let t=0;t<=1.0001;t+=.05){ const a=(1-t)*(1-t), b=2*t*(1-t), c=t*t; pts.push([a*sx+b*mx+c*tx, a*sz+b*mz+c*tz]); } out.push({pts, w:name, wide:3}); };
-  to(FRU.x+FRU.S+7, FRU.z-4, 'Canasta de frutas', 1); to(CHOC.x+CHOC.R+5, CHOC.z+2, 'Carritos chocones', -1); to(ESG.x+ESG.S+7, ESG.z-4, 'Escondidas', 1);
-  to(DWG.x+DWG.R+6, DWG.z-4, '¡A dibujar!', -1); to(NUMG.x+15, NUMG.z-7, '¡Al número!', 1);
+  // v272: cada camino se curva lo necesario para no pasar por encima de otro minijuego (el de Escondidas cruzaba los Carritos chocones)
+  const PADS=[[FRU,FRU.S*1.42+3],[CHOC,CHOC.R+5],[ESG,ESG.S*1.42+3],[DWG,DWG.R+7],[NUMG,21]];
+  const to=(tx,tz,name,side,G)=>{ const dx=tx-P.x, dz=tz-P.z, L=Math.hypot(dx,dz), ux=dx/L, uz=dz/L, sx=P.x+ux*(P.R+1), sz=P.z+uz*(P.R+1); let pts=null;
+    for(const k of [.12,-.12,.22,-.22,.32,-.32,.45,-.45,.6,-.6]){ const mx=(sx+tx)/2-uz*L*k*side, mz=(sz+tz)/2+ux*L*k*side, q=[];
+      for(let t=0;t<=1.0001;t+=.05){ const a=(1-t)*(1-t), b=2*t*(1-t), c=t*t; q.push([a*sx+b*mx+c*tx, a*sz+b*mz+c*tz]); }
+      if(!pts) pts=q; if(q.every(([x,z])=>PADS.every(([H,R])=>H===G || Math.hypot(x-H.x,z-H.z)>R+3+4))){ pts=q; break; } }
+    out.push({pts, w:name, wide:3}); };
+  to(FRU.x+FRU.S+7, FRU.z-4, 'Canasta de frutas', 1, FRU); to(CHOC.x+CHOC.R+5, CHOC.z+2, 'Carritos chocones', -1, CHOC); to(ESG.x+ESG.S+7, ESG.z-4, 'Escondidas', 1, ESG);
+  to(DWG.x+DWG.R+6, DWG.z-4, '¡A dibujar!', -1, DWG); to(NUMG.x+15, NUMG.z-7, '¡Al número!', 1, NUMG);
   return out; })();
 function valleBuild(){ const V=VALLE, N=V.N, S=V.S, B=V.base=new Uint8Array(N*N);
   for(let j=0;j<N;j++){ const z=V.z0+(j+.5)*S; if(z<150) continue; const ia=Math.max(0,Math.floor((-5.3*z-V.x0)/S)), ib=Math.min(N-1,Math.ceil((-.42*z-V.x0)/S));
