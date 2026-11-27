@@ -1,4 +1,4 @@
-# v276: arreglos (ronda 1): remolinos y cañas fuera del inicio, brincos en escaleras y sombreros, sin caras encimadas que parpadean (meseta y pirámide), bordillo y pared de la meseta, sin tabla de arena y pose de surf, letrero de Escondidas
+# v276: arreglos (ronda 1 y 2): arroyo con agua de verdad, manantial y cascadita; casa del árbol rehecha; remolinos y cañas fuera del inicio, brincos en escaleras y sombreros, sin caras encimadas que parpadean (meseta y pirámide), bordillo y pared de la meseta, sin tabla de arena y pose de surf, letrero de Escondidas
 import asyncio, sys, os
 from playwright.async_api import async_playwright
 REAL=open('threerepo/build/three.min.js').read()
@@ -52,6 +52,33 @@ async def m():
       const out=[]; scene.traverse(o=>{ if(o.isMesh && o.geometry && o.geometry.parameters && o.geometry.parameters.width===1.9 && o.geometry.parameters.height===1.19){ const x=o.position.x, z=o.position.z, own=VALLE_PATHS.map(W=>segD(x,z,W)); out.push([Math.min(...own), Math.hypot(x-VALLE.plaza.x,z-VALLE.plaza.z)-VALLE.plaza.R]); } });
       return out.map(v=>v.map(n=>+n.toFixed(1))); })()""")
     ok(len(r)==5 and all(a>2 and d<16 for a,d in r), 'los 5 letreros del valle quedan a la orilla de su camino, junto a la plaza y sin pisar otro camino %s'%r)
+    # 10. el arroyo del bosque es agua de verdad: nadas en medio, en el manantial y en la pocita; chapoteas en la orilla
+    r=await ev("""(()=>{ const S=FOR.stream, out={}; const at=(x,z,lab)=>{ arWarp(x,S.L[0]+3,z,0); player.pos.y=Math.max(terrainH(x,z),(riverLevelAt(x,z)??-99))+.3; player.vy=-2; player.grounded=false; for(let i=0;i<30;i++) __run(.1); out[lab]=[player.swim, player.inWater]; };
+      const i=50, [x,z]=S.pts[i], [x2,z2]=S.pts[i+1], dx=x2-x, dz=z2-z, l=Math.hypot(dx,dz), nx=-dz/l, nz=dx/l;
+      at(x,z,'centro'); at(x+nx*3.8,z+nz*3.8,'orilla'); at(x+nx*7,z+nz*7,'seco'); at(S.spring.x,S.spring.z,'manantial'); at(S.plunge.x,S.plunge.z,'pocita');
+      const W=FOR_WATER; return [out, Math.abs(riverLevelAt(x,z)-S.L[i])<.01, W.meshes.length, W.meshes[0].material.type, !!(W.meshes[0].material.defines||{}).FLOW, W.fall.material===fallMats[1]]; })()""")
+    o=r[0]
+    ok(o['centro'][0] and o['manantial'][0] and o['pocita'][0], 'en el arroyo, el manantial y la pocita de la cascadita se puede nadar %s'%o)
+    ok(o['orilla'][1] and not o['orilla'][0] and not o['seco'][0] and not o['seco'][1], 'en la orilla chapoteas y afuera estás seco')
+    ok(r[1] and r[2]>=4 and r[3]=='ShaderMaterial' and r[4] and r[5], 'el agua es como la del río (corre, refleja) y la cascadita cae como la del río %s'%r[1:])
+    # 11. el agua nace del manantial (sin corte recto) y llega al estanque
+    r=await ev("""(()=>{ const S=FOR.stream, C=S.spring, P=S.pts, Pd=FOR.pond; const a=riverLevelAt(C.x,C.z)!==null, b=riverLevelAt((C.x+P[1][0])/2,(C.z+P[1][1])/2)!==null; let last=-1; for(let i=P.length-1;i>0;i--){ if(riverLevelAt(P[i][0],P[i][1])!==null){ last=i; break; } }
+      const dl=Math.hypot(P[last][0]-Pd.x,P[last][1]-Pd.z); return [a,b,+(dl-Pd.R).toFixed(1)]; })()""")
+    ok(r[0] and r[1] and r[2]<0, 'el arroyo sale del manantial sin hueco y llega hasta el estanque %s'%r)
+    # 12. casa del árbol: sin caras encimadas en pisos, escalones, barandales y casita
+    out=[]
+    for nm,c,R in [('casita','(()=>{ const T=FOR.th, ac=Math.atan2(-T.z,-T.x)+Math.PI, R=FOR.giants[0].r+.15+3.3; return [T.x+Math.cos(ac)*R,T.z+Math.sin(ac)*R]; })()',5),('plataforma','[FOR.th.x,FOR.th.z]',10),('vecino','[FOR.giants[1].x,FOR.giants[1].z]',6)]:
+      r=await ev("""(()=>{ const [cx,cz]=%s; arWarp(cx,FOR.th.y+1,cz,0); __run(.5); const a=__zf(cx,cz,%d,{top:60}); const bad=a.top.filter(t=>t.n[1]>-.5 && t.ov>.05); return [a.tris, bad.length, JSON.stringify(bad.slice(0,2))]; })()"""%(c,R)); out.append((nm,r[0],r[1],r[2]))
+    ok(all(t>500 and n==0 for _,t,n,_ in out), 'casa del árbol: ninguna cara encimada que se vea %s'%[(a,b,c) for a,b,c,_ in out]+('' if all(n==0 for _,_,n,_ in out) else ' '+str([d for *_,d in out])))
+    # 13. postes derechos de la espiral hasta el suelo, piso de una pieza y redes
+    r=await ev("""(()=>{ const P=FOR.thPosts.filter(Boolean); return [P.length, P.every(p=>p.gb<=terrainH(p.x,p.z)+.01 && p.top-p.gb>6), !!FOR.deck, FOR.nets.geometry.index.count/6, !!FOR_FX.lamp]; })()""")
+    ok(r[0]>=12 and r[1], 'los postes de la espiral bajan hasta el suelo (%s postes)'%r[0])
+    ok(r[2] and r[3]>60 and r[4], 'pisos de una sola pieza, %s tramos de red entre postes y farolito en la casita'%r[3])
+    # 14. el barandal de la espiral no te deja caer (y abajo se entra)
+    r=await ev("""(()=>{ const S=FOR.slabs.find(s=>s.t==='hx'), rm=(S.r0+S.r1)/2, th=S.turns*Math.PI*2*.45, a=S.a0+th, h=S.h0+(S.h1-S.h0)*.45; arWarp(S.x+Math.cos(a)*rm,h+.05,S.z+Math.sin(a)*rm,0); __run(.3); keys['KeyW']=true;
+      for(let i=0;i<25;i++){ yaw=Math.atan2(-(Math.cos(a)),-(Math.sin(a))); __run(.1); } keys['KeyW']=false; __run(.3); const d=Math.hypot(player.pos.x-S.x,player.pos.z-S.z);
+      return [+(player.pos.y-h).toFixed(2), +(d-S.r1).toFixed(2)]; })()""")
+    ok(abs(r[0])<.6 and r[1]<.05, 'en la espiral el barandal no te deja caer %s'%r)
     # 9. más precisión para la profundidad
     r=await ev("camera.near")
     ok(r>=.1, 'la cámara ve desde 10 cm (menos parpadeo de lejos) %s'%r)
