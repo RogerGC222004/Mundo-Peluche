@@ -1,5 +1,5 @@
 # v277: arreglos de lo que encontró Roger: agua del lago del castillo, estanque de la montaña redondo, caminos sin pasto encima, piernas tras el camello, camello se queda donde te bajas, sin tirón al mojarte, Cubito con arco, ojitos en la curva de la cabeza, idioma
-import asyncio, sys, os
+import asyncio, sys, os, json
 from playwright.async_api import async_playwright
 REAL=open('threerepo/build/three.min.js').read()
 html='<!doctype html><meta charset=utf-8><style>[hidden]{display:none!important}</style>'+open(os.environ.get('JUEGO','/home/claude/mundo-peluche.html')).read().replace("function frame(){","window.__T={ev(s){return eval(s);}}; function frame(){",1)
@@ -15,6 +15,11 @@ async def m():
     ev=lambda s: pg.evaluate("s=>__T.ev(s)", s)
     ok=lambda c,t: print(('BIEN ' if c else 'MAL  ')+t)
     await ev("window.__run=(sec)=>{ let t=clock.elapsedTime; const n=Math.round(sec/.05); for(let i=0;i<n;i++){ clock.elapsedTime=(t+=.05); update(.05,t); } }; startGame(); 1"); await pg.wait_for_timeout(1200); await ev("__run(1); 1")
+    # 10. Meseta Champiñón y Bosque Frondoso más llenos: árboles enormes y más tupidos, más gigantes; más hongos y colosales
+    r=json.loads(await ev("""(()=>{ const F=NV.trees.filter(t=>zone3At(t[0],t[1])==='bosque'), sm=F.reduce((a,t)=>a+t[2],0)/Math.max(1,F.length);
+      return JSON.stringify({bosque:F.length, escala:+sm.toFixed(2), gigantes:FOR.giants.length, hongos:MES.nMid, colosales:MES.colossal.length, chiquitos:MES.nSmall}); })()"""))
+    ok(r['bosque']>4000 and r['escala']>2.3 and r['gigantes']>=180, 'el Bosque Frondoso tiene más árboles y enormes, y más árboles gigantes %s'%r)
+    ok(r['hongos']>5500 and r['colosales']>=40 and r['chiquitos']>20000, 'la Meseta Champiñón tiene más hongos y muchos más colosales %s'%r)
     # 8. ojitos: cada ojo queda pegado a la curva de su cabeza y mirando hacia afuera de ella; la pata ya tiene dos ojos
     r=await ev("""(()=>{ const res={}, chk=(lab,root)=>{ root.updateMatrixWorld(true); const E=GOOGLY.list.filter(e=>{ let q=e.g; while(q){ if(q===root) return true; q=q.parent; } return false; }); let worst=0, wd=1;
         for(const e of E){ const F=gFit(root,e.g.parent,...e.g.position.toArray(),e.r,new THREE.Vector3(0,0,1).applyQuaternion(e.g.quaternion),null); if(!F) continue;
