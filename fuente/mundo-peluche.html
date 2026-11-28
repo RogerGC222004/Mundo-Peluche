@@ -5890,6 +5890,8 @@ I18N.add({
 "El arco con el Cubito apunta bien.": "The bow aims right with Cubito.",
 "Ya no llueve dentro de la tienda de Tortu.": "No more rain inside Tortu's shop.",
 "Al cambiar de idioma todo cambia completo.": "Changing language now changes everything.",
+"El juego va más suave, con menos tirones, sobre todo en el Bosque y la Meseta.": "The game runs smoother, with fewer hiccups, especially in the Forest and on the Mesa.",
+"El brazo del Cubito ya no se va hacia atrás con el arco.": "Cubito's arm no longer bends backward with the bow.",
 "¡Nuevo: el Desierto Canela! Dunas, cactus con carita, oasis y una pirámide con cofre.": "New: Cinnamon Desert! Dunes, cacti with faces, an oasis and a pyramid with a chest.",
 "En el desierto: tabla de arena, camello para montar, remolinos y animalitos.": "In the desert: sandboard, a camel to ride, whirlwinds and little animals.",
 "¡Nueva: la Meseta Champiñón! Un bosque de hongos con un mirador altísimo.": "New: Mushroom Mesa! A mushroom forest with a super tall lookout.",
@@ -7708,7 +7710,7 @@ I18N.start();
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 window.__mpMain=() => {
-const GAME_VERSION='277';
+const GAME_VERSION='278';
 // ======================================================================================
 // ---------------- v242: ÍCONOS DIBUJADOS EN LUGAR DE EMOJIS ----------------
 // Cada emoji de la lista se cambia, donde aparezca en la pantalla, por un dibujo hecho a mano con el mismo estilo de la barra
@@ -7867,7 +7869,7 @@ const UMW={skip:false};
   const um=OP.updateMatrix; OP.updateMatrix=function(){ um.call(this); this._mc=null; }; }
 // v222: Math.hypot (se usa ~600 veces, muchas en cada cuadro) en Chrome no se "pega" al código: cada llamada deja un número suelto que luego hay que
 // limpiar (en el Huawei esas limpiezas son tirones). Para 2 o 3 números da lo mismo con raíz cuadrada; con otros casos se usa la original.
-{ const H=Math.hypot; Math.hypot=function(a,b,c,d){ if(d===undefined){ if(c===undefined){ if(b!==undefined) return Math.sqrt(a*a+b*b); } else return Math.sqrt(a*a+b*b+c*c); } return H.apply(Math,arguments); }; }
+{ const H=Math.hypot; Math.hypot=function(a,b,c,d,e,f){ if(d===undefined){ if(c===undefined){ if(b!==undefined) return Math.sqrt(a*a+b*b); return NaN; } return Math.sqrt(a*a+b*b+c*c); } if(e===undefined) return Math.sqrt(a*a+b*b+c*c+d*d); return f===undefined?H(a,b,c,d,e):H(a,b,c,d,e,f); }; }   // v278: sin «arguments» (con él, CADA llamada dejaba basura: ~900 lugares la usan). El juego siempre la llama con 2 o 3 números; si falta uno da NaN, como la original
 const scene = new THREE.Scene();
 const SKY = 0xcfe7f2;
 scene.background = new THREE.Color(SKY);
@@ -9106,7 +9108,7 @@ function swMake(c,n){ const h=q=>swH(c.id,n,q); if(h(0)>SWELL.PROB) return [];
   for(let k=0;k<N;k++){ const x0=x-nx*SWELL.GAP*k, z0=z-nz*SWELL.GAP*k, id=((n%1000000)*70000+c.id)*4+k, Lh=(140+260*h(7))*(1-.08*k);
     // cuándo llega a tierra (ahí se apaga)
     let land=Infinity; for(let dd=0; dd<life*C; dd+=40){ const px=x0+nx*dd, pz=z0+nz*dd; let hit=swCoastS(px,pz)<8; if(!hit) for(const I of swIsl()) if(Math.hypot(px-I.x,pz-I.z)<560){ hit=true; break; } if(hit){ land=dd/C; break; } }
-    const w={id, t0, life, x0, z0, nx, nz, tx:-nz, tz:nx, Lh, str:(.8+.4*h(8))*(1-.1*k), ph:h(9)*6.283+k, land, tube:null, px:x0, pz:z0, amp:0, nu:0, nh:0, nd:0, age:0};
+    const w={id, t0, life, x0, z0, nx, nz, tx:-nz, tz:nx, Lh, str:(.8+.4*h(8))*(1-.1*k), ph:h(9)*6.283+k, land, tube:null, px:x0, pz:z0, amp:0, nu:0, nh:0, nd:0, age:0, dc:0, inN:false, act:null};
     // ¿forma un tubo? (en algún momento de su vida, en algún lugar de la cresta)
     if(!out.some(o=>o.tube)){   /* un solo tubo por grupo de olas */ const u0=(swH(id,n,78)-.5)*Lh*.8, tS=18+swH(id,n,79)*30, cx=x0+nx*C*tS+w.tx*u0, cz=z0+nz*C*tS+w.tz*u0;
       if(swCoastS(cx,cz)>15 && terrainH(cx,cz)<SEA_Y-1.5){ const tH=tubeHAt(cx,cz)*(.85+.3*swH(id,n,80)), L0=Math.max(70,6*tH), vp=3.5+.12*tH, Tr=5+.05*tH, Dt=.6*Tr+1.05*L0/vp+4;
@@ -9133,15 +9135,16 @@ function swellTick(){ { const k=seaWeatherK(); SWELL.k=k[0]; TUBE.wk=k[1]; SWELL
   // 2) dónde va cada una y qué tan alta (crece, se apaga, se acaba en tierra)
   const cx=camera.position.x, cz=camera.position.z, ppx=player.pos.x, ppz=player.pos.z, wk=TUBE.wk||1; S.near.length=0; TUBE.act=[];
   const thin=ULTRA, fN=(S.fN=(S.fN|0)+1);   // v222: en ultra ligero, las olas lejanas (más de 600 m: detrás de la niebla) se revisan 1 de cada 16 cuadros
-  for(const w of S.all){ if((thin && w.dc>600 || w.dc>1700) && ((fN+w.id)&15)!==0) continue;   /* v271: las muy lejanas (más allá de todo lo que se ve) también de vez en cuando */ const age=T-w.t0; w.age=age; if(age<0 || age>w.life){ w.amp=0; continue; }
+  for(let wi=0, WA=S.all; wi<WA.length; wi++){ const w=WA[wi]; if(w.dc>600 && ((fN+w.id)&(thin||w.dc>1700?15:3))!==0){ if(w.inN){ S.near.push(w); if(w.act) TUBE.act.push(w.act); } continue; }   /* v278: las lejanas (más de 600 m, tras la niebla) se recalculan 1 de cada 4 cuadros y mientras siguen con lo último (antes todas en cada cuadro: en el bosque y la meseta, mucha basura) */
+    w.inN=false; w.act=null; const age=T-w.t0; w.age=age; if(age<0 || age>w.life){ w.amp=0; continue; }
     w.px=w.x0+w.nx*C*age; w.pz=w.z0+w.nz*C*age;
     w.amp=w.str*smooth(0,15,age)*smooth(w.life,w.life-15,age)*(w.land<Infinity?smooth(w.land+12,w.land,age):1);
-    const dc=swSegD(w,cx,cz), dp=swSegD(w,ppx,ppz); w.dc=dc; if(w.amp<.005 || Math.min(dc,dp)>1300) continue; S.near.push(w);
+    const dc=swSegD(w,cx,cz), dp=swSegD(w,ppx,ppz); w.dc=dc; if(w.amp<.005 || Math.min(dc,dp)>1300) continue; S.near.push(w); w.inN=true;
     // el tubo de esta ola (si tiene y ya le toca)
     w.nd=0; const tb=w.tOff?null:w.tube; if(tb){ const e=age-tb.tS, L=tb.L0*Math.sqrt(wk);
       if(e>.6*tb.Tr){ const q=Math.min(1,(e-.6*tb.Tr)*tb.vp/(1.05*tb.L0)), ub=L/2-q*1.05*L, hw=Math.max(0,(L/2-Math.max(ub,-L/2))/2); w.nh=hw; w.nu=tb.u0+tb.dir*(Math.max(ub,-L/2)+hw); w.nd=smooth(0,.06,q); }
       if(e>=0 && e<=tb.Dt){ const q=Math.max(0,Math.min(1,(e-.6*tb.Tr)*tb.vp/(1.05*tb.L0))), f=smooth(0,tb.Tr,e)*smooth(tb.Dt,tb.Dt-4,e)*Math.min(1,w.amp/w.str+.25), H=tb.tH*wk;
-        TUBE.act.push({id:w.id, w, u0:tb.u0, Ox:w.px+w.tx*tb.u0, Oz:w.pz+w.tz*tb.u0, nx:w.nx, nz:w.nz, tx:w.tx, tz:w.tz, L, H, Ht:H*f, fade:f, q, dir:tb.dir, vp:tb.vp, V0:Math.max(16,3*H), V1:-Math.max(14,3.6*H)}); } } }
+        TUBE.act.push(w.act={id:w.id, w, u0:tb.u0, Ox:w.px+w.tx*tb.u0, Oz:w.pz+w.tz*tb.u0, nx:w.nx, nz:w.nz, tx:w.tx, tz:w.tz, L, H, Ht:H*f, fade:f, q, dir:tb.dir, vp:tb.vp, V0:Math.max(16,3*H), V1:-Math.max(14,3.6*H)}); } } }
   // 3) a la tarjeta de video: las más cercanas a la cámara
   { const G=S.gpu, N=S.near; G.length=0;   /* v223: las SWN más cercanas sin hacer listas nuevas en cada cuadro (mismo orden que antes) */
     for(let k=0;k<N.length;k++){ const w=N[k]; if(G.length<SWN || w.dc<G[G.length-1].dc){ let j=G.length<SWN?G.length:G.length-1; while(j>0 && G[j-1].dc>w.dc){ G[j]=G[j-1]; j--; } G[j]=w; } } }
@@ -9706,14 +9709,20 @@ const obstacles = [];
 // Rejilla para buscar solo los obstáculos cercanos (antes se revisaban todos, miles, varias veces por cuadro)
 const DYN_OBS=[];   // los que se mueven (caballitos del carrusel): siempre se revisan
 const obsGrid={cell:6, map:null, n:-1};
+// v278: con la isla grande hay ~100 mil cosas con las que chocas: rehacer toda la rejilla tardaba 65-130 ms en PC (medio segundo en el teléfono) y pasaba
+// cada vez que algo cercano se escondía o se movía. Ahora se quitan y se mueven solo esas.
+function obsCells(o,fn){ const C=obsGrid.cell, rr=o.r+2.5; for(let i=Math.floor((o.x-rr)/C);i<=Math.floor((o.x+rr)/C);i++) for(let j=Math.floor((o.z-rr)/C);j<=Math.floor((o.z+rr)/C);j++) fn(i*100003+j); }
+function obsGridDrop(S){ const m=obsGrid.map; if(!m) return; for(const o of S) obsCells(o,k=>{ const l=m.get(k); if(!l) return; const i=l.indexOf(o); if(i>=0){ l[i]=l[l.length-1]; l.pop(); } if(!l.length) m.delete(k); }); }
+function obsMove(o,x,z){ const sync=obsGrid.map && obsGrid.n===obstacles.length; if(sync) obsGridDrop([o]); o.x=x; o.z=z; if(sync){ const m=obsGrid.map; obsCells(o,k=>{ let l=m.get(k); if(!l){ l=[]; m.set(k,l); } l.push(o); }); } }
 function obsNear(x,z){
   if(obsGrid.n!==obstacles.length){ const C=obsGrid.cell, n0=obsGrid.n;
     // v197: si solo se agregaron al final (lo más común), se agregan esos a la rejilla; si se quitó algo, se rehace toda
-    const now=performance.now(), add=n0>0 && obstacles.length>n0 && obstacles[n0-1]===obsGrid.last && obsGrid.map && now-(obsGrid.full||0)<5000, m=add?obsGrid.map:new Map(); obsGrid.map=m; if(!add) obsGrid.full=now;
+    const now=performance.now(), add=n0>0 && obstacles.length>n0 && obstacles[n0-1]===obsGrid.last && obsGrid.map, m=add?obsGrid.map:new Map(); obsGrid.map=m; if(!add) obsGrid.full=now;
     for(let q=add?n0:0;q<obstacles.length;q++){ const o=obstacles[q], rr=o.r+2.5; for(let i=Math.floor((o.x-rr)/C);i<=Math.floor((o.x+rr)/C);i++) for(let j=Math.floor((o.z-rr)/C);j<=Math.floor((o.z+rr)/C);j++){ const k=i*100003+j; let l=m.get(k); if(!l){ l=[]; m.set(k,l); } l.push(o); } }
     obsGrid.n=obstacles.length; obsGrid.last=obstacles[obstacles.length-1]; }
   const l=obsGrid.map.get(Math.floor(x/obsGrid.cell)*100003+Math.floor(z/obsGrid.cell));
-  return DYN_OBS.length ? (l?l.concat(DYN_OBS):DYN_OBS) : (l||EMPTY_OBS);
+  if(DYN_OBS.length){ for(let i=0;i<DYN_OBS.length;i++){ const o=DYN_OBS[i], m=o.r+20; if(Math.abs(o.x-x)<m && Math.abs(o.z-z)<m) return l?l.concat(DYN_OBS):DYN_OBS; } }   // v278: lo que se mueve solo se junta si está cerca (antes se hacía una lista nueva en CADA consulta, cientos por cuadro: basura que frenaba)
+  return l||EMPTY_OBS;
 }
 const EMPTY_OBS=[];
 const PLAYER_H=2.0;   // alto del peluche (para pasar por debajo de puertas, alas, etc.)
@@ -9790,11 +9799,20 @@ function icullSph(r){ const m=r.m; if(m.geometry.boundingSphere!==r.bs) m.geomet
   if(r.L===undefined) r.L=INST_LOD.find(q=>q.m===m)||null; if(r.L){ r.L.hi.boundingSphere=r.bs; r.L.lo.boundingSphere=r.bs; } }
 function icullApply(r,cx,cy,cz,R0){ const m=r.m, N=r.N;
   if(!r.grabbed){ r.grabbed=true; if(m.instanceColor && !r.C) r.C=m.instanceColor.array.slice(0,N*3); }
-  let n=0, same=!r.dirty; const idx=r.idx, f=r.full;
+  let n=0, ns=0, same=!r.dirty; const idx=r.idx, f=r.full, sh=ICS.on && m.castShadow;
   if(!f || (()=>{ const dx=f.center.x-cx, dy=f.center.y-cy, dz=f.center.z-cz, L=R0+f.radius; return dx*dx+dy*dy+dz*dz<=L*L; })()){
     const X=r.X, Y=r.Y, Z=r.Z, RR=r.R, NR=r.NR;   // (v277: NR = hasta dónde se dibuja esa copia; el relleno de los bosques solo de cerca)
-    for(let i=0;i<N;i++){ const dx=X[i]-cx, dy=Y[i]-cy, dz=Z[i]-cz, L=(NR!==null && NR[i]>0 && NR[i]<R0 ? NR[i] : R0)+RR[i]; if(dx*dx+dy*dy+dz*dz>L*L) continue;
+    if(sh){ let B=ICS.b1; if(B.length<N){ B=ICS.b1=new Int32Array(N+1024); ICS.b2=new Int32Array(N+1024); } const B2=ICS.b2, tx=ICS.tx, ty=ICS.ty, tz=ICS.tz, lx=ICS.lx, ly=ICS.ly, lz=ICS.lz, a0=ICS.a0, a1=ICS.a1, H=ICS.H; let nf=0;
+      for(let i=0;i<N;i++){ const dx=X[i]-cx, dy=Y[i]-cy, dz=Z[i]-cz, L=(NR!==null && NR[i]>0 && NR[i]<R0 ? NR[i] : R0)+RR[i]; if(dx*dx+dy*dy+dz*dz>L*L) continue;
+        const ex=X[i]-tx, ey=Y[i]-ty, ez=Z[i]-tz, a=ex*lx+ey*ly+ez*lz, rr=RR[i];   // v278: ¿su sombra cae en el cuadro de sombras alrededor del peluche? esas van primero
+        if(a>a0-rr && a<a1+rr){ const q=H+rr; if(ex*ex+ey*ey+ez*ez-a*a<q*q){ B[ns++]=i; continue; } }
+        B2[nf++]=i; }
+      n=ns+nf; for(let k=0;k<nf;k++) B[ns+k]=B2[k];
+      if(same && n===r.n){ for(let k=0;k<n;k++) if(idx[k]!==B[k]){ same=false; break; } } else same=false;
+      if(!same) for(let k=0;k<n;k++) idx[k]=B[k]; }
+    else for(let i=0;i<N;i++){ const dx=X[i]-cx, dy=Y[i]-cy, dz=Z[i]-cz, L=(NR!==null && NR[i]>0 && NR[i]<R0 ? NR[i] : R0)+RR[i]; if(dx*dx+dy*dy+dz*dz>L*L) continue;
       if(same && (n>=r.n || idx[n]!==i)) same=false; idx[n++]=i; } }
+  r.ns=sh?ns:-1;   // cuántas hacen sombra (-1: todas)
   if(same && n===r.n) return; r.n=n; r.dirty=false;
   const a=m.instanceMatrix.array, M=r.M; let x0=1e9, y0=1e9, z0=1e9, x1=-1e9, y1=-1e9, z1=-1e9, rm=0;
   for(let k=0;k<n;k++){ const i=idx[k], s=i*16, d=k*16; for(let q=0;q<16;q++) a[d+q]=M[s+q];
@@ -9805,16 +9823,29 @@ function icullApply(r,cx,cy,cz,R0){ const m=r.m, N=r.N;
   m.count=n; if(r.hideEmpty) m.visible=n>0;   // v271: los grupos sin nada cerca ni se revisan al dibujar
   if(n){ r.bs.center.set((x0+x1)/2,(y0+y1)/2,(z0+z1)/2); r.bs.radius=Math.hypot(x1-x0,y1-y0,z1-z0)/2+rm+.5; } else { r.bs.center.set(0,-1e5,0); r.bs.radius=-1e9; }   // (radio negativo: three.js no lo dibuja ni le hace sombra)
   icullSph(r); }
+// v278: las copias (árboles, hongos, rocas…) de toda la vista se mandaban también a dibujar su sombra, aunque el cuadro de sombras solo cubre ~60 m
+// alrededor del peluche (en el bosque eran ~270 mil triángulos de más en cada cuadro). Ahora las que hacen sombra van primero y solo esas entran.
+const ICS={on:false, tx:0, ty:0, tz:0, lx:0, ly:1, lz:0, a0:0, a1:0, H:0, b1:new Int32Array(0), b2:new Int32Array(0), off:[]};
+function icsUpdate(){ const on=!!(renderer.shadowMap.enabled && sun.castShadow && settings.shadows), T=sun.target.position, P=sun.position, c=sun.shadow.camera;
+  let lx=P.x-T.x, ly=P.y-T.y, lz=P.z-T.z; const D=Math.sqrt(lx*lx+ly*ly+lz*lz)||1; lx/=D; ly/=D; lz/=D;
+  const moved=(T.x-ICS.tx)**2+(T.y-ICS.ty)**2+(T.z-ICS.tz)**2>9, turned=lx*ICS.lx+ly*ICS.ly+lz*ICS.lz<.9995;
+  if(on!==ICS.on || (on && (moved || turned))){ ICS.on=on; ICS.tx=T.x; ICS.ty=T.y; ICS.tz=T.z; ICS.lx=lx; ICS.ly=ly; ICS.lz=lz;
+    const h=Math.max(Math.abs(c.left),Math.abs(c.right),Math.abs(c.top),Math.abs(c.bottom)), M=7; ICS.a0=D-c.far-M; ICS.a1=D-c.near+M; ICS.H=h*1.4143+M; ICULL.dirty=true; } }   // (si el peluche se movió 3 m o el sol giró ~2°, se vuelven a escoger)
+{ const SM=renderer.shadowMap, R=SM.render;
+  SM.render=function(lights,sc,cam){ if(sc!==scene || !ICS.on) return R.call(this,lights,sc,cam); const L=ICULL.L, O=ICS.off; let k=0;
+    for(let i=0;i<L.length;i++){ const r=L[i], m=r.m; if(r.ns>=0 && r.ns<r.n && m.castShadow && m.visible){ if(r.ns===0) m.castShadow=false; else m.count=r.ns; O[k++]=r; } }
+    try{ return R.call(this,lights,sc,cam); } finally{ for(let i=0;i<k;i++){ const r=O[i]; r.m.castShadow=true; r.m.count=r.n; O[i]=null; } } }; }
 function icullTick(){ const L=ICULL.L; if(!L.length || SP.on) return; const cam=camera, cp=cam.position;   // (en el espacio la isla no se ve)
+  try{ icsUpdate(); }catch(e){ ICS.on=false; }
   const fr=typeof FREE!=='undefined' && !!FREE.on; if(fr!==ICULL.free){ ICULL.free=fr; FAR_OFF=fr; deepFloor.visible=!fr;
     if(!ICULL.far){ ICULL.far=[]; scene.traverse(o=>{ if(o.isMesh && o!==farRelief && o.material===farRelief.material) ICULL.far.push(o); }); } for(const o of ICULL.far) o.visible=!fr; }
   for(const r of L) if(r.n>=0 && r.m.geometry.boundingSphere!==r.bs) icullSph(r);   // (alguien le cambió la forma: que siga con su esfera)
   const fog=scene.fog, lim=Math.min(cam.far, fog && fog.far>0 ? fog.far : cam.far), tv=Math.tan(cam.fov*Math.PI/360), th=tv*cam.aspect, R0=lim*Math.sqrt(1+tv*tv+th*th)+6;   // hasta la esquina de la vista
   const dx=cp.x-ICULL.x, dy=cp.y-ICULL.y, dz=cp.z-ICULL.z;
-  if(!(dx*dx+dy*dy+dz*dz<9 && Math.abs(R0-ICULL.R)<2 && !ICULL.dirty)){ ICULL.x=cp.x; ICULL.y=cp.y; ICULL.z=cp.z; ICULL.R=R0; ICULL.dirty=false; ICULL.q=0; }
+  if(!(dx*dx+dy*dy+dz*dz<9 && Math.abs(R0-ICULL.R)<2 && !ICULL.dirty)){ ICULL.big=!(dx*dx+dy*dy+dz*dz<1600) || ICULL.q===undefined; ICULL.x=cp.x; ICULL.y=cp.y; ICULL.z=cp.z; ICULL.R=R0; ICULL.dirty=false; ICULL.o=((ICULL.o|0)+(ICULL.q|0))%L.length; ICULL.q=0; }   // (v278: se sigue desde donde se quedó, así ninguno se queda sin acomodar aunque vayas muy rápido)
   // v222: se acomodan de a poco (en ultra ligero, ~1 ms por cuadro); de golpe daba un tirón al caminar
   if(ICULL.q===undefined) ICULL.q=L.length; const t0=performance.now();
-  while(ICULL.q<L.length){ icullApply(L[ICULL.q++],ICULL.x,ICULL.y,ICULL.z,ICULL.R); if(ULTRA && (ICULL.q&7)===0 && performance.now()-t0>1) break; } }
+  while(ICULL.q<L.length){ icullApply(L[((ICULL.o|0)+ICULL.q++)%L.length],ICULL.x,ICULL.y,ICULL.z,ICULL.R); if((ICULL.q&7)===0 && performance.now()-t0>(ULTRA?1:ICULL.big?60:2)) break; } }   // v278: también en las demás calidades (en el bosque grande era un tironcito cada 3 m); si brincaste lejos, de golpe
 
 // ---------- Pista de carreras ----------
 // Muestras densas de la línea central (cada ~2 m) para dibujarla, saber si un coche va sobre ella y contar vueltas
@@ -10656,10 +10687,12 @@ let desSeen=false;
 function desAnimalCollide(p){ if(!DESA.list.length || player.pg || player.car) return; for(const A of DESA.list){ if(A.kind!=='tortuga') continue; const dx=p.x-A.x, dz=p.z-A.z, d=Math.hypot(dx,dz), R=1.15; if(d<R && d>1e-3 && p.y<terrainH(A.x,A.z)+.95){ p.x=A.x+dx/d*R; p.z=A.z+dz/d*R; } } }
 // v276: granitos de arena que vuelan con el viento cerca del suelo (en ráfagas), solo cuando andas en el desierto
 const DES_FLY={pts:null, n:ULTRA?50:MIN_Q?80:130, v:null, w:0};
+function desFlyInit(){ const F=DES_FLY, p=player.pos; if(F.pts) return;   // v278: se arma al cargar (así su dibujo se prepara con todo lo demás)
+  { const g=new THREE.BufferGeometry(), P=new Float32Array(F.n*3); g.setAttribute('position',new THREE.BufferAttribute(P,3)); F.v=new Float32Array(F.n*2);
+    const m=new THREE.PointsMaterial({color:'#f2d8a6', size:.05, sizeAttenuation:true, transparent:true, opacity:.85, depthWrite:false}); F.pts=new THREE.Points(g,m); F.pts.frustumCulled=false; F.pts.userData.noBatch=true; F.pts.visible=false; scene.add(F.pts);
+    for(let i=0;i<F.n;i++){ P[i*3]=p.x+(Math.random()-.5)*36; P[i*3+2]=p.z+(Math.random()-.5)*36; P[i*3+1]=-999; F.v[i*2]=Math.random(); F.v[i*2+1]=.4+Math.random()*.6; } } }
 function desFlyTick(dt){ const F=DES_FLY, p=player.pos, inD=desW(p.x,p.z)>.55 && !player.swim && !SP.on && !FREE.on; F.w+=((inD?1:0)-F.w)*Math.min(1,dt*1.5); if(F.pts) F.pts.visible=F.w>.02; if(F.w<=.02) return;
-  if(!F.pts){ const g=new THREE.BufferGeometry(), P=new Float32Array(F.n*3); g.setAttribute('position',new THREE.BufferAttribute(P,3)); F.v=new Float32Array(F.n*2);
-    const m=new THREE.PointsMaterial({color:'#f2d8a6', size:.05, sizeAttenuation:true, transparent:true, opacity:.85, depthWrite:false}); F.pts=new THREE.Points(g,m); F.pts.frustumCulled=false; F.pts.userData.noBatch=true; scene.add(F.pts);
-    for(let i=0;i<F.n;i++){ P[i*3]=p.x+(Math.random()-.5)*36; P[i*3+2]=p.z+(Math.random()-.5)*36; P[i*3+1]=-999; F.v[i*2]=Math.random(); F.v[i*2+1]=.4+Math.random()*.6; } }
+  desFlyInit();
   const P=F.pts.geometry.attributes.position.array, t=SAND_U.t.value, gust=.35+.65*Math.max(0,Math.sin(t*.31)*Math.sin(t*.17+1)), wx=.82, wz=.57, sp=(3+5*gust);
   F.pts.material.opacity=.85*F.w*(.35+.65*gust);
   for(let i=0;i<F.n;i++){ let x=P[i*3], z=P[i*3+2]; const k=F.v[i*2+1]; x+=wx*sp*k*dt; z+=wz*sp*k*dt; const dx=x-p.x, dz=z-p.z;
@@ -10676,7 +10709,7 @@ function desUpdate(dt){ try{ desWhirlTick(dt); desAnimalsTick(dt); desFlyTick(dt
 (function desCamel(){ DES.rem=new Map(); const O=DES.oasis, a=Math.atan2(O.z,O.x), x=O.x-Math.cos(a)*(O.R+17)-Math.sin(a)*9, z=O.z-Math.sin(a)*(O.R+17)+Math.cos(a)*9, h=Math.atan2(O.x-x,O.z-z)+Math.PI/2;
   const g=desCamelMesh(); g.position.set(x,terrainH(x,z),z); g.rotation.y=h; const ob={x,z,r:1.1,top:terrainH(x,z)+2.2,walk:false}; DES.camel={x,z,h,idle:g,ride:null,ph:0,home:{x,z,h},ob}; obstacles.push(ob); })();
 // v277: el camello se queda donde te bajaste; regresa solito a su lugar cuando ya nadie lo ve (lejos de ti y de su lugar)
-function desCamelPlace(C,x,z,h){ C.x=x; C.z=z; C.h=h; C.idle.position.set(x,terrainH(x,z),z); C.idle.rotation.y=h; C.ob.x=x; C.ob.z=z; C.ob.top=terrainH(x,z)+2.2; obsGrid.n=-1; }
+function desCamelPlace(C,x,z,h){ C.x=x; C.z=z; C.h=h; C.idle.position.set(x,terrainH(x,z),z); C.idle.rotation.y=h; obsMove(C.ob,x,z); C.ob.top=terrainH(x,z)+2.2; }
 // ---------- v274: Meseta Champiñón: paredes, subidas, hongos, mirador, brillo de noche y esporas ----------
 const MES_GLOW={value:0};
 function mesGlowMat(key){ const m=felt('#ffffff','rgba(0,0,0,.08)'); m.vertexColors=true; const prev=m.onBeforeCompile; m.customProgramCacheKey=()=>'feltPQ-'+key;   // (su propio programa: el de fieltro se comparte entre todos)
@@ -15339,6 +15372,8 @@ function exitAsk(){ const ov=onlineCard('<h2>¿Quieres salir del juego?</h2><p>T
 // solo guarda la versión, para no llenar de avisos a quien apenas empieza.
 const NEWS_KEY='mundoPelucheNovedades';
 const NEWS={
+  '278':{add:[],
+         fix:["El juego va más suave, con menos tirones, sobre todo en el Bosque y la Meseta.", "El brazo del Cubito ya no se va hacia atrás con el arco."]},
   '277':{add:["Botones redondos con dibujito en la esquina: ya no tapan el centro de la pantalla, y puedes deslizar encima para mover la cámara.", "Lo que traes en la mano (arco, bola de nieve…) siempre va en el botón verde.", "Bosque Frondoso con árboles enormes y Meseta Champiñón llena de hongos.", "Botones, joystick y ruedita de gestos a la medida de tu pantalla.", "Puedes acomodar cada botón de acción en Opciones.", "Los avisos duran más para que alcances a leerlos."],
          fix:["El lago del castillo vuelve a tener agua.", "Ya no se traba el juego al tocar el agua.", "El camello se queda donde te bajas.", "El arco con el Cubito apunta bien.", "Ya no llueve dentro de la tienda de Tortu.", "Al cambiar de idioma todo cambia completo."]},
   '276':{add:["¡La isla creció! Hay tierra nueva y el Lago de los patitos.", "Nuevo: el Valle de los minijuegos y un aeropuerto de colores.", "Nuevo: el Desierto Canela, con arena de verdad, oasis, pirámide y un camello para montar.", "Nueva: la Meseta Champiñón, un bosque de hongos con peluchitos hongo.", "Nuevo: el Bosque Frondoso, con casa del árbol, arroyo, fogata y pesca en el estanque.", "Animalitos nuevos que te miran y a veces se acercan: fenecs, tortugas, venados, ardillas, búhos y más.", "¿Te gusta el juego? Ahora puedes calificarlo desde Opciones → Para papás.", "En la app, el juego te pregunta antes de salir, para que no lo cierres sin querer."],
@@ -19674,7 +19709,8 @@ function bowPose(obj,rig,o){
   rig.bow.visible=true; rig.bow.position.copy(bw_bt); rig.bow.rotation.set(-p,0,0); rig.bow.translateZ(-.42);   // el agarre queda en la mano
   // cuerda del arco: de la punta de arriba a la de abajo pasando por los dedos que jalan
   const draw=o.draw;
-  const nockZ=rig.bow.userData.tipZ-draw*.42;
+  let nockZ=rig.bow.userData.tipZ-draw*.42;
+  if(KB_) nockZ=Math.max(nockZ,.42+(.29-bw_bt.z)/Math.max(.35,fz));   // v278: el Cubito es grueso: la cuerda (y la mano que jala) se queda delante de su pecho, no adentro del cuerpo
   rig.bow.userData.nock.set(0,0,nockZ);
   { const ty=rig.bow.userData.tipY, tz=rig.bow.userData.tipZ;   // la cuerda del arco en V: de cada punta a los dedos
     rig.bow.userData.str.forEach((m,i)=>{ const sy=i?-ty:ty; bw_ra.set(0,sy,tz); bw_rb.set(0,0,nockZ); const L=bw_ra.distanceTo(bw_rb);
@@ -19695,9 +19731,9 @@ function bowPose(obj,rig,o){
   } else {
     // en la cuerda del arco; al soltar la flecha el brazo se estira hacia adelante
     const bowLocal=bw_w.copy(rig.bow.userData.nock); rig.bow.localToWorld(bowLocal); bw_inv.copy(obj.matrixWorld).invert(); bowLocal.applyMatrix4(bw_inv);
-    bw_ht.copy(bowLocal);
+    bw_ht.copy(bowLocal); if(KB_){ bw_ht.z=Math.max(bw_ht.z,.27); bw_ht.x+=REEL_SIDE*.06; }
     if(o.extend>0) bw_ht.lerp(bw_S.set(reelArm.position.x*.6, SY+fy*.58, fz*.58), o.extend);
-    reachArm(reelArm,bw_ht,bw_hint.set(REEL_SIDE,-.4,-.6),false,AU,AL);
+    reachArm(reelArm,bw_ht,KB_?bw_hint.set(REEL_SIDE,-.9,.15):bw_hint.set(REEL_SIDE,-.4,-.6),false,AU,AL);   // (v278: con el Cubito el codo va hacia abajo y afuera, no hacia atrás)
   }
   rig.reel.visible=true;
 }
@@ -29387,7 +29423,7 @@ function wiBuildDecor(){ const G=new THREE.Group(); scene.add(G); const P=WI_PLA
 function wiSnowK(){ const c=camera.position, d=Math.hypot(c.x-WI.x,c.z-WI.z); return d>WI.R+120 ? 0 : .5*(1-smooth(WI.R-60,WI.R+120,d)); }
 function wiTick(dt,t){
   const d=Math.min(Math.hypot(camera.position.x-WI.x,camera.position.z-WI.z), Math.hypot(player.pos.x-WI.x,player.pos.z-WI.z));
-  if(!WI.done && d<1450){ if(!WI.job) WI.job=wiBuildGen(); const t0=performance.now(), budget=d<720?1e9:(MIN_Q?4:6);
+  if(!WI.done && d<1450){ if(!WI.job) WI.job=wiBuildGen(); const t0=performance.now(), budget=d<260?1e9:d<720?28:(MIN_Q?4:6);
     try{ while(performance.now()-t0<budget){ if(WI.job.next().done){ WI.job=null; break; } } }catch(e){ console.warn('isla invierno',e); WI.job=null; WI.done=true; } }
   // el color del agua (bajito y espuma) usa la profundidad de esta isla cuando estás cerca
   if(WI.depth){ const near=Math.hypot(camera.position.x-WI.x,camera.position.z-WI.z)<WI.E+260, U=seaSurface.material.uniforms;
@@ -29921,7 +29957,7 @@ JI_DECK_GROUND=function(x,z,y){ if(!JI_DECK.length || x<JI_BOX[0]||x>JI_BOX[2]||
 // cada cuadro
 function jiTick(dt,t){
   const d=Math.min(Math.hypot(camera.position.x-JI.x,camera.position.z-JI.z), Math.hypot(player.pos.x-JI.x,player.pos.z-JI.z));
-  if(!JI.done && d<1450){ if(!JI.job) JI.job=jiBuildGen(); const t0=performance.now(), budget=d<720?1e9:(MIN_Q?4:6);
+  if(!JI.done && d<1450){ if(!JI.job) JI.job=jiBuildGen(); const t0=performance.now(), budget=d<260?1e9:d<720?28:(MIN_Q?4:6);
     try{ while(performance.now()-t0<budget){ if(JI.job.next().done){ JI.job=null; break; } } }catch(e){ console.warn('isla selva',e); JI.job=null; JI.done=true; } }
   if(JI.depth){ const near=Math.hypot(camera.position.x-JI.x,camera.position.z-JI.z)<JI.E+260, U=seaSurface.material.uniforms;
     JI.depthOn=near; }   // v145: islandSeaDepth() decide cuál mar se ve
@@ -31540,7 +31576,7 @@ function* diBuildCake(){ const C=DI_CAKE, base=C.base, G=new THREE.Group(), Y=i=
 // cada cuadro
 function diTick(dt,t){
   const d=Math.min(Math.hypot(camera.position.x-DI.x,camera.position.z-DI.z), Math.hypot(player.pos.x-DI.x,player.pos.z-DI.z));
-  if(!DI.done && d<1450){ if(!DI.job) DI.job=diBuildGen(); const t0=performance.now(), budget=d<720?1e9:(MIN_Q?4:6);
+  if(!DI.done && d<1450){ if(!DI.job) DI.job=diBuildGen(); const t0=performance.now(), budget=d<260?1e9:d<720?28:(MIN_Q?4:6);
     try{ while(performance.now()-t0<budget){ if(DI.job.next().done){ DI.job=null; break; } } }catch(e){ console.warn('isla dulce',e); DI.job=null; DI.done=true; } }
   if(DI.depth){ const near=Math.hypot(camera.position.x-DI.x,camera.position.z-DI.z)<DI.E+260, U=seaSurface.material.uniforms;
     DI.depthOn=near; }   // v145: islandSeaDepth() decide cuál mar se ve
@@ -38600,7 +38636,8 @@ const acVis=o=>{ for(let p=o;p;p=p.parent){ if(!p.visible) return false; if(p===
 function acSig(o){ const e=o.matrixWorld.elements, r=(v,k)=>Math.round(v*k); return r(e[0],1000)*1.000003+r(e[2],1000)*7.0000031+r(e[5],1000)*53.00007+r(e[10],1000)*401.0001+r(e[12],100)*3001.3+r(e[13],100)*29989.7+r(e[14],100)*299993.1+(o.isInstancedMesh?(o.userData.ic?o.userData.ic.N*3e11+1:o.instanceMatrix.version*7e9+o.count*3e11):0); }   // v197: un número (antes un texto: lento)   // dónde está (sin contar si se ve)
 function acEligible(o){ if(!o.isMesh || o.isSprite || o.userData.noCol || o.userData.batchShared || (o.isInstancedMesh && (o.userData.ic?o.userData.ic.N:o.count)>600)) return false; const m=Array.isArray(o.material)?o.material[0]:o.material; if(!m || m.transparent || m.type==='MeshBasicMaterial' || m.type==='ShaderMaterial' || m.type==='RawShaderMaterial') return false;
   for(let p=o;p;p=p.parent) if(AC.dyn.has(p) || (p.userData && p.userData.noCol)) return false; return !!o.geometry; }
-function acRemove(rec){ if(!rec.obs || !rec.obs.length) { rec.obs=null; return; } const S=new Set(rec.obs); if(AC.pend.length) AC.pend=AC.pend.filter(c=>!S.has(c)); let w=0; for(let i=0;i<obstacles.length;i++){ const o=obstacles[i]; if(!S.has(o)) obstacles[w++]=o; } obstacles.length=w; rec.obs=null; AC.dirty=true; }
+function acRemove(rec){ if(!rec.obs || !rec.obs.length) { rec.obs=null; return; } const S=new Set(rec.obs); if(AC.pend.length) AC.pend=AC.pend.filter(c=>!S.has(c)); const sync=obsGrid.map && obsGrid.n===obstacles.length; let w=0; for(let i=0;i<obstacles.length;i++){ const o=obstacles[i]; if(!S.has(o)) obstacles[w++]=o; } const gone=obstacles.length-w; obstacles.length=w; rec.obs=null;
+  if(sync){ obsGridDrop(S); obsGrid.n=obstacles.length; obsGrid.last=obstacles[obstacles.length-1]; } else if(gone) AC.dirty=true; }   // v278: se quitan de la rejilla sin rehacerla toda
 function acBuild(o,rec){ const out=[]; if(o.isInstancedMesh){ const IC=o.userData.ic; for(let i=0,n=IC?IC.N:o.count;i<n;i++){ if(IC) _acM.fromArray(IC.M,i*16); else o.getMatrixAt(i,_acM); _acM.premultiply(o.matrixWorld); acMakeOne(o.geometry,_acM,out); } } else acMakeOne(o.geometry,o.matrixWorld,out);
   rec.obs=out; if(out.length){ for(const c of out) AC.pend.push(c); AC.made.push(rec); rec.o=o; const e=o.matrixWorld.elements; rec.x=e[12]; rec.z=e[14]; AC.n+=out.length; } }
 function acVisit(o){ if(!o.parent) return; let rec=AC.seen.get(o); const sig=acSig(o), vis=acVis(o);
@@ -40111,6 +40148,7 @@ frame();
     try{ HOWTO.warm(); }catch(e){}   // v228: el papel de los carteles de los minijuegos, listo desde la carga   // v228: los talleres de vehículos se arman aquí (antes, en el primer cuadro del juego: ~140 ms de tirón al llegar)
     // todos los materiales de la isla se preparan ahora (si no, se preparan la primera vez que los ves y el juego da un tironcito)
     let cbWk=null; try{ cbWk=new THREE.Group(); const gb=new THREE.BoxGeometry(.01,.01,.01), sk=cbSkirtMesh({legs:[]}); sk.geometry=gb; sk.visible=true; cbWk.add(sk,new THREE.Mesh(gb,CB_MAT),new THREE.Mesh(gb,CB_GLOW)); cbWk.position.copy(camera.position); scene.add(cbWk); }catch(e){}   // v258: la falda que se mueve y los cubitos que brillan del Cubito
+    try{ desFlyInit(); }catch(e){}   // v278: los brillitos del desierto se arman antes, así su dibujo también se prepara aquí
     try{ renderer.compile(scene,camera); }catch(e){} if(cbWk) scene.remove(cbWk);
     stPrecompile();   // v277: las manchas de tu peluche (si no, la primera vez que tocas el agua se traba)
     L.step('Juntando las piezas…',.72); await paint();

@@ -25,6 +25,12 @@ async def m():
     # 11. dentro de la casita de Tortu no llueve ni nieva (el muelle creció y el techo ya no se encontraba)
     r=json.loads(await ev("""(()=>{ const P=PIER, [x,z]=pW(0,P.HZ), rt=roofTopAt(x,z); return JSON.stringify({rt:+rt.toFixed(2), Y:P.Y, open:wxOpen(x,z,P.Y+.1), hid:precipHidden(precipCovers(x,P.Y+1,z,20),x,P.Y+1,z)}); })()"""))
     ok(r['rt']>r['Y']+2 and not r['open'] and r['hid'], 'en la casita de Tortu el techo tapa la lluvia y la nieve (ni charcos ni nieve en el piso) %s'%r)
+    # 12. rendimiento con la isla grande: la rejilla de choques no se rehace completa al quitar o mover algo; sin subir de más a la tarjeta de video
+    r=json.loads(await ev("""(()=>{ obsNear(0,0); const full0=obsGrid.full, n0=obstacles.length; const o={x:0,z:50,r:1,top:1,walk:false}; obstacles.push(o); obsNear(0,50); const inG=obsNear(0,50).includes(o);
+      const rec={obs:[o]}; acRemove(rec); const out=!obsNear(0,50).includes(o), full1=obsGrid.full; const K=DES.camel, t=performance.now(); desCamelPlace(K,K.x+1,K.z,K.h); const ms=performance.now()-t, near=obsNear(K.x,K.z).includes(K.ob); desCamelPlace(K,K.home.x,K.home.z,K.home.h);
+      return JSON.stringify({inG, out, igual:full0===full1, ms:+ms.toFixed(1), near, flies:!!(DES_FLY&&DES_FLY.pts), tex:renderer.info.memory.textures}); })()"""))
+    ok(r['inG'] and r['out'] and r['igual'] and r['near'] and r['ms']<10, 'choques: agregar, quitar y mover el camello sin rehacer toda la rejilla (antes 65-130 ms en PC) %s'%r)
+    ok(r['flies'] and r['tex']<200, 'los brillitos del desierto se preparan al cargar, sin subir de más a la tarjeta de video (%s texturas)'%r['tex'])
     # 8. ojitos: cada ojo queda pegado a la curva de su cabeza y mirando hacia afuera de ella; la pata ya tiene dos ojos
     r=await ev("""(()=>{ const res={}, chk=(lab,root)=>{ root.updateMatrixWorld(true); const E=GOOGLY.list.filter(e=>{ let q=e.g; while(q){ if(q===root) return true; q=q.parent; } return false; }); let worst=0, wd=1;
         for(const e of E){ const F=gFit(root,e.g.parent,...e.g.position.toArray(),e.r,new THREE.Vector3(0,0,1).applyQuaternion(e.g.quaternion),null); if(!F) continue;
@@ -40,7 +46,7 @@ async def m():
     ok(all(v[1]<.25 and v[2]>.97 for v in R.values()), 'cada ojito está sobre la curva de su cabeza y mirando hacia afuera de ella %s'%{k:v for k,v in R.items() if not(v[1]<.25 and v[2]>.97)})
     ok(len(d['pata'])==6 and all(x>.08 for x in d['pata']), 'la pata y sus patitos ya tienen dos ojos separados (antes uno encima del otro) %s'%d['pata'][:6])
     # 9. idioma: al pasar a inglés y regresar a español, todos los botones regresan a español
-    r=await ev("""(async()=>{ const T=()=>new Promise(r=>setTimeout(r,150)); const snap=()=>[...document.querySelectorAll('button')].map(b=>b.textContent.trim()).filter(t=>t);
+    r=await ev("""(async()=>{ const T=()=>new Promise(r=>setTimeout(r,150)); const snap=()=>[...document.querySelectorAll('button')].filter(b=>!b.closest('#loader')).map(b=>b.textContent.trim()).filter(t=>t);
       const es0=snap(); I18N.set('en'); await T(); const en=snap(); I18N.set('es'); await T(); const es1=snap(); const bad=[]; es1.forEach((t,i)=>{ if(t!==es0[i]) bad.push([es0[i],t]); });
       const chg=en.filter((t,i)=>t!==es0[i]).length; return JSON.stringify([es0.length, chg, bad.slice(0,8)]); })()""")
     d=_j.loads(r)
@@ -76,8 +82,9 @@ async def m():
     r=await ev("""(()=>{ wardrobe.eq.body='av_cubo'; applyOutfit(plush,{...wardrobe.eq}); arWarp(0,groundAt(0,40,999)+.1,40,0); if(!bowHeld()) useSlot(1); hook.mode=0; yaw=Math.PI; pitch=0; __run(.6); plush.updateMatrixWorld(true);
       const arm=plush.userData.arms.find(a=>a.userData.side===BOW_SIDE), j=arm.userData.joint, rg=plush.userData.bowRig, W=o=>o.getWorldPosition(new THREE.Vector3()), L=v=>plush.worldToLocal(v.clone());
       const grip=rg.bow.localToWorld(new THREE.Vector3(0,0,.42)), sh=W(arm), el=W(j), out=[+(L(grip).z).toFixed(2), +grip.distanceTo(sh).toFixed(2), +(L(el).z-L(sh).z).toFixed(2)];
+      { const nk=rg.bow.localToWorld(rg.bow.userData.nock.clone()); out.push(+L(nk).z.toFixed(2)); }
       hook.mode=0; bowShoot(); const st=hook.pos.distanceTo(grip); out.push(+st.toFixed(2)); bowRelease(true); delete wardrobe.eq.body; applyOutfit(plush,{...wardrobe.eq}); __run(.3); return out; })()""")
-    ok(r[0]>.6 and r[1]>.7 and r[2]>0 and r[3]<.6, 'Cubito con arco: brazo estirado al frente a la altura del hombro, codo hacia adelante y la flecha sale del arco %s'%r)
+    ok(r[0]>.6 and r[1]>.7 and r[2]>0 and r[3]>.2 and r[4]<.6, 'Cubito con arco: brazo estirado al frente, la cuerda (y la mano que jala) delante del pecho y la flecha sale del arco %s'%r)
     print('errores', len(errs)); [print('  E:',e[:300]) for e in dict.fromkeys(errs)]
     await b.close()
 asyncio.run(m())

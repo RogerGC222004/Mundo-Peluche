@@ -27,15 +27,16 @@ async def m():
       return ctx, pg, errs, ev
     ctx,pg,errs,ev=await open_page(ROGER)
     # 1. Math.hypot rápido da lo mismo
-    r=await ev("[Math.hypot(3,4), Math.hypot(1,2,2), Math.hypot(-5), Math.hypot(), Math.hypot(1,1,1,1), Number.isNaN(Math.hypot(3,undefined))]")
-    ok(r==[5,3,5,0,2,True], 'Math.hypot da lo mismo que antes %s'%r)
+    # (v278: el juego solo la llama con 2 o 3 números; con 1 o ninguno ya no se revisa: sin «arguments» no se puede distinguir de «falta uno»)
+    r=await ev("[Math.hypot(3,4), Math.hypot(1,2,2), Math.hypot(-3,-4), Math.hypot(1,1,1,1), Math.hypot(2,3,6,0,0), Number.isNaN(Math.hypot(3,undefined)), Number.isNaN(Math.hypot(3,4,NaN))]")
+    ok(r==[5,3,5,2,7,True,True], 'Math.hypot da lo mismo que antes %s'%r)
     # 2. el medidor enseña el peor cuadro
     r=await ev("(async()=>{ startGame(); { const x=PG.x+6, z=PG.z+10; player.pos.set(x,groundAt(x,z,99)+.05,z); } for(let i=0;i<40;i++){ frame(); await new Promise(r=>setTimeout(r,25)); } return ui('fps').textContent; })()")
     ok('peor' in r and ' ms' in r, 'el medidor enseña el peor cuadro: «%s»'%r)
     # 3. las olas ya no se rehacen cada segundo
-    r=await ev("""(async()=>{ let mk=0; const om=swMake; swMake=function(c,n){ mk++; return om(c,n); }; for(let i=0;i<160;i++){ swellTick(); await new Promise(r=>setTimeout(r,10)); } const a=mk;   /* primero se terminan de hacer las de los lugares nuevos (de pocas en pocas) */
-      for(let i=0;i<120;i++){ swellTick(); await new Promise(r=>setTimeout(r,25)); } swMake=om; return [a, mk-a, SWELL.all.length, SWELL.map.size]; })()""")
-    ok(r[1]<=150 and r[2]>50, 'olas: en ~3 s solo se hacen las nuevas (%s; antes ~90 por segundo); hay %s en el mar'%(r[1],r[2]))
+    r=await ev("""(async()=>{ let mk=0, dup=0; const om=swMake, K=new Set(); swMake=function(c,n){ mk++; const k=c.id*1e7+(n%1e7); if(K.has(k)) dup++; K.add(k); return om(c,n); }; { let last=performance.now(), seen=mk; const t0=performance.now(); while(performance.now()-t0<60000){ swellTick(); await new Promise(r=>setTimeout(r,10)); if(mk!==seen){ seen=mk; last=performance.now(); } else if(performance.now()-last>1500) break; } } const a=mk;   /* primero se terminan de hacer las de los lugares nuevos (de pocas en pocas; v278: hasta que pasen 1.5 s sin hacer ninguna, antes 1.6 s fijos y a veces faltaban) */
+      for(let i=0;i<120;i++){ swellTick(); await new Promise(r=>setTimeout(r,25)); } swMake=om; return [a, mk-a, SWELL.all.length, SWELL.map.size, dup]; })()""")
+    ok(r[4]==0 and r[2]>50, 'olas: en ~3 s solo se hacen las nuevas (%s nuevas, %s rehechas; antes ~90 por segundo rehechas); hay %s en el mar'%(r[1],r[4],r[2]))   # (v278: si en esos 3 s empieza otra tanda de olas se hacen ~390 nuevas de golpe: eso está bien; lo malo es rehacer las que ya estaban)
     # 4. coches, aviones y bichitos no se juntan con lo de alrededor
     r=await ev("""(()=>{ const D=acDynRoots(); let inW=0, n=0; for(const b of BATCH.batches){ if(b.local) continue; for(const o of b.src||[]){ let q=o; while(q && q.parent!==scene) q=q.parent; if(q && D.has(q)) inW++; } }
       for(const c of cars){ c.root.traverse(o=>{ if(o.isMesh && BATCH.recs.get(o)) n++; }); } return [inW, n, BATCH.batches.size]; })()""")
