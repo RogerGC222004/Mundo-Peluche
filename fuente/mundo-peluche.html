@@ -316,15 +316,27 @@ body.in-mg #hint{display:none!important;}
 .tbtn.dive{background:#ffd2dc;box-shadow:0 5px 0 #d98aa0;}
 .tbtn{width:90px;height:90px;border-radius:50%;border:none;font-family:var(--display);font-weight:800;font-size:15px;color:var(--thread);background:var(--label);box-shadow:0 5px 0 #c9c2ab;font-size:17px;}
 .tbtn.jump{width:108px;height:108px;background:var(--felt);box-shadow:0 5px 0 var(--felt-dk);font-size:20px;}
+/* v277: acomodo de fábrica en horizontal (el de Roger): Saltar abajo a la derecha, Tirarse a su izquierda, Gestos arriba de Saltar y Saludar a su izquierda.
+   Todo se mide con «u» (1 % del alto de la pantalla, con tope en tablets): así cada botón queda en el mismo lugar y crece o se achica con la pantalla. */
+@media (orientation:landscape){
+  .touch.lay277{--u:min(1vh,7px);}
+  .touch.lay277 #tbtnsFoot > .tbtn{position:fixed;margin:0;}
+  .touch.lay277 #tJump{width:calc(var(--u)*25.5);height:calc(var(--u)*25.5);font-size:calc(var(--u)*4.9);right:calc(var(--u)*5.5 + var(--sa-right,env(safe-area-inset-right,0px)));bottom:calc(var(--u)*5.5 + var(--sa-bottom,env(safe-area-inset-bottom,0px)));}
+  .touch.lay277 #tDive{width:calc(var(--u)*21.1);height:calc(var(--u)*21.1);font-size:calc(var(--u)*4.1);right:calc(var(--u)*35 + var(--sa-right,env(safe-area-inset-right,0px)));bottom:calc(var(--u)*5.1 + var(--sa-bottom,env(safe-area-inset-bottom,0px)));}
+  .touch.lay277 #tGest{width:calc(var(--u)*16.7);height:calc(var(--u)*16.7);font-size:calc(var(--u)*3.6);right:calc(var(--u)*7.2 + var(--sa-right,env(safe-area-inset-right,0px)));bottom:calc(var(--u)*37 + var(--sa-bottom,env(safe-area-inset-bottom,0px)));}
+  .touch.lay277 #tWave{width:calc(var(--u)*16.7);height:calc(var(--u)*16.7);font-size:calc(var(--u)*3.6);right:calc(var(--u)*27.7 + var(--sa-right,env(safe-area-inset-right,0px)));bottom:calc(var(--u)*30.5 + var(--sa-bottom,env(safe-area-inset-bottom,0px)));}
+}
 /* v277: acciones del lugar en botoncitos redondos con dibujito, junto a Gestos/Saludar (en pantalla táctil) */
 .pacts{position:fixed;display:flex;flex-direction:row-reverse;align-items:flex-start;gap:2px;pointer-events:none;}
 .pacts.col{flex-direction:column-reverse;align-items:center;gap:2px;}
+.pacts.slots{width:0;height:0;}
 .pact{pointer-events:auto;touch-action:none;display:flex;flex-direction:column;align-items:center;width:78px;padding:0;margin:0;border:none;background:none;font-family:var(--display);font-weight:800;font-size:12px;line-height:1.12;color:var(--thread);cursor:pointer;-webkit-tap-highlight-color:transparent;}
 .pact .pc{width:58px;height:58px;border-radius:50%;background:var(--label);box-shadow:0 4px 0 #c9c2ab;display:flex;align-items:center;justify-content:center;}
 .pact .pc .emi{width:34px;height:34px;pointer-events:none;}
 .pact .pl{margin-top:4px;padding:1px 6px;border-radius:9px;background:rgba(251,248,239,.9);max-width:78px;text-align:center;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .pact:disabled{opacity:.6;cursor:default;}
 .pact:not(:disabled):active .pc{transform:translateY(2px);box-shadow:0 2px 0 #c9c2ab;}
+@media (min-height:600px){ .pact{width:96px;font-size:14px;} .pact .pc{width:72px;height:72px;} .pact .pc .emi{width:42px;height:42px;} .pact .pl{max-width:96px;} }   /* (tablets: un poco más grandes) */
 @media (max-height:500px){ .pact{width:70px;font-size:11px;} .pact .pc{width:50px;height:50px;} .pact .pc .emi{width:30px;height:30px;} .pact .pl{max-width:70px;} }
 
 .zone-banner{position:fixed;left:50%;top:calc(24% + var(--sa-top,env(safe-area-inset-top,0px)));transform:translate(-50%,-10px) scale(.92);opacity:0;transition:opacity .5s,transform .5s;pointer-events:none;z-index:40;
@@ -14549,7 +14561,7 @@ function show(next){
   menuEl.hidden = next!=='menu';
   pauseEl.hidden = next!=='pause';
   hudEl.hidden = next!=='play';
-  touchEl.hidden = !(next==='play' && isTouch);
+  touchEl.hidden = !(next==='play' && isTouch); if(next==='play') setTimeout(()=>{ try{ fitHotbar(); }catch(e){} },0);
   try{ updateTouchMode(); if(next!=='play') setActions(null,null); }catch(e){}
   crossEl.hidden = !(next==='play' && camMode==='first');
   try{ document.body.classList.toggle('not-play', next!=='play'); }catch(e){}
@@ -15001,7 +15013,12 @@ function layoutOf(id){ const L=settings.layout||{}, o=L[orientKey()]||{}; return
 function placeCtl(id,v){ const el=ui(id); if(!el) return;
   el.style.translate=(v.x||v.y)?`${Math.round(v.x*innerWidth)}px ${Math.round(v.y*innerHeight)}px`:'';
   el.style.scale=v.s&&v.s!==1?String(v.s):''; }
-function applyLayout(){ LAYOUT_ITEMS.forEach(([id])=>placeCtl(id,layoutOf(id))); }
+function applyLayout(){ LAYOUT_ITEMS.forEach(([id])=>placeCtl(id,layoutOf(id)));
+  { const o=(settings.layout||{}).land||{}, mine=['tGest','tWave','tDive','tJump'].some(id=>{ const v=o[id]; return v && (v.x||v.y||(v.s&&v.s!==1)); }); ui('touch').classList.toggle('lay277',!mine); } fitHotbar(); }
+// v277: en pantallas angostas la barra de objetos se recorre a la izquierda (o se achica un poco) para no quedar debajo de «Tirarse»
+function fitHotbar(){ const hb=ui('hotbar'), dv=ui('tDive'); if(!hb) return; hb.style.left=''; hb.style.transform=''; if(!isTouch || !ui('touch').classList.contains('lay277') || innerWidth<innerHeight || hb.hidden || ui('touch').hidden) return;
+  const H=hb.getBoundingClientRect(), D0=dv.getBoundingClientRect(), S=ui('stick').getBoundingClientRect(), D={left:D0.left-(innerHeight<=500?70:78)-6, bottom:D0.bottom, width:D0.width}; if(!H.width || !D.width || H.right<=D.left-8 || H.top>=D.bottom) return;   // (deja lugar a la izquierda de Tirarse para un botoncito)
+  const room=D.left-8-(S.right+8); if(room>=H.width){ hb.style.left=Math.round(Math.min(innerWidth/2,D.left-8-H.width/2))+'px'; return; } hb.style.left=Math.round(S.right+8+room/2)+'px'; hb.style.transform='translateX(-50%) scale('+Math.max(.66,room/H.width).toFixed(3)+')'; hb.style.transformOrigin='50% 100%'; }   // v277: el acomodo nuevo de fábrica (si ya moviste esos botones, se queda el tuyo)
 addEventListener('resize',()=>{ clearTimeout(applyLayout._t); applyLayout._t=setTimeout(applyLayout,120); });
 const editor={on:false, sel:null, set:'foot', saved:null, drag:null};
 const EDIT_SHOW=['touch','hud','hotbar','actions','tbtnsFoot','tcar','pause','options','act1','act2','tveh','tFx','tSiren','tVLights','tHorn','tLights','tBrake','tGas'];
@@ -16157,19 +16174,19 @@ function gwItems(level){
   if(level==='gest') return (wardrobe.gest||[]).filter(gestAllowed).map(id=>({label:GEST_BY[id].n, svg:G_ICON[id], gest:id}));
   return (wardrobe.pint||[]).filter(id=>PAINT_BY[id]).map(id=>({label:PAINT_BY[id].n, img:paintThumb(id), paint:id})); }
 function gwRender(){ const el=ui('gWheel'); if(!GW.open){ el.hidden=true; return; } el.hidden=false;
-  const W=innerWidth, H=innerHeight, cx=W/2, cy=H/2-6, r0=44, r1=Math.min(H*.4,Math.min(W*.42,160)), it=GW.items=gwItems(GW.level), n=Math.max(1,it.length), gap=n>1?.035:0, start=-Math.PI/2-Math.PI/n;
+  const W=innerWidth, H=innerHeight, cx=W/2, cy=H/2-6, r1=Math.round(Math.max(100,Math.min(H*.3,W*.3,240))), k=r1/158, r0=Math.round(44*k), it=GW.items=gwItems(GW.level), n=Math.max(1,it.length), gap=n>1?.035:0, start=-Math.PI/2-Math.PI/n;
   GW.geo={cx,cy,r0,r1,start,n};
   let s=`<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="font-family:Sniglet,Nunito,sans-serif"><defs><filter id="gwSh"><feDropShadow dx="0" dy="1.5" stdDeviation="1.2" flood-color="#000" flood-opacity=".55"/></filter></defs><rect width="${W}" height="${H}" fill="rgba(20,16,12,.18)"/>`;
   if(!it.length){ s+=`<circle cx="${cx}" cy="${cy}" r="${r1}" fill="rgba(30,24,18,.46)" stroke="rgba(255,255,255,.6)" stroke-width="1.6"/><text x="${cx}" y="${cy-r0-18}" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" filter="url(#gwSh)">${GW.level==='gest'?'No tienes gestos en tu ruedita':'No tienes globos en tu ruedita'}</text><text x="${cx}" y="${cy+r0+30}" text-anchor="middle" font-size="13" font-weight="800" fill="#fff" filter="url(#gwSh)">Ponlos en Personalizar</text>`; }
-  it.forEach((t,i)=>{ const a0=start+i*2*Math.PI/n+gap/2, a1=start+(i+1)*2*Math.PI/n-gap/2, am=(a0+a1)/2, rm=(r0+r1)/2+4, x=cx+Math.cos(am)*rm, y=cy+Math.sin(am)*rm, two=n<=2, sc=two?1.25:.95;
+  it.forEach((t,i)=>{ const a0=start+i*2*Math.PI/n+gap/2, a1=start+(i+1)*2*Math.PI/n-gap/2, am=(a0+a1)/2, rm=(r0+r1)/2+4, x=cx+Math.cos(am)*rm, y=cy+Math.sin(am)*rm, two=n<=2, sc=(two?1.25:.95)*k;
     s+=`<path d="${n===1?`M${cx+r1},${cy} A${r1},${r1} 0 1 1 ${cx-r1},${cy} A${r1},${r1} 0 1 1 ${cx+r1},${cy} M${cx+r0},${cy} A${r0},${r0} 0 1 0 ${cx-r0},${cy} A${r0},${r0} 0 1 0 ${cx+r0},${cy}Z`:gwSlice(cx,cy,r0,r1,a0,a1)}" fill-rule="evenodd" fill="${GW.sel===i?'rgba(255,255,255,.42)':'rgba(30,24,18,.46)'}" stroke="rgba(255,255,255,.6)" stroke-width="1.6"/>`;
     const yy=n===1?cy-r0-(r1-r0)/2:y, xx=n===1?cx:x;
-    if(t.svg) s+=`<g transform="translate(${xx.toFixed(1)},${(yy-10).toFixed(1)}) scale(${sc})">${t.svg}</g>`;
+    if(t.svg) s+=`<g transform="translate(${xx.toFixed(1)},${(yy-10*k).toFixed(1)}) scale(${sc})">${t.svg}</g>`;
     else s+=`<image href="${t.img}" x="${(xx-26*sc).toFixed(1)}" y="${(yy-36*sc).toFixed(1)}" width="${(52*sc).toFixed(1)}" height="${(52*sc).toFixed(1)}"/>`;
-    s+=`<text x="${xx.toFixed(1)}" y="${(yy+(two?44:34)).toFixed(1)}" text-anchor="middle" font-size="${two?17:13}" font-weight="800" fill="#fff" filter="url(#gwSh)">${t.label}</text>`; });
+    s+=`<text x="${xx.toFixed(1)}" y="${(yy+(two?44:34)*k).toFixed(1)}" text-anchor="middle" font-size="${Math.max(11,Math.round((two?17:13)*k))}" font-weight="800" fill="#fff" filter="url(#gwSh)">${t.label}</text>`; });
   s+=`<circle cx="${cx}" cy="${cy}" r="${r0-6}" fill="rgba(255,255,255,.88)" stroke="rgba(0,0,0,.15)" stroke-width="2"/>`;
-  s+=GW.level!=='root' ? `<path d="M${cx+12},${cy-5} H${cx-11} M${cx-3},${cy-13} L${cx-12},${cy-5} L${cx-3},${cy+3}" stroke="#2c3a1a" stroke-width="3.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><text x="${cx}" y="${cy+18}" text-anchor="middle" font-size="11" font-weight="800" fill="#2c3a1a">Atrás</text>`
-    : `<path d="M${cx-9},${cy-9} L${cx+9},${cy+9} M${cx+9},${cy-9} L${cx-9},${cy+9}" stroke="#2c3a1a" stroke-width="3.6" stroke-linecap="round"/>`;
+  s+=`<g transform="translate(${cx},${cy}) scale(${k.toFixed(3)}) translate(${-cx},${-cy})">`+(GW.level!=='root' ? `<path d="M${cx+12},${cy-5} H${cx-11} M${cx-3},${cy-13} L${cx-12},${cy-5} L${cx-3},${cy+3}" stroke="#2c3a1a" stroke-width="3.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><text x="${cx}" y="${cy+18}" text-anchor="middle" font-size="11" font-weight="800" fill="#2c3a1a">Atrás</text>`
+    : `<path d="M${cx-9},${cy-9} L${cx+9},${cy+9} M${cx+9},${cy-9} L${cx-9},${cy+9}" stroke="#2c3a1a" stroke-width="3.6" stroke-linecap="round"/>`)+'</g>';   // (v277: la ruedita crece o se achica con la pantalla y todo lo de adentro con ella)
   el.innerHTML=s+'</svg>'; }
 function gwOpen(){ if(state!=='play' || GW.open) return; if(document.pointerLockElement) document.exitPointerLock(); GW.open=true; GW.level='root'; GW.sel=-1; gwRender(); }
 function gwClose(){ if(!GW.open) return; GW.open=false; gwRender(); }
@@ -17258,10 +17275,21 @@ function pactIcon(x){ const L=String(x.label||''), l=L.toLowerCase(); if(/muñec
 const PACT_EMO=/[\u{1F000}-\u{1FAFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{25A0}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu;
 function pactCap(x){ let t=String(txl(String(x.label||''))).replace(PACT_EMO,'').replace(/\s*\([^)]*\)/g,'').replace(/\s+/g,' ').trim(); if(t.length>15){ const m=/ (de|del|con) /.exec(t.slice(5)); if(m) t=t.slice(0,5+m.index); } return t; }   // (corto: «Hacer bola de nieve» → «Hacer bola»; el dibujito dice el resto)
 // ¿caben los botoncitos junto a Gestos? (en fila a su izquierda o, si no hay lugar, en columna encima)
-function pactGest(){ if(!isTouch || touchEl.hidden || ui('tbtnsFoot').hidden) return null; const g=ui('tGest'); if(!g || g.hidden) return null; const r=g.getBoundingClientRect(); return r.width>10 ? r : null; }
+function pactGest(){ if(!isTouch || touchEl.hidden || ui('tbtnsFoot').hidden) return null; let r=null; for(const id of ['tGest','tWave']){ const g=ui(id); if(!g || g.hidden) continue; const q=g.getBoundingClientRect(); if(q.width>10 && (!r || q.left<r.left)) r=q; } return r; }   // (v277: junto al de más a la izquierda de Gestos y Saludar)
 function pactFits(n){ const r=pactGest(); if(!r || !n) return false; const W=innerHeight<=500?72:80, H=innerHeight<=500?84:94; return r.left-12-n*W>=4 || (innerHeight-r.top+6)+n*H<innerHeight-40; }
-function pactPlace(){ if(pactEl.hidden) return; const r=pactGest(); if(!r) return; const n=pactEl.children.length, W=innerHeight<=500?72:80, st=pactEl.style; st.left=st.top=st.right=st.bottom='auto';
-  if(r.left-12-n*W>=4){ pactEl.classList.remove('col'); st.right=Math.round(innerWidth-r.left+12)+'px'; st.top=Math.round(r.top+r.height/2-(innerHeight<=500?25:29))+'px'; }   // en fila, a la izquierda de Gestos
+// v277: con el acomodo nuevo, cada botoncito tiene su lugar: el 1º a la izquierda de Saludar, el 2º a la izquierda de Tirarse (un poco arriba), el 3º a la izquierda del 1º
+function pactSlots(){ const K=[...pactEl.children], w=ui('tWave'), d=ui('tDive'); if(!K.length || !w || !d || w.hidden || d.hidden) return false; const W0=w.getBoundingClientRect(), D0=d.getBoundingClientRect(); if(!(W0.width>10 && D0.width>10)) return false;
+  pactEl.classList.add('slots'); pactEl.classList.remove('col'); const st=pactEl.style; st.left=st.top='0px'; st.right=st.bottom='auto';
+  const C=innerHeight<=500?50:58, avoid=[W0,D0,ui('tJump').getBoundingClientRect(),ui('tGest').getBoundingClientRect(),ui('hotbar').getBoundingClientRect(),ui('stick').getBoundingClientRect()], placed=[];
+  const hit=(a,b)=>b.width>0 && a.left<b.right+3 && b.left<a.right+3 && a.top<b.bottom+3 && b.top<a.bottom+3;
+  K.forEach((b,i)=>{ b.style.position='fixed'; const bw=b.offsetWidth, bh=b.offsetHeight; let cx, cy;
+    if(i===0){ cx=W0.left-6-bw/2; cy=W0.top-6+C/2; } else if(i===1){ cx=D0.left-6-bw/2; cy=Math.max(D0.top+C*.35, placed[0].bottom+4+C/2); } else { const p=placed[0]; cx=p.left-6-bw/2; cy=p.top+C/2; }
+    let L=cx-bw/2, T=cy-C/2; for(let k=0;k<40;k++){ const rr={left:L,top:T,right:L+bw,bottom:T+bh}; if(!avoid.concat(placed).some(q=>hit(rr,q))) break; L-=6; }
+    L=Math.max(4,Math.round(L)); T=Math.max(4,Math.min(innerHeight-bh-4,Math.round(T))); b.style.left=L+'px'; b.style.top=T+'px'; placed.push({left:L,top:T,right:L+bw,bottom:T+bh}); });
+  return true; }
+function pactPlace(){ if(pactEl.hidden) return; [...pactEl.children].forEach(b=>{ b.style.position=b.style.left=b.style.top=''; }); pactEl.classList.remove('slots'); if(ui('touch').classList.contains('lay277') && innerWidth>innerHeight && pactSlots()) return; const r=pactGest(); if(!r) return; const n=pactEl.children.length, W=innerHeight<=500?72:80, st=pactEl.style; st.left=st.top=st.right=st.bottom='auto';
+  if(r.left-12-n*W>=4){ pactEl.classList.remove('col'); st.right=Math.round(innerWidth-r.left+12)+'px'; let top=Math.round(r.top+r.height/2-(innerHeight<=500?25:29)); st.top=top+'px';   // en fila, a la izquierda de Gestos/Saludar
+    { const P=pactEl.getBoundingClientRect(); for(const id of ['tDive','tJump']){ const q=ui(id).getBoundingClientRect(); if(q.width && P.left<q.right && q.left<P.right && top+P.height>q.top-4) top=Math.min(top,Math.round(q.top-4-P.height)); } st.top=Math.max(4,top)+'px'; } }   // (v277: si los letreritos llegan a Tirarse, la fila sube)
   else { const w=ui('tWave'), q=w && !w.hidden ? w.getBoundingClientRect() : r, R=q.width>10?q:r; pactEl.classList.add('col'); st.right=Math.max(4,Math.round(innerWidth-(R.left+R.width/2)-W/2))+'px'; st.bottom=Math.round(innerHeight-Math.min(r.top,R.top)+6)+'px'; } }   // (si no caben en fila: en columna encima de Saludar)
 function setPlaceActs(L){ PA=L.filter(Boolean); const key=PA.map(x=>x.label+(x.disabled?'·':'')).join('|'); if(key===paKey) return; paKey=key;
   pactEl.textContent=''; pactEl.hidden=!PA.length; if(!PA.length) return;
