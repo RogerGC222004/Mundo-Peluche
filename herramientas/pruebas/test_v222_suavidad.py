@@ -27,8 +27,9 @@ async def m():
       return ctx, pg, errs, ev
     ctx,pg,errs,ev=await open_page(ROGER)
     # 1. Math.hypot rápido da lo mismo
-    r=await ev("[Math.hypot(3,4), Math.hypot(1,2,2), Math.hypot(-5), Math.hypot(), Math.hypot(1,1,1,1), Number.isNaN(Math.hypot(3,undefined))]")
-    ok(r==[5,3,5,0,2,True], 'Math.hypot da lo mismo que antes %s'%r)
+    # (v278: el juego solo la llama con 2 o 3 números; con 1 o ninguno ya no se revisa: sin «arguments» no se puede distinguir de «falta uno»)
+    r=await ev("[Math.hypot(3,4), Math.hypot(1,2,2), Math.hypot(-3,-4), Math.hypot(1,1,1,1), Math.hypot(2,3,6,0,0), Number.isNaN(Math.hypot(3,undefined)), Number.isNaN(Math.hypot(3,4,NaN))]")
+    ok(r==[5,3,5,2,7,True,True], 'Math.hypot da lo mismo que antes %s'%r)
     # 2. el medidor enseña el peor cuadro
     r=await ev("(async()=>{ startGame(); { const x=PG.x+6, z=PG.z+10; player.pos.set(x,groundAt(x,z,99)+.05,z); } for(let i=0;i<40;i++){ frame(); await new Promise(r=>setTimeout(r,25)); } return ui('fps').textContent; })()")
     ok('peor' in r and ' ms' in r, 'el medidor enseña el peor cuadro: «%s»'%r)
