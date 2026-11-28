@@ -8869,7 +8869,7 @@ float sNoise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return textu
 // ---------- v271: árboles, pinos, rocas, flores (y unos cactus hacia el desierto) en la tierra nueva ----------
 // Se reparten siempre igual (cuenta fija, no al azar). El bosque, tupido; las áreas verdes con arboledas y praderas de flores;
 // el desierto, el valle y la meseta casi despejados (cada uno traerá lo suyo). Se dibujan en grupos grandes (menos piezas).
-const NV={trees:[], pines:[], cacti:[], rocks:[], flowers:[]};
+const NV={trees:[], pines:[], cacti:[], rocks:[], flowers:[], fillT:[], fillP:[]};
 (function newVeg(){ const t0=performance.now();
   const q=ULTRA?.3:({min:.45, low:.65, mid:.85, high:1, max:1}[Q0]||.65), C=16, N=Math.ceil(COAST3_MAX/C), rn={d:0,s:0,i:0};
   const ARA=[1.37,4.71,3.93,.15,5.38,5.5,.72,2.75];   // juegos de la orilla, muelle, Cuco, cohete y perlas (quedan despejados)
@@ -8912,6 +8912,17 @@ const NV={trees:[], pines:[], cacti:[], rocks:[], flowers:[]};
     if(!ok(x,z,a,d,cN)) continue;
     if(L) add(L,it); else fl(gx,gz,x,z,nf,sp);
   }
+  // v277: relleno de cerca del Bosque Frondoso: el doble de árboles, pero estos solo se dibujan a tu alrededor (más lejos los tapa la neblina).
+  // Van en los mismos grupos de copias que los demás árboles (no suman dibujos por cuadro); no salen en el mapa ni llevan helechos.
+  { const NEAR=Q0==='low'||Q0==='min'||ULTRA?105:130, GC=12, Gd=new Map(), gk=(i,j)=>i*100003+j, put=(x,z,r)=>{ const k=gk(Math.floor(x/GC),Math.floor(z/GC)); let L=Gd.get(k); if(!L) Gd.set(k,L=[]); L.push([x,z,r]); };
+    const busy=(x,z,r)=>{ const i0=Math.floor(x/GC), j0=Math.floor(z/GC); for(let i=i0-1;i<=i0+1;i++) for(let j=j0-1;j<=j0+1;j++){ const L=Gd.get(gk(i,j)); if(L) for(const [px,pz,pr] of L) if((x-px)*(x-px)+(z-pz)*(z-pz)<(r+pr)*(r+pr)) return true; } return false; };
+    const inF=a=>{ const d=((a-FOR.a0)%(Math.PI*2)+Math.PI*2)%(Math.PI*2); return d<=FOR.a1-FOR.a0; };
+    for(const t of NV.trees) if(inF(Math.atan2(t[1],t[0]))) put(t[0],t[1],.9*t[2]+1); for(const t of NV.pines) if(inF(Math.atan2(t[1],t[0]))) put(t[0],t[1],.6*t[2]+1);
+    const CF=10, M=Math.ceil(COAST3_MAX/CF); for(let gx=-M;gx<=2;gx++) for(let gz=-M;gz<=70;gz++){ const x0=(gx+.5)*CF, z0=(gz+.5)*CF; if(x0*x0+z0*z0<1000*1000 || !inF(Math.atan2(z0,x0))) continue;   // (el bosque queda abajo a la izquierda: x<0, z<700)
+      const r1=rlHash(gx*23+611,gz*41+613), r2=rlHash(gx*31+617,gz*17+619), r3=rlHash(gx*13+623,gz*7+627); if(r3>.62) continue;
+      const x=x0+(r1-.5)*CF*.8, z=z0+(r2-.5)*CF*.8, d=Math.hypot(x,z), a=Math.atan2(z,x); if(d/coastMidR(a)<1.02) continue; const cN=1+(d-coastRN(a))/ISLAND_R2; if(cN>.86 || zone3At(x,z)!=='bosque') continue;
+      const pine=r1<.2, sc=pine?1.6+r2*1.6:1.6+r2*2.4, rr=pine?.6*sc+1:.9*sc+1; if(busy(x,z,rr) || NV_PATH(x,z)<7.5 || !ok(x,z,a,d,cN)) continue; put(x,z,rr);
+      const rot=+(r3*10%6.283).toFixed(2); if(pine) add(NV.fillP,[x,z,sc,rot,NEAR]); else add(NV.fillT,[x,z,sc,r2<.3?1:0,rot,NEAR]); } }
   // palmeras en la playa nueva: grupitos de 3 a 5 (la orilla es más del doble de larga)
   { const have=MAP.palms.map(p=>[p[0],p[1]]), okP=(x,z)=>{ const h=terrainH(x,z); return h>SEA_Y+.6 && h<4.5 && Math.abs(terrainH(x+2,z)-h)<1.2 && Math.abs(terrainH(x,z+2)-h)<1.2 && have.every(([qx,qz])=>Math.hypot(qx-x,qz-z)>7); };
     for(let k=0;k<26;k++){ const a=-Math.PI+(k+.5)/26*Math.PI*2+(rlHash(k,71)-.5)*.12; if(ARA.some(b=>Math.abs(angD(a,b))<.07) || Math.abs(angD(a,AIRPORT.a))<.12) continue;
@@ -9695,7 +9706,7 @@ function instanced(geo, mat, items, set, opts={}){
     _o.position.set(0,0,0); _o.rotation.set(0,0,0); _o.scale.set(1,1,1); set(_o,it,i); _o.updateMatrix();
     const CK=opts.chunk||CHUNK, key=Math.floor(_o.position.x/CK)+','+Math.floor(_o.position.z/CK);   // v271: la tierra nueva usa grupos más grandes (menos piezas en la escena)
     let b=buckets.get(key); if(!b){ b=[]; buckets.set(key,b); }
-    where[i]=[key,b.length]; b.push({m:_o.matrix.clone(), p:_o.position.clone(), s:Math.max(_o.scale.x,_o.scale.y,_o.scale.z)});
+    where[i]=[key,b.length]; b.push({m:_o.matrix.clone(), p:_o.position.clone(), s:Math.max(_o.scale.x,_o.scale.y,_o.scale.z), nr:opts.near?(opts.near(it)||0):0});
   });
   if(!geo.boundingSphere) geo.computeBoundingSphere();
   const gr=geo.boundingSphere ? geo.boundingSphere.radius : 1, meshes=new Map();
@@ -9710,7 +9721,7 @@ function instanced(geo, mat, items, set, opts={}){
     m.frustumCulled=true;   // la esfera de arriba envuelve todo el grupo: si no se ve, no se dibuja (three.js lo apaga por defecto en grupos)
     m.castShadow=opts.shadow!==false; m.receiveShadow=true; scene.add(m); meshes.set(key,m);
     { const n=list.length, X=new Float32Array(n), Y=new Float32Array(n), Z=new Float32Array(n), R=new Float32Array(n), gx=gr+geo.boundingSphere.center.length();   // v220: para dibujar solo las de cerca
-      list.forEach((e,i)=>{ X[i]=e.p.x; Y[i]=e.p.y; Z[i]=e.p.z; R[i]=gx*e.s; }); const rec=icullAdd(m,X,Y,Z,R); if(opts.hideEmpty) rec.hideEmpty=true; }
+      list.forEach((e,i)=>{ X[i]=e.p.x; Y[i]=e.p.y; Z[i]=e.p.z; R[i]=gx*e.s; }); let NR=null; if(opts.near){ NR=new Float32Array(n); list.forEach((e,i)=>{ NR[i]=e.nr; }); } const rec=icullAdd(m,X,Y,Z,R,NR); if(opts.hideEmpty) rec.hideEmpty=true; }
   });
   return { meshes:[...meshes.values()], setColorAt(i,col){ const [k,j]=where[i], m=meshes.get(k), ic=m.userData.ic; if(ic && ic.grabbed) icullColor(ic,j,col); else m.setColorAt(j,col); } };
 }
@@ -9720,8 +9731,8 @@ function instanced(geo, mat, items, set, opts={}){
 // Las copias completas se guardan aparte: los choques, el detalle por tamaño y el regreso siempre usan la lista completa.
 const ICULL={L:[], x:NaN, y:NaN, z:NaN, R:-1, dirty:false, far:null, free:null};
 let FAR_OFF=false;   // en el Modo libre no se pintan las montañas lejanas de la isla
-function icullAdd(m,X,Y,Z,R){ const N=m.count, f=m.geometry.boundingSphere;
-  const rec={m, N, M:m.instanceMatrix.array.slice(0,N*16), C:null, X, Y, Z, R, idx:new Int32Array(N), n:-1, bs:new THREE.Sphere(), full:f?f.clone():null, grabbed:false, dirty:true, L:undefined};
+function icullAdd(m,X,Y,Z,R,NR){ const N=m.count, f=m.geometry.boundingSphere;
+  const rec={m, N, M:m.instanceMatrix.array.slice(0,N*16), C:null, X, Y, Z, R, NR:NR||null, idx:new Int32Array(N), n:-1, bs:new THREE.Sphere(), full:f?f.clone():null, grabbed:false, dirty:true, L:undefined};
   m.userData.ic=rec; ICULL.L.push(rec); ICULL.dirty=true; return rec; }
 // un grupo hecho a mano, con sus copias ya puestas (los bombones de los portales…)
 function icullAddMesh(m){ m.updateMatrixWorld(true); const N=m.count, a=m.instanceMatrix.array, w=m.matrixWorld, ws=w.getMaxScaleOnAxis();
@@ -9738,8 +9749,8 @@ function icullApply(r,cx,cy,cz,R0){ const m=r.m, N=r.N;
   if(!r.grabbed){ r.grabbed=true; if(m.instanceColor && !r.C) r.C=m.instanceColor.array.slice(0,N*3); }
   let n=0, same=!r.dirty; const idx=r.idx, f=r.full;
   if(!f || (()=>{ const dx=f.center.x-cx, dy=f.center.y-cy, dz=f.center.z-cz, L=R0+f.radius; return dx*dx+dy*dy+dz*dz<=L*L; })()){
-    const X=r.X, Y=r.Y, Z=r.Z, RR=r.R;
-    for(let i=0;i<N;i++){ const dx=X[i]-cx, dy=Y[i]-cy, dz=Z[i]-cz, L=R0+RR[i]; if(dx*dx+dy*dy+dz*dz>L*L) continue;
+    const X=r.X, Y=r.Y, Z=r.Z, RR=r.R, NR=r.NR;   // (v277: NR = hasta dónde se dibuja esa copia; el relleno de los bosques solo de cerca)
+    for(let i=0;i<N;i++){ const dx=X[i]-cx, dy=Y[i]-cy, dz=Z[i]-cz, L=(NR!==null && NR[i]>0 && NR[i]<R0 ? NR[i] : R0)+RR[i]; if(dx*dx+dy*dy+dz*dz>L*L) continue;
       if(same && (n>=r.n || idx[n]!==i)) same=false; idx[n++]=i; } }
   if(same && n===r.n) return; r.n=n; r.dirty=false;
   const a=m.instanceMatrix.array, M=r.M; let x0=1e9, y0=1e9, z0=1e9, x1=-1e9, y1=-1e9, z1=-1e9, rm=0;
@@ -10337,7 +10348,7 @@ const FLOWER_MATS={petal:new THREE.MeshStandardMaterial({roughness:1}), stem:new
   if(!ULTRA) instanced(new THREE.CylinderGeometry(.025,.025,.35,5), FLOWER_MATS.stem, FL, (o,[x,z])=>o.position.set(x,terrainH(x,z)+.17,z), {shadow:false});
 })();
 // v271: lo de la tierra nueva: las mismas figuras, en grupos grandes; los grupos sin nada cerca ni se revisan al dibujar
-(function newVegDraw(){ const O={chunk:ULTRA?440:380, hideEmpty:true}, T=NV.trees, LEAVES=[[0,3.2,0,1.5],[.9,2.7,.3,1.05],[-.8,2.8,-.2,1.1],[.1,4.1,.1,1.0]];
+(function newVegDraw(){ const O={chunk:ULTRA?440:380, hideEmpty:true, near:it=>(Array.isArray(it[0])?it[0][5]:it[5])||0}, T=NV.trees.concat(NV.fillT), LEAVES=[[0,3.2,0,1.5],[.9,2.7,.3,1.05],[-.8,2.8,-.2,1.1],[.1,4.1,.1,1.0]];
   if(T.length){ instanced(cylG, trunkMat, T, (o,[x,z,s,,rot])=>{ const y=groundMin(x,z,.35*s)-.15; o.position.set(x,y+1.2*s,z); o.scale.set(.35*s,2.4*s,.35*s); o.rotation.y=rot; }, O);
     const leaf=(o,[[x,z,s,,rot],[px,py,pz,r]])=>{ const y=groundMin(x,z,.35*s)-.15, c=Math.cos(rot), sn=Math.sin(rot); o.position.set(x+(px*c+pz*sn)*s, y+py*s, z+(-px*sn+pz*c)*s); o.scale.setScalar(r*s); };
     if(ULTRA){ const list=[]; T.forEach(t=>LEAVES.forEach(l=>list.push([t,l]))); const cols=['#6fae3e','#7cbf4a','#f0a9bb','#ffcf6b'].map(h=>new THREE.Color(h));
@@ -10345,7 +10356,7 @@ const FLOWER_MATS={petal:new THREE.MeshStandardMaterial({roughness:1}), stem:new
     else { const LG=Q0==='low'?new THREE.SphereGeometry(1,10,7):sphereG;   // v277: en calidad baja las bolitas de hojas un poco más sencillas (el bosque ahora tiene árboles enormes y más tupidos)
       for(let k=0;k<4;k++){ const list=[]; T.forEach(t=>{ if(t[3]===k) LEAVES.forEach(l=>list.push([t,l])); }); if(list.length) instanced(LG, leafMats[k], list, leaf, {...O, lo:sphereLo}); } }
     T.forEach(([x,z,s])=>obstacles.push({x,z,r:.5*s,top:terrainH(x,z)+60,walk:false})); }
-  for(const [L,g,r] of [[NV.pines,VEG_GEO.pine,.45],[NV.cacti,VEG_GEO.cactus,.5]]) if(L.length){ instanced(g, VEG_GEO.mat, L, (o,[x,z,s,rot])=>{ o.position.set(x,groundMin(x,z,.25*s)-.12,z); o.scale.setScalar(s); o.rotation.y=rot; }, O);
+  for(const [L,g,r] of [[NV.pines.concat(NV.fillP),VEG_GEO.pine,.45],[NV.cacti,VEG_GEO.cactus,.5]]) if(L.length){ instanced(g, VEG_GEO.mat, L, (o,[x,z,s,rot])=>{ o.position.set(x,groundMin(x,z,.25*s)-.12,z); o.scale.setScalar(s); o.rotation.y=rot; }, {...O, near:it=>it[4]||0});
     L.forEach(([x,z,s])=>obstacles.push({x,z,r:r*s,top:terrainH(x,z)+60,walk:false})); }
   if(NV.rocks.length){ instanced(sphereG, rockMat, NV.rocks, (o,[x,z,s,rot])=>{ const base=groundMin(x,z,.8*s)-.15*s; o.position.set(x,base+s*.35,z); o.scale.set(s*1.2,s*.7,s); o.rotation.y=rot; }, O);
     NV.rocks.forEach(([x,z,s])=>{ const base=groundMin(x,z,.8*s)-.15*s; obstacles.push({x,z,r:s*1.05,top:base+s*1.05,walk:true}); }); }
@@ -10798,8 +10809,13 @@ function mesCollide(p,dt){ if(!mesNear(p.x,p.z) || player.pg) return;
     groups.forEach(L=>{ const mg=new THREE.Mesh(desMerge(L),MES_GMAT); mg.castShadow=true; mg.userData.noCol=true; scene.add(mg); }); }   // (por grupos: lo que no se ve no se dibuja)
   const pg=new THREE.BufferGeometry(); pg.setAttribute('position',new THREE.Float32BufferAttribute(prisms.P,3)); pg.setAttribute('normal',new THREE.Float32BufferAttribute(prisms.N,3)); pg.setAttribute('uv',new THREE.Float32BufferAttribute(prisms.U,2)); pg.setAttribute('color',new THREE.Float32BufferAttribute(prisms.C,3)); pg.setIndex(prisms.I); pg.computeBoundingSphere();
   { const m=new THREE.Mesh(pg,DES_FVC); m.castShadow=true; m.receiveShadow=true; m.userData.noCol=true; scene.add(m); }
+  // v277: relleno de cerca de la Meseta: el doble de hongos medianos y grandes; solo se dibujan a tu alrededor (más lejos los tapa la neblina)
+  { const NEAR=Q0==='low'||Q0==='min'||ULTRA?105:130, CF=8; for(let gx=-145;gx<=230;gx++) for(let gz=95;gz<=385;gz++){ const x0=(gx+.5)*CF, z0=(gz+.5)*CF, dd=x0*x0+z0*z0; if(dd<1050*1050 || dd>3000*3000) continue;   // (solo el rectángulo donde cae la meseta)
+      const r3=rlHash(gx*29+701,gz*11+703); if(r3>.75) continue; const r1=rlHash(gx*7+707,gz*37+709), r2=rlHash(gx*43+711,gz*5+713), x=x0+(r1-.5)*CF*.8, z=z0+(r2-.5)*CF*.8;
+      const k=(r1*5|0)%5, kind=SMALL[k][0], s=kind==='parasol'?4+r2*6:2.4+r2*3.4, cr=MES_SHAPE[kind][2]*s; if(ex(x,z,cr*.6) || !okAt(x,z,4)) continue; addA(x,z,cr*.6);
+      lists[k].push([x,z,s,r3*15%6.283,NEAR]); const y=groundMin(x,z,.3*s)-.04; if(s>=3.5) mesSolidMush(x,y,z,s,kind); else obstacles.push({x,z,r:Math.max(.25,MES_SHAPE[kind][1]*s),top:mushTop(y,s,kind).bot+.05,walk:false}); } }   // (los grandes se pisan; a los medianos no se les atraviesa el tallo)
   SMALL.forEach(([kind,pal],k)=>{ const L=lists[k]; if(!L.length) return; const geo=desMerge(mushParts(0,0,0,1,kind,pal,0,{spots:kind==='parasol'?0:3, G:MES_GL}));
-    const I=instanced(geo,MES_GMAT,L,(o,[x,z,sc,rot])=>{ o.position.set(x,groundMin(x,z,.3*sc)-.04,z); o.scale.setScalar(sc); o.rotation.y=rot; },{chunk:760,hideEmpty:true,shadow:false}); I.meshes.forEach(m=>m.userData.noCol=true); });   // (grupos grandes: menos dibujos; de cerca se escogen solos)
+    const I=instanced(geo,MES_GMAT,L,(o,[x,z,sc,rot])=>{ o.position.set(x,groundMin(x,z,.3*sc)-.04,z); o.scale.setScalar(sc); o.rotation.y=rot; },{chunk:760,hideEmpty:true,shadow:false,near:it=>it[4]||0}); I.meshes.forEach(m=>m.userData.noCol=true); });   // (grupos grandes: menos dibujos; de cerca se escogen solos)
   M.mid=mid; M.small=lists; M.nSmall=lists.reduce((a,L)=>a+L.length,0); M.nMid=mid.length; window.__mesMs=performance.now()-t0;
   // un caminito de la escalera al camino que rodea la meseta
   { const [x0,z0]=mesAt(M.acc[0],0,M.stair.L+.5), [x1,z1]=mesAt(M.acc[0],0,M.R+M.S+44-mesRim(M.acc[0])+4); PATHS.push({pts:[[x0,z0],[x1,z1]], yOff:.12, long:true}); }

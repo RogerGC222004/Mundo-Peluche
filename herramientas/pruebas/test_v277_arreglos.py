@@ -17,9 +17,11 @@ async def m():
     await ev("window.__run=(sec)=>{ let t=clock.elapsedTime; const n=Math.round(sec/.05); for(let i=0;i<n;i++){ clock.elapsedTime=(t+=.05); update(.05,t); } }; startGame(); 1"); await pg.wait_for_timeout(1200); await ev("__run(1); 1")
     # 10. Meseta Champiñón y Bosque Frondoso más llenos: árboles enormes y más tupidos, más gigantes; más hongos y colosales
     r=json.loads(await ev("""(()=>{ const F=NV.trees.filter(t=>zone3At(t[0],t[1])==='bosque'), sm=F.reduce((a,t)=>a+t[2],0)/Math.max(1,F.length);
-      return JSON.stringify({bosque:F.length, escala:+sm.toFixed(2), gigantes:FOR.giants.length, hongos:MES.nMid, colosales:MES.colossal.length, chiquitos:MES.nSmall}); })()"""))
+      const NR=ICULL.L.filter(r=>r.NR && r.NR.some(v=>v>0)).length;
+      return JSON.stringify({bosque:F.length, escala:+sm.toFixed(2), gigantes:FOR.giants.length, hongos:MES.nMid, colosales:MES.colossal.length, chiquitos:MES.nSmall, relleno:NV.fillT.length+NV.fillP.length, gruposCerca:NR}); })()"""))
     ok(r['bosque']>4000 and r['escala']>2.3 and r['gigantes']>=180, 'el Bosque Frondoso tiene más árboles y enormes, y más árboles gigantes %s'%r)
-    ok(r['hongos']>5500 and r['colosales']>=40 and r['chiquitos']>20000, 'la Meseta Champiñón tiene más hongos y muchos más colosales %s'%r)
+    ok(r['hongos']>5500 and r['colosales']>=40 and r['chiquitos']>40000, 'la Meseta Champiñón tiene más hongos y muchos más colosales %s'%r)
+    ok(r['relleno']>12000 and r['gruposCerca']>20, 'relleno de cerca: más árboles en el bosque que solo se dibujan a tu alrededor (%s árboles, %s grupos)'%(r['relleno'],r['gruposCerca']))
     # 8. ojitos: cada ojo queda pegado a la curva de su cabeza y mirando hacia afuera de ella; la pata ya tiene dos ojos
     r=await ev("""(()=>{ const res={}, chk=(lab,root)=>{ root.updateMatrixWorld(true); const E=GOOGLY.list.filter(e=>{ let q=e.g; while(q){ if(q===root) return true; q=q.parent; } return false; }); let worst=0, wd=1;
         for(const e of E){ const F=gFit(root,e.g.parent,...e.g.position.toArray(),e.r,new THREE.Vector3(0,0,1).applyQuaternion(e.g.quaternion),null); if(!F) continue;
