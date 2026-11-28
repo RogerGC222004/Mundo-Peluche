@@ -49,6 +49,14 @@ async def m():
       return JSON.stringify({r1, r0, H:innerHeight, def, mine, back}); })()"""))
     ok(abs(r['r1']-r['H']*.3)<2 and r['r0']<44, 'la ruedita de gestos mide 30 %% del alto de la pantalla (antes casi todo el alto) %s'%r)
     ok(r['def'] and not r['mine'] and r['back'], 'el acomodo nuevo es el de fábrica; si ya moviste tus botones se queda el tuyo; «Restablecer» vuelve al nuevo %s'%r)
+    # 6. «Acción 1…5» en el editor de botones: se mueven y cambian de tamaño por separado
+    r=json.loads(await ev("""(()=>{ settings.layout={}; applyLayout(); openEditor(); const G=[1,2,3,4,5].filter(i=>{ const q=ui('pa'+i).getBoundingClientRect(); return q.width>20; }).length, actOff=ui('actions').hidden;
+      storeCtl('pa1',{x:-.2,y:-.3,s:1.4}); closeEditor(); weatherOfSlot=k=>'snow'; holding=false; applyHeld(); arWarp(0,groundAt(0,30,999)+.1,30,0); for(let i=0;i<10;i++) __run(.5); scanActions();
+      const b=document.querySelector('#pacts .pact'), q=b.getBoundingClientRect(), D=ui('tDive').getBoundingClientRect(); const moved=q.right<D.left-60 && q.top<D.top-60, big=b.style.scale==='1.4';
+      settings.layout={}; applyLayout(); scanActions(); const b2=document.querySelector('#pacts .pact'), q2=b2.getBoundingClientRect(); const back=Math.abs(q2.right-(D.left-5))<12; weatherOfSlot=window.__wos;
+      return JSON.stringify({G, actOff, moved, big, back}); })()"""))
+    ok(r['G']==5 and r['actOff'], 'en el editor salen «Acción 1» a «Acción 5» (y ya no los botones rectangulares) %s'%r)
+    ok(r['moved'] and r['big'] and r['back'], '«Acción 1» se mueve y cambia de tamaño por separado; «Restablecer» la regresa junto a Tirarse %s'%r)
     print('errores', len(errs)); [print('  E:',e[:300]) for e in dict.fromkeys(errs)]
     await b.close()
 asyncio.run(m())

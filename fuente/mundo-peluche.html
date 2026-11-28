@@ -334,6 +334,9 @@ body.in-mg #hint{display:none!important;}
 .pacts.slots .pact .pc{width:calc(min(1vh,7px)*13);height:calc(min(1vh,7px)*13);min-width:44px;min-height:44px;}
 .pacts.slots .pact .pc .emi{width:62%;height:62%;}
 .pacts.slots .pact.main .pc{width:calc(min(1vh,7px)*15.5);height:calc(min(1vh,7px)*15.5);min-width:52px;min-height:52px;background:var(--felt);box-shadow:0 4px 0 var(--felt-dk);}
+.pact.pa-ghost{position:fixed;pointer-events:none;width:auto;}
+.pa-ghost .pc{width:calc(min(1vh,7px)*13);height:calc(min(1vh,7px)*13);min-width:44px;min-height:44px;background:rgba(251,248,239,.85);outline:2px dashed var(--thread);outline-offset:-5px;}
+.pa-ghost b{font-family:var(--display);font-weight:800;font-size:20px;color:var(--thread);}
 .pact-tip{position:fixed;z-index:40;pointer-events:none;background:rgba(251,248,239,.95);color:var(--thread);font-family:var(--display);font-weight:800;font-size:14px;padding:5px 10px;border-radius:10px;box-shadow:0 3px 10px rgba(0,0,0,.18);white-space:nowrap;transition:opacity .3s;}
 .pact{pointer-events:auto;touch-action:none;display:flex;flex-direction:column;align-items:center;width:78px;padding:0;margin:0;border:none;background:none;font-family:var(--display);font-weight:800;font-size:12px;line-height:1.12;color:var(--thread);cursor:pointer;-webkit-tap-highlight-color:transparent;}
 .pact .pc{width:58px;height:58px;border-radius:50%;background:var(--label);box-shadow:0 4px 0 #c9c2ab;display:flex;align-items:center;justify-content:center;}
@@ -1245,6 +1248,7 @@ input[type=range]{width:140px;accent-color:var(--felt-dk);}
 <div class="gwheel" id="gWheel" hidden></div>
 <div class="touch" id="touch" hidden>
   <div class="pacts" id="pacts" hidden></div>
+  <div id="paGhosts" hidden><button class="pact pa-ghost" id="pa1" tabindex="-1"><span class="pc"><b>1</b></span></button><button class="pact pa-ghost" id="pa2" tabindex="-1"><span class="pc"><b>2</b></span></button><button class="pact pa-ghost" id="pa3" tabindex="-1"><span class="pc"><b>3</b></span></button><button class="pact pa-ghost" id="pa4" tabindex="-1"><span class="pc"><b>4</b></span></button><button class="pact pa-ghost" id="pa5" tabindex="-1"><span class="pc"><b>5</b></span></button></div>
   <div class="stick" id="stick"><div class="knob" id="knob"></div></div>
   <div class="tbtns" id="tbtnsFoot">
     <button class="tbtn small" id="tGest" style="grid-column:1;grid-row:1">Gestos</button>
@@ -15012,13 +15016,13 @@ function look(dx,dy,s){
 // Cada control guarda un desplazamiento (en fracción de pantalla) y una escala, aparte para horizontal y vertical.
 const LAYOUT_ITEMS=[['stick','Joystick'],['tGest','Gestos'],['tWave','Saludar (atajo)'],['tDive','Tirarse'],['tJump','Saltar'],
   ['tLights','Luces'],['tBrake','Frenar'],['tGas','Acelerar'],['tFx','Especial ⭐ (vehículo)'],['tSiren','Sirena (vehículo)'],['tVLights','Luces (vehículo)'],['tHorn','Claxon (vehículo)'],
-  ['hotbar','Barra de objetos'],['actions','Botones de acción'],['pauseChip','Pausa'],['camChip','Cambiar cámara']];
+  ['hotbar','Barra de objetos'],['actions','Botones de acción'],['pa1','Acción 1'],['pa2','Acción 2'],['pa3','Acción 3'],['pa4','Acción 4'],['pa5','Acción 5'],['pauseChip','Pausa'],['camChip','Cambiar cámara']];
 const orientKey=()=>innerWidth>=innerHeight?'land':'port';
 function layoutOf(id){ const L=settings.layout||{}, o=L[orientKey()]||{}; return o[id]||{x:0,y:0,s:1}; }
 function placeCtl(id,v){ const el=ui(id); if(!el) return;
   el.style.translate=(v.x||v.y)?`${Math.round(v.x*innerWidth)}px ${Math.round(v.y*innerHeight)}px`:'';
   el.style.scale=v.s&&v.s!==1?String(v.s):''; }
-function applyLayout(){ LAYOUT_ITEMS.forEach(([id])=>placeCtl(id,layoutOf(id)));
+function applyLayout(){ paGhostsPlace(); LAYOUT_ITEMS.forEach(([id])=>placeCtl(id,layoutOf(id))); try{ paKey=''; }catch(e){}
   { const o=(settings.layout||{}).land||{}, mine=['tGest','tWave','tDive','tJump'].some(id=>{ const v=o[id]; return v && (v.x||v.y||(v.s&&v.s!==1)); }); ui('touch').classList.toggle('lay277',!mine); } fitHotbar(); }
 // v277: en pantallas angostas la barra de objetos se recorre a la izquierda (o se achica un poco) para no quedar debajo de «Tirarse»
 function fitHotbar(){ const hb=ui('hotbar'), dv=ui('tDive'); if(!hb) return; hb.style.left=''; hb.style.transform=''; if(!isTouch || !ui('touch').classList.contains('lay277') || innerWidth<innerHeight || hb.hidden || ui('touch').hidden) return;
@@ -15029,12 +15033,14 @@ const editor={on:false, sel:null, set:'foot', saved:null, drag:null};
 const EDIT_SHOW=['touch','hud','hotbar','actions','tbtnsFoot','tcar','pause','options','act1','act2','tveh','tFx','tSiren','tVLights','tHorn','tLights','tBrake','tGas'];
 function editorVisible(id){ const foot=editor.set==='foot';
   if(id==='tLights'||id==='tBrake'||id==='tGas'||id==='tSiren'||id==='tVLights'||id==='tHorn'||id==='tFx') return !foot;
-  if(id==='tWave'||id==='tDive'||id==='tJump'||id==='tGest') return foot;
+  if(id==='tWave'||id==='tDive'||id==='tJump'||id==='tGest'||/^pa\d$/.test(id)) return foot;
+  if(id==='actions' && isTouch && innerWidth>innerHeight) return false;   // (v277: en horizontal táctil ya no hay botones rectangulares: se acomodan «Acción 1…5»)
   return true; }
 function markEditor(){ LAYOUT_ITEMS.forEach(([id])=>{ const el=ui(id); if(!el) return; el.classList.toggle('edit-mark', editor.on && editorVisible(id)); el.classList.toggle('sel', editor.on && editor.sel===id); }); }
 function editorSetVisibility(){ const foot=editor.set==='foot';
   ui('touch').hidden=false; ui('hud').hidden=false; ui('hotbar').hidden=false; ui('actions').hidden=false;
   ui('tbtnsFoot').hidden=!foot; ui('tcar').hidden=foot; ui('tveh').hidden=foot; ui('tveh').classList.add('up'); ['tFx','tSiren','tVLights','tHorn','tLights','tBrake','tGas'].forEach(id=>{ ui(id).hidden=foot; });   // v182: también los del vehículo
+  ui('paGhosts').hidden=!foot; paGhostsPlace(); if(isTouch && innerWidth>innerHeight) ui('actions').hidden=true;
   ui('editSet').textContent=foot?'Ver botones del coche':'Ver botones a pie'; centerText(ui('editSet'));
   if(editor.sel && !editorVisible(editor.sel)) selectCtl(null); markEditor(); }
 function selectCtl(id){ editor.sel=id; const name=id?LAYOUT_ITEMS.find(x=>x[0]===id)[1]:'Toca un botón';
@@ -15056,7 +15062,7 @@ function closeEditor(){
   if(!editor.on) return; editor.on=false; editor.drag=null;
   ui('editLayer').hidden=true; ui('editBar').hidden=true;
   ui('act1').textContent=editor.saved.a1; ui('act2').textContent=editor.saved.a2;
-  editor.saved.hidden.forEach(([id,h])=>{ ui(id).hidden=h; });
+  editor.saved.hidden.forEach(([id,h])=>{ ui(id).hidden=h; }); ui('paGhosts').hidden=true; paKey=''; try{ scanActions(); }catch(e){}
   markEditor(); saveSettings(); syncOptionsUI(); centerAllText();
 }
 function ctlAt(x,y){ // el de más arriba en la lista que contenga el punto (con un margen para dedos)
@@ -17287,16 +17293,28 @@ function pactFits(n){ const r=pactGest(); if(!r || !n) return false; const W=inn
 // cuando vas montado o manejando) va primero, en verde y un poco más grande. Si Tirarse o Saludar no están (en el coche, el avión…) se usan sus lugares de fábrica.
 function pactAnchor(id,R0,B0,D0){ const e=ui(id); if(e && !e.hidden && !ui('tbtnsFoot').hidden && !touchEl.hidden){ const q=e.getBoundingClientRect(); if(q.width>10) return q; }
   const u=Math.min(innerHeight/100,7), d=D0*u, right=innerWidth-R0*u, bottom=innerHeight-B0*u; return {left:right-d, right, top:bottom-d, bottom, width:d, height:d}; }
+// lugar de fábrica de cada «Acción N» (con Tirarse y Saludar en su lugar de fábrica); el editor mueve a partir de aquí
+function paBaseRects(bw,bh){ const u=Math.min(innerHeight/100,7), V=(R0,B0,D0)=>{ const d=D0*u, right=innerWidth-R0*u, bottom=innerHeight-B0*u; return {left:right-d, right, top:bottom-d, bottom, width:d, height:d}; };
+  const D0=V(35,5.1,21.1), W0=V(27.7,30.5,16.7), EX=['hotbar','stick'].map(id=>ui(id).getBoundingClientRect()).filter(q=>q.width>2), placed=[], hit=(a,b)=>a.left<b.right+3 && b.left<a.right+3 && a.top<b.bottom+3 && b.top<a.bottom+3;
+  const slot=(cx,cy)=>{ let L=cx-bw/2, T=cy-bh/2; for(let k=0;k<60;k++){ const rr={left:L,top:T,right:L+bw,bottom:T+bh}; if(![D0,W0].concat(EX,placed).some(q=>hit(rr,q))) break; L-=5; } const q={left:Math.round(L),top:Math.round(T),right:Math.round(L)+bw,bottom:Math.round(T)+bh,width:bw}; placed.push(q); return q; };
+  const s1=slot(D0.left-5-bw/2, D0.top+D0.height*.42), s2=slot(W0.left-5-bw/2, W0.top+W0.height*.5), s3=slot(s2.left-5-bw/2, s2.top+bh/2), s4=slot(s3.left-5-bw/2, s3.top+bh/2), s5=slot(s4.left-5-bw/2, s4.top+bh/2);
+  return [s1,s2,s3,s4,s5]; }
+function paGhostsPlace(){ const G=[1,2,3,4,5].map(i=>ui('pa'+i)); if(!G[0]) return; const was=ui('paGhosts').hidden; ui('paGhosts').hidden=false; const bw=G[0].offsetWidth||52, bh=G[0].offsetHeight||52; const B=paBaseRects(bw,bh); G.forEach((g,i)=>{ g.style.left=B[i].left+'px'; g.style.top=B[i].top+'px'; }); ui('paGhosts').hidden=was; }
+const paCustom=i=>{ const v=layoutOf('pa'+(i+1)); return (v.x||v.y||(v.s&&v.s!==1)) ? v : null; };
 function pactSlots(){ const K=[...pactEl.children]; if(!K.length) return false;
   const D0=pactAnchor('tDive',35,5.1,21.1), W0=pactAnchor('tWave',27.7,30.5,16.7);
   pactEl.classList.add('slots'); pactEl.classList.remove('col'); const st=pactEl.style; st.left=st.top='0px'; st.right=st.bottom='auto';
   const avoid=[D0,W0]; for(const id of ['tJump','tGest','hotbar','stick','tBrake','tGas','tLights','tveh']){ const e=ui(id); if(e && !e.hidden && e.offsetParent!==null){ const q=e.getBoundingClientRect(); if(q.width>2) avoid.push(q); } }
   const placed=[], hit=(a,b)=>b.width>0 && a.left<b.right+3 && b.left<a.right+3 && a.top<b.bottom+3 && b.top<a.bottom+3;
-  K.forEach(b=>{ b.style.position='fixed'; }); const bw=Math.max(...K.map(b=>b.offsetWidth)), bh=Math.max(...K.map(b=>b.offsetHeight));
+  K.forEach(b=>{ b.style.position='fixed'; b.style.scale=''; }); const bw=Math.max(...K.map(b=>b.offsetWidth)), bh=Math.max(...K.map(b=>b.offsetHeight));
+  // los que el jugador movió en el editor: en su lugar (a partir del lugar de fábrica) y con su tamaño; los demás se acomodan sin taparlos
+  const g1=ui('pa1'), gw=(g1&&g1.offsetWidth)||bw, gh=(g1&&g1.offsetHeight)||bh, BR=(()=>{ const was=ui('paGhosts').hidden; ui('paGhosts').hidden=false; const w=g1.offsetWidth, h=g1.offsetHeight; ui('paGhosts').hidden=was; return paBaseRects(w||gw,h||gh); })(), mine=[];
+  K.forEach((b,i)=>{ const v=paCustom(i); if(!v || !BR[i]) return; const w=b.offsetWidth, h=b.offsetHeight, cx=BR[i].left+BR[i].width/2+(v.x||0)*innerWidth, cy=BR[i].top+(BR[i].bottom-BR[i].top)/2+(v.y||0)*innerHeight, sc=v.s||1;
+    b.style.left=Math.round(cx-w/2)+'px'; b.style.top=Math.round(cy-h/2)+'px'; if(sc!==1) b.style.scale=String(sc); mine[i]=true; avoid.push({left:cx-w*sc/2, right:cx+w*sc/2, top:cy-h*sc/2, bottom:cy+h*sc/2, width:w*sc}); });
   const slot=(cx,cy)=>{ let L=cx-bw/2, T=cy-bh/2; for(let k=0;k<60;k++){ const rr={left:L,top:T,right:L+bw,bottom:T+bh}; if(!avoid.concat(placed).some(q=>hit(rr,q))) break; L-=5; }
     L=Math.max(4,Math.round(L)); T=Math.max(4,Math.min(innerHeight-bh-4,Math.round(T))); const q={left:L,top:T,right:L+bw,bottom:T+bh, width:bw}; placed.push(q); return q; };
-  const s1=slot(D0.left-5-bw/2, D0.top+D0.height*.42), s2=slot(W0.left-5-bw/2, W0.top+W0.height*.5), s3=slot(s2.left-5-bw/2, s2.top+bh/2), s4=slot(s1.left-5-bw/2, s1.top+bh/2), s5=slot(s3.left-5-bw/2, s3.top+bh/2);
-  [s1,s2,s3,s4,s5].forEach((q,i)=>{ const b=K[i]; if(!b) return; const w=b.offsetWidth, h=b.offsetHeight; b.style.left=Math.round(q.left+(bw-w)/2)+'px'; b.style.top=Math.round(q.top+(bh-h)/2)+'px'; });
+  const s1=slot(D0.left-5-bw/2, D0.top+D0.height*.42), s2=slot(W0.left-5-bw/2, W0.top+W0.height*.5), s3=slot(s2.left-5-bw/2, s2.top+bh/2), s4=slot(s3.left-5-bw/2, s3.top+bh/2), s5=slot(s4.left-5-bw/2, s4.top+bh/2);
+  [s1,s2,s3,s4,s5].forEach((q,i)=>{ const b=K[i]; if(!b || mine[i]) return; const w=b.offsetWidth, h=b.offsetHeight; b.style.left=Math.round(q.left+(bw-w)/2)+'px'; b.style.top=Math.round(q.top+(bh-h)/2)+'px'; });
   return true; }
 function pactPlace(){ if(pactEl.hidden) return; [...pactEl.children].forEach(b=>{ b.style.position=b.style.left=b.style.top=''; }); pactEl.classList.remove('slots'); if(pactOn() && pactSlots()) return; const r=pactGest(); if(!r) return; const n=pactEl.children.length, W=innerHeight<=500?72:80, st=pactEl.style; st.left=st.top=st.right=st.bottom='auto';
   if(r.left-12-n*W>=4){ pactEl.classList.remove('col'); st.right=Math.round(innerWidth-r.left+12)+'px'; let top=Math.round(r.top+r.height/2-(innerHeight<=500?25:29)); st.top=top+'px';   // en fila, a la izquierda de Gestos/Saludar
