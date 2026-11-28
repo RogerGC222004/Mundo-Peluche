@@ -8186,6 +8186,12 @@ function terrainMainH(x,z){ const M=TMESH; if(!M) return terrainExact(x,z);
 // v271: ¿esa parte del mundo tiene malla de la isla? (si no, el fondo hondo lo pone deepFloor)
 function meshCovers(x,z){ const M=TMESH; if(!M) return Math.abs(x)<1400 && Math.abs(z)<1400; if(x>-M.IE && x<M.IE && z>-M.IE && z<M.IE) return true;
   const ti=Math.floor((x+M.XO)/M.TS), tj=Math.floor((z+M.XO)/M.TS); return ti>=0 && tj>=0 && ti<M.NT && tj<M.NT && !!M.T[tj*M.NT+ti]; }
+// v277: el estanque donde nace el río: una tacita redonda (antes el relieve guardado cada 5 m lo dejaba disparejo y el agua salía en pedazos)
+var RLP_CARVE=null, RLP_RN={d:0,s:0,i:0};
+function rlPondShape(x,z,h){ const P=RLP_CARVE; if(!P) return h; const d=Math.hypot(x-P.x,z-P.z); if(d>P.R+16) return h;
+  if(d<P.R) return Math.min(h, P.lvl+.25-2.4*(1-(d/P.R)*(d/P.R)));   // adentro: el fondo baja parejo hacia el centro
+  let k=1-smooth(P.R+6,P.R+16,d); const n=RL_RIVER.near(x,z,RLP_RN); if(n.s>P.R*.5) k*=smooth(RL_RIVER_W/2+1,RL_RIVER_W/2+6,n.d);   // por donde sale el río no se levanta
+  return lerp(h, Math.max(h, P.lvl+.25+(d-P.R)*.45), k); }   // afuera: la orilla queda arriba del agua
 function terrainExact(x,z){
   const d=Math.hypot(x,z), a=Math.atan2(z,x), cO=d/coastOldR(x,z), cM=d/coastMidR(a), cN=1+(d-coastRN(a))/ISLAND_R2;   // v271: cN = qué tan cerca de la orilla nueva (en las mismas medidas de antes)
   let h=0; const ld=Math.hypot(x-LAKE.x, z-LAKE.z);
@@ -8196,7 +8202,7 @@ function terrainExact(x,z){
   // ondulación suave del fondo marino
   const sea = cN>1 ? .8*Math.sin(x*.03+1)*Math.cos(z*.027) * smooth(1,1.15,cN) * (1-smooth(1.35,1.45,cN)) : 0;
   const land = cM>.88 && cN<.92 ? newLandH(x,z,cM,cN) : 0;   // v271: la tierra nueva alrededor
-  return mgPad(x,z, h + reliefH(x,z) + land + shoreBaseN(cN) + sea + (cN>1.2?seaAbyss(x,z,d,(cN-1.45)*ISLAND_R2):0));   // + montañas, cañones, colinas y el río (v119)
+  return mgPad(x,z, rlPondShape(x,z, h + reliefH(x,z) + land + shoreBaseN(cN) + sea + (cN>1.2?seaAbyss(x,z,d,(cN-1.45)*ISLAND_R2):0)));   // + montañas, cañones, colinas y el río (v119)
 }
 const coastC=(x,z)=>1+(Math.hypot(x,z)-coastR(x,z))/ISLAND_R2;   // v271: en metros desde la orilla (0.9 = 115 m tierra adentro)
 // dónde empieza el mar mirando desde el centro en la dirección a (se busca desde afuera, así no confunde lagunas o el río con la costa)
@@ -8373,7 +8379,7 @@ function rgSample(A,x,z){ const fx=(x+RG.E)/RG.S, fz=(z+RG.E)/RG.S; if(fx<0||fz<
 const reliefH=(x,z)=>rgSample(RG.h,x,z);
 // el río: fondo, estanque donde nace, poza de la cascada y nivel del agua
 function rlBedAt(s){ const L=RL_RIVER.L, n=L.length; let lo=0, hi=n-1; while(hi-lo>1){ const m=(lo+hi)>>1; if(L[m]<=s) lo=m; else hi=m; } const t=(s-L[lo])/Math.max(1e-6,L[hi]-L[lo]); return RL_BED[lo]+(RL_BED[hi]-RL_BED[lo])*t; }
-const RL_POND=(()=>{ const [x,z]=RL_RIVER.pts[0]; return {x,z,R:17, lvl:RL_BED[0]+.75}; })();
+const RL_POND=(()=>{ const [x,z]=RL_RIVER.pts[0]; return {x,z,R:17, lvl:RL_BED[0]+.75}; })(); RLP_CARVE=RL_POND;
 const RL_RBOX=(()=>{ let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9; for(const [x,z] of RL_RIVER.pts){ x0=Math.min(x0,x); x1=Math.max(x1,x); z0=Math.min(z0,z); z1=Math.max(z1,z); } return [x0-40,z0-40,x1+40,z1+40]; })();
 // ---------- v272: Valle de los minijuegos ----------
 // Todo el piso es de tapetes de foami (piezas de 2 m que encajan como rompecabezas) con letras y números de colores.
@@ -8965,16 +8971,16 @@ function waveH(x,z,A,t){ let h=0; for(const [dx,dz,k,w,a,ph] of WAVES) h+=a*Math
 function waterSurfaceY(x,z){ if(inLakeWater(x,z)) return WATER_Y+waveH(x,z,WATER.lakeA,WATER.t); const r=riverLevelAt(x,z); return r!==null ? r+waveH(x,z,WATER.lakeA,WATER.t) : SEA_Y+waveH(x,z,WATER.seaA*(1+seaOpenK(x,z)),WATER.t)+bigH(x,z); }
 // Profundidad guardada en una textura (se calcula una vez): valor = (nivel - fondo + 2) / 12
 function depthTexture(N,cx,cz,E,level,fast){
-  const data=new Uint8Array(N*N), st=2*E/N, X=i=>cx-E+st*(i+.5);
+  const data=new Uint8Array(N*N), st=2*E/N, X=i=>cx-E+st*(i+.5), Z=j=>cz-E+st*(j+.5);   // v277: Z con su propio centro (con X para los dos, el lago junto al castillo salía sin agua)
   const wet=(x0,z0,x1,z1)=>RL_SEAPONDS.some(P=>x1>P.x-P.R-8&&x0<P.x+P.R+8&&z1>P.z-P.R-8&&z0<P.z+P.R+8) || INLAND_SEA.some(P=>x1>P.x-P.R-8&&x0<P.x+P.R+8&&z1>P.z-P.R-8&&z0<P.z+P.R+8) || (x1>RL_RBOX[0]&&x0<RL_RBOX[2]&&z1>RL_RBOX[1]&&z0<RL_RBOX[3]);   // lagunas al nivel del mar y el río
   const one=(x,z)=>{ if(fast){ const c=coastC(x,z); if(c>1.16) return 255; if(c<.84 && !wet(x,z,x,z)) return 0; }   // tierra adentro (menos las lagunas al nivel del mar) o mar hondo
     return Math.round(THREE.MathUtils.clamp((level-terrainH(x,z)+2)/12,0,1)*255); };
   // v271: por bloques de 16×16: los que son todo tierra adentro o todo mar hondo se llenan sin hacer cuentas punto por punto
   const B=fast?16:N;
   for(let bj=0;bj<N;bj+=B) for(let bi=0;bi<N;bi+=B){ const i1=Math.min(N,bi+B), j1=Math.min(N,bj+B); let fill=-1;
-    if(fast){ let mn=9, mx=-9; for(const [i,j] of [[bi,bj],[i1-1,bj],[bi,j1-1],[i1-1,j1-1],[(bi+i1)>>1,(bj+j1)>>1]]){ const c=coastC(X(i),X(j)); if(c<mn) mn=c; if(c>mx) mx=c; }
-      const span=B*st/ISLAND_R2; if(mn>1.16+span) fill=255; else if(mx<.84-span && !wet(X(bi)-st,X(bj)-st,X(i1)+st,X(j1)+st)) fill=0; }
-    for(let j=bj;j<j1;j++) for(let i=bi;i<i1;i++) data[j*N+i]=fill>=0?fill:one(X(i),X(j)); }
+    if(fast){ let mn=9, mx=-9; for(const [i,j] of [[bi,bj],[i1-1,bj],[bi,j1-1],[i1-1,j1-1],[(bi+i1)>>1,(bj+j1)>>1]]){ const c=coastC(X(i),Z(j)); if(c<mn) mn=c; if(c>mx) mx=c; }
+      const span=B*st/ISLAND_R2; if(mn>1.16+span) fill=255; else if(mx<.84-span && !wet(X(bi)-st,Z(bj)-st,X(i1)+st,Z(j1)+st)) fill=0; }
+    for(let j=bj;j<j1;j++) for(let i=bi;i<i1;i++) data[j*N+i]=fill>=0?fill:one(X(i),Z(j)); }
   const t=new THREE.DataTexture(data,N,N,THREE.LuminanceFormat); t.magFilter=t.minFilter=THREE.LinearFilter; t.generateMipmaps=false; t.needsUpdate=true;
   return {tex:t, rect:new THREE.Vector4(cx-E,cz-E,2*E,2*E)};
 }
@@ -9615,9 +9621,10 @@ const pathSamples=[], pathLines=[];
         const a=pts[Math.max(0,i-1)], b=pts[Math.min(pts.length-1,i+1)];
         let tx=b.x-a.x, tz=b.z-a.z; const tl=Math.hypot(tx,tz)||1; tx/=tl; tz/=tl;
         const nx=-tz, nz=tx, v=i*len/n/3;
-        [[-1,0],[1,1]].forEach(([sgn,u])=>{ const x=p.x+nx*sgn*W/2, z=p.z+nz*sgn*W/2; verts.push(x, terrainH(x,z)+(P.yOff||.08), z); uvs.push(u,v); });
+        [[-1,0],[0,.5],[1,1]].forEach(([sgn,u])=>{ const x=p.x+nx*sgn*W/2, z=p.z+nz*sgn*W/2; let hy=terrainH(x,z);   // v277: tres puntos de ancho y lo más alto de alrededor (antes el pasto se asomaba por el camino en las cuestas)
+          for(const [ox,oz] of [[tx,tz],[-tx,-tz],[nx,nz],[-nx,-nz]]) hy=Math.max(hy,terrainH(x+ox*.7,z+oz*.7)); verts.push(x, hy+(P.yOff||.08), z); uvs.push(u,v); });
         if(i<i1 || i===pts.length-1){ pathSamples.push([p.x,p.z]); line.push([p.x,p.z]); }
-        if(i<i1){ const k=(i-i0)*2; idx.push(k,k+1,k+2, k+1,k+3,k+2); } }
+        if(i<i1){ const k=(i-i0)*3; idx.push(k,k+1,k+3, k+1,k+4,k+3, k+1,k+2,k+4, k+2,k+5,k+4); } }
       const geo=new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(verts,3));
       geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs,2));
@@ -10457,7 +10464,7 @@ function desCamelMesh(){ const T='#d9a86a', T2='#c79358', BLK='#2a2226', WHT='#f
       [rboxGeo(),0,2.46,-.05,.95,.1,.9,0,0,0,'#ff5b5b'],[rboxGeo(),0,2.525,-.05,.7,.05,.7,0,0,0,'#ffd23f'],[rboxGeo(),-.5,2.18,-.05,.04,.52,.8,0,0,0,'#3fa7ff'],[rboxGeo(),.5,2.18,-.05,.04,.52,.8,0,0,0,'#3fa7ff'],[cyl,0,1.4,-1.0,.05,.6,.05,-.4,0,0,T2]]),DES_FVC);   // (v276: la silla va encima de la joroba)
   body.castShadow=true; g.add(body); g.userData.body=body; const legs=[]; for(const [x,z] of [[-.32,.6],[.32,.6],[-.32,-.65],[.32,-.65]]){ const p=new THREE.Group(); p.position.set(x,1.25,z); const l=new THREE.Mesh(desMerge([[cyl,0,-.6,0,.13,1.2,.13,0,0,0,T],[sph,0,-1.2,0,.15,.08,.17,0,0,0,T2]]),DES_FVC); l.castShadow=true; p.add(l); g.add(p); legs.push(p); }
   g.userData.legs=legs; g.traverse(o=>{ if(o.isMesh){ o.userData.noCol=true; o.userData.noBatch=true; } }); scene.add(g); return g; }
-function desCamelAnim(g,ph,amp){ const L=g.userData.legs; L.forEach((p,i)=>{ p.rotation.x=Math.sin(ph+(i===0||i===3?0:Math.PI))*amp; }); const U=g.userData; if(U.body) U.body.position.y=Math.abs(Math.sin(ph))*amp*.25; if(!U.eyes && U.body){ U.eyes=new THREE.Group(); U.body.add(U.eyes); googlyEyes(U.eyes,.15,2.48,1.5,.085,{dir:[.55,.15,1]}); }   // ojitos saltones como los ositos de gomita (aquí: GOOGLY ya existe)
+function desCamelAnim(g,ph,amp){ const L=g.userData.legs; L.forEach((p,i)=>{ p.rotation.x=Math.sin(ph+(i===0||i===3?0:Math.PI))*amp; }); const U=g.userData; if(U.body) U.body.position.y=Math.abs(Math.sin(ph))*amp*.25; if(!U.eyes && U.body){ U.eyes=new THREE.Group(); U.body.add(U.eyes); googlyEyes(U.eyes,.15,2.48,1.5,.085,{dir:[.55,.15,1], fit:U.body, key:'camel'}); }   // ojitos saltones como los ositos de gomita (aquí: GOOGLY ya existe)
   if(U.eyes) U.eyes.visible=g.position.distanceToSquared(camera.position)<30*30; }   // se mece al caminar (los ojitos rebotan)
 function desCamelStart(){ const C=DES.camel; startPlay('camel',0); const P=player.pg; if(!P) return; P.cm={x:C.x, z:C.z, h:C.h, v:0, ph:0}; C.idle.visible=false; if(!C.ride) C.ride=desCamelMesh(); C.ride.visible=true;
   flashNote(isTouch?'Mueve el joystick para caminar con el camello':'W/S para avanzar · A/D para girar'); }
@@ -10479,7 +10486,7 @@ function sitMeasure(o){ const L=o.userData.legs; if(!L) return; let lo=1e9; o.up
   for(const l of L){ const up=l.children[0]; if(!up || !up.geometry) continue; const P=up.geometry.attributes.position; _sitM.multiplyMatrices(inv,up.matrixWorld); for(let i=0;i<P.count;i+=2){ v.fromBufferAttribute(P,i).applyMatrix4(_sitM); if(v.y<lo) lo=v.y; } }
   if(lo<1e8){ const b=lo*o.scale.y; o.userData.sitButt=o.userData.sitButt===undefined?b:o.userData.sitButt+(b-o.userData.sitButt)*.5; } }
 const _sitI=new THREE.Matrix4(), _sitM=new THREE.Matrix4(), _sitV=new THREE.Vector3();
-function desCamelEnd(P){ const C=DES.camel; if(C.ride) C.ride.visible=false; C.idle.visible=true; const S=P&&P.cm; if(S){ const x=S.x+Math.cos(S.h)*1.6, z=S.z-Math.sin(S.h)*1.6; return [x,0,z]; } return null; }
+function desCamelEnd(P){ const C=DES.camel; if(C.ride) C.ride.visible=false; C.idle.visible=true; const S=P&&P.cm; if(S){ desCamelPlace(C,S.x,S.z,S.h); const x=S.x+Math.cos(S.h)*1.6, z=S.z-Math.sin(S.h)*1.6; return [x,0,z]; } return null; }
 function desRemoteCamel(r,dt,t){ const S=DES.rem.get(r)||(DES.rem.set(r,{}),DES.rem.get(r)); r.pos.lerp(r.target,1-Math.exp(-dt*8)); const yawT=r.facing||0; r.cmH=r.cmH===undefined?yawT:lerpAng(r.cmH,yawT,1-Math.exp(-dt*6));
   if(!S.c) S.c=desCamelMesh(); S.c.visible=true; const h=terrainH(r.pos.x,r.pos.z), mv=Math.min(1,r.target.distanceTo(r.pos)*4); S.ph=(S.ph||0)+dt*(1+mv*5); S.c.position.set(r.pos.x,h,r.pos.z); S.c.rotation.set(0,r.cmH,0); desCamelAnim(S.c,S.ph,.08+mv*.4);
   const bob=S.c.userData.body?S.c.userData.body.position.y:0, pose={pos:[r.pos.x,h+bob+DES_SEAT-sitButt(r.obj),r.pos.z], yaw:r.cmH, sit:1, straddle:1, grip:1}; placePlay(r.obj,pose); pgPoseLimbs(r.obj,pose,t,dt,r.walk); sitMeasure(r.obj); r.label.position.set(0,2.42,0); r.blob.visible=false; S.seen=t; return true; }
@@ -10530,7 +10537,7 @@ function desAnimalGeo(kind){ if(DESA.geo[kind]) return DESA.geo[kind]; const sph
 function desAnimalWing(){ return DESA.wing||(DESA.wing=desMerge([[new THREE.SphereGeometry(1,8,5),.45,0,0,.5,.04,.22,0,0,0,'#7a4e2e']])); }
 const DESA_EYE={lagartija:[0,.084,.17,.43,.05], fenec:[0,.1,.53,.44,.058], escorpion:[0,.06,.16,.3,.042], tortuga:[0,.1,.85,1.33,.055], serpiente:[Math.sin(-.45)*.1,.066,.13,.67,.044], liebre:[0,.08,.47,.36,.052], halcon:[0,.068,.12,.47,.045]};   // [centro x, separación, y, z, tamaño]
 function desAnimalSpawn(kind,x,z){ const g=new THREE.Group(), m=new THREE.Mesh(desAnimalGeo(kind),DES_FVC); m.castShadow=kind!=='halcon'; g.add(m); let wings=null;
-  const E=DESA_EYE[kind], ey=new THREE.Group(); ey.position.x=E[0]; m.add(ey); googlyEyes(ey,E[1],E[2],E[3],E[4],{dir:[.45,.2,1]}); ey.visible=false;   // ojitos saltones (como los ositos de gomita); solo de cerca
+  const E=DESA_EYE[kind], ey=new THREE.Group(); ey.position.x=E[0]; m.add(ey); googlyEyes(ey,E[1],E[2],E[3],E[4],{dir:[.45,.2,1], key:'des:'+kind}); ey.visible=false;   // ojitos saltones (como los ositos de gomita); solo de cerca
   if(kind==='halcon'){ wings=[-1,1].map(s=>{ const w=new THREE.Mesh(desAnimalWing(),DES_FVC); w.scale.x=s; g.add(w); return w; }); }
   g.traverse(o=>{ if(o.isMesh){ o.userData.noCol=true; o.userData.noBatch=true; } }); scene.add(g);
   const A={kind, g, m, wings, ey, x, z, h:Math.random()*6.28, v:0, st:0, t:Math.random()*3, ph:Math.random()*6, cx:x, cz:z, r:20+Math.random()*25}; DESA.list.push(A); return A; }
@@ -10593,12 +10600,15 @@ function desFlyTick(dt){ const F=DES_FLY, p=player.pos, inD=desW(p.x,p.z)>.55 &&
   F.pts.geometry.attributes.position.needsUpdate=true; }
 function desUpdate(dt){ try{ desWhirlTick(dt); desAnimalsTick(dt); desFlyTick(dt); }catch(e){ if(!window.__desE){ window.__desE=1; console.warn('desierto',e); } }
   { const on=player.pg && player.pg.k==='sandb' && player.pg.sb; if(on && !DES.board) DES.board=desBoardMesh(); if(DES.board){ DES.board.visible=!!on; if(on){ const S=player.pg.sb; DES.board.position.set(S.x,S.y,S.z); DES.board.rotation.order='YXZ'; DES.board.rotation.set(-(S.tilt||0),S.h,0); } } }
+  { const C=DES.camel; if(C && C.home && (C.x!==C.home.x || C.z!==C.home.z) && !(player.pg && player.pg.k==='camel')){ const H=C.home, dp=Math.hypot(player.pos.x-C.x,player.pos.z-C.z), dh=Math.hypot(player.pos.x-H.x,player.pos.z-H.z); if(dp>90 && dh>90) desCamelPlace(C,H.x,H.z,H.h); } }   // v277
   { const C=DES.camel; if(C && Math.abs(player.pos.x-C.x)<120 && Math.abs(player.pos.z-C.z)<120){ C.ph+=dt; desCamelAnim(C.idle,0,0); C.idle.children[0].rotation.x=Math.sin(C.ph*.8)*.02; } }
   try{ desRemoteSweep(performance.now()/1000); }catch(e){}
   const C=DES.chest; if(C && Math.abs(player.pos.x-C.x)<80 && Math.abs(player.pos.z-C.z)<80){ const want=desDone()?1:0; C.open+=(want-C.open)*Math.min(1,dt*4); C.lid.rotation.x=-C.open*1.7; C.coins.visible=C.open<.5; }
   if(!desSeen && desW(player.pos.x,player.pos.z)>.6){ desSeen=true; flashNote('¡Llegaste al Desierto Canela!'); } }
 (function desCamel(){ DES.rem=new Map(); const O=DES.oasis, a=Math.atan2(O.z,O.x), x=O.x-Math.cos(a)*(O.R+17)-Math.sin(a)*9, z=O.z-Math.sin(a)*(O.R+17)+Math.cos(a)*9, h=Math.atan2(O.x-x,O.z-z)+Math.PI/2;
-  const g=desCamelMesh(); g.position.set(x,terrainH(x,z),z); g.rotation.y=h; DES.camel={x,z,h,idle:g,ride:null,ph:0}; obstacles.push({x,z,r:1.1,top:terrainH(x,z)+2.2,walk:false}); })();
+  const g=desCamelMesh(); g.position.set(x,terrainH(x,z),z); g.rotation.y=h; const ob={x,z,r:1.1,top:terrainH(x,z)+2.2,walk:false}; DES.camel={x,z,h,idle:g,ride:null,ph:0,home:{x,z,h},ob}; obstacles.push(ob); })();
+// v277: el camello se queda donde te bajaste; regresa solito a su lugar cuando ya nadie lo ve (lejos de ti y de su lugar)
+function desCamelPlace(C,x,z,h){ C.x=x; C.z=z; C.h=h; C.idle.position.set(x,terrainH(x,z),z); C.idle.rotation.y=h; C.ob.x=x; C.ob.z=z; C.ob.top=terrainH(x,z)+2.2; obsGrid.n=-1; }
 // ---------- v274: Meseta Champiñón: paredes, subidas, hongos, mirador, brillo de noche y esporas ----------
 const MES_GLOW={value:0};
 function mesGlowMat(key){ const m=felt('#ffffff','rgba(0,0,0,.08)'); m.vertexColors=true; const prev=m.onBeforeCompile; m.customProgramCacheKey=()=>'feltPQ-'+key;   // (su propio programa: el de fieltro se comparte entre todos)
@@ -11088,7 +11098,7 @@ function forAnimalGeo(kind){ if(FORA.geo[kind]) return FORA.geo[kind]; const sph
       [sph,-.1,.68,.15,.075,.075,.04,0,0,0,'#f0e0c8'],[sph,.1,.68,.15,.075,.075,.04,0,0,0,'#f0e0c8']] };
   return FORA.geo[kind]=desMerge(D[kind]); }
 const FORA_EYE={venado:[.1,1.5,.74,.06], conejo:[.075,.48,.3,.045], ardilla:[.052,.38,.2,.035], buho:[.1,.68,.19,.075]};
-function forAnimalSpawn(kind,x,z,y,extra){ const g=new THREE.Group(), m=new THREE.Mesh(forAnimalGeo(kind),DES_FVC); m.castShadow=true; g.add(m); const E=FORA_EYE[kind], ey=new THREE.Group(); m.add(ey); googlyEyes(ey,E[0],E[1],E[2],E[3],{dir:[.4,.15,1]}); ey.visible=false;
+function forAnimalSpawn(kind,x,z,y,extra){ const g=new THREE.Group(), m=new THREE.Mesh(forAnimalGeo(kind),DES_FVC); m.castShadow=true; g.add(m); const E=FORA_EYE[kind], ey=new THREE.Group(); m.add(ey); googlyEyes(ey,E[0],E[1],E[2],E[3],{dir:[.4,.15,1], key:'for:'+kind}); ey.visible=false;
   g.traverse(o=>{ if(o.isMesh){ o.userData.noCol=true; o.userData.noBatch=true; } }); scene.add(g);
   const A=Object.assign({kind, g, m, ey, x, z, y:y===undefined?terrainH(x,z):y, h:Math.random()*6.28, v:0, st:0, t:Math.random()*3, ph:Math.random()*6, gx:x, gz:z, flee:0}, extra||{}); FORA.list.push(A); return A; }
 function forOkSpot(x,z){ const a=Math.atan2(z,x); if(Math.abs(angD(a,3.71))>.75) return false; const d=Math.hypot(x,z); if(d<coastMidR(a)*1.04 || 1+(d-coastRN(a))/ISLAND_R2>.85) return false;
@@ -14242,6 +14252,10 @@ function stUnpackX(S,str){ if(typeof str!=='string' || str.length>320) str=''; i
 const myStn=stNew(); myStn.clm=new Map();
 // al entrar al Modo libre se preparan de una vez las manchas de tu peluche (así no se traba la primera vez que te ensucias)
 function stWarm(){ try{ if(!FREE.on || myStn.on) return; stSyncCloth(plush,myStn); plush.userData.stn=myStn; stUni(myStn).uSt.value.forEach(v=>v.set(0,0,0,0)); stWrap(plush,myStn); myStn.wr=true; myStn.warm=3; }catch(e){} }   // (se dibuja así 3 cuadros, sin manchas, y se quita)
+// v277: las manchas (agua, lodo…) usan una copia de cada material de tu peluche; la primera vez que te mojabas se preparaban
+// esas copias y el juego se trababa ~2 s. Ahora se preparan con la pantalla de carga y al salir de la tienda (sin manchas: no se ve nada).
+function stPrecompile(){ try{ if(myStn.on || myStn.wr) return; const added=!plush.parent; if(added) scene.add(plush); stSyncCloth(plush,myStn); plush.userData.stn=myStn; stUni(myStn).uSt.value.forEach(v=>v.set(0,0,0,0));
+    stWrap(plush,myStn); let root=plush; while(root.parent) root=root.parent; renderer.compile(root,camera); stRestore(plush); myStn.wr=false; if(added) scene.remove(plush); }catch(e){ try{ stRestore(plush); myStn.wr=false; }catch(e2){} } }
 function stPresence(){ return stPack(myStn); }
 function stPresenceX(){ try{ return stPackX(myStn); }catch(e){ return null; } }
 // tu peluche: lo que pisas, en lo que nadas o te tiras, y el agua de la isla (el mar, el lago); tus manos; tu ropa
@@ -14443,6 +14457,7 @@ function poseLimbs(obj,t,dt,sw,air,dk,waving,swimT,walkPh=0,mv=0,holdMap=false,s
     if(sit>0){ hip=hip*(1-sit)-1.5*sit; knee=knee*(1-sit)+1.5*sit; }   // sentado: muslos adelante, rodillas dobladas
     if(air) ease(l.rotation,'x',hip); else l.rotation.x=hip;
     ease(j.rotation,'x',knee);
+    if(l.rotation.z) l.rotation.z=Math.abs(l.rotation.z)<.01?0:l.rotation.z*(1-k);   // v277: las piernas abiertas (camello, surf) regresan a su lugar
   });
   // Brazos: codos un poco doblados al estar de pie, más al correr, hacia arriba al saltar, rectos al tirarse
   arms.forEach(a=>{
@@ -14477,9 +14492,11 @@ const stick={x:0,y:0};
 // Centrado óptico: la tipografía redondeada deja más aire a un lado de las letras,
 // así que medimos la tinta real del texto y lo desplazamos para que quede al centro.
 const inkCtx=document.createElement('canvas').getContext('2d');
+const CT_SET=new Set(); relang(()=>{ for(const el of CT_SET){ if(!el.isConnected){ CT_SET.delete(el); continue; } try{ centerText(el,el.__esSrc); }catch(e){} } });   // v277: los botones centrados regresan al otro idioma
 function centerText(el, text){
-  if(text===undefined) text=el.textContent;
-  text=txl(String(text).trim());   // v255: ya traducido (para medirlo bien)
+  if(text===undefined){ let t=''; const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT); for(let q=w.nextNode(); q; q=w.nextNode()) t+=(q.__es!==undefined && q.nodeValue===q.__en)?q.__es:q.nodeValue; t=t.trim();
+    if(el.__esSrc && (t===el.__esSrc || t===txl(el.__esSrc))) t=el.__esSrc; text=t; }   // v277: el texto en español (aunque ya esté en inglés)
+  const src=String(text).trim(); text=txl(src); el.__esSrc=src; CT_SET.add(el);   // v255: ya traducido (para medirlo bien)   // v277: se recuerda para volver a ponerlo al cambiar de idioma
   const cs=getComputedStyle(el);
   inkCtx.font=`${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
   inkCtx.textAlign='left';
@@ -14487,7 +14504,7 @@ function centerText(el, text){
   const shift=(m.actualBoundingBoxRight-m.actualBoundingBoxLeft)/2 - m.width/2;
   let s=el.querySelector(':scope > .lbl');
   if(!s){ el.textContent=''; s=document.createElement('span'); s.className='lbl'; el.appendChild(s); }
-  s.textContent=text;
+  s.textContent=text; if(text!==src && s.firstChild){ s.firstChild.__es=src; s.firstChild.__en=text; }   // v277: así al volver a español regresa
   s.style.transform = Math.abs(shift)>.3 ? `translateX(${(-shift).toFixed(2)}px)` : '';
 }
 function centerAllText(){ document.querySelectorAll('.btn, .tbtn, .chip:not(.room-chip)').forEach(el=>{ if(!el.querySelector('*:not(.lbl):not(.emi):not(.emi-g):not(.emi-u):not(.emi-t)')) centerText(el); }); }   // (v242: los íconos dibujados cuentan como texto)
@@ -19444,8 +19461,8 @@ function instBounds(im){ const g=im.geometry.clone(); if(!g.boundingSphere) g.co
   const sph=new THREE.Sphere(); box.getBoundingSphere(sph); sph.radius+=gr*maxS; g.boundingSphere=sph; im.geometry=g; im.frustumCulled=true; return im; }
 // Brazo de dos partes que alcanza un punto (en coordenadas del peluche). stretch: el antebrazo se estira si no llega.
 const bw_S=new THREE.Vector3(), bw_D=new THREE.Vector3(), bw_U=new THREE.Vector3(), bw_E=new THREE.Vector3(), bw_F=new THREE.Vector3(), bw_hint=new THREE.Vector3(), bw_qi=new THREE.Quaternion(), bw_down=new THREE.Vector3(0,-1,0);
-function reachArm(arm,target,hint,stretch){
-  bw_S.copy(arm.position); bw_D.copy(target).sub(bw_S); let d=bw_D.length(); const a=ARM_UP, b=ARM_LOW; bw_D.normalize();
+function reachArm(arm,target,hint,stretch,A,B){
+  bw_S.copy(arm.position); bw_D.copy(target).sub(bw_S); let d=bw_D.length(); const a=A||ARM_UP, b=B||ARM_LOW; bw_D.normalize();
   const joint=arm.userData.joint;
   if(stretch && d>a+b-.01){ arm.quaternion.setFromUnitVectors(bw_down,bw_D); joint.quaternion.identity(); joint.scale.y=THREE.MathUtils.clamp((d-a)/b,1,1.3); return; }   // se estira un poquito, nunca como palo
   joint.scale.y=1; d=THREE.MathUtils.clamp(d,Math.abs(a-b)+.02,a+b-.01);
@@ -19463,10 +19480,11 @@ function bowPose(obj,rig,o){
   // o: {pitch, draw(0..1), mode, target(world Vector3|null), extend(0..1 brazo estirado al soltar), pull(0..1)}
   const p=THREE.MathUtils.clamp(o.pitch,-1,1), fz=Math.cos(p), fy=Math.sin(p);
   const bowArm=obj.userData.arms.find(a=>a.userData.side===BOW_SIDE), reelArm=obj.userData.arms.find(a=>a.userData.side===REEL_SIDE);
+  const KB_=obj.userData.av==='k', AU=KB_?CB.M.uarm[1]*CB.S:ARM_UP, AL=KB_?(CB.M.farm[1]+4)*CB.S:ARM_LOW, SY=KB_?bowArm.position.y:SHOULDER_Y;   // v277: el Cubito tiene los hombros más arriba y los brazos más largos (antes se doblaban hacia atrás)
   // mano del arco: estirada hacia adelante, un poquito hacia el centro
-  const reachL=ARM_UP+ARM_LOW-.03;
-  bw_bt.set(bowArm.position.x*.35, SHOULDER_Y+fy*reachL, fz*reachL);
-  reachArm(bowArm,bw_bt,bw_hint.set(BOW_SIDE,-.3,0),false);
+  const reachL=AU+AL-.03;
+  bw_bt.set(bowArm.position.x*.35, SY+fy*reachL, fz*reachL);
+  reachArm(bowArm,bw_bt,bw_hint.set(BOW_SIDE,-.3,0),false,AU,AL);
   rig.bow.visible=true; rig.bow.position.copy(bw_bt); rig.bow.rotation.set(-p,0,0); rig.bow.translateZ(-.42);   // el agarre queda en la mano
   // cuerda del arco: de la punta de arriba a la de abajo pasando por los dedos que jalan
   const draw=o.draw;
@@ -19480,20 +19498,20 @@ function bowPose(obj,rig,o){
   if(o.target && o.mode===3){
     // yendo hacia la flecha: el brazo del carrete apunta derecho hacia ella (la cuerda hace el resto)
     bw_inv.copy(obj.matrixWorld).invert(); bw_ht.copy(o.target).applyMatrix4(bw_inv);
-    const k=o.reachK??1; bw_w.copy(bw_ht).sub(reelArm.position); const L=Math.max(.001,bw_w.length()), want=Math.min(L,ARM_UP+ARM_LOW-.02);
+    const k=o.reachK??1; bw_w.copy(bw_ht).sub(reelArm.position); const L=Math.max(.001,bw_w.length()), want=Math.min(L,AU+AL-.02);
     bw_ht.copy(reelArm.position).addScaledVector(bw_w,want/L*(.55+.45*Math.min(1,Math.max(0,k))));
-    reachArm(reelArm,bw_ht,bw_hint.set(REEL_SIDE,-.5,-.3),false);
+    reachArm(reelArm,bw_ht,bw_hint.set(REEL_SIDE,-.5,-.3),false,AU,AL);
   } else if(o.pull>0){
     // jalando: el brazo se dobla hacia adentro y se sacude un poco
     const sh=Math.sin(performance.now()*.04)*.02*o.pull;
-    bw_ht.set(reelArm.position.x*.4+sh, SHOULDER_Y-.12+sh, .12-.05*o.pull);
-    reachArm(reelArm,bw_ht,bw_hint.set(REEL_SIDE*.4,-.6,-1),false);
+    bw_ht.set(reelArm.position.x*.4+sh, SY-.12+sh, .12-.05*o.pull);
+    reachArm(reelArm,bw_ht,bw_hint.set(REEL_SIDE*.4,-.6,-1),false,AU,AL);
   } else {
     // en la cuerda del arco; al soltar la flecha el brazo se estira hacia adelante
     const bowLocal=bw_w.copy(rig.bow.userData.nock); rig.bow.localToWorld(bowLocal); bw_inv.copy(obj.matrixWorld).invert(); bowLocal.applyMatrix4(bw_inv);
     bw_ht.copy(bowLocal);
-    if(o.extend>0) bw_ht.lerp(bw_S.set(reelArm.position.x*.6, SHOULDER_Y+fy*.58, fz*.58), o.extend);
-    reachArm(reelArm,bw_ht,bw_hint.set(REEL_SIDE,-.4,-.6),false);
+    if(o.extend>0) bw_ht.lerp(bw_S.set(reelArm.position.x*.6, SY+fy*.58, fz*.58), o.extend);
+    reachArm(reelArm,bw_ht,bw_hint.set(REEL_SIDE,-.4,-.6),false,AU,AL);
   }
   rig.reel.visible=true;
 }
@@ -19534,6 +19552,7 @@ function traceShot(from,dir,maxD,_,ignoreSelf){
 function bowShoot(){
   if(!bowHeld() || hook.mode===1) return;
   const f=yaw+Math.PI, ap=aimPitch(), start=new THREE.Vector3(player.pos.x+Math.sin(f)*.55, player.pos.y+SHOULDER_Y+Math.sin(ap)*.55, player.pos.z+Math.cos(f)*.55);   // desde el arco
+  { const rg=plush.userData.bowRig; if(rg && rg.bow.visible){ rg.bow.getWorldPosition(start); } }   // v277: sale del arco de verdad (con cualquier muñeco)
   const aim=cameraAim(); { const tt=aim.distanceTo(start)/BOW.speed; aim.y+=.5*BOW.grav*tt*tt; }   // compensa la caída: pega donde apuntas
   const dir=aim.sub(start).normalize();
   hook.mode=1; hook.pos.copy(start).addScaledVector(dir,.4); hook.vel.copy(dir).multiplyScalar(BOW.speed); hook.from.copy(player.pos); hook.t=0; hook.extend=1; hook.kind=null; hook.ref=null;
@@ -19675,13 +19694,34 @@ function remoteBowPose(r){
 // su peso y se sacude cuando el animalito se mueve (solo se calcula de cerca: googlyTick).
 const GOOGLY={list:[], W:new THREE.MeshStandardMaterial({color:0xf4f4f2, roughness:.45}), P:new THREE.MeshStandardMaterial({color:0x0c0c0c, roughness:.5}),
   D:new THREE.MeshStandardMaterial({color:0xffffff, roughness:.04, metalness:.1, transparent:true, opacity:.22, depthWrite:false})};
+// v277: cada ojo se acomoda en la curva de la cabeza: se busca el punto de la cabeza más cercano y el ojo mira hacia afuera de ahí
+// (antes todos miraban derecho al frente y en las cabezas redondas se salían de lado). Se guarda por tipo de animal (o.key).
+const GFIT=new Map(), _gfT=new THREE.Triangle(), _gfA=new THREE.Vector3(), _gfB=new THREE.Vector3(), _gfC=new THREE.Vector3(), _gfP=new THREE.Vector3(), _gfQ=new THREE.Vector3(), _gfBa=new THREE.Vector3(), _gfN=new THREE.Vector3(), _gfS=new THREE.Sphere(), _gfM=new THREE.Matrix3(), _gfN0=new THREE.Vector3(), _gfN1=new THREE.Vector3(), _gfN2=new THREE.Vector3();
+function gFit(root,par,x,y,z,r,dl,key){ if(key && GFIT.has(key)){ const c=GFIT.get(key); return c?{p:c.p.clone(), d:c.d.clone()}:null; }
+  // el punto más cercano gana, pero castigando las caras que miran muy distinto a donde debía mirar el ojo (así no se acuesta en la orilla de un parche delgado)
+  let res=null; try{ root.updateMatrixWorld(true); const P=par.localToWorld(new THREE.Vector3(x,y,z)), DW=dl.clone().applyQuaternion(par.getWorldQuaternion(new THREE.Quaternion())).normalize(), K=r*1.2;
+    let bs=1e9; const bp=new THREE.Vector3(), bn=new THREE.Vector3();
+    root.traverse(m=>{ if(!m.isMesh || m.isInstancedMesh || m.isSkinnedMesh || m.userData.googly || !m.geometry) return; const g=m.geometry, pos=g.attributes.position; if(!pos || pos.count>60000) return;
+      if(!g.boundingSphere) g.computeBoundingSphere(); _gfS.copy(g.boundingSphere).applyMatrix4(m.matrixWorld); if(Math.max(0,_gfS.distanceToPoint(P))>=bs) return;
+      const nor=g.attributes.normal, idx=g.index, M=m.matrixWorld, n=idx?idx.count:pos.count; _gfM.getNormalMatrix(M);
+      for(let i=0;i+2<n;i+=3){ const i0=idx?idx.getX(i):i, i1=idx?idx.getX(i+1):i+1, i2=idx?idx.getX(i+2):i+2;
+        _gfA.fromBufferAttribute(pos,i0).applyMatrix4(M); _gfB.fromBufferAttribute(pos,i1).applyMatrix4(M); _gfC.fromBufferAttribute(pos,i2).applyMatrix4(M); _gfT.set(_gfA,_gfB,_gfC); _gfT.closestPointToPoint(P,_gfQ);
+        const d=_gfQ.distanceTo(P); if(d>=bs) continue;
+        if(nor){ _gfT.getBarycoord(_gfQ,_gfBa); _gfN0.fromBufferAttribute(nor,i0); _gfN1.fromBufferAttribute(nor,i1); _gfN2.fromBufferAttribute(nor,i2); _gfN.copy(_gfN0).multiplyScalar(_gfBa.x).addScaledVector(_gfN1,_gfBa.y).addScaledVector(_gfN2,_gfBa.z).applyMatrix3(_gfM).normalize(); }
+        else _gfT.getNormal(_gfN);
+        const sc=d+K*(1-_gfN.dot(DW)); if(sc>=bs) continue; bs=sc; bp.copy(_gfQ); bn.copy(_gfN); } });
+    if(bp.distanceTo(P)<r*4 && bn.lengthSq()>.5 && bn.dot(DW)>.2){ const wp=bp.clone().addScaledVector(bn,r*.14), lp=par.worldToLocal(wp), q=par.getWorldQuaternion(new THREE.Quaternion()).invert(), ld=bn.clone().applyQuaternion(q).normalize(); res={p:lp, d:ld}; } }catch(e){ res=null; }
+  if(key) GFIT.set(key,res?{p:res.p.clone(), d:res.d.clone()}:null); return res; }
 function googlyEyes(par,x,y,z,r,o={}){ const dir=o.dir||[0,0,1], out=[];
+  let fitRoot=null; if(o.fit!==false){ fitRoot=o.fit||par; while(!o.fit && fitRoot.parent && !fitRoot.parent.isScene) fitRoot=fitRoot.parent; if(fitRoot.isScene) fitRoot=null; }
   for(const s of (o.single?[1]:[1,-1])){ const g=new THREE.Group(); g.position.set(s*x,y,z);
-    const d=new THREE.Vector3(s*dir[0],dir[1],dir[2]).normalize(); g.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),d);
+    const d=new THREE.Vector3(s*dir[0],dir[1],dir[2]).normalize();
+    const F=fitRoot?gFit(fitRoot,par,s*x,y,z,r,d,o.key?o.key+(s>0?'+':'-'):null):null; if(F){ g.position.copy(F.p); d.copy(F.d); }
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),d);
     const w=new THREE.Mesh(sphereG,GOOGLY.W); w.scale.set(r,r,r*.42); g.add(w);
     const p=new THREE.Mesh(sphereLo,GOOGLY.P); p.scale.setScalar(r*.56); p.position.set(0,-r*.38,r*.3); g.add(p);
     if(!ULTRA){ const dm=new THREE.Mesh(sphereG,GOOGLY.D); dm.scale.set(r*1.04,r*1.04,r*.62); dm.renderOrder=3; g.add(dm); }
-    g.traverse(q=>{ if(q.isMesh){ q.castShadow=false; q.userData.noCol=true; } });
+    g.traverse(q=>{ if(q.isMesh){ q.castShadow=false; q.userData.noCol=true; q.userData.googly=true; } });
     par.add(g); const e={g, p, r, root:o.root||null, pp:new THREE.Vector2(0,-.9), v:new THREE.Vector2(), last:new THREE.Vector3(), lv:new THREE.Vector3(), first:true};
     GOOGLY.list.push(e); out.push(e); }
   return out; }
@@ -21520,7 +21560,7 @@ function stTipSync(){ const el=ui('stTip'); if(!el) return; const m=shopCat==='p
   const t = !shopOpen() ? '' : m==='paint' ? (SW.last ? 'Toca la pared para lanzar otro · gírala o acércate' : 'Toca un globo para lanzarlo a la pared') : m==='poster' ? 'Toca el póster para verla completa' : shopCat==='gestos' ? (SHOPG.last ? 'Toca tu peluche para verlo otra vez' : 'Toca un gesto para verlo') : '';
   if(el.textContent!==t) el.textContent=t; el.hidden=!t; }
 function openShop(){ shopTry=null; shopKeep.clear(); try{ gEnd(plush); }catch(e){} batchDropUnder(plush); menuEl.hidden=true; shopEl.hidden=false; studio.add(plush); stView.auto=true; stView.dist=4.6; stView.pitch=.12; renderShop(); }
-function closeShop(){ shopOutfitT=0; shopTry=null; petTry=null; shopEl.hidden=true; try{ shopPreviewsOff(); }catch(e){} try{ applyOutfit(plush, wardrobe.eq); }catch(e){ console.warn('ropa',e); flashNote('Aviso para Roger: falló vestir al peluche ('+String(e&&e.message||e).slice(0,60)+')'); } scene.add(plush); plush.visible=true; if(state==='menu') menuEl.hidden=false; try{ diShopClosed(); }catch(e){} }   // v203: la tienda se cierra primero, pase lo que pase
+function closeShop(){ shopOutfitT=0; shopTry=null; petTry=null; shopEl.hidden=true; try{ shopPreviewsOff(); }catch(e){} try{ applyOutfit(plush, wardrobe.eq); }catch(e){ console.warn('ropa',e); flashNote('Aviso para Roger: falló vestir al peluche ('+String(e&&e.message||e).slice(0,60)+')'); } scene.add(plush); plush.visible=true; if(state==='menu') menuEl.hidden=false; try{ diShopClosed(); }catch(e){} setTimeout(stPrecompile,300); }   // (v277: prepara las manchas de la ropa nueva)   // v203: la tienda se cierra primero, pase lo que pase
 ui('shopBtn').onclick=openShop; tap(ui('shopBack'),()=>closeShop()); tap(ui('shopBack2'),()=>closeShop());   // v203: salir responde al tocar (sin esperar el «click» del teléfono)
 addEventListener('keydown',e=>{ if(e.code==='Escape' && !shopEl.hidden){ e.preventDefault(); closeShop(); } });
 const shopOpen=()=>!shopEl.hidden;
@@ -21646,7 +21686,7 @@ function buildPet(spec){
   } else if(spec.k==='snail'){
     const by=.08; pp(body,sphereG,M2,0,by,.04,.11,.075,.3); pp(body,sphereG,M2,0,by+.05,.3,.08,.09,.08);
     const sh=grp(body,0,by+.2,-.05); pp(sh,sphereG,M,0,0,0,.1,.19,.19); pp(sh,PETG.tor,pm('#a85f2a'),0,0,0,.13,.13,.1,0,Math.PI/2,0); pp(sh,PETG.tor,pm('#a85f2a'),0,.02,.02,.07,.07,.12,0,Math.PI/2,0); pp(sh,sphereG,pm('#a85f2a'),0,.03,.03,.11,.04,.04);
-    const hd=P.head=grp(body,0,by+.1,.32); [-1,1].forEach(s=>{ pp(hd,PETG.cyl,M2,s*.035,.07,0,.012,.14,.012,0,0,-s*.25); }); googlyEyes(hd,.053,.155,.01,.032,{dir:[.15,.3,1]});   // v194: ojos saltones en la punta de sus antenitas
+    const hd=P.head=grp(body,0,by+.1,.32); [-1,1].forEach(s=>{ pp(hd,PETG.cyl,M2,s*.035,.07,0,.012,.14,.012,0,0,-s*.25); }); googlyEyes(hd,.053,.155,.01,.032,{dir:[.15,.3,1], fit:false});   // v194: ojos saltones en la punta de sus antenitas
     pp(hd,sphereG,pm('#ff8fa8'),0,-.01,.07,.03,.01,.012);
   } else if(spec.k==='turtle'){
     const by=.16; pp(body,PETG.half,M,0,by,0,.3,.22,.34); pp(body,PETG.tor,pm('#e7b43e'),0,by,0,.3,.34,.15,Math.PI/2);
@@ -36659,7 +36699,7 @@ function grnBuild(){ GRN.built=true; const P=GREEN3.pic, L0=GREEN3.lake[0], L1=G
     const h=new THREE.Mesh(sphereG,m); h.scale.setScalar(.27*s); h.position.set(0,.55*s,.38*s); g.add(h);
     const be=new THREE.Mesh(sphereG,bk); be.scale.set(.13*s,.05*s,.15*s); be.position.set(0,.5*s,.66*s); g.add(be);
     [-1,1].forEach(q=>{ const w=new THREE.Mesh(sphereG,m); w.scale.set(.1*s,.18*s,.34*s); w.position.set(q*.4*s,.2*s,-.02*s); w.rotation.z=q*.25; g.add(w); });
-    try{ googlyEyes(g,0,.62*s,.58*s,.085*s,{dir:[0,0,1]}); }catch(e){}
+    try{ googlyEyes(g,.12*s,.64*s,.56*s,.075*s,{dir:[.35,.1,1]}); }catch(e){}   // v277: antes los dos ojos estaban encimados en el centro (se veía un solo ojo)
     g.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); scene.add(g); return g; };
   GRN.ducks.push({o:body('#f4f1e6',1.25), k:0}); for(let k=1;k<=5;k++) GRN.ducks.push({o:body('#ffd84a',.62), k});
   GRN.c={x:L0.x*.72+L1.x*.28, z:L0.z*.72+L1.z*.28, a:Math.atan2(L1.z-L0.z,L1.x-L0.x), A:30, B:20}; }
@@ -39886,6 +39926,7 @@ frame();
     // todos los materiales de la isla se preparan ahora (si no, se preparan la primera vez que los ves y el juego da un tironcito)
     let cbWk=null; try{ cbWk=new THREE.Group(); const gb=new THREE.BoxGeometry(.01,.01,.01), sk=cbSkirtMesh({legs:[]}); sk.geometry=gb; sk.visible=true; cbWk.add(sk,new THREE.Mesh(gb,CB_MAT),new THREE.Mesh(gb,CB_GLOW)); cbWk.position.copy(camera.position); scene.add(cbWk); }catch(e){}   // v258: la falda que se mueve y los cubitos que brillan del Cubito
     try{ renderer.compile(scene,camera); }catch(e){} if(cbWk) scene.remove(cbWk);
+    stPrecompile();   // v277: las manchas de tu peluche (si no, la primera vez que tocas el agua se traba)
     L.step('Juntando las piezas…',.72); await paint();
     { const tb=performance.now(); try{ batchWarm(); }catch(e){ console.warn('batchWarm',e); } window.__ldBatchMs=Math.round(performance.now()-tb); }   // v221
     // v228: una vuelta con la cámara alrededor del inicio (detrás de la pantalla de carga): las imágenes y piezas que ves al aparecer ya quedan en la tarjeta de video
