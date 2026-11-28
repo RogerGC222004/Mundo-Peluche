@@ -22,6 +22,9 @@ async def m():
     ok(r['bosque']>4000 and r['escala']>2.3 and r['gigantes']>=180, 'el Bosque Frondoso tiene más árboles y enormes, y más árboles gigantes %s'%r)
     ok(r['hongos']>5500 and r['colosales']>=40 and r['chiquitos']>40000, 'la Meseta Champiñón tiene más hongos y muchos más colosales %s'%r)
     ok(r['relleno']>12000 and r['gruposCerca']>20, 'relleno de cerca: más árboles en el bosque que solo se dibujan a tu alrededor (%s árboles, %s grupos)'%(r['relleno'],r['gruposCerca']))
+    # 11. dentro de la casita de Tortu no llueve ni nieva (el muelle creció y el techo ya no se encontraba)
+    r=json.loads(await ev("""(()=>{ const P=PIER, [x,z]=pW(0,P.HZ), rt=roofTopAt(x,z); return JSON.stringify({rt:+rt.toFixed(2), Y:P.Y, open:wxOpen(x,z,P.Y+.1), hid:precipHidden(precipCovers(x,P.Y+1,z,20),x,P.Y+1,z)}); })()"""))
+    ok(r['rt']>r['Y']+2 and not r['open'] and r['hid'], 'en la casita de Tortu el techo tapa la lluvia y la nieve (ni charcos ni nieve en el piso) %s'%r)
     # 8. ojitos: cada ojo queda pegado a la curva de su cabeza y mirando hacia afuera de ella; la pata ya tiene dos ojos
     r=await ev("""(()=>{ const res={}, chk=(lab,root)=>{ root.updateMatrixWorld(true); const E=GOOGLY.list.filter(e=>{ let q=e.g; while(q){ if(q===root) return true; q=q.parent; } return false; }); let worst=0, wd=1;
         for(const e of E){ const F=gFit(root,e.g.parent,...e.g.position.toArray(),e.r,new THREE.Vector3(0,0,1).applyQuaternion(e.g.quaternion),null); if(!F) continue;
