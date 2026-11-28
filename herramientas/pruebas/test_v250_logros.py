@@ -83,8 +83,8 @@ async def m():
     r=await ev(r"""(()=>{ const d0=LG.s.dias||0; LG.dd.day='2000-01-01'; LG.dd.k={pez:9}; qDay(); return {nuevo:LG.dd.day===ttDay() && !LG.dd.k.pez && LG.dd.cl.every(x=>!x), dias:(LG.s.dias||0)-d0}; })()""")
     ok(r['nuevo'] and r['dias']==1, '🕛 al cambiar el día empiezan misiones nuevas desde cero (y cuenta un día jugado)')
     r=await ev(r"""(async()=>{ const o={}; o.cartel=!!QB.g && Math.hypot(QB.x,QB.z)<CAKE_ST.r0;
-      player.pos.set(QB.x-Math.cos(QB.a)*1.4, QB.y+.1, QB.z-Math.sin(QB.a)*1.4); player.vel.set(0,0,0); await __W(400); scanActions(); o.cerca=actA&&actA.label||'';
-      player.pos.set(0,.12,0); await __W(400); scanActions(); o.lejos=!(actA && /Misiones|misiones/.test(actA.label)); return o; })()""")
+      player.pos.set(QB.x-Math.cos(QB.a)*1.4, QB.y+.1, QB.z-Math.sin(QB.a)*1.4); player.vel.set(0,0,0); await __W(400); scanActions(); o.cerca=(actA&&actA.label)||(PA[0]&&PA[0].label)||'';   /* v277: en pantalla táctil las acciones del lugar van en botoncitos */
+      player.pos.set(0,.12,0); await __W(400); scanActions(); o.lejos=![actA,...PA].some(x=>x && /Misiones|misiones/.test(x.label)); return o; })()""")
     ok(r['cartel'] and 'Misiones' in r['cerca'] and r['lejos'], '🪧 el cartel está dentro del castillo y al acercarte sale el botón «%s»'%r['cerca'])
 
     # E) viaja con el código de «Mi progreso»
